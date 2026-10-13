@@ -2061,8 +2061,13 @@
     });
   }
 
-  function renderKnowledgeContent(node) {
+  function renderKnowledgeOrigin(node) {
     const origin = window.FreeBbsLearningContent?.originMarkdown(node.sections) || '';
+    // Only authored origin content earns a reading surface. An application
+    // summary or an empty-state message must not become a sticky document.
+    document
+      .getElementById('knowledge-history')
+      ?.setAttribute('data-learning-origin-state', origin ? 'available' : 'empty');
     const history = document.getElementById('knowledge-history-prose');
     if (history) {
       history.toggleAttribute('data-learning-document-empty', !origin);
@@ -2074,6 +2079,10 @@
       historyEmpty.textContent = '本知识点尚未提供起源说明。';
       historyEmpty.toggleAttribute('hidden', Boolean(origin));
     }
+  }
+
+  function renderKnowledgeContent(node) {
+    renderKnowledgeOrigin(node);
     if (window.FreeBbsLearningContent?.isChapterNode(node))
       document
         .getElementById('knowledge-body')

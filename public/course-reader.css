@@ -18,8 +18,8 @@ body.course-reader-page .course-reader-main {
   --course-map-primary-heading-size: 1.2rem;
   --course-map-index-marker-size: 26px;
   --course-map-index-marker-font-size: 0.78rem;
-  --course-map-index-item-title-size: 0.9rem;
-  --course-map-index-meta-size: 0.76rem;
+  --course-map-index-item-title-size: 1rem;
+  --course-map-index-meta-size: 0.875rem;
   --course-map-chapter-title-size: 1rem;
   --course-map-chapter-meta-size: 0.8rem;
   --course-map-topic-title-size: 1rem;
@@ -38,7 +38,7 @@ body.course-reader-page .course-reader-main {
   font-family: var(--font-zh-body, var(--font-ui));
 }
 
-body.course-reader-page .course-reader-main :where(button, a, select) {
+body.course-reader-page .course-reader-main :where(button, a, select, input) {
   font-family: var(--font-zh-ui, var(--font-ui));
 }
 
@@ -48,7 +48,7 @@ body.course-reader-page .course-reader-main :where(h1, h2, h3, strong) {
   text-wrap: pretty;
 }
 
-body.course-reader-page .course-reader-main :where(button, a, select):focus-visible {
+body.course-reader-page .course-reader-main :where(button, a, select, input):focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 3px;
 }
@@ -75,14 +75,14 @@ body.course-reader-page .course-reader-kicker {
 body.course-reader-page .course-reader-summary {
   max-width: 65ch;
   margin: 0 0 12px;
-  font-size: 0.92rem;
+  font-size: 1rem;
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
 
 body.course-reader-page .course-reader-meta {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
@@ -108,7 +108,7 @@ body.course-reader-page .course-map-reader-control {
   border-radius: 7px;
   background: var(--ui-surface);
   color: var(--ui-text) !important;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   line-height: 1.4;
   text-decoration: none;
@@ -242,7 +242,7 @@ body.course-reader-page .course-map-index-item.is-active .course-map-index-numbe
 }
 
 body.course-reader-page .course-map-index-copy strong {
-  font-size: 0.88rem;
+  font-size: 0.9375rem;
   line-height: 1.5;
   font-weight: 500;
   white-space: normal;
@@ -251,7 +251,7 @@ body.course-reader-page .course-map-index-copy strong {
 
 body.course-reader-page .course-map-index-copy span {
   color: var(--ui-muted) !important;
-  font-size: 0.72rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -330,7 +330,7 @@ body.course-reader-page .course-map-directory-current-copy > small {
 }
 
 body.course-reader-page .course-map-directory-current-copy > span {
-  font-size: 0.73rem;
+  font-size: 0.875rem;
   letter-spacing: 0;
 }
 
@@ -345,14 +345,14 @@ body.course-reader-page .course-map-directory-current-copy h2 {
 body.course-reader-page .course-map-directory-current-copy p {
   margin: 0;
   max-width: 65ch;
-  font-size: 0.86rem;
+  font-size: 1rem;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
 body.course-reader-page .course-map-directory-current-copy > div,
 body.course-reader-page .course-map-directory-current-copy > div :is(b, i) {
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: 400;
   line-height: 1.6;
 }
@@ -381,7 +381,7 @@ body.course-reader-page .course-reader-study-link {
   border-radius: 6px;
   background: transparent;
   color: var(--ui-text) !important;
-  font-size: 0.82rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
   box-shadow: none;
@@ -401,7 +401,7 @@ body.course-reader-page .course-map-directory-section-heading {
 }
 
 body.course-reader-page .course-map-directory-section-heading strong {
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -448,15 +448,75 @@ body.course-reader-page .course-reader-main .course-map-topic-main strong {
 body.course-reader-page .course-reader-main .course-map-topic-code {
   color: var(--ui-muted) !important;
   font-family: var(--font-code, monospace);
-  font-size: 0.72rem;
+  font-size: 0.8125rem;
   font-weight: 400;
   letter-spacing: 0;
 }
 
 body.course-reader-page .course-reader-main .course-map-topic-meta :is(b, i) {
-  font-size: 0.74rem;
+  font-size: 0.8125rem;
   font-weight: 400;
   color: var(--ui-muted) !important;
+}
+
+body.course-reader-page .course-directory-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  scroll-margin-block: 112px;
+  font-size: 0.9375rem;
+}
+
+body.course-reader-page .course-directory-search input {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 420px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 1rem;
+}
+
+body.course-reader-page .course-directory-count {
+  margin: 10px 0;
+  color: var(--ui-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+body.course-reader-page .course-directory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+body.course-reader-page .course-directory-pagination button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  font-size: 0.9375rem;
+  transform: none;
+}
+
+body.course-reader-page .course-directory-pagination button:hover:not(:disabled) {
+  background: var(--ui-surface-soft);
+}
+
+body.course-reader-page .course-directory-pagination button:disabled {
+  color: var(--ui-muted);
+  cursor: default;
+  opacity: 0.6;
 }
 
 body.course-reader-page .course-reader-main .course-map-topic-tag {

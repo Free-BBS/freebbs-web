@@ -881,9 +881,9 @@ test('directory containment is separate from current-point relations and metadat
   assert.equal(content.children[1].tag, 'details');
   assert.equal(Boolean(content.children[1].open), false);
   assert.match(detail.textContent, /所属章节：真实章名一 · EE-01-01/);
-  assert.match(detail.textContent, /可先了解课程组标记前序/);
-  assert.match(detail.textContent, /接着了解课程组标记后序/);
-  assert.match(detail.textContent, /补充联系跨章补充内容所属章节：真实章名二/);
+  assert.match(detail.textContent, /可先了解1 个课程组标记前序/);
+  assert.match(detail.textContent, /接着了解1 个课程组标记后序/);
+  assert.match(detail.textContent, /补充联系1 个跨章补充内容所属章节：真实章名二/);
   assert.match(detail.textContent, /不表示必须先修/);
   assert.ok(
     detail.children.indexOf(h.byClass('course-structure-relations')) <
@@ -892,6 +892,58 @@ test('directory containment is separate from current-point relations and metadat
   assert.equal(Boolean(h.byClass('course-structure-information').open), false);
   assert.ok(h.button('学习概览'));
   assert.deepEqual(h.graphIds(), ['EE-01-01', 'EE-01-02', 'EE-01-03', 'EE-02-01']);
+});
+
+test('chapter entry previews use at most three actual points without a fabricated overview or whole-chapter graph', () => {
+  const title = '真实作者提供的长章节名称：连续时间系统的时域分析与信号处理';
+  const points = Array.from({ length: 67 }, (_, index) => ({
+    id: `SS-01-${String(index + 1).padStart(3, '0')}`,
+    title: `真实知识点 ${index + 1}：允许完整显示的长标题`,
+    chapterTitle: title,
+    level: index % 2 ? 'core' : 'general',
+  }));
+  const h = readerFixture(points);
+  h.controller.selectChapter('SS-01');
+  const detail = h.byClass('course-structure-details');
+  const entries = h.byClass('course-structure-chapter-entries');
+  assert.match(detail.textContent, new RegExp(title));
+  assert.match(detail.textContent, /67 个知识点/);
+  assert.doesNotMatch(detail.textContent, /概览尚未发布|暂无板块概览/);
+  assert.deepEqual(
+    entries.children.map((entry) => entry.dataset.coursePreviewPointId),
+    ['SS-01-001', 'SS-01-002', 'SS-01-003'],
+  );
+  assert.deepEqual(h.graphIds(), [], 'Choosing a chapter does not expand its point graph');
+  const before = h.controller.getState();
+  h.byClass('course-structure-picker-open').click();
+  assert.equal(h.activeElement(), h.byClass('course-structure-picker-search'));
+  assert.deepEqual(h.controller.getState(), before, 'Opening the search creates no navigation');
+  entries.children[1].click();
+  assert.equal(h.controller.getState().focusedNodeId, 'SS-01-002');
+  assert.deepEqual(h.graphIds(), ['SS-01-002']);
+  assert.equal(
+    h.byClass('course-structure-filters'),
+    undefined,
+    'No unused filter for no relations',
+  );
+});
+
+test('relation cards visibly separate published categories and cross-chapter ownership while retaining local navigation', () => {
+  const h = readerFixture(directionalNodes, directionalEdges);
+  h.controller.focusNode('EE-01-01');
+  const cards = h.byClass('course-structure-relations');
+  assert.deepEqual(
+    cards.children.map((card) => card.dataset.relationGroup),
+    ['incoming', 'outgoing', 'related'],
+  );
+  assert.equal(cards.children[0].children[1].classList.contains('is-cross-chapter'), false);
+  assert.equal(cards.children[2].children[1].classList.contains('is-cross-chapter'), true);
+  const entry = cards.children[2].children[1].children[0];
+  assert.equal(entry.dataset.courseRelatedId, 'EE-02-01');
+  entry.click();
+  assert.equal(h.controller.getState().focusedNodeId, 'EE-02-01');
+  h.byClass('course-structure-back').click();
+  assert.equal(h.controller.getState().focusedNodeId, 'EE-01-01');
 });
 
 test('empty relationships stay honest and the accessible auxiliary graph remains optional with no chapter fences', () => {
