@@ -43,7 +43,7 @@ function appFor(directory?: string, production = false) {
           tags: [],
           roles:
             uid === 'lead'
-              ? ['platform.super_admin']
+              ? ['platform.admin']
               : uid === 'department'
                 ? ['youth_league.organization.member']
                 : [],

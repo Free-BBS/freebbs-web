@@ -44,6 +44,30 @@ function renderGuard(user: PresentationUser) {
 }
 
 describe('SuperAdminRouteGuard', () => {
+  it.each([
+    {
+      developmentAccess: 'member' as const,
+      viewer: { uid: 'lead', displayName: '旧负责人', canManageDevelopment: false },
+    },
+    { developmentAccess: 'member' as const },
+    {
+      developmentAccess: 'member' as const,
+      viewer: { uid: 'lead', displayName: '资格不一致', canManageDevelopment: true },
+    },
+  ])('rejects a stale reserved role without trusted lead access: %j', (qualification) => {
+    renderGuard({ ...policyOnlyUser, roles: ['platform.super_admin'], ...qualification });
+    expect(screen.getByText('community content')).toBeInTheDocument();
+    expect(screen.queryByText('governance content')).not.toBeInTheDocument();
+  });
+  it('allows a main-site lead with trusted access qualification', () => {
+    renderGuard({
+      ...policyOnlyUser,
+      roles: ['platform.super_admin'],
+      developmentAccess: 'lead',
+      viewer: { uid: 'lead', displayName: '负责人', canManageDevelopment: true },
+    });
+    expect(screen.getByText('governance content')).toBeInTheDocument();
+  });
   it('redirects a policy-only administrator to the community with replacement', () => {
     renderGuard(policyOnlyUser);
 

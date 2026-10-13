@@ -28,14 +28,12 @@ export interface InformationHubPageProps {
 
 function canPublish(user: UserContext | null): boolean {
   if (!user) return false;
-  if (user.roles.includes('platform.super_admin')) return true;
+  if (user.roles.includes('platform.admin')) return true;
   return (
     (
       user as UserContext & { policies?: Array<{ action: string; effect?: string }> }
     ).policies?.some(
-      (policy) =>
-        policy.effect !== 'deny' &&
-        (policy.action === '*' || policy.action === 'information.announcement.create'),
+      (policy) => policy.effect !== 'deny' && policy.action === 'information.announcement.create',
     ) ?? false
   );
 }

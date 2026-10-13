@@ -85,11 +85,43 @@ async function applyDevelopmentAccess(
   },
 ): Promise<DevelopmentAccessRecord | null> {
   const all = await store.developmentAccess.listForUpdate();
-  const existing = all.find(
-    (record) =>
-      record.subjectUid === input.user.uid ||
-      (input.user.studentId !== null && record.studentId === input.user.studentId),
+  if (
+    all.some(
+      (record) =>
+        record.subjectUid &&
+        record.subjectUid !== input.user.uid &&
+        input.user.studentId &&
+        record.studentId === input.user.studentId,
+    )
+  ) {
+    throw new HttpError(
+      409,
+      'development_identity_conflict',
+      '该学号的准入记录已绑定另一 UID，请核对用户目录',
+    );
+  }
+  const existing = all.find((record) =>
+    record.subjectUid
+      ? record.subjectUid === input.user.uid
+      : record.studentId
+        ? Boolean(input.user.studentId && record.studentId === input.user.studentId)
+        : Boolean(
+            record.username &&
+            input.user.username &&
+            record.username.toLocaleLowerCase() === input.user.username.toLocaleLowerCase(),
+          ),
   );
+  if (
+    existing?.status === 'active' &&
+    existing.accessLevel === 'lead' &&
+    input.accessLevel !== 'lead' &&
+    !all.some(
+      (record) =>
+        record.id !== existing.id && record.status === 'active' && record.accessLevel === 'lead',
+    )
+  ) {
+    throw new HttpError(409, 'last_development_lead', '至少保留一位发展端负责人');
+  }
   if (input.accessLevel === null) {
     if (!existing || existing.status !== 'active') return null;
     if (existing.accessLevel === 'lead') {

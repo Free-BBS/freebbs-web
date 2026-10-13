@@ -14,7 +14,7 @@ import { ResponsiveRecordList } from '../../components/ResponsiveRecordList.js';
 import { StatusBadge } from '../../components/StatusBadge.js';
 import { createApiClient, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
-import { isSuperAdmin } from '../../core/permissions/Can.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 
 import {
   knowledgeEntryPath,
@@ -64,9 +64,10 @@ const sameScope = (left: ScopeRef | undefined, right: ScopeRef) =>
   left === undefined || (left.type === right.type && left.id === right.id);
 function permitted(user: PageUser | null, action: string, scope: ScopeRef): boolean {
   if (user === null) return false;
-  if (isSuperAdmin(user)) return true;
+  if (isBusinessAdmin(user)) return true;
   const policies = (user.policies ?? []).filter(
     (policy) =>
+      policy.action !== '*' &&
       matches(policy.action, action) &&
       matches(policy.resource, 'knowledge_entry') &&
       sameScope(policy.scope, scope),
@@ -84,7 +85,7 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
     suppliedUser === undefined ? (auth?.user ?? null) : suppliedUser
   ) as PageUser | null;
   const managesAcrossOrganizations =
-    user?.roles.includes('platform.super_admin') === true ||
+    user?.roles.includes('platform.admin') === true ||
     user?.roles.some((role) => organizationForRole(role)?.level === 'lead') === true;
   const organizations = useMemo(
     () =>

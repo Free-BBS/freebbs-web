@@ -51,7 +51,7 @@ export function SportsMatchesPage({ client, user }: Props) {
   const mayUpdate = permitted(user, 'sports.match.update', 'sports_match');
   const managesAllMatches =
     user?.roles.some((role) =>
-      ['platform.super_admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
+      ['platform.admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
     ) ?? false;
   const selectedMatches = useMemo(
     () =>

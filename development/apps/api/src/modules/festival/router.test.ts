@@ -23,7 +23,7 @@ async function fixture(maxUploadBytes = 1024) {
     director: ['department.arts_director'],
     lead: ['domain.arts_lead'],
     tuanwei: ['affiliation.tuanwei_lead'],
-    admin: ['platform.super_admin'],
+    admin: ['platform.admin'],
     sports: ['domain.sports_lead'],
   };
   const app = express();

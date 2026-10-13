@@ -28,6 +28,8 @@ export interface TagAssignmentInput extends AssignmentInput {
 export interface AssignmentMutationContext {
   actorUid: string;
   now?: Date;
+  /** HTTP identity editing cannot mutate the reserved lead; internal recovery may. */
+  allowReservedLeadMutation?: boolean;
 }
 
 const publicScope: ScopeRef = { type: 'public', id: '*' };
@@ -290,8 +292,36 @@ export async function archiveRoleAssignment(
     if (assignment === undefined) {
       throw new HttpError(404, 'assignment_not_found', 'Role assignment not found');
     }
+    if (
+      assignment.roleKey === SUPER_ADMIN_ROLE_KEY &&
+      context.allowReservedLeadMutation === false
+    ) {
+      throw new HttpError(409, 'protected_development_lead', '发展端负责人须通过准入管理修改');
+    }
     if (assignment.status !== 'active') {
       throw new HttpError(409, 'assignment_inactive', 'Role assignment is not active');
+    }
+
+    if (assignment.roleKey === 'platform.admin' && isCurrent(assignment.expiresAt, now)) {
+      const [subjects, access] = await Promise.all([
+        transactionStore.subjects.listForUpdate({ status: 'active' }),
+        transactionStore.developmentAccess.listForUpdate(),
+      ]);
+      const other = assignments.some(
+        (row) =>
+          row.id !== assignment.id &&
+          row.subjectUid !== assignment.subjectUid &&
+          row.roleKey === 'platform.admin' &&
+          row.status === 'active' &&
+          isCurrent(row.expiresAt, now) &&
+          subjects.some((subject) => subject.uid === row.subjectUid) &&
+          (access.length === 0 ||
+            access.some(
+              (grant) => grant.subjectUid === row.subjectUid && grant.status === 'active',
+            )),
+      );
+      if (!other)
+        throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
     }
 
     if (

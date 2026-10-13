@@ -1,4 +1,8 @@
 import { Router } from 'express';
+import {
+  canManageDevelopmentAccess,
+  isDevelopmentBusinessAdmin,
+} from '@freebbs-development/contracts';
 
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
 import type { DataMode } from '../../core/database/create-store.js';
@@ -38,16 +42,36 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         });
         return;
       }
-      if (!result.user.roles.includes('platform.super_admin')) {
+      if (!canManageDevelopmentAccess(result.user)) {
         response.status(403).json({
           data: {
-            error: { code: 'forbidden', message: 'Super administrator role is required' },
+            error: { code: 'forbidden', message: 'Original development lead access is required' },
           },
           requestId: response.locals.requestId as string,
         });
         return;
       }
       response.locals.user = result.user;
+      const accessRoute = /^\/development-users(?:\/[^/]+)?\/?$/.test(request.path);
+      const accessAudit = request.path === '/audit-logs' && request.method === 'GET';
+      const statusRoute = request.path === '/system-status' && request.method === 'GET';
+      if (
+        !accessRoute &&
+        !accessAudit &&
+        !statusRoute &&
+        !isDevelopmentBusinessAdmin(result.user.roles)
+      ) {
+        response.status(403).json({
+          data: {
+            error: {
+              code: 'forbidden',
+              message: 'Platform administrator role is required for business identity management',
+            },
+          },
+          requestId: response.locals.requestId,
+        });
+        return;
+      }
       next();
     } catch (error) {
       next(error);

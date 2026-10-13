@@ -68,8 +68,7 @@ export function canEditDepartment(roles: readonly RoleKey[], id: string): boolea
   const department = departmentById(id);
   return (
     department !== undefined &&
-    (roles.includes('platform.super_admin') ||
-      department.roleKeys.some((role) => roles.includes(role)))
+    (roles.includes('platform.admin') || department.roleKeys.some((role) => roles.includes(role)))
   );
 }
 export function legacyDepartmentId(

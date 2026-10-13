@@ -136,7 +136,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
     id: 'admin',
     name: '管理员模块',
-    description: '维护发展端用户的组织身份卡片。',
+    description: '维护发展端访问名单与负责人资格。',
     route: '/admin',
     icon: adminIcon,
     ownerTeam: '平台核心组',
@@ -158,6 +158,18 @@ export const ORGANIZATIONS_NAVIGATION: ModuleManifest = {
   status: 'enabled',
   requiredPermissions: [],
   order: 5,
+};
+
+export const SYSTEM_SETTINGS_NAVIGATION: ModuleManifest = {
+  id: 'admin',
+  name: '系统设置',
+  description: '维护组织身份、通知和奖励。',
+  route: '/system-settings',
+  icon: adminIcon,
+  ownerTeam: '平台核心组',
+  status: 'enabled',
+  requiredPermissions: [],
+  order: 7.5,
 };
 
 export function resolveModuleStatus(

@@ -96,8 +96,8 @@ describe('publisher department metadata', () => {
     expect(payload).not.toHaveProperty('organizationId');
     expect(payload.schema).not.toHaveProperty('publisherDepartmentId');
   });
-  it('offers the entire canonical directory only to superadmin', async () => {
-    actor.roles = ['platform.super_admin'];
+  it('offers the entire canonical directory to platform administrators', async () => {
+    actor.roles = ['platform.admin'];
     show();
     await screen.findByLabelText('发布部门');
     expect(within(screen.getByLabelText('发布部门')).getAllByRole('option')).toHaveLength(21);

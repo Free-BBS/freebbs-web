@@ -36,10 +36,11 @@ describe('community permission catalogue', () => {
     }
   });
 
-  it('grants platform admins moderation without identity reveal or wish approval', () => {
-    expect(actions('platform.admin')).toContain('community.content.moderate');
+  it('grants explicit platform administrators global business authority while reserving leads', () => {
+    expect(actions('platform.admin')).toContain('*');
     expect(actions('platform.admin')).not.toContain('community.identity.reveal');
     expect(actions('platform.admin')).not.toContain('community.wish.convert.approve');
-    expect(actions('platform.super_admin')).toContain('*');
+    expect(actions('platform.super_admin')).not.toContain('*');
+    expect(actions('platform.super_admin')).toContain('admin.manage');
   });
 });

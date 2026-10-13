@@ -129,8 +129,10 @@ export function hasLiaisonPermission(
   scopes: readonly ScopeRef[] = [],
 ): boolean {
   if (!user) return false;
+  if (user.roles.includes('platform.admin')) return true;
   const now = Date.now();
   const applies = (policy: LiaisonPolicy, scope?: ScopeRef) =>
+    policy.action !== '*' &&
     matches(policy.action, action) &&
     matches(policy.resource, resource) &&
     (policy.expiresAt == null || Date.parse(policy.expiresAt) > now) &&

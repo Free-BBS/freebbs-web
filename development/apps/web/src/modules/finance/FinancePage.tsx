@@ -81,7 +81,7 @@ const statusTones: Record<FinanceStatus, StatusBadgeStatus> = {
 
 function leadOrganizationIds(user: FinanceUser | null): string[] {
   if (user === null) return [];
-  if (user.roles.includes('platform.super_admin')) {
+  if (user.roles.includes('platform.admin')) {
     return SOCIAL_ORGANIZATIONS.map(({ id }) => id);
   }
   const own = user.roles.flatMap((role) => {
@@ -106,7 +106,7 @@ function memberOrganizationIds(user: FinanceUser | null): string[] {
 
 function canReviewFinance(user: FinanceUser | null): boolean {
   if (user === null) return false;
-  if (user.roles.includes('platform.super_admin')) return true;
+  if (user.roles.includes('platform.admin')) return true;
   return user.roles.some((role) => {
     const membership = organizationForRole(role);
     return membership?.organizationId === 'tuanwei' && membership.level === 'lead';
@@ -137,9 +137,11 @@ function matches(pattern: string, value: string): boolean {
 
 function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): boolean {
   if (user === null) return false;
+  if (user.roles.includes('platform.admin')) return true;
   const now = Date.now();
   const policies = (user.policies ?? []).filter(
     (policy) =>
+      policy.action !== '*' &&
       matches(policy.action, action) &&
       matches(policy.resource, 'finance_record') &&
       (policy.scope === undefined ||
@@ -154,9 +156,11 @@ function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): b
 
 function hasAnyGrant(user: FinanceUser | null, action: string): boolean {
   if (user === null) return false;
+  if (user.roles.includes('platform.admin')) return true;
   const now = Date.now();
   return (user.policies ?? []).some(
     (policy) =>
+      policy.action !== '*' &&
       matches(policy.action, action) &&
       matches(policy.resource, 'finance_record') &&
       policy.effect === 'allow' &&
@@ -574,8 +578,7 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
     const available = records ?? [];
     const memberships = memberOrganizationIds(user);
     const globalViewer =
-      user?.roles.includes('platform.super_admin') ||
-      user?.roles.includes('affiliation.tuanwei_lead');
+      user?.roles.includes('platform.admin') || user?.roles.includes('affiliation.tuanwei_lead');
     const recordOrganizations = [
       ...new Set(
         available.flatMap((record) => (record.organizationId ? [record.organizationId] : [])),

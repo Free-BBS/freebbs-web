@@ -16,8 +16,8 @@ describe('canonical department directory', () => {
         expect(contracts.canEditDepartment([role], department.id)).toBe(true);
         expect(contracts.departmentsForRoles([role]).map(({ id }) => id)).toEqual([department.id]);
       }
-      expect(contracts.canEditDepartment(['platform.admin'], department.id)).toBe(false);
-      expect(contracts.canEditDepartment(['platform.super_admin'], department.id)).toBe(true);
+      expect(contracts.canEditDepartment(['platform.admin'], department.id)).toBe(true);
+      expect(contracts.canEditDepartment(['platform.super_admin'], department.id)).toBe(false);
       const unrelated = directory.find(({ id }) => id !== department.id)!;
       expect(contracts.canEditDepartment(unrelated.roleKeys, department.id)).toBe(false);
     }

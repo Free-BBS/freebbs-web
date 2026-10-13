@@ -52,6 +52,28 @@ const financeLead = {
 };
 
 describe('FinancePage', () => {
+  it('gives platform administrators finance creation and review controls without policy fixtures', async () => {
+    mockRequest.mockResolvedValueOnce([existingRecord]);
+    render(<FinancePage user={{ ...financeLead, roles: ['platform.admin'], policies: [] }} />);
+    await screen.findByText(existingRecord.title);
+    expect(screen.getByRole('button', { name: '保存草稿' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '批准' })).toBeInTheDocument();
+  });
+  it('does not grant lead-only finance controls from a legacy global policy', async () => {
+    mockRequest.mockResolvedValueOnce([existingRecord]);
+    render(
+      <FinancePage
+        user={{
+          ...financeLead,
+          roles: ['platform.super_admin'],
+          policies: [{ action: '*', resource: '*', effect: 'allow' }],
+        }}
+      />,
+    );
+    await screen.findByText(existingRecord.title);
+    expect(screen.queryByRole('button', { name: '保存草稿' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '批准' })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     mockRequest.mockReset();
   });
