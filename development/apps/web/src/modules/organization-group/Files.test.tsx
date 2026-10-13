@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../core/api/client.js';
 import { FileTile } from './Files.js';
@@ -80,5 +80,66 @@ describe('authenticated private previews', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '预览' })).not.toBeDisabled());
     expect(create).not.toHaveBeenCalled();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+});
+
+describe('private download lifecycle', () => {
+  it('saves a completed download from the current tile', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const api = {
+      request: vi.fn() as ApiClient['request'],
+      download: vi.fn(async () => new Blob(['private image'])),
+    };
+    render(<FileTile file={file} api={api} />);
+    fireEvent.click(screen.getByRole('button', { name: '下载' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(api.download).toHaveBeenCalledWith('/organization-group/files/private%2Fphoto');
+  });
+
+  it.each(['unmount', 'file', 'client'] as const)(
+    'discards a late private download after %s changes the initiating view',
+    async (change) => {
+      let resolve!: (blob: Blob) => void;
+      const create = vi.spyOn(URL, 'createObjectURL');
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const api = {
+        request: vi.fn() as ApiClient['request'],
+        download: vi.fn(
+          () =>
+            new Promise<Blob>((accept) => {
+              resolve = accept;
+            }),
+        ),
+      };
+      const view = render(<FileTile file={file} api={api} />);
+      fireEvent.click(screen.getByRole('button', { name: '下载' }));
+      if (change === 'unmount') view.unmount();
+      else if (change === 'file')
+        view.rerender(<FileTile file={{ ...file, id: 'new-file' }} api={api} />);
+      else view.rerender(<FileTile file={file} api={{ ...api, download: vi.fn() }} />);
+      await act(async () => resolve(new Blob(['old private image'])));
+      expect(click).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ignores a failed download from a replaced client', async () => {
+    let reject!: (error: Error) => void;
+    const api = {
+      request: vi.fn() as ApiClient['request'],
+      download: vi.fn(
+        () =>
+          new Promise<Blob>((_resolve, decline) => {
+            reject = decline;
+          }),
+      ),
+    };
+    const view = render(<FileTile file={file} api={api} />);
+    fireEvent.click(screen.getByRole('button', { name: '下载' }));
+    view.rerender(<FileTile file={file} api={{ ...api, download: vi.fn() }} />);
+    await act(async () => reject(new Error('旧账号的下载失败')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   OrganizationGroupEditContext,
   OrganizationGroupEntry,
@@ -39,6 +39,28 @@ export function Ledger({
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const query = queryString({ yearId: year.id, ...filters, page, pageSize: 20 });
+  const exportVersion = useRef(0);
+  useEffect(() => {
+    exportVersion.current += 1;
+    return () => {
+      exportVersion.current += 1;
+    };
+  }, [api, query, workspace.revision, workspace.canExport]);
+  async function exportLedger() {
+    const version = exportVersion.current;
+    const isCurrent = () => version === exportVersion.current;
+    setError('');
+    try {
+      await downloadBlob(
+        api,
+        `/organization-group/export.xlsx?${query}`,
+        `组织组活动台账-${year.label}.xlsx`,
+        isCurrent,
+      );
+    } catch (cause) {
+      if (isCurrent()) setError(errorMessage(cause));
+    }
+  }
   useEffect(() => {
     let live = true;
     setRows(null);
@@ -277,16 +299,7 @@ export function Ledger({
             <p>统计与导出均以当前可查看、已筛选的全部记录计算。</p>
           </div>
           {workspace.canExport ? (
-            <button
-              type="button"
-              onClick={() =>
-                void downloadBlob(
-                  api,
-                  `/organization-group/export.xlsx?${query}`,
-                  `组织组活动台账-${year.label}.xlsx`,
-                ).catch((cause) => setError(errorMessage(cause)))
-              }
-            >
+            <button type="button" onClick={() => void exportLedger()}>
               导出 Excel
             </button>
           ) : null}

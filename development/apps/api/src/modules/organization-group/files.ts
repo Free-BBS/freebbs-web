@@ -40,18 +40,21 @@ export async function inspectFile(
     ? Buffer.from(file.originalname, 'latin1').toString('utf8')
     : file.originalname;
   const originalName = decoded.includes('\uFFFD') ? file.originalname : decoded;
+  const characters = Array.from(originalName).map((character) =>
+    character.charCodeAt(0) < 32 ||
+    character.charCodeAt(0) === 127 ||
+    /[/\\<>:"|?*]/.test(character)
+      ? '_'
+      : character,
+  );
+  const originalExtension = extname(characters.join(''));
+  const extension = originalExtension.toLowerCase();
+  const suffixLength = Array.from(originalExtension).length;
+  // Keep the format suffix while limiting Unicode code points, never UTF-16 halves.
   const name =
-    Array.from(originalName)
-      .map((character) =>
-        character.charCodeAt(0) < 32 ||
-        character.charCodeAt(0) === 127 ||
-        /[/\\<>:"|?*]/.test(character)
-          ? '_'
-          : character,
-      )
-      .join('')
-      .slice(0, 180) || 'file';
-  const extension = extname(name).toLowerCase();
+    (characters.length > 180 && suffixLength < 180
+      ? characters.slice(0, 180 - suffixLength).join('') + originalExtension
+      : characters.slice(0, 180).join('')) || 'file';
   if (
     b.length >= 45 &&
     b.subarray(0, 8).equals(pngMagic) &&
@@ -189,9 +192,11 @@ export async function sendFile(
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
   response.setHeader('Content-Type', asset.mime);
+  // Older records may contain a surrogate split by the previous UTF-16 truncation.
+  const originalName = asset.originalName.replace(/[\uD800-\uDFFF]/gu, '\uFFFD');
   response.setHeader(
     'Content-Disposition',
-    `${preview ? 'inline' : 'attachment'}; filename="file${extname(asset.originalName).replace(/[^a-zA-Z0-9.]/g, '')}"; filename*=UTF-8''${encodeURIComponent(asset.originalName).replace(/'/g, '%27')}`,
+    `${preview ? 'inline' : 'attachment'}; filename="file${extname(originalName).replace(/[^a-zA-Z0-9.]/g, '')}"; filename*=UTF-8''${encodeURIComponent(originalName).replace(/'/g, '%27')}`,
   );
   response.send(bytes);
 }

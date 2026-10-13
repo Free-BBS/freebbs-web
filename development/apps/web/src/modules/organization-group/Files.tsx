@@ -3,9 +3,15 @@ import type { OrganizationGroupFile } from '@freebbs-development/contracts';
 import type { GroupClient } from './OrganizationGroupPage.js';
 import { errorMessage } from './model.js';
 
-export async function downloadBlob(api: GroupClient, path: string, name: string) {
+export async function downloadBlob(
+  api: GroupClient,
+  path: string,
+  name: string,
+  isCurrent: () => boolean,
+) {
   if (!api.download) throw new Error('文件下载暂不可用。');
   const blob = await api.download(path);
+  if (!isCurrent()) return;
   const url = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement('a');
@@ -70,6 +76,21 @@ export function FileTile({
       if (live.current && version === readVersion.current) setBusy(false);
     }
   }
+  async function download() {
+    const version = readVersion.current;
+    const isCurrent = () => live.current && version === readVersion.current;
+    setError('');
+    try {
+      await downloadBlob(
+        api,
+        `/organization-group/files/${encodeURIComponent(file.id)}`,
+        file.originalName,
+        isCurrent,
+      );
+    } catch (cause) {
+      if (isCurrent()) setError(errorMessage(cause));
+    }
+  }
   return (
     <div className="og-file">
       <div className="og-file-top">
@@ -83,16 +104,7 @@ export function FileTile({
           </button>
         ) : null}
         {api.download ? (
-          <button
-            type="button"
-            onClick={() =>
-              void downloadBlob(
-                api,
-                `/organization-group/files/${encodeURIComponent(file.id)}`,
-                file.originalName,
-              ).catch((cause) => setError(errorMessage(cause)))
-            }
-          >
+          <button type="button" onClick={() => void download()}>
             下载
           </button>
         ) : null}
