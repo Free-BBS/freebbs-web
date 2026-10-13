@@ -81,6 +81,8 @@ describe('SuperAdminRouteGuard', () => {
       ...policyOnlyUser,
       uid: 'super-admin',
       roles: ['platform.super_admin'],
+      developmentAccess: 'lead',
+      viewer: { uid: 'super-admin', displayName: '负责人', canManageDevelopment: true },
       policies: [],
     });
 

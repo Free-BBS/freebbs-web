@@ -33,7 +33,7 @@ interface Job extends ConnectorMessage {
   revision: number;
 }
 export function canConfigureDevelopment(user: UserContext) {
-  return isDevelopmentBusinessAdmin(user.roles);
+  return isDevelopmentBusinessAdmin(user);
 }
 const messageSchema = z
   .object({

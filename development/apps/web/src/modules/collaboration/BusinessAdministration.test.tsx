@@ -47,13 +47,13 @@ const space: CollaborationSpace = {
   history: [],
   canManage: true,
 };
-function identity(roles: RoleKey[]) {
-  mockAuth.mockReturnValue({ user: { uid: 'actor', roles } });
+function identity(roles: RoleKey[], businessAdmin = false) {
+  mockAuth.mockReturnValue({ user: { uid: 'actor', roles, businessAdmin } });
 }
 
 describe('collaboration business administrator boundary', () => {
   it('offers platform administrators every department in the space editor', () => {
-    identity(['platform.admin']);
+    identity(['platform.admin'], true);
     render(
       <MemoryRouter>
         <SpaceEditor existing={space} busy={false} onSave={vi.fn()} onCancel={vi.fn()} />
@@ -86,7 +86,7 @@ describe('collaboration business administrator boundary', () => {
   it.each([{ kind: 'shared_table' as const }, { kind: 'materials' as const }])(
     'allows platform admin editing for both restricted column controls in $kind',
     ({ kind }) => {
-      identity(['platform.admin']);
+      identity(['platform.admin'], true);
       render(<EntryEditor space={{ ...space, kind }} busy={false} onSubmit={vi.fn()} />);
       expect(screen.getByRole('textbox', { name: /^受限文字/ })).toBeEnabled();
       expect(screen.getByRole('combobox', { name: /^受限选择/ })).toBeEnabled();
@@ -106,6 +106,12 @@ describe('collaboration business administrator boundary', () => {
     render(<EntryEditor space={space} busy={false} onSubmit={vi.fn()} />);
     expect(screen.getByRole('textbox', { name: /^受限文字/ })).toBeEnabled();
     expect(screen.getByRole('combobox', { name: /^受限选择/ })).toBeEnabled();
+  });
+  it('does not grant global controls from a retained platform role without effective authority', () => {
+    identity(['platform.admin'], false);
+    render(<EntryEditor space={space} busy={false} onSubmit={vi.fn()} />);
+    expect(screen.getByRole('textbox', { name: /^受限文字/ })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /^受限选择/ })).toBeDisabled();
   });
   it('keeps owner editing effective without a platform admin role', () => {
     identity(['platform.super_admin']);

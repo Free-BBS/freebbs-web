@@ -2,6 +2,7 @@ import { IdentityProviderUnavailableError } from './auth-client.js';
 
 import { isDevelopmentBusinessAdmin, type UserContext } from '@freebbs-development/contracts';
 import { loadAuthorizationContext } from '../authorization/load-authorization-context.js';
+import { authorize } from '../authorization/authorize.js';
 import { ROLE_PERMISSION_CATALOG } from '../authorization/permission-catalog.js';
 import type { AuthorizationContext } from '../authorization/policy.js';
 import { ensurePlatformDefinitions } from '../bootstrap/bootstrap-service.js';
@@ -104,7 +105,7 @@ export async function synchronizeSubject(
 }
 
 function emptyAuthorizationContext(identity: UserContext): AuthorizationContext {
-  return { ...identity, roles: [], tags: [], policies: [] };
+  return { ...identity, roles: [], businessAdmin: false, tags: [], policies: [] };
 }
 
 function temporarySuperAdminContext(context: AuthorizationContext): AuthorizationContext {
@@ -176,7 +177,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
               viewerIdentity,
               now,
             );
-            viewerBusinessAdmin = isDevelopmentBusinessAdmin(viewerContext.roles);
+            viewerBusinessAdmin = isDevelopmentBusinessAdmin(viewerContext);
           }
           if (!viewerBusinessAdmin || options.userDirectory === undefined) {
             return {
@@ -228,10 +229,29 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
                   canManageDevelopment: accessLevel === 'lead',
                   canPreviewDevelopment: previewing
                     ? viewerBusinessAdmin
-                    : isDevelopmentBusinessAdmin(storedUser.roles),
+                    : isDevelopmentBusinessAdmin(storedUser),
                 },
               }
-            : user,
+            : {
+                ...user,
+                developmentAccess: authorize(
+                  user,
+                  { action: 'admin.manage', resource: 'admin' },
+                  now,
+                ).allowed
+                  ? 'lead'
+                  : 'member',
+                viewer: {
+                  uid: viewerIdentity.uid,
+                  displayName: viewerIdentity.displayName,
+                  canManageDevelopment: authorize(
+                    user,
+                    { action: 'admin.manage', resource: 'admin' },
+                    now,
+                  ).allowed,
+                  canPreviewDevelopment: isDevelopmentBusinessAdmin(user),
+                },
+              },
       };
     } catch (error) {
       if (error instanceof IdentityProviderUnavailableError) {

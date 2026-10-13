@@ -41,6 +41,7 @@ async function fixture(production = false, store?: DevelopmentStore) {
                 ? ['platform.admin']
                 : [],
           tags: [],
+          businessAdmin: uid === 'admin',
         };
         return { status: 200 as const, user };
       },

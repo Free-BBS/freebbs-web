@@ -1,3 +1,4 @@
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
@@ -57,7 +58,7 @@ export function createCollectionManagementRouter(
       send(response, auth.status, { error: { code: auth.code, message: auth.message } });
       return;
     }
-    const departments = auth.user.roles.includes('platform.admin')
+    const departments = isDevelopmentBusinessAdmin(auth.user)
       ? [...DEPARTMENT_DIRECTORY]
       : departmentsForRoles(auth.user.roles);
     const namespaces = [

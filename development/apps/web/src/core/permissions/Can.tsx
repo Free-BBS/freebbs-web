@@ -38,8 +38,10 @@ export function isSuperAdmin(
   return canManageDevelopmentAccess(user);
 }
 
-export function isBusinessAdmin(user: Pick<PresentationUser, 'roles'>): boolean {
-  return isDevelopmentBusinessAdmin(user.roles);
+export function isBusinessAdmin(
+  user: Pick<PresentationUser, 'roles' | 'businessAdmin'> | null | undefined,
+): boolean {
+  return isDevelopmentBusinessAdmin(user);
 }
 
 export function hasPresentationPermission(user: PresentationUser, permission: string): boolean {
@@ -73,7 +75,9 @@ export function Can({
     (role === undefined ||
       (role === 'platform.super_admin'
         ? isSuperAdmin(user)
-        : user.roles.includes(role) || (businessAdmin && !role.startsWith('platform.')))) &&
+        : role === 'platform.admin'
+          ? businessAdmin
+          : user.roles.includes(role) || (businessAdmin && !role.startsWith('platform.')))) &&
     (tag === undefined ||
       businessAdmin ||
       user.tags.some((assignment) => assignment.key === tag)) &&

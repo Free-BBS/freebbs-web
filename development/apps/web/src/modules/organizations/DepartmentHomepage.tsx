@@ -62,7 +62,7 @@ export function DepartmentHomepage({
   }, [api, base]);
   const canEdit =
     home?.canEdit ??
-    (Boolean(homeError) && canEditDepartment(auth?.user?.roles ?? [], department.id));
+    (Boolean(homeError) && Boolean(auth?.user && canEditDepartment(auth.user, department.id)));
   async function choose(file?: File) {
     const version = ++readVersion.current;
     setUpload(null);

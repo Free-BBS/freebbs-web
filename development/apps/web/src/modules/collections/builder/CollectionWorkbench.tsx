@@ -13,7 +13,12 @@ import type {
   CollectionSchema,
   CollectionsDashboardPayload,
 } from '@freebbs-development/contracts';
-import { DEPARTMENT_DIRECTORY, departmentsForRoles } from '@freebbs-development/contracts';
+import {
+  DEPARTMENT_DIRECTORY,
+  departmentsForRoles,
+  isDevelopmentBusinessAdmin,
+  type UserContext,
+} from '@freebbs-development/contracts';
 import { ApiError, createApiClient, type ApiClient } from '../../../core/api/client.js';
 import { useOptionalAuth } from '../../../core/auth/AuthProvider.js';
 import { emptyCollectionSchema } from '../collection-utils.js';
@@ -37,10 +42,10 @@ import {
   type BuilderSelection,
 } from './model.js';
 
-function canMaintainModuleLibrary(roles: readonly string[]): boolean {
-  return roles.some(
+function canMaintainModuleLibrary(user: UserContext | null | undefined): boolean {
+  if (isDevelopmentBusinessAdmin(user)) return true;
+  return (user?.roles ?? []).some(
     (role) =>
-      role === 'platform.admin' ||
       role.startsWith('counselor.') ||
       role === 'student_union.executive_president' ||
       role === 'student_union.presidium' ||
@@ -54,7 +59,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const api = client ?? fallback;
   const { collectionId } = useParams();
   const roles = auth?.user?.roles ?? [];
-  const publisherDepartments = roles.includes('platform.admin')
+  const publisherDepartments = isDevelopmentBusinessAdmin(auth?.user)
     ? [...DEPARTMENT_DIRECTORY]
     : departmentsForRoles(roles);
   const [schema, setSchema] = useState<CollectionSchema>(structuredClone(emptyCollectionSchema));
@@ -93,8 +98,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
     ]).then(
       ([dashboard, modules, form]) => {
         if (!active) return;
-        const roles = auth?.user?.roles ?? [];
-        const managesLibrary = canMaintainModuleLibrary(roles);
+        const managesLibrary = canMaintainModuleLibrary(auth?.user);
         setCanCreate(dashboard.canCreate || form?.canManage === true);
         setAllowed(form ? form.canManage : dashboard.canCreate || managesLibrary);
         setCustomModules(modules);
@@ -164,7 +168,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
     }
   }
 
-  const canManageLibrary = canMaintainModuleLibrary(roles);
+  const canManageLibrary = canMaintainModuleLibrary(auth?.user);
 
   function add(kind: CollectionFieldKind, index?: number, template?: CollectionModuleDefinition) {
     const inserted = addField(schema, kind, index);

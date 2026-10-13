@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { SportsMatch } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin, type SportsMatch } from '@freebbs-development/contracts';
 import type { DevelopmentApi, SportsUser } from './SportsPage.js';
 import { permitted } from './SportsPage.js';
 
@@ -50,9 +50,11 @@ export function SportsMatchesPage({ client, user }: Props) {
   const mayCreate = permitted(user, 'sports.match.create', 'sports_match');
   const mayUpdate = permitted(user, 'sports.match.update', 'sports_match');
   const managesAllMatches =
-    user?.roles.some((role) =>
-      ['platform.admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
-    ) ?? false;
+    isDevelopmentBusinessAdmin(user) ||
+    (user?.roles.some((role) =>
+      ['domain.sports_lead', 'department.sports_director'].includes(role),
+    ) ??
+      false);
   const selectedMatches = useMemo(
     () =>
       matches

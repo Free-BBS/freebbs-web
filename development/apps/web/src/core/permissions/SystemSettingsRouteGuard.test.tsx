@@ -17,7 +17,9 @@ describe('SystemSettingsRouteGuard', () => {
     null,
     member,
     { ...member, roles: ['platform.super_admin'] },
-    { ...member, roles: ['platform.admin'], previewing: true },
+    { ...member, roles: ['platform.admin'] },
+    { ...member, roles: ['platform.admin'], businessAdmin: false },
+    { ...member, roles: ['platform.admin'], businessAdmin: true, previewing: true },
   ])('denies %j', (user) => {
     render(
       <MemoryRouter initialEntries={['/system-settings']}>
@@ -42,7 +44,9 @@ describe('SystemSettingsRouteGuard', () => {
     ({ roles }) => {
       render(
         <MemoryRouter>
-          <SystemSettingsRouteGuard user={{ ...member, roles: roles as UserContext['roles'] }}>
+          <SystemSettingsRouteGuard
+            user={{ ...member, roles: roles as UserContext['roles'], businessAdmin: true }}
+          >
             设置内容
           </SystemSettingsRouteGuard>
         </MemoryRouter>,

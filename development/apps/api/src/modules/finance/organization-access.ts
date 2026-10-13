@@ -1,4 +1,9 @@
-import { organizationForRole, type SocialOrganizationId } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import {
+  SOCIAL_ORGANIZATION_IDS,
+  organizationForRole,
+  type SocialOrganizationId,
+} from '@freebbs-development/contracts';
 
 import { authorize } from '../../core/authorization/authorize.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
@@ -9,7 +14,7 @@ function organizationScope(organizationId: SocialOrganizationId) {
 }
 
 export function isFinanceSuperAdmin(actor: AuthorizationContext): boolean {
-  return actor.roles.includes('platform.admin');
+  return isDevelopmentBusinessAdmin(actor);
 }
 
 export function leadOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
@@ -30,19 +35,51 @@ export function leadOrganizations(actor: AuthorizationContext): SocialOrganizati
 }
 
 export function hasFinanceAccess(actor: AuthorizationContext): boolean {
-  return isFinanceSuperAdmin(actor) || leadOrganizations(actor).length > 0;
+  return (
+    canAccessFinanceOrganization(actor, null) ||
+    SOCIAL_ORGANIZATION_IDS.some((id) => canAccessFinanceOrganization(actor, id))
+  );
 }
 
-export function canReviewFinance(actor: AuthorizationContext): boolean {
-  return isFinanceSuperAdmin(actor) || leadOrganizations(actor).includes('tuanwei');
+export function canReviewFinance(
+  actor: AuthorizationContext,
+  organizationId?: SocialOrganizationId | null,
+): boolean {
+  return authorize(actor, {
+    action: 'finance.record.review',
+    resource: 'finance_record',
+    ...(organizationId === undefined
+      ? {}
+      : {
+          scope:
+            organizationId === null
+              ? { type: 'public', id: '*' }
+              : organizationScope(organizationId),
+        }),
+  }).allowed;
 }
 
 export function canAccessFinanceOrganization(
   actor: AuthorizationContext,
   organizationId: SocialOrganizationId | null | undefined,
+  action: 'read' | 'create' | 'update' = 'read',
 ): boolean {
-  if (canReviewFinance(actor)) return true;
-  return organizationId != null && leadOrganizations(actor).includes(organizationId);
+  const eligible = actor.roles.some(
+    (role) =>
+      role === 'platform.admin' ||
+      role === 'counselor.youth_league_secretary' ||
+      role === 'counselor.youth_league' ||
+      organizationForRole(role)?.level === 'lead',
+  );
+  return (
+    eligible &&
+    authorize(actor, {
+      action: `finance.record.${action}`,
+      resource: 'finance_record',
+      scope:
+        organizationId == null ? { type: 'public', id: '*' } : organizationScope(organizationId),
+    }).allowed
+  );
 }
 
 export function canAccessFinanceRecord(

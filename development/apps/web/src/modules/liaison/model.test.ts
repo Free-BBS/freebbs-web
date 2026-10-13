@@ -15,10 +15,33 @@ const team = { type: 'liaison_team', id: 'team-1' } as const;
 const outcome = { type: 'liaison_outcome', id: 'outcome-1' } as const;
 
 describe('liaison presentation permissions', () => {
+  it('keeps a scoped administrator within its compiled grants', () => {
+    const scoped: LiaisonUser = {
+      ...base,
+      roles: ['platform.admin'],
+      businessAdmin: false,
+      policies: [
+        {
+          action: 'liaison.problem.review',
+          resource: 'liaison_problem',
+          effect: 'allow',
+          scope: problem,
+        },
+      ],
+    };
+    expect(
+      hasLiaisonPermission(scoped, 'liaison.problem.review', 'liaison_problem', [problem]),
+    ).toBe(true);
+    expect(
+      hasLiaisonPermission(scoped, 'liaison.problem.review', 'liaison_problem', [
+        { type: 'liaison_problem', id: 'other' },
+      ]),
+    ).toBe(false);
+  });
   it('allows business administrators and refuses legacy lead wildcard authority', () => {
     expect(
       hasLiaisonPermission(
-        { ...base, roles: ['platform.admin'] },
+        { ...base, roles: ['platform.admin'], businessAdmin: true },
         'liaison.problem.review',
         'liaison_problem',
         [problem],

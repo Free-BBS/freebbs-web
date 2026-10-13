@@ -169,7 +169,7 @@ export const SYSTEM_SETTINGS_NAVIGATION: ModuleManifest = {
   ownerTeam: '平台核心组',
   status: 'enabled',
   requiredPermissions: [],
-  order: 7.5,
+  order: 100,
 };
 
 export function resolveModuleStatus(

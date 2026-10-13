@@ -43,7 +43,7 @@ export function createAuditRouter(store: DevelopmentStore): Router {
 
   router.get('/audit-logs', async (request, response) => {
     const query = parse(auditQuerySchema, request.query);
-    if (!isDevelopmentBusinessAdmin(response.locals.user.roles))
+    if (!isDevelopmentBusinessAdmin(response.locals.user))
       query.action = 'admin.development_access.update';
     send(response, 200, await store.queryAuditLogs(query));
   });

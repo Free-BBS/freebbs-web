@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  type ScopeRef,
+  type UserContext,
+} from '@freebbs-development/contracts';
 
 export interface InformationLayoutProps {
   children: ReactNode;
@@ -21,7 +25,7 @@ function matches(pattern: string, permission: string): boolean {
 }
 
 function hasCapability(user: InformationLayoutProps['user'], permission: string): boolean {
-  if (user?.roles.includes('platform.admin')) return true;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   const policies = (user?.policies ?? []).filter(
     (policy) => policy.action !== '*' && matches(policy.action, permission),
   );

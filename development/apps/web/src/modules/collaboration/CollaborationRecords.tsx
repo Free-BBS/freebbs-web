@@ -71,16 +71,11 @@ export function CollaborationRecords({
                     ))}
                     <td>
                       {localDate(entry.updatedAt)}{' '}
-                      {(space.canManage || entry.uid === auth.user?.uid) &&
-                        space.status === 'published' && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setDeleting(entry.id)}
-                          >
-                            删除
-                          </button>
-                        )}
+                      {(space.canManage || entry.uid === auth.user?.uid) && (
+                        <button type="button" disabled={busy} onClick={() => setDeleting(entry.id)}>
+                          删除
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -131,11 +126,11 @@ export function CollaborationRecords({
                         : '待本人确认'}
                   </p>
                 )}
-                {space.kind === 'practice' && space.status === 'published' && space.canManage && (
+                {space.kind === 'practice' && space.canManage && (
                   <select
                     aria-label={`调整${entry.displayName}支队`}
                     value={entry.assignedSlot ?? ''}
-                    disabled={busy || space.status !== 'published'}
+                    disabled={busy}
                     onChange={(event) =>
                       void mutate(`/collaboration/${space.id}/entries/${entry.id}/assignment`, {
                         revision: space.revision,
@@ -152,13 +147,12 @@ export function CollaborationRecords({
                   </select>
                 )}
                 {space.kind === 'practice' &&
-                  space.status === 'published' &&
                   entry.uid === auth.user?.uid &&
                   entry.assignedSlot &&
                   entry.assignmentStatus !== 'accepted' && (
                     <div>
                       <button
-                        disabled={busy || space.status !== 'published'}
+                        disabled={busy}
                         onClick={() =>
                           void mutate(`/collaboration/${space.id}/entries/${entry.id}/assignment`, {
                             revision: space.revision,
@@ -169,7 +163,7 @@ export function CollaborationRecords({
                         接受安排
                       </button>
                       <button
-                        disabled={busy || space.status !== 'published'}
+                        disabled={busy}
                         onClick={() =>
                           void mutate(`/collaboration/${space.id}/entries/${entry.id}/assignment`, {
                             revision: space.revision,
@@ -226,8 +220,7 @@ export function CollaborationRecords({
                     </p>
                   ))}
                 </div>
-                {space.status === 'published' &&
-                  entry.canReview &&
+                {entry.canReview &&
                   entry.reviewStatus === 'pending' &&
                   ['review', 'attendance'].includes(space.kind) && (
                     <ReviewControls
@@ -247,7 +240,7 @@ export function CollaborationRecords({
         )}
       </section>
 
-      {deleting && space.status === 'published' && (
+      {deleting && (
         <section
           className="collaboration-confirm"
           role="alertdialog"

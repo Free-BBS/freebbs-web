@@ -41,6 +41,7 @@ function appFor(directory?: string, production = false) {
           avatarUrl: null,
           baseRole: 'student',
           tags: [],
+          businessAdmin: uid === 'lead',
           roles:
             uid === 'lead'
               ? ['platform.admin']

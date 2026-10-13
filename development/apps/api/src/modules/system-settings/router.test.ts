@@ -194,6 +194,15 @@ describe('development system settings boundaries', () => {
   });
   it('protects the last administrator through legacy combined-role assignment and role-status routes', async () => {
     const store = createMemoryStore();
+    await store.developmentAccess.create({
+      subjectUid: 'demo-admin',
+      studentId: null,
+      username: 'demo-admin',
+      accessLevel: 'lead',
+      status: 'active',
+      ownerUid: 'demo-admin',
+      scope,
+    });
     const app = createApp({ store, authMode: 'demo' });
     const assignment = (await store.roleAssignments.list()).find(
       (row) => row.subjectUid === 'demo-admin' && row.roleKey === 'platform.admin',
@@ -690,7 +699,7 @@ describe('development system settings boundaries', () => {
         .expect(400);
     expect(calls).toBe(2);
   });
-  it('keeps administrator global sports and organization-group capabilities while preserving member scopes and lead business denial', async () => {
+  it('keeps global administrator capabilities and qualified lead sports-card maintenance while preserving member and organization-group boundaries', async () => {
     const { app, store } = await fixture();
     await request(app)
       .patch(`${base}/sports/teams`)
@@ -700,13 +709,13 @@ describe('development system settings boundaries', () => {
     await request(app)
       .patch(`${base}/sports/teams`)
       .set('Authorization', 'Bearer lead')
-      .send({ id: 'team-basketball', name: '无权修改' })
-      .expect(404);
+      .send({ id: 'team-basketball', name: '负责人维护' })
+      .expect(200);
     await request(app)
       .patch(`${base}/sports/teams`)
       .set('Authorization', 'Bearer member')
       .send({ id: 'team-basketball', name: '无权修改' })
-      .expect(404);
+      .expect(403);
     for (const uid of ['lead', 'member']) {
       const landing = await request(app)
         .get(`${base}/organization-group/workspace`)
@@ -723,7 +732,7 @@ describe('development system settings boundaries', () => {
       .set('Authorization', 'Bearer admin')
       .expect(200);
     expect(workspace.body.data.canManage).toBe(true);
-    expect((await store.sportsTeams.get('team-basketball'))?.name).toBe('新名称');
+    expect((await store.sportsTeams.get('team-basketball'))?.name).toBe('负责人维护');
   });
   it('ignores persisted lead business denies as well as grants when the same user explicitly holds business administration', async () => {
     const { app, store } = await fixture();

@@ -401,7 +401,7 @@ export function CollaborationPage() {
                 {space.kind === 'practice' && (
                   <button
                     type="button"
-                    disabled={busy || space.status !== 'published'}
+                    disabled={busy}
                     onClick={() =>
                       void mutate(`/collaboration/${space.id}/assign`, { revision: space.revision })
                     }

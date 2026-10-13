@@ -18,6 +18,7 @@ import {
   tagAssignmentSchema,
 } from './schemas.js';
 import { adminActor } from './subjects-router.js';
+import type { UserDirectory } from '../../core/auth/user-directory.js';
 
 function send<T>(response: Response, status: number, data: T): void {
   const envelope: ApiEnvelope<T> = {
@@ -47,7 +48,11 @@ function filters(query: {
   };
 }
 
-export function createAssignmentsRouter(store: DevelopmentStore): Router {
+export function createAssignmentsRouter(
+  store: DevelopmentStore,
+  directory?: UserDirectory,
+  allowedUids?: readonly string[],
+): Router {
   const router = Router();
 
   router.get('/role-assignments', async (request, response) => {
@@ -75,6 +80,8 @@ export function createAssignmentsRouter(store: DevelopmentStore): Router {
     const assignment = await archiveRoleAssignment(store, assignmentId, {
       actorUid: adminActor(response).uid,
       allowReservedLeadMutation: false,
+      ...(directory ? { directory } : {}),
+      ...(allowedUids ? { allowedUids } : {}),
     });
     send(response, 200, { id: assignment.id, status: assignment.status, archived: true });
   });

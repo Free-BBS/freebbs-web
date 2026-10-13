@@ -35,6 +35,7 @@ const admin: UserContext = {
   ...ordinary,
   uid: 'admin',
   roles: ['platform.admin'],
+  businessAdmin: true,
 };
 
 const generalEntry = {
