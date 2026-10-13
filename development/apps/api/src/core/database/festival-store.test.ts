@@ -29,11 +29,14 @@ describe('festival reviewer contract', () => {
       'department.arts_director',
       'domain.arts_lead',
       'affiliation.tuanwei_lead',
-      'platform.super_admin',
+      'platform.admin',
     ]);
     expect(contracts.canReviewFestival).toBeTypeOf('function');
     for (const role of contracts.ROLE_KEYS) {
-      expect(contracts.canReviewFestival({ roles: [role] }), role).toBe(allowed.has(role));
+      expect(
+        contracts.canReviewFestival({ roles: [role], businessAdmin: role === 'platform.admin' }),
+        role,
+      ).toBe(allowed.has(role));
     }
     expect(contracts.canReviewFestival({ roles: [] })).toBe(false);
     expect(contracts.canReviewFestival(null)).toBe(false);

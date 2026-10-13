@@ -11,6 +11,8 @@ import { createApiClient } from '../core/api/client.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { SuperAdminRouteGuard } from '../core/permissions/SuperAdminRouteGuard.js';
+import { SystemSettingsRouteGuard } from '../core/permissions/SystemSettingsRouteGuard.js';
+import { SystemSettingsPage } from '../modules/system-settings/SystemSettingsPage.js';
 import { AdminPage } from '../modules/admin/AdminPage.js';
 import { CollectionsLandingPage } from '../modules/collections/CollectionsLandingPage.js';
 import { MyRegistrations } from '../modules/collections/MyRegistrations.js';
@@ -46,6 +48,7 @@ import {
   type ModuleStateOverrides,
 } from './module-manifests.js';
 import { OrganizationsPage } from '../modules/organizations/OrganizationsPage.js';
+import { OrganizationGroupPage } from '../modules/organization-group/OrganizationGroupPage.js';
 import { CollaborationPage } from '../modules/collaboration/CollaborationPage.js';
 import { PublicRegistrationPage } from '../modules/collections/PublicRegistrationPage.js';
 import { CollectionResultsPage } from '../modules/collections/CollectionResultsPage.js';
@@ -185,6 +188,20 @@ function GrowthRoute() {
       client={auth.client}
       uid={auth.user?.uid ?? ''}
       displayName={auth.user?.displayName ?? '同学'}
+    />
+  );
+}
+
+function OrganizationGroupRoute() {
+  const auth = useAuth();
+  const matches = useMatches();
+  const states = matches[0]?.data as ModuleStateOverrides | undefined;
+  const information = MODULE_MANIFESTS.find((module) => module.id === 'information')!;
+  return (
+    <OrganizationGroupPage
+      key={auth.demoUser ?? auth.previewUser ?? auth.user?.uid}
+      client={auth.client}
+      enabled={resolveModuleStatus(information, states) === 'enabled'}
     />
   );
 }
@@ -362,6 +379,27 @@ function AdminRoute() {
   );
 }
 
+function SystemSettingsRoute() {
+  const auth = useAuth();
+  return (
+    <SystemSettingsRouteGuard user={auth.user as PresentationUser | null}>
+      <SystemSettingsPage
+        key={auth.demoUser ?? auth.previewUser ?? auth.user?.uid}
+        client={auth.client}
+      />
+    </SystemSettingsRouteGuard>
+  );
+}
+
+function DevelopmentSettingsRoute() {
+  const auth = useAuth();
+  return (
+    <SystemSettingsRouteGuard user={auth.user as PresentationUser | null}>
+      <DevelopmentSettingsPage />
+    </SystemSettingsRouteGuard>
+  );
+}
+
 export const appRouter = createBrowserRouter(
   [
     { path: '/collections/public/:collectionId', element: <PublicRegistrationPage /> },
@@ -379,7 +417,8 @@ export const appRouter = createBrowserRouter(
         { path: 'ranch-dye', element: <CommercePage section="ranch-dye" /> },
         { path: 'profile', element: <ProfileRoute /> },
         { path: 'settings', element: <CommercePage section="settings" /> },
-        { path: 'settings/development', element: <DevelopmentSettingsPage /> },
+        { path: 'system-settings', element: <SystemSettingsRoute /> },
+        { path: 'settings/development', element: <DevelopmentSettingsRoute /> },
         { path: 'desk', element: <DeskRoute /> },
         { path: 'desk/library/notices', element: <PublishingBookRoute book="notices" /> },
         { path: 'desk/library/experience', element: <PublishingBookRoute book="experience" /> },
@@ -477,6 +516,10 @@ export const appRouter = createBrowserRouter(
         },
         { path: 'growth', element: <GrowthRoute /> },
         { path: 'organizations', element: <OrganizationsRoute /> },
+        {
+          path: 'organizations/youth_league/organization/ledger',
+          element: <OrganizationGroupRoute />,
+        },
         { path: 'organizations/:organizationKey', element: <OrganizationsRoute /> },
         { path: 'organizations/:organizationKey/:departmentKey', element: <OrganizationsRoute /> },
         { path: 'interest-groups', element: <Navigate to="/growth" replace /> },

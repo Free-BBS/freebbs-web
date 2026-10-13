@@ -5,9 +5,9 @@ import type { RoleKey } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../../core/api/client.js';
 import { emptyCollectionSchema } from '../collection-utils.js';
 import { CollectionWorkbench } from './CollectionWorkbench.js';
-const actor = vi.hoisted(() => ({ roles: [] as RoleKey[] }));
+const actor = vi.hoisted(() => ({ roles: [] as RoleKey[], businessAdmin: false }));
 vi.mock('../../../core/auth/AuthProvider.js', () => ({
-  useOptionalAuth: () => ({ user: { roles: actor.roles } }),
+  useOptionalAuth: () => ({ user: { roles: actor.roles, businessAdmin: actor.businessAdmin } }),
 }));
 function show(old = false) {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
@@ -45,6 +45,7 @@ function show(old = false) {
 describe('publisher department metadata', () => {
   beforeEach(() => {
     actor.roles = [];
+    actor.businessAdmin = false;
   });
   it('selects a sole canonical membership and includes it in save/publish', async () => {
     actor.roles = ['department.sports_member'];
@@ -96,8 +97,9 @@ describe('publisher department metadata', () => {
     expect(payload).not.toHaveProperty('organizationId');
     expect(payload.schema).not.toHaveProperty('publisherDepartmentId');
   });
-  it('offers the entire canonical directory only to superadmin', async () => {
-    actor.roles = ['platform.super_admin'];
+  it('offers the entire canonical directory to platform administrators', async () => {
+    actor.roles = ['platform.admin'];
+    actor.businessAdmin = true;
     show();
     await screen.findByLabelText('发布部门');
     expect(within(screen.getByLabelText('发布部门')).getAllByRole('option')).toHaveLength(21);

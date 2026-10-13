@@ -67,6 +67,7 @@ describe('application routes', () => {
     ['/inventory', 'inventory'],
     ['/profile', 'profile'],
     ['/settings', 'settings'],
+    ['/system-settings', 'system-settings'],
     ['/liaison/problems/problem-1', 'liaison/problems/:problemId'],
   ])('matches %s to its focused module route', (pathname, expectedPath) => {
     expect(leafRoute(pathname)?.path).toBe(expectedPath);

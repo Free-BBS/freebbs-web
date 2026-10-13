@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryStore } from '../database/memory-store.js';
-import { hasConfiguredDevelopmentLead, resolveDevelopmentAccess } from './development-access.js';
+import {
+  hasConfiguredDevelopmentLead,
+  resolveDevelopmentAccess,
+  upsertDevelopmentAccess,
+} from './development-access.js';
 
 const publicScope = { type: 'public', id: '*' } as const;
 
@@ -17,6 +21,27 @@ function identity(input: { uid: string; studentId: string | null; username: stri
 }
 
 describe('development access identity matching', () => {
+  it('does not rebind an existing UID-bound access grant through a colliding directory student ID', async () => {
+    const store = createMemoryStore({ seed: false });
+    const original = await store.developmentAccess.create({
+      subjectUid: 'uid-original',
+      studentId: '202300001',
+      username: 'Original',
+      accessLevel: 'member',
+      status: 'active',
+      ownerUid: 'lead',
+      scope: publicScope,
+    });
+    await expect(
+      upsertDevelopmentAccess(store, {
+        user: { uid: 'uid-other', studentId: '202300001', username: 'Other' },
+        accessLevel: 'member',
+        actorUid: 'lead',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'development_identity_conflict' });
+    expect(await store.developmentAccess.get(original.id)).toEqual(original);
+    expect(await store.developmentAccess.list()).toHaveLength(1);
+  });
   it('does not fall back to student ID or username when a grant is bound to another UID', async () => {
     const store = createMemoryStore({ seed: false });
     await store.developmentAccess.create({

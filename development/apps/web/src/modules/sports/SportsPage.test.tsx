@@ -48,7 +48,7 @@ describe('SportsPage', () => {
       'href',
       '/sports/team-basketball',
     );
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(2);
     expect(request).toHaveBeenCalledWith('/sports/teams');
     expect(screen.getByRole('heading', { name: '無体育' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /懂無帝/ })).toHaveAttribute('href', '/sports/matches');
@@ -57,7 +57,7 @@ describe('SportsPage', () => {
     expect(request.mock.calls.flat().join(' ')).not.toContain('/checkins');
   });
 
-  it('keeps the directory read-only even for a team maintainer', async () => {
+  it('uses server capabilities instead of inferring creation from client policies', async () => {
     const request = vi.fn().mockResolvedValue(teams);
 
     render(
@@ -72,8 +72,8 @@ describe('SportsPage', () => {
     );
 
     await screen.findByRole('article', { name: /篮球队/ });
-    expect(screen.queryByRole('button', { name: '创建队伍草稿' })).not.toBeInTheDocument();
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '添加代表队' })).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it('uses a Unicode-safe concise summary for an overlong team description', async () => {

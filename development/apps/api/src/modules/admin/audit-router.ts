@@ -1,4 +1,4 @@
-import type { ApiEnvelope } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin, type ApiEnvelope } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -43,6 +43,8 @@ export function createAuditRouter(store: DevelopmentStore): Router {
 
   router.get('/audit-logs', async (request, response) => {
     const query = parse(auditQuerySchema, request.query);
+    if (!isDevelopmentBusinessAdmin(response.locals.user))
+      query.action = 'admin.development_access.update';
     send(response, 200, await store.queryAuditLogs(query));
   });
 

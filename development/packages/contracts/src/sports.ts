@@ -1,5 +1,19 @@
 import type { ScopeRef } from './permissions.js';
 
+export interface SportsTeamHomepage {
+  teamId: string;
+  html: string | null;
+  originalFilename: string | null;
+  revision: number;
+  updatedAt: string | null;
+  editor: { uid: string; displayName: string; avatarUrl: string | null } | null;
+  canEdit: boolean;
+}
+
+export interface SportsCapabilities {
+  canCreate: boolean;
+}
+
 export type SportsMatchStatus = 'upcoming' | 'live' | 'ended';
 
 export interface SportsMatch {

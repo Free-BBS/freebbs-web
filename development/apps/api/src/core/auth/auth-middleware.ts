@@ -1,7 +1,8 @@
 import { IdentityProviderUnavailableError } from './auth-client.js';
 
-import type { UserContext } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin, type UserContext } from '@freebbs-development/contracts';
 import { loadAuthorizationContext } from '../authorization/load-authorization-context.js';
+import { authorize } from '../authorization/authorize.js';
 import { ROLE_PERMISSION_CATALOG } from '../authorization/permission-catalog.js';
 import type { AuthorizationContext } from '../authorization/policy.js';
 import { ensurePlatformDefinitions } from '../bootstrap/bootstrap-service.js';
@@ -104,7 +105,7 @@ export async function synchronizeSubject(
 }
 
 function emptyAuthorizationContext(identity: UserContext): AuthorizationContext {
-  return { ...identity, roles: [], tags: [], policies: [] };
+  return { ...identity, roles: [], businessAdmin: false, tags: [], policies: [] };
 }
 
 function temporarySuperAdminContext(context: AuthorizationContext): AuthorizationContext {
@@ -143,6 +144,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       let accessGrant: Awaited<ReturnType<typeof resolveDevelopmentAccess>> = null;
       let bootstrapAdministrator = false;
       let previewing = false;
+      let viewerBusinessAdmin = false;
 
       if (options.mode === 'main') {
         if (options.store) {
@@ -168,11 +170,20 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
         const previewUid = firstHeader(headers, 'x-development-preview-uid')?.trim();
         if (previewUid) {
-          if (accessLevel !== 'lead' || options.userDirectory === undefined) {
+          if (options.store) {
+            await synchronizeSubject(options.store, viewerIdentity, now);
+            const viewerContext = await loadAuthorizationContext(
+              options.store,
+              viewerIdentity,
+              now,
+            );
+            viewerBusinessAdmin = isDevelopmentBusinessAdmin(viewerContext);
+          }
+          if (!viewerBusinessAdmin || options.userDirectory === undefined) {
             return {
               status: 403,
               code: 'preview_identity_denied',
-              message: 'Development identity preview requires lead access',
+              message: 'Development identity preview requires explicit platform administration',
             };
           }
           const target = await options.userDirectory.get(previewUid);
@@ -184,7 +195,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
             };
           }
           identity = directoryUserContext(target);
-          previewing = identity.uid !== viewerIdentity.uid;
+          previewing = true;
         }
       }
 
@@ -216,9 +227,31 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
                   uid: viewerIdentity.uid,
                   displayName: viewerIdentity.displayName,
                   canManageDevelopment: accessLevel === 'lead',
+                  canPreviewDevelopment: previewing
+                    ? viewerBusinessAdmin
+                    : isDevelopmentBusinessAdmin(storedUser),
                 },
               }
-            : user,
+            : {
+                ...user,
+                developmentAccess: authorize(
+                  user,
+                  { action: 'admin.manage', resource: 'admin' },
+                  now,
+                ).allowed
+                  ? 'lead'
+                  : 'member',
+                viewer: {
+                  uid: viewerIdentity.uid,
+                  displayName: viewerIdentity.displayName,
+                  canManageDevelopment: authorize(
+                    user,
+                    { action: 'admin.manage', resource: 'admin' },
+                    now,
+                  ).allowed,
+                  canPreviewDevelopment: isDevelopmentBusinessAdmin(user),
+                },
+              },
       };
     } catch (error) {
       if (error instanceof IdentityProviderUnavailableError) {

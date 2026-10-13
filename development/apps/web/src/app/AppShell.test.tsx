@@ -66,6 +66,97 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
+  it('does not infer reserved access from a role when trusted viewer qualification denies it', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        authMode: 'demo',
+        user: {
+          ...user,
+          roles: ['platform.super_admin'],
+          developmentAccess: 'member',
+          viewer: { uid: user.uid, displayName: user.displayName, canManageDevelopment: false },
+        },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+  it('keeps system settings available when the finance module is disabled', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ user: { ...user, roles: ['platform.admin'], businessAdmin: true } }),
+    );
+    renderShell('/system-settings', { moduleStates: { finance: 'disabled' } });
+    expect(
+      within(screen.getByRole('complementary', { name: '发展平台侧栏' })).getByRole('link', {
+        name: '系统设置',
+      }),
+    ).toBeInTheDocument();
+  });
+  it('places one effective administrator settings entry at the sidebar bottom and in mobile navigation', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ user: { ...user, roles: ['platform.admin'], businessAdmin: true } }),
+    );
+    renderShell('/system-settings');
+    const navigation = screen.getByRole('navigation', { name: '主要导航' });
+    expect(within(navigation).queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    const sidebar = screen.getByRole('complementary', { name: '发展平台侧栏' });
+    const settings = within(sidebar).getByRole('link', { name: '系统设置' });
+    expect(settings.parentElement).toHaveClass('sidebar-footer');
+    expect(settings.nextElementSibling).toHaveAccessibleName('学习端');
+    expect(settings).toHaveAttribute('href', '/system-settings');
+    expect(settings).toHaveAttribute('aria-current', 'page');
+    const mobile = screen.getByRole('navigation', { name: '移动导航' });
+    expect(within(mobile).getAllByRole('link', { name: '系统设置' })).toHaveLength(1);
+    expect(within(sidebar).getAllByRole('link', { name: '系统设置' })).toHaveLength(1);
+    expect(within(mobile).getAllByRole('link').at(-2)).toHaveAccessibleName('系统设置');
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+
+  it.each([false, undefined])(
+    'hides settings for a role without effective global authority (%s)',
+    (businessAdmin) => {
+      mockUseAuth.mockReturnValue(
+        authenticatedAuth({ user: { ...user, roles: ['platform.admin'], businessAdmin } }),
+      );
+      renderShell('/community');
+      expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('hides privileged navigation during identity preview', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        setPreviewUser: vi.fn(),
+        user: {
+          ...user,
+          roles: ['platform.admin', 'platform.super_admin'],
+          businessAdmin: true,
+          previewing: true,
+          viewer: { canManageDevelopment: true },
+        },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+
+  it('keeps system settings hidden for lead-only identities', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        user: {
+          ...user,
+          roles: ['platform.super_admin'],
+          developmentAccess: 'lead',
+          viewer: { canManageDevelopment: true },
+        },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '管理员模块' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
   it.each([
     ['/events', '/collections'],
     ['/events/activity-night-run', '/collections'],
@@ -396,6 +487,7 @@ it('exposes governance to a platform super administrator', () => {
       user: {
         ...user,
         roles: ['platform.super_admin'],
+        developmentAccess: 'lead',
         viewer: { uid: user.uid, displayName: user.displayName, canManageDevelopment: true },
       },
     }),

@@ -267,7 +267,7 @@ describe('department homepages and published activities', () => {
     const { app, store } = await fixture();
     for (const assignment of await store.roleAssignments.list({ query: 'demo-admin' })) {
       if (assignment.subjectUid === 'demo-admin')
-        await store.roleAssignments.update(assignment.id, { roleKey: 'platform.admin' });
+        await store.roleAssignments.update(assignment.id, { status: 'inactive' });
     }
     await request(app)
       .put(home)

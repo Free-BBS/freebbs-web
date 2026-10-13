@@ -1,4 +1,8 @@
-import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  type ScopeRef,
+  type UserContext,
+} from '@freebbs-development/contracts';
 
 export type LiaisonProblemStatus =
   'draft' | 'pending_review' | 'rejected' | 'open' | 'paused' | 'closed' | 'archived';
@@ -129,8 +133,10 @@ export function hasLiaisonPermission(
   scopes: readonly ScopeRef[] = [],
 ): boolean {
   if (!user) return false;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   const now = Date.now();
   const applies = (policy: LiaisonPolicy, scope?: ScopeRef) =>
+    policy.action !== '*' &&
     matches(policy.action, action) &&
     matches(policy.resource, resource) &&
     (policy.expiresAt == null || Date.parse(policy.expiresAt) > now) &&

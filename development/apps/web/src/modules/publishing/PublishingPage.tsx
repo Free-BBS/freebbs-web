@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   DEPARTMENT_DIRECTORY,
+  isDevelopmentBusinessAdmin,
   departmentsForRoles,
   PUBLISHING_CATEGORIES,
   type PublishingContent,
@@ -162,7 +163,7 @@ export function PublishingPage({ book }: { book?: 'notices' | 'experience' }) {
           item={contentId ? item : undefined}
           categories={categories}
           departments={
-            user?.roles.includes('platform.super_admin')
+            isDevelopmentBusinessAdmin(user)
               ? [...DEPARTMENT_DIRECTORY]
               : departmentsForRoles(user?.roles ?? [])
           }

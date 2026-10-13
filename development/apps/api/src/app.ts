@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import express from 'express';
 
-import type { ApiEnvelope } from '@freebbs-development/contracts';
+import type { ApiEnvelope, DevelopmentRewardProvider } from '@freebbs-development/contracts';
 import { ACTIVITY_CONTENT_BODY_MAX_BYTES } from '@freebbs-development/contracts';
 import { loadEnvironment, type AuthMode } from './config/env.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import { createAuthMiddleware } from './core/auth/auth-middleware.js';
+import { auditBusinessOverrides } from './core/audit/business-override.js';
 import { DemoAuthClient } from './core/auth/demo-auth-client.js';
 import { MainSiteAuthClient } from './core/auth/main-site-auth-client.js';
 import type { UserDirectory } from './core/auth/user-directory.js';
@@ -35,9 +36,11 @@ import { createKnowledgeRouter } from './modules/knowledge/router.js';
 import { createLiaisonRouter } from './modules/liaison/router.js';
 import { createSportsRouter } from './modules/sports/router.js';
 import { createCollaborationRouter } from './modules/collaboration/router.js';
+import { createOrganizationGroupRouter } from './modules/organization-group/router.js';
 import { createMaterialsRouter } from './modules/collaboration/materials.js';
 import { createConnectorsRouter } from './modules/connectors/router.js';
 import { createPublishingRouter } from './modules/publishing/router.js';
+import { createSystemSettingsRouters } from './modules/system-settings/router.js';
 
 import type { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 
@@ -81,6 +84,8 @@ export interface CreateAppOptions {
   sportsUploadDirectory?: string;
   collectionsUploadDirectory?: string;
   learningSurveyResolver?: LearningSurveyResolver;
+  developmentRewardProvider?: DevelopmentRewardProvider;
+  systemSettingsDirectory?: string;
 }
 
 function requestId(response: Response): string {
@@ -133,11 +138,13 @@ export function createApp(options: CreateAppOptions = {}) {
   if (environment.nodeEnv === 'production' && authMode === 'demo') {
     throw new Error('Demo authentication is disabled in production');
   }
+  const previewAllowedUids = [...(options.previewAllowedUids ?? environment.previewAllowedUids)];
+  const allowedDevelopmentUids = authMode === 'main' ? previewAllowedUids : environment.demoUserIds;
   const authenticate = createAuthMiddleware({
     authClient: resolveAuthClient(authMode, options),
     mode: authMode,
     store,
-    allowedUids: options.previewAllowedUids ?? environment.previewAllowedUids,
+    allowedUids: previewAllowedUids,
     userDirectory: options.userDirectory,
   });
   const allowedOrigins = new Set(
@@ -168,7 +175,7 @@ export function createApp(options: CreateAppOptions = {}) {
       response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
       response.setHeader(
         'Access-Control-Allow-Headers',
-        'Authorization,Content-Type,X-Demo-User,X-Development-Preview-Uid,X-Request-Id',
+        'Authorization,Content-Type,X-Demo-User,X-Development-Preview-Uid,X-Request-Id,Idempotency-Key',
       );
       if (request.method === 'OPTIONS') {
         response.status(204).end();
@@ -190,6 +197,12 @@ export function createApp(options: CreateAppOptions = {}) {
       activityContentParser(request, response, next);
     } else next();
   });
+  // Bulk rosters and configurable questionnaire answers exceed the small
+  // default JSON limit. Keep this bounded expansion within the ledger API.
+  app.use(
+    `${API_BASE_PATH}/organization-group`,
+    express.json({ limit: '8mb', type: 'application/json' }),
+  );
   app.use(express.json({ limit: '64kb', type: 'application/json' }));
 
   app.get(`${API_BASE_PATH}/health`, (_request, response) => {
@@ -240,6 +253,36 @@ export function createApp(options: CreateAppOptions = {}) {
     }
   });
 
+  // Identity preview is read-only across every mounted business router.
+  app.use(API_BASE_PATH, (request, response, next) => {
+    if (
+      request.headers['x-development-preview-uid'] &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    ) {
+      sendEnvelope<ApiErrorData>(response, 403, {
+        error: { code: 'preview_read_only', message: '身份预览仅支持读取' },
+      });
+      return;
+    }
+    next();
+  });
+  const systemSettingsRouters = createSystemSettingsRouters({
+    store,
+    authenticate,
+    userDirectory: options.userDirectory,
+    allowedUids: allowedDevelopmentUids,
+    directory:
+      options.systemSettingsDirectory ??
+      options.collectionsUploadDirectory ??
+      environmentSource.COLLECTIONS_UPLOAD_DIR,
+    nodeEnvironment: environment.nodeEnv,
+    authMode,
+    rewardProvider: options.developmentRewardProvider,
+  });
+  app.use(`${API_BASE_PATH}/system-settings`, systemSettingsRouters.settings);
+  app.use(`${API_BASE_PATH}/notifications`, systemSettingsRouters.inbox);
+  app.use(API_BASE_PATH, auditBusinessOverrides(store, authenticate));
+
   app.use(
     `${API_BASE_PATH}/admin`,
     createAdminRouter({
@@ -249,6 +292,7 @@ export function createApp(options: CreateAppOptions = {}) {
       dataMode: databaseMode,
       getAppliedMigrationCount,
       userDirectory: options.userDirectory,
+      allowedUids: allowedDevelopmentUids,
     }),
   );
   const interestGroupsRouter = createClubsRouter({ store, authenticate });
@@ -321,6 +365,15 @@ export function createApp(options: CreateAppOptions = {}) {
   );
   app.use(`${API_BASE_PATH}/community`, createCommunityRouter({ store, authenticate }));
   app.use(
+    `${API_BASE_PATH}/organization-group`,
+    createOrganizationGroupRouter({
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
     `${API_BASE_PATH}/collaboration`,
     createCollaborationRouter({
       store,
@@ -377,6 +430,9 @@ export function createApp(options: CreateAppOptions = {}) {
     createSportsRouter({
       store,
       authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      homepageDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
       ...(options.sportsUploadDirectory ? { uploadDirectory: options.sportsUploadDirectory } : {}),
     }),
   );

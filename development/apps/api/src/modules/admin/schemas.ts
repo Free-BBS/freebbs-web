@@ -35,7 +35,12 @@ export const modulePatchSchema = z
 export const roleAssignmentSchema = z
   .object({
     subjectUid: identifier,
-    roleKey: z.enum(ROLE_KEYS),
+    roleKey: z
+      .enum(ROLE_KEYS)
+      .refine(
+        (key) => key !== 'platform.super_admin',
+        'Development leads must be appointed through access management',
+      ),
     expiresAt,
     scope: scopeSchema.optional(),
   })

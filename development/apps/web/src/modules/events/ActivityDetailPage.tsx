@@ -9,6 +9,7 @@ import {
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { createApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 
 export interface DevelopmentApi {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -111,7 +112,7 @@ function utcInstantToLocalDateTimeInput(value: string): string {
 function canUpdateOrganization(user: PageUser | null, organizationId: string | null): boolean {
   if (organizationId === null) return true;
   return Boolean(
-    user?.roles.includes('platform.super_admin') ||
+    isBusinessAdmin(user) ||
     user?.roles.some((role) => {
       const membership = organizationForRole(role);
       return (
