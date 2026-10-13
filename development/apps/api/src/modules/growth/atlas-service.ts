@@ -82,7 +82,7 @@ export function createAtlasService(options: AtlasOptions) {
         workspace.schedule?.finished ||
         ['finished', 'archived'].includes(activity.status) ||
         validDate(endsAt);
-      if (!ended || (endsAt && !validDate(endsAt))) continue;
+      if (!ended) continue;
       if (registeredIds.has(activity.id))
         registrationEvents.push({
           id: activity.id,
@@ -108,8 +108,7 @@ export function createAtlasService(options: AtlasOptions) {
       if (form.ownerUid === uid) organized++;
       const workspace = await readActivityWorkspace(directory, 'native_collection', form.id);
       const endsAt = workspace.schedule?.endsAt ?? null;
-      if (!(workspace.schedule?.finished || validDate(endsAt)) || (endsAt && !validDate(endsAt)))
-        continue;
+      if (!(workspace.schedule?.finished || validDate(endsAt))) continue;
       if (respondedIds.has(form.id))
         registrationEvents.push({
           id: `collection:${form.id}`,
