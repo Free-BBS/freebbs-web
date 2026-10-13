@@ -57,7 +57,7 @@ export function createCollectionManagementRouter(
       send(response, auth.status, { error: { code: auth.code, message: auth.message } });
       return;
     }
-    const departments = auth.user.roles.includes('platform.super_admin')
+    const departments = auth.user.roles.includes('platform.admin')
       ? [...DEPARTMENT_DIRECTORY]
       : departmentsForRoles(auth.user.roles);
     const namespaces = [

@@ -42,7 +42,7 @@ function allowed(
 
 function managesAllSports(actor: AuthorizationContext): boolean {
   return actor.roles.some((role) =>
-    ['platform.super_admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
+    ['platform.admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
   );
 }
 

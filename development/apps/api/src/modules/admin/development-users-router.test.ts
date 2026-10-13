@@ -55,7 +55,7 @@ describe('development access administration', () => {
     await request(app)
       .put('/api/development/v1/admin/development-users/u_development_lead')
       .set('Authorization', 'Bearer main-admin')
-      .send({ accessLevel: 'lead', roles: [], captainTeamIds: [] })
+      .send({ accessLevel: 'lead' })
       .expect(200);
 
     await request(app)
@@ -73,7 +73,7 @@ describe('development access administration', () => {
     });
   });
 
-  it('lists main-site users and atomically assigns access and development roles', async () => {
+  it('lists main-site users and assigns access without granting business identities', async () => {
     const store = createMemoryStore();
     await store.developmentAccess.create({
       subjectUid: 'u_lead',
@@ -128,29 +128,14 @@ describe('development access administration', () => {
       .set('Authorization', 'Bearer lead')
       .send({
         accessLevel: 'member',
-        roles: ['domain.arts_lead', 'department.sports_member', 'platform.admin'],
-        captainTeamIds: ['team-basketball'],
       })
       .expect(200);
 
     expect(await store.developmentAccess.list({ query: 'u_target' })).toEqual([
       expect.objectContaining({ subjectUid: 'u_target', accessLevel: 'member', status: 'active' }),
     ]);
-    expect(await store.roleAssignments.list({ query: 'u_target' })).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ roleKey: 'domain.arts_lead', status: 'active' }),
-        expect.objectContaining({ roleKey: 'department.sports_member', status: 'active' }),
-        expect.objectContaining({ roleKey: 'platform.admin', status: 'active' }),
-      ]),
-    );
-    expect(await store.tagAssignments.list({ query: 'u_target' })).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          tagKey: 'sports.team_captain',
-          scope: { type: 'sports_team', id: 'team-basketball' },
-        }),
-      ]),
-    );
+    expect(await store.roleAssignments.list({ query: 'u_target' })).toEqual([]);
+    expect(await store.tagAssignments.list({ query: 'u_target' })).toEqual([]);
 
     await request(app)
       .put('/api/development/v1/admin/development-users/u_target')
@@ -252,7 +237,7 @@ describe('development access administration', () => {
     await request(app)
       .put('/api/development/v1/admin/development-users/u_lead')
       .set('Authorization', 'Bearer lead')
-      .send({ accessLevel: null, roles: [], captainTeamIds: [] })
+      .send({ accessLevel: null })
       .expect(409);
     expect(await store.developmentAccess.list({ query: 'u_lead' })).toEqual([
       expect.objectContaining({ accessLevel: 'lead', status: 'active' }),

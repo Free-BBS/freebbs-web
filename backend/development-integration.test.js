@@ -150,3 +150,32 @@ test('development initialization failure does not prevent the main backend from 
   assert.match(reports[0][0], /development API will remain unavailable/);
   assert.equal(reports[0][1], failure);
 });
+
+test('runtime loader forwards the optional development reward provider without invoking it', async () => {
+  const { mkdtemp, mkdir, writeFile, rm } = require('node:fs/promises');
+  const path = require('node:path');
+  const { tmpdir } = require('node:os');
+  const { loadDevelopmentRuntime } = require('./development-integration');
+  const root = await mkdtemp(path.join(tmpdir(), 'development-provider-'));
+  try {
+    const dist = path.join(root, 'development', 'apps', 'api', 'dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(path.join(dist, 'package.json'), JSON.stringify({ type: 'module' }));
+    await writeFile(
+      path.join(dist, 'integrated-runtime.js'),
+      'export function createIntegratedDevelopmentRuntime(options) { return options; }',
+    );
+    const provider = {
+      async grant() {
+        throw new Error('must not run at initialization');
+      },
+    };
+    const options = await loadDevelopmentRuntime({
+      repositoryRoot: root,
+      developmentRewardProvider: provider,
+    });
+    assert.equal(options.developmentRewardProvider, provider);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

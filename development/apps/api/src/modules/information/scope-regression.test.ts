@@ -150,7 +150,7 @@ describe('information scoped authorization regressions', () => {
       scope: { type: 'user', id: 'user-b' },
     });
     await store.rolePermissions.create({
-      roleKey: 'platform.super_admin',
+      roleKey: 'platform.admin',
       action: '*',
       resource: '*',
       effect: 'deny',
@@ -228,7 +228,7 @@ describe('information scoped authorization regressions', () => {
       scope: { type: 'organization', id: 'org-b' },
     });
     await store.rolePermissions.create({
-      roleKey: 'platform.super_admin',
+      roleKey: 'platform.admin',
       action: '*',
       resource: '*',
       effect: 'deny',

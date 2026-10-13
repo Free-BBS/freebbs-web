@@ -18,6 +18,7 @@ export interface UserContext {
     uid: string;
     displayName: string;
     canManageDevelopment: boolean;
+    canPreviewDevelopment?: boolean;
   };
   previewing?: boolean;
 }

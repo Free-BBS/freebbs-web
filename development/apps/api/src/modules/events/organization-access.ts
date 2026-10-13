@@ -14,7 +14,7 @@ export function organizationsForActor(actor: AuthorizationContext): SocialOrgani
 }
 
 export function isSuperAdmin(actor: AuthorizationContext): boolean {
-  return actor.roles.includes('platform.super_admin');
+  return actor.roles.includes('platform.admin');
 }
 
 export function canCreateForOrganization(

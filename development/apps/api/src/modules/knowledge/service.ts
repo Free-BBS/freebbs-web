@@ -89,7 +89,7 @@ function entryAudience(entry: KnowledgeEntryRecord): 'general' | 'social_org' {
 
 function managesAcrossOrganizations(actor: AuthorizationContext): boolean {
   return (
-    actor.roles.includes('platform.super_admin') ||
+    actor.roles.includes('platform.admin') ||
     actor.roles.some((role) => organizationForRole(role)?.level === 'lead')
   );
 }

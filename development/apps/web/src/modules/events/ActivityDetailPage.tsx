@@ -111,7 +111,7 @@ function utcInstantToLocalDateTimeInput(value: string): string {
 function canUpdateOrganization(user: PageUser | null, organizationId: string | null): boolean {
   if (organizationId === null) return true;
   return Boolean(
-    user?.roles.includes('platform.super_admin') ||
+    user?.roles.includes('platform.admin') ||
     user?.roles.some((role) => {
       const membership = organizationForRole(role);
       return (

@@ -60,7 +60,7 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
 export function managesContent(item: PublishingContent, user: UserContext) {
   return (
     item.ownerUid === user.uid ||
-    user.roles.includes('platform.super_admin') ||
+    user.roles.includes('platform.admin') ||
     Boolean(item.departmentId && canEditDepartment(user.roles, item.departmentId))
   );
 }

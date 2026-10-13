@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { UserContext } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { HttpError } from '../../core/errors/http-error.js';
 import type { CollaborationOptions } from '../collaboration/router.js';
 import {
@@ -32,11 +33,7 @@ interface Job extends ConnectorMessage {
   revision: number;
 }
 export function canConfigureDevelopment(user: UserContext) {
-  return (
-    user.developmentAccess === 'lead' ||
-    user.roles.includes('platform.super_admin') ||
-    user.roles.includes('platform.admin')
-  );
+  return isDevelopmentBusinessAdmin(user.roles);
 }
 const messageSchema = z
   .object({
@@ -126,7 +123,7 @@ export function createConnectorsRouter(
     if (identity.status !== 200)
       throw new HttpError(identity.status, identity.code, identity.message);
     if (!canConfigureDevelopment(identity.user))
-      throw new HttpError(403, 'forbidden', '只有发展端负责人和平台管理员可以管理连接设置');
+      throw new HttpError(403, 'forbidden', '只有平台管理员可以管理连接设置');
     requireStorage();
     response.locals.user = identity.user;
     next();

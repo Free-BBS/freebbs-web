@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import express from 'express';
 
-import type { ApiEnvelope } from '@freebbs-development/contracts';
+import type { ApiEnvelope, DevelopmentRewardProvider } from '@freebbs-development/contracts';
 import { ACTIVITY_CONTENT_BODY_MAX_BYTES } from '@freebbs-development/contracts';
 import { loadEnvironment, type AuthMode } from './config/env.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import { createAuthMiddleware } from './core/auth/auth-middleware.js';
+import { auditBusinessOverrides } from './core/audit/business-override.js';
 import { DemoAuthClient } from './core/auth/demo-auth-client.js';
 import { MainSiteAuthClient } from './core/auth/main-site-auth-client.js';
 import type { UserDirectory } from './core/auth/user-directory.js';
@@ -39,6 +40,7 @@ import { createOrganizationGroupRouter } from './modules/organization-group/rout
 import { createMaterialsRouter } from './modules/collaboration/materials.js';
 import { createConnectorsRouter } from './modules/connectors/router.js';
 import { createPublishingRouter } from './modules/publishing/router.js';
+import { createSystemSettingsRouters } from './modules/system-settings/router.js';
 
 import type { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 
@@ -82,6 +84,8 @@ export interface CreateAppOptions {
   sportsUploadDirectory?: string;
   collectionsUploadDirectory?: string;
   learningSurveyResolver?: LearningSurveyResolver;
+  developmentRewardProvider?: DevelopmentRewardProvider;
+  systemSettingsDirectory?: string;
 }
 
 function requestId(response: Response): string {
@@ -246,6 +250,35 @@ export function createApp(options: CreateAppOptions = {}) {
       next(error);
     }
   });
+
+  // Identity preview is read-only across every mounted business router.
+  app.use(API_BASE_PATH, (request, response, next) => {
+    if (
+      request.headers['x-development-preview-uid'] &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    ) {
+      sendEnvelope<ApiErrorData>(response, 403, {
+        error: { code: 'preview_read_only', message: '身份预览仅支持读取' },
+      });
+      return;
+    }
+    next();
+  });
+  const systemSettingsRouters = createSystemSettingsRouters({
+    store,
+    authenticate,
+    userDirectory: options.userDirectory,
+    directory:
+      options.systemSettingsDirectory ??
+      options.collectionsUploadDirectory ??
+      environmentSource.COLLECTIONS_UPLOAD_DIR,
+    nodeEnvironment: environment.nodeEnv,
+    authMode,
+    rewardProvider: options.developmentRewardProvider,
+  });
+  app.use(`${API_BASE_PATH}/system-settings`, systemSettingsRouters.settings);
+  app.use(`${API_BASE_PATH}/notifications`, systemSettingsRouters.inbox);
+  app.use(API_BASE_PATH, auditBusinessOverrides(store, authenticate));
 
   app.use(
     `${API_BASE_PATH}/admin`,

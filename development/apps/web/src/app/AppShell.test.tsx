@@ -66,6 +66,57 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
+  it('does not infer reserved access from a role when trusted viewer qualification denies it', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        authMode: 'demo',
+        user: {
+          ...user,
+          roles: ['platform.super_admin'],
+          developmentAccess: 'member',
+          viewer: { uid: user.uid, displayName: user.displayName, canManageDevelopment: false },
+        },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+  it('keeps system settings available when the finance module is disabled', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ user: { ...user, roles: ['platform.admin'] } }),
+    );
+    renderShell('/system-settings', { moduleStates: { finance: 'disabled' } });
+    expect(
+      within(screen.getByRole('navigation', { name: '主要导航' })).getByRole('link', {
+        name: '系统设置',
+      }),
+    ).toBeInTheDocument();
+  });
+  it('places platform administrator system settings directly after finance', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ user: { ...user, roles: ['platform.admin'] } }),
+    );
+    renderShell('/system-settings');
+    const navigation = screen.getByRole('navigation', { name: '主要导航' });
+    const links = within(navigation).getAllByRole('link');
+    const financeIndex = links.findIndex((link) => link.textContent === '财务治理');
+    expect(financeIndex).toBeGreaterThan(-1);
+    expect(links[financeIndex + 1]).toHaveAccessibleName('系统设置');
+    expect(links[financeIndex + 1]).toHaveAttribute('href', '/system-settings');
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+
+  it('keeps system settings hidden for lead-only identities', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        user: { ...user, roles: ['platform.super_admin'], viewer: { canManageDevelopment: true } },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '管理员模块' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
   it.each([
     ['/events', '/collections'],
     ['/events/activity-night-run', '/collections'],

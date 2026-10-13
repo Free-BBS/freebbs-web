@@ -11,7 +11,7 @@ const SOCIAL_ROLE_PREFIXES = [
 ] as const;
 
 export function canCreateCollection(actor: AuthorizationContext): boolean {
-  if (actor.roles.includes('platform.super_admin')) return true;
+  if (actor.roles.includes('platform.admin')) return true;
   return actor.roles.some(
     (role) =>
       organizationForRole(role) !== null ||
@@ -20,14 +20,13 @@ export function canCreateCollection(actor: AuthorizationContext): boolean {
 }
 
 export function canManageCollection(actor: AuthorizationContext, ownerUid: string): boolean {
-  return actor.roles.includes('platform.super_admin') || actor.uid === ownerUid;
+  return actor.roles.includes('platform.admin') || actor.uid === ownerUid;
 }
 
 export function canManageCollectionModuleLibrary(actor: AuthorizationContext): boolean {
   return actor.roles.some(
     (role) =>
       role === 'platform.admin' ||
-      role === 'platform.super_admin' ||
       role.startsWith('counselor.') ||
       role === 'student_union.executive_president' ||
       role === 'student_union.presidium' ||

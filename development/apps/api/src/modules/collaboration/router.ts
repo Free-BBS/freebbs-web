@@ -103,7 +103,7 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
 export function manages(space: CollaborationSpace, actor: UserContext) {
   return (
     actor.uid === space.ownerUid ||
-    actor.roles.includes('platform.super_admin') ||
+    actor.roles.includes('platform.admin') ||
     Boolean(space.departmentId && canEditDepartment(actor.roles, space.departmentId)) ||
     Boolean(
       space.teamId &&
@@ -314,7 +314,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         input.columns &&
         JSON.stringify(input.columns) !== JSON.stringify(current.columns) &&
         current.ownerUid !== user.uid &&
-        !user.roles.includes('platform.super_admin')
+        !user.roles.includes('platform.admin')
       )
         throw new HttpError(403, 'column_configuration_forbidden', '只有创建者可以配置字段权限');
       if (input.teamId !== undefined && input.teamId !== (current.teamId ?? null))
@@ -396,7 +396,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (['availability', 'practice'].includes(space.kind) && !uniqueChoices.length)
         throw new HttpError(400, 'missing_choice', '请选择可用时间或报名志愿');
       if (space.kind === 'shared_table') {
-        if (space.ownerUid !== user.uid && !user.roles.includes('platform.super_admin'))
+        if (space.ownerUid !== user.uid && !user.roles.includes('platform.admin'))
           for (const column of space.columns)
             if (
               column.editRoleKeys?.length &&
@@ -468,7 +468,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (
         space.kind === 'shared_table' &&
         space.ownerUid !== user.uid &&
-        !user.roles.includes('platform.super_admin') &&
+        !user.roles.includes('platform.admin') &&
         space.columns.some(
           (column) =>
             column.editRoleKeys?.length &&

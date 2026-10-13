@@ -162,7 +162,7 @@ export function PublishingPage({ book }: { book?: 'notices' | 'experience' }) {
           item={contentId ? item : undefined}
           categories={categories}
           departments={
-            user?.roles.includes('platform.super_admin')
+            user?.roles.includes('platform.admin')
               ? [...DEPARTMENT_DIRECTORY]
               : departmentsForRoles(user?.roles ?? [])
           }
