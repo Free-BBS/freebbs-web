@@ -6,6 +6,8 @@ FreeBBS 的政策需要覆盖社区、AI 服务、学习工作台和发展板块
 
 配套文件：[审核工作保存记录](moderation-handoff-privacy-first-20261012.md)、[需要确认的事项和实施任务](privacy-decisions-20261012.md)、[10 月 13 日运营决定与供应商补充核对](privacy-verification-20261013.md)。下述数据清单保留 10 月 12 日的检查范围；最新 main、正式网页及供应商补充发现以 10 月 13 日文件为准。
 
+基于后续用户确认的反馈邮箱和老师/院系名单来源，已形成[第一版隐私草案及审阅说明](privacy-draft-review.md)，尚未对外生效。以下调研中的待确认项以该审阅说明和实施清单的最新状态为准。
+
 ## 依据范围与结论边界
 
 - 2026 年 10 月 12 日通过 GitHub 连接器核对，`Free-BBS/freebbs-web` 的 main 为 `39295a77cb9c2aab55145bb9ac8fe36e6e74b4d6`，与本地已合入的 main 一致。[main 检查点](https://github.com/Free-BBS/freebbs-web/commit/39295a77cb9c2aab55145bb9ac8fe36e6e74b4d6)。
