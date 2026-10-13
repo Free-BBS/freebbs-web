@@ -73,6 +73,73 @@ async function fixture(global = true, allowedUids: readonly string[] = []) {
 const bearer = (uid: string) => ({ Authorization: `Bearer ${uid}` });
 
 describe('scope-aware global business authority', () => {
+  it('reserves identity preview to original leads while global business administrators retain only settings access', async () => {
+    const { app, assign, store } = await fixture();
+    const leadPreview = await request(app)
+      .get(`${base}/me`)
+      .set(bearer('lead'))
+      .set('X-Development-Preview-Uid', 'global')
+      .expect(200);
+    expect(leadPreview.body.data).toMatchObject({
+      uid: 'global',
+      roles: ['platform.admin'],
+      businessAdmin: true,
+      previewing: true,
+      developmentAccess: 'lead',
+      viewer: { uid: 'lead', canManageDevelopment: true, canPreviewDevelopment: true },
+    });
+    const globalIdentity = await request(app).get(`${base}/me`).set(bearer('global')).expect(200);
+    expect(globalIdentity.body.data).toMatchObject({
+      businessAdmin: true,
+      developmentAccess: 'member',
+      viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+    });
+    await request(app).get(`${base}/system-settings`).set(bearer('global')).expect(200);
+    await request(app).get(`${base}/admin/development-users`).set(bearer('global')).expect(403);
+    await assign('target', 'platform.super_admin');
+    await assign('target', 'platform.admin');
+    await assign('local', 'platform.super_admin', localScope);
+    for (const uid of ['global', 'local', 'target']) {
+      const denied = await request(app)
+        .get(`${base}/me`)
+        .set(bearer(uid))
+        .set('X-Development-Preview-Uid', 'lead')
+        .expect(403);
+      expect(denied.body.data.error.code).toBe('preview_identity_denied');
+    }
+    const subject = (await store.subjects.list()).find(({ uid }) => uid === 'lead')!;
+    await store.subjects.update(subject.id, { status: 'inactive' });
+    const inactiveLead = await request(app).get(`${base}/me`).set(bearer('lead')).expect(200);
+    expect(inactiveLead.body.data.viewer.canPreviewDevelopment).toBe(false);
+    await request(app)
+      .get(`${base}/me`)
+      .set(bearer('lead'))
+      .set('X-Development-Preview-Uid', 'global')
+      .expect(403);
+  });
+
+  it('never treats allowlist fallback or retained global lead roles as original lead access', async () => {
+    const { app, store, assign } = await fixture(true, ['global']);
+    const access = (await store.developmentAccess.list()).find(
+      ({ subjectUid }) => subjectUid === 'global',
+    )!;
+    await store.developmentAccess.delete(access.id);
+    await assign('global', 'platform.super_admin');
+    const identity = await request(app).get(`${base}/me`).set(bearer('global')).expect(200);
+    expect(identity.body.data).toMatchObject({
+      roles: expect.arrayContaining(['platform.super_admin', 'platform.admin']),
+      businessAdmin: true,
+      developmentAccess: 'member',
+      viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+    });
+    await request(app).get(`${base}/system-settings`).set(bearer('global')).expect(200);
+    await request(app)
+      .get(`${base}/me`)
+      .set(bearer('global'))
+      .set('X-Development-Preview-Uid', 'lead')
+      .expect(403);
+  });
+
   it('keeps local admin policies local and denies global settings and identity preview over HTTP', async () => {
     const { store, app, users } = await fixture();
     const identity = {

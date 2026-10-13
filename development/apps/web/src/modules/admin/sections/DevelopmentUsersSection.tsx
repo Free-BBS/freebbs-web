@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ApiClient } from '../../../core/api/client.js';
 import { useOptionalAuth } from '../../../core/auth/AuthProvider.js';
 import { FirstBusinessAdminSection } from './FirstBusinessAdminSection.js';
+import { isSuperAdmin } from '../../../core/permissions/Can.js';
 
 interface AccessUser {
   uid: string;
@@ -12,6 +14,24 @@ interface AccessUser {
   accessLevel: 'member' | 'lead' | null;
 }
 const accessLabels = { none: '不可访问', member: '可访问', lead: '发展端负责人' } as const;
+
+function IdentityPreviewButton({ uid, disabled }: { uid: string; disabled: boolean }) {
+  const auth = useOptionalAuth();
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      className="secondary-button"
+      disabled={disabled}
+      onClick={() => {
+        auth?.setPreviewUser(uid);
+        navigate('/community');
+      }}
+    >
+      预览此用户界面
+    </button>
+  );
+}
 
 export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'request'> }) {
   const auth = useOptionalAuth();
@@ -180,6 +200,15 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
                   {draft.username} · {draft.studentId ?? '无学号'} · {draft.uid}
                 </p>
               </div>
+              {auth?.authMode === 'main' &&
+              auth.user &&
+              isSuperAdmin(auth.user) &&
+              auth.user.viewer?.canPreviewDevelopment === true ? (
+                <IdentityPreviewButton
+                  uid={draft.uid}
+                  disabled={dirty || saving || loading || source?.accessLevel == null}
+                />
+              ) : null}
             </header>
             <section className="identity-access-card" aria-labelledby="access-level-title">
               <div>

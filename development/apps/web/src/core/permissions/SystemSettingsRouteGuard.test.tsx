@@ -54,4 +54,28 @@ describe('SystemSettingsRouteGuard', () => {
       expect(screen.getByText('设置内容')).toBeInTheDocument();
     },
   );
+  it('allows a qualified lead to read the global administrator target settings during preview', () => {
+    render(
+      <MemoryRouter>
+        <SystemSettingsRouteGuard
+          user={{
+            ...member,
+            roles: ['platform.admin'],
+            businessAdmin: true,
+            previewing: true,
+            viewer: {
+              uid: 'lead',
+              displayName: '负责人',
+              canManageDevelopment: true,
+              canPreviewDevelopment: true,
+            },
+            developmentAccess: 'lead',
+          }}
+        >
+          只读设置内容
+        </SystemSettingsRouteGuard>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('只读设置内容')).toBeInTheDocument();
+  });
 });

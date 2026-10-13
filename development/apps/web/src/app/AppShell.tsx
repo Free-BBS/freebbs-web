@@ -5,9 +5,12 @@ import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
 import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
-import { MainPreviewSelect } from '../core/auth/MainPreviewSelect.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
-import { isBusinessAdmin, isSuperAdmin, type PresentationUser } from '../core/permissions/Can.js';
+import {
+  canViewSystemSettings,
+  isSuperAdmin,
+  type PresentationUser,
+} from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { MainSiteFooter } from './MainSiteFooter.js';
@@ -90,7 +93,7 @@ function ModuleNavigation({
     .flatMap((module) =>
       module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
     );
-  if (withLearningLink && isBusinessAdmin(user) && !user.previewing) {
+  if (withLearningLink && canViewSystemSettings(user)) {
     navigationModules.push(SYSTEM_SETTINGS_NAVIGATION);
   }
 
@@ -233,7 +236,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
                 <span>管理员模块</span>
               </NavLink>
             ) : null}
-            {isBusinessAdmin(auth.user) && !auth.user.previewing ? (
+            {canViewSystemSettings(auth.user) ? (
               <NavLink className="sidebar-system-link" to={SYSTEM_SETTINGS_NAVIGATION.route}>
                 <img className="sidebar-system-icon" src={SYSTEM_SETTINGS_NAVIGATION.icon} alt="" />
                 <span>{SYSTEM_SETTINGS_NAVIGATION.name}</span>
@@ -264,11 +267,6 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           {auth.authMode === 'demo' ? (
             <div className="demo-preview-toolbar">
               <DemoUserSwitcher />
-            </div>
-          ) : null}
-          {auth.authMode === 'main' && auth.user.viewer?.canPreviewDevelopment ? (
-            <div className="demo-preview-toolbar">
-              <MainPreviewSelect />
             </div>
           ) : null}
 

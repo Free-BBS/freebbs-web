@@ -23,10 +23,12 @@ export function IdentitySettings({
   client,
   initial,
   onUsersChange,
+  readonly = false,
 }: {
   client: Pick<ApiClient, 'request'>;
   initial: SystemSettingsBootstrap;
   onUsersChange: (users: SystemSettingsUser[]) => void;
+  readonly?: boolean;
 }) {
   const auth = useOptionalAuth();
   const [users, setUsers] = useState(initial.users);
@@ -86,11 +88,13 @@ export function IdentitySettings({
     }
   }
   function patch(change: Partial<SystemSettingsUser>) {
+    if (readonly) return;
     setDraft((current) => (current ? { ...current, ...change } : current));
     setMessage('');
     if (!stale) setError('');
   }
   async function save() {
+    if (readonly) return;
     if (!draft || saving || stale) return;
     if (captainEnabled && !draft.captainTeamIds.length) {
       setError('请至少选择一支负责的代表队。');
@@ -228,6 +232,7 @@ export function IdentitySettings({
                 <input
                   type="checkbox"
                   checked={draft.roles.includes('platform.admin')}
+                  disabled={readonly}
                   onChange={(event) =>
                     patch({
                       roles: event.currentTarget.checked
@@ -252,6 +257,7 @@ export function IdentitySettings({
                       })
                     }
                     labelsForRoles={labelsForRoles}
+                    readonly={readonly}
                   />
                 ))}
               </div>
@@ -277,6 +283,7 @@ export function IdentitySettings({
                       <input
                         type="checkbox"
                         checked={captainEnabled}
+                        disabled={readonly}
                         onChange={(event) => {
                           setCaptainEnabled(event.currentTarget.checked);
                           if (!event.currentTarget.checked) patch({ captainTeamIds: [] });
@@ -290,6 +297,7 @@ export function IdentitySettings({
                             <input
                               type="checkbox"
                               checked={draft.captainTeamIds.includes(team.id)}
+                              disabled={readonly}
                               onChange={(event) =>
                                 patch({
                                   captainTeamIds: event.currentTarget.checked
@@ -314,14 +322,14 @@ export function IdentitySettings({
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!dirty || saving || loading}
+                  disabled={readonly || !dirty || saving || loading}
                   onClick={() => select(source)}
                 >
                   放弃修改
                 </button>
                 <button
                   type="button"
-                  disabled={!dirty || saving || loading || stale}
+                  disabled={readonly || !dirty || saving || loading || stale}
                   onClick={() => void save()}
                 >
                   {saving ? '保存中…' : '保存身份设置'}
