@@ -221,7 +221,8 @@ test('public roster contains only approved fields and 34 unique members', () => 
     zhang.introduction,
     '苟利于民，不必法古；苟周于事，不必循俗。勠力同心，和衷共济；草木蔓发，春山在望。击鼓催征稳驭舟，奋楫扬帆启新程。',
   );
-  assert.equal(zhang.photo, '/assets/staff/zhang-yichi.png');
+  assert.equal(zhang.photo, '/assets/staff/zhang-yichi-preview.webp');
+  assert.equal(zhang.photoThumbnail, '/assets/staff/zhang-yichi-thumb.webp');
   assert.equal(roster.members.find((member) => member.name === '周柏田').introduction, '');
   assert.match(
     roster.members.find((member) => member.name === '江玮陶').introduction,
@@ -718,13 +719,14 @@ test('a missing photo falls back to the member name', () => {
   assert.equal(fallback.hidden, false);
 });
 
-test('list uses only a thumbnail and explicit open loads the original even while its thumbnail is pending', () => {
+test('list uses only a thumbnail and explicit open loads the larger local photo even while its thumbnail is pending', () => {
   const doc = directoryDocument();
   const member = {
     name: '成员',
     groups: [],
     introduction: '',
-    photo: '/assets/staff/member.png',
+    photo: '/assets/staff/member-preview.webp',
+    photoThumbnail: '/assets/staff/member-thumb.webp',
   };
   const card = createStaffCard(doc, member, 'h2', installStaffPhotoViewer(doc));
   const avatar = card.children[0];
@@ -745,10 +747,15 @@ test('list uses only a thumbnail and explicit open loads the original even while
   assert.equal(fallback.hidden, true);
   assert.equal(image.width, 88);
   assert.equal(image.height, 116);
+  assert.equal(image.src, member.photoThumbnail);
+  assert.equal(image.loading, 'lazy');
+  assert.equal(image.decoding, 'async');
   avatar.trigger('click');
   assert.equal(doc.ids['staff-photo-dialog'].open, true);
   assert.equal(doc.ids['staff-photo-name'].textContent, member.name);
   assert.equal(doc.ids['staff-photo-image'].src, member.photo);
+  assert.notEqual(doc.ids['staff-photo-image'].src, image.src);
+  assert.equal(doc.ids['staff-photo-image'].decoding, 'async');
   assert.equal(doc.ids['staff-photo-image'].alt, '成员的照片');
   assert.equal(doc.ids['staff-photo-close'].focused, true);
   doc.ids['staff-photo-image'].trigger('load');
@@ -851,6 +858,34 @@ test('old and invalid thumbnail fields never make a card download the original',
   }
   assert.equal(staffThumbnailPath('/assets/staff/../a.jpg'), '');
   assert.equal(staffThumbnailPath('//invalid/a.jpg'), '');
+});
+
+test('published preview photos retain explicit thumbnails and legacy preview paths derive the same small variant', () => {
+  const published = normalizeStaffRoster(roster);
+  assert.equal(published.members.length, roster.members.length);
+  published.members.forEach((member, index) => {
+    assert.equal(member.photo, roster.members[index].photo);
+    assert.equal(member.photoThumbnail, roster.members[index].photoThumbnail);
+    assert.match(member.photoThumbnail, /-thumb\.webp$/);
+    assert.doesNotMatch(member.photoThumbnail, /-preview-thumb\.webp$/);
+  });
+  const base = { name: '成员', groups: [], photo: '/assets/staff/person-preview.webp' };
+  for (const photoThumbnail of [undefined, base.photo, 'https://invalid.example/photo.webp']) {
+    const member = normalizeStaffRoster({ members: [{ ...base, photoThumbnail }] }).members[0];
+    assert.equal(member.photoThumbnail, '/assets/staff/person-thumb.webp');
+    const card = createStaffCard({ createElement: element }, member);
+    assert.equal(card.children[0].children[1].src, '/assets/staff/person-thumb.webp');
+  }
+  const custom = normalizeStaffRoster({
+    members: [{ ...base, photoThumbnail: '/assets/staff/custom-small.webp' }],
+  }).members[0];
+  assert.equal(custom.photoThumbnail, '/assets/staff/custom-small.webp');
+  const card = createStaffCard({ createElement: element }, custom);
+  assert.equal(card.children[0].children[1].src, '/assets/staff/custom-small.webp');
+  assert.equal(
+    staffThumbnailPath('/assets/staff/person-thumb.webp'),
+    '/assets/staff/person-thumb.webp',
+  );
 });
 
 test('closed and quickly replaced viewers ignore every stale load and error event', () => {
@@ -1088,7 +1123,7 @@ test('staff entry retains shared shell and every local asset exists', () => {
   assert.match(html, /id="user-panel"/);
   assert.match(html, /src="\/app\.js"/);
   assert.match(html, /href="\/staff\.css"/);
-  assert.match(html, /src="\/staff\.js\?v=20261011-thumbnails"/);
+  assert.match(html, /src="\/staff\.js\?v=20261014-main-compat-1"/);
   assert.match(html, /id="staff-course-section" hidden/);
   assert.match(html, /role="group" aria-label="按课程部组别查看"/);
   for (const group of ['数学组', '电路组', '信号组', '待确认']) {
@@ -1104,6 +1139,11 @@ test('staff entry retains shared shell and every local asset exists', () => {
   for (const member of normalizeStaffRoster(roster).members) {
     assert.ok(member.photo, `${member.name} photo`);
     assert.ok(fs.existsSync(path.join(root, 'public', member.photo)), member.photo);
+    assert.ok(member.photoThumbnail, `${member.name} thumbnail`);
+    assert.ok(
+      fs.existsSync(path.join(root, 'public', member.photoThumbnail)),
+      member.photoThumbnail,
+    );
   }
   const photo = fs.readFileSync(path.join(root, 'public/assets/staff/zhang-yichi.png'));
   assert.equal(photo.readUInt32BE(16), 162);

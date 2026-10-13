@@ -88,6 +88,7 @@ export async function loadAuthorizationContext(
   const context: AuthorizationContext = {
     ...identityContext,
     roles: [],
+    businessAdmin: false,
     tags: [],
     policies: [],
   };
@@ -132,15 +133,60 @@ export async function loadAuthorizationContext(
       isCurrent(assignment.expiresAt, now),
   );
   context.roles = [...new Set(currentRoleAssignments.map(({ roleKey }) => roleKey))];
+  const businessAdmin = currentRoleAssignments.some(
+    (assignment) => assignment.roleKey === 'platform.admin' && isGlobal(assignment.scope),
+  );
   const activeRoleBindings = roleBindings.filter(
     (binding) => binding.status === 'active' && catalogDefinition(binding),
   );
   for (const assignment of currentRoleAssignments) {
+    // New counselor finance defaults work on existing stores. Any governed
+    // finance row (including inactive rows) suppresses this runtime default.
+    if (
+      ['counselor.youth_league_secretary', 'counselor.youth_league'].includes(assignment.roleKey) &&
+      !roleBindings.some(
+        (binding) =>
+          binding.roleKey === assignment.roleKey && binding.action.startsWith('finance.'),
+      )
+    ) {
+      for (const permission of activePermissions.filter(
+        (permission) => permission.action === 'finance.*' && permission.resource === '*',
+      )) {
+        policies.push({
+          id: `counselor-finance:${assignment.id}:${permission.id}`,
+          action: permission.action,
+          resource: permission.resource,
+          effect: 'allow',
+          expiresAt: assignment.expiresAt,
+          ...(isGlobal(assignment.scope) ? {} : { scope: assignment.scope }),
+        });
+      }
+    }
+    // Existing databases can retain legacy lead wildcard rows. The reserved lead
+    // role never supplies business permissions, even before catalog reconciliation.
+    if (assignment.roleKey === 'platform.admin') {
+      for (const permission of activePermissions.filter(
+        (permission) => !permission.action.startsWith('admin.'),
+      )) {
+        policies.push({
+          id: `business-admin:${assignment.id}:${permission.id}`,
+          action: permission.action,
+          resource: permission.resource,
+          effect: 'allow',
+          expiresAt: assignment.expiresAt,
+          ...(isGlobal(assignment.scope) ? {} : { scope: assignment.scope }),
+        });
+      }
+    }
     for (const binding of activeRoleBindings) {
       if (binding.roleKey !== assignment.roleKey) continue;
+      if (assignment.roleKey === 'platform.super_admin' && !binding.action.startsWith('admin.'))
+        continue;
       const scope = combineScopes(assignment.scope, binding.scope);
       if (scope === null) continue;
       for (const permission of permissionCandidates(binding, activePermissions)) {
+        if (assignment.roleKey === 'platform.admin' && permission.action.startsWith('admin.'))
+          continue;
         policies.push({
           id: `role:${assignment.id}:${binding.id}:${permission.id}`,
           action: permission.action,
@@ -200,5 +246,5 @@ export async function loadAuthorizationContext(
     }
   }
 
-  return { ...context, policies };
+  return { ...context, businessAdmin, policies };
 }

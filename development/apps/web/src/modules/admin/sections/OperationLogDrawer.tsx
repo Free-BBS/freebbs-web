@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import type { ApiClient } from '../../../core/api/client.js';
 
-const path = '/admin/audit-logs?action=admin.development_user.update&page=1&pageSize=20';
+const path = '/admin/audit-logs?action=admin.development_access.update&page=1&pageSize=20';
 
 export function OperationLogDrawer({
   client,
@@ -60,12 +60,12 @@ export function OperationLogDrawer({
         </header>
         {loading ? <p role="status">正在读取操作记录…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
-        {!loading && !error && records.length === 0 ? <p>还没有身份设置记录。</p> : null}
+        {!loading && !error && records.length === 0 ? <p>还没有访问设置记录。</p> : null}
         <ol className="operation-log-list">
           {records.map((record) => (
             <li key={record.id}>
               <strong>{record.actorUid}</strong>
-              <span>更新了 {record.resourceId} 的身份卡片</span>
+              <span>更新了 {record.resourceId} 的访问设置</span>
               <time dateTime={record.createdAt}>
                 {new Date(record.createdAt).toLocaleString('zh-CN')}
               </time>

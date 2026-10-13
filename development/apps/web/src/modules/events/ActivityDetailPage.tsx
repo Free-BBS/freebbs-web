@@ -9,6 +9,7 @@ import {
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { createApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 
 export interface DevelopmentApi {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -111,7 +112,7 @@ function utcInstantToLocalDateTimeInput(value: string): string {
 function canUpdateOrganization(user: PageUser | null, organizationId: string | null): boolean {
   if (organizationId === null) return true;
   return Boolean(
-    user?.roles.includes('platform.super_admin') ||
+    isBusinessAdmin(user) ||
     user?.roles.some((role) => {
       const membership = organizationForRole(role);
       return (
@@ -430,25 +431,27 @@ export function ActivityDetailPage({
   const registrationCount = detail.registrationCount ?? 0;
   const progress =
     milestones.length === 0 ? null : Math.round((completed / milestones.length) * 100);
+  const registrationEnded = [detail.registrationDeadline, detail.endsAt].some(
+    (value) => value !== null && Date.parse(value) <= Date.now(),
+  );
   const registrationState =
     user === null
       ? '请登录后查看报名状态'
       : registration?.status === 'registered'
         ? '已报名'
-        : detail.status !== 'published'
-          ? '报名尚未开放'
-          : !canRegister
-            ? '当前不可报名'
-            : detail.registrationDeadline !== null &&
-                Date.parse(detail.registrationDeadline) <= Date.now()
-              ? '报名已截止'
-              : detail.capacity !== null && registrationCount >= detail.capacity
-                ? '名额已满'
-                : '未报名';
+        : ['finished', 'archived'].includes(detail.status)
+          ? '报名已截止'
+          : detail.status !== 'published'
+            ? '报名尚未开放'
+            : !canRegister
+              ? '当前不可报名'
+              : registrationEnded
+                ? '报名已截止'
+                : detail.capacity !== null && registrationCount >= detail.capacity
+                  ? '名额已满'
+                  : '未报名';
   const registrationUnavailable =
-    (detail.registrationDeadline !== null &&
-      Date.parse(detail.registrationDeadline) <= Date.now()) ||
-    (detail.capacity !== null && registrationCount >= detail.capacity);
+    registrationEnded || (detail.capacity !== null && registrationCount >= detail.capacity);
 
   return (
     <section className="module-page" aria-labelledby="activity-detail-title">

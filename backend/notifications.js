@@ -11,7 +11,13 @@ const SCHEMA = ['026_notifications.sql', '047_notification_email_preferences.sql
   )
   .map((sql) => sql.trim())
   .filter(Boolean);
-const ROLE_LABELS = { student: '学生', ta: '助教', teacher: '教师', admin: '管理员' };
+const ROLE_LABELS = {
+  student: '学生',
+  ta: '助教',
+  teacher: '教师',
+  admin: '管理员',
+  enterprise: '企业',
+};
 const REACTION_LABELS = { smile: '点赞', light: '点亮', fireworks: '送上烟花' };
 const EMAIL_PREFERENCE_KEYS = Object.freeze([
   'reply',
@@ -144,7 +150,7 @@ function extractMentionUsernames(value) {
   const names = new Map();
   const source = String(value || '');
   for (const match of source.matchAll(
-    /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,64})(?=$|[^A-Za-z0-9_])/g,
+    /(^|[^A-Za-z0-9_])@([\p{Script=Han}A-Za-z0-9_]{2,64})(?=$|[^\p{Script=Han}A-Za-z0-9_])/gu,
   )) {
     const username = match[2];
     const key = username.toLowerCase();
@@ -394,6 +400,23 @@ function createNotificationService({
       });
       return recipientCount;
     });
+  }
+
+  async function notifyCertification(
+    { actor, recipients, title, body, link, eventKey },
+    connection,
+  ) {
+    return inTransaction(pool, connection, (database) =>
+      insertNotifications(database, recipients, {
+        actorId: actor.id,
+        kind: 'certification',
+        title,
+        body,
+        link,
+        eventKey,
+        email: false,
+      }),
+    );
   }
 
   async function notifyReply(
@@ -719,6 +742,7 @@ function createNotificationService({
   return {
     publish,
     notifyReply,
+    notifyCertification,
     notifyMentions,
     notifyReaction,
     notifyCommentReaction,

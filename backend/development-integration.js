@@ -89,6 +89,7 @@ async function loadDevelopmentRuntime({
   uploadDirectory,
   collectionsUploadDirectory,
   sportsUploadDirectory,
+  developmentRewardProvider,
 }) {
   const modulePath = path.join(
     repositoryRoot,
@@ -106,6 +107,7 @@ async function loadDevelopmentRuntime({
     uploadDirectory,
     collectionsUploadDirectory,
     sportsUploadDirectory,
+    ...(developmentRewardProvider ? { developmentRewardProvider } : {}),
   });
 }
 

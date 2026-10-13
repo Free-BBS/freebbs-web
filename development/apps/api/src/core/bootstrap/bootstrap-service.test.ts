@@ -373,7 +373,7 @@ describe('production governance bootstrap', () => {
       ({ action, resource }) => action === '*' && resource === '*',
     );
     const deniedBinding = rolePermissions.find(
-      ({ roleKey, action }) => roleKey === 'platform.super_admin' && action === '*',
+      ({ roleKey, action }) => roleKey === 'platform.super_admin' && action === 'admin.manage',
     );
     const inactiveBinding = rolePermissions.find(
       ({ roleKey, action }) => roleKey === 'domain.liaison_lead' && action === 'clubs.*',
@@ -479,7 +479,7 @@ describe('production governance bootstrap', () => {
         roles: ['platform.super_admin'],
         permissions: ['*:*'],
         rolePermissions: expect.arrayContaining([
-          'platform.super_admin:*:*:public:*',
+          'platform.super_admin:admin.manage:admin:public:*',
           'domain.liaison_lead:clubs.*:*:public:*',
         ]),
         tagDefinitions: ['sports.team_captain'],
@@ -530,8 +530,8 @@ describe('production governance bootstrap', () => {
     const canonicalRoleBinding = (await store.rolePermissions.list()).find(
       ({ roleKey, action, resource, scope }) =>
         roleKey === 'platform.super_admin' &&
-        action === '*' &&
-        resource === '*' &&
+        action === 'admin.manage' &&
+        resource === 'admin' &&
         scope.type === 'public' &&
         scope.id === '*',
     );
@@ -572,8 +572,8 @@ describe('production governance bootstrap', () => {
       (await store.rolePermissions.list()).filter(
         ({ roleKey, action, resource, scope }) =>
           roleKey === 'platform.super_admin' &&
-          action === '*' &&
-          resource === '*' &&
+          action === 'admin.manage' &&
+          resource === 'admin' &&
           scope.type === 'public' &&
           scope.id === '*',
       ),

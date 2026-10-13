@@ -1,5 +1,4 @@
-// Mechanical delivery conversion, adapted from the existing staff-photo pipeline.
-// Originals remain the full-size viewer source; only list thumbnails are generated.
+// Generate delivery variants from retained originals; never overwrite source photos.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const sharp = require('sharp');
@@ -10,6 +9,7 @@ const ROSTER = path.join(ROOT, 'public/data/staff.json');
 const MAX_THUMBNAIL_BYTES = 800 * 1000;
 const BUDGETS = {
   thumbnail: { width: 176, height: 232, bytes: 24 * 1024 },
+  preview: { width: 1200, height: 1200, bytes: 220 * 1024 },
 };
 
 async function createVariant(source, target, budget = BUDGETS.thumbnail) {
@@ -38,21 +38,31 @@ async function createVariant(source, target, budget = BUDGETS.thumbnail) {
 
 async function optimizeStaffPhotos({ assets = ASSETS, rosterFile = ROSTER } = {}) {
   const roster = JSON.parse(await fs.readFile(rosterFile, 'utf8'));
-  const entries = roster.members.map((member) => {
-    const match = /^\/assets\/staff\/([a-z0-9_-]+)\.(?:png|jpe?g|webp)$/i.exec(member.photo || '');
-    if (!match || /-(?:thumb|preview)$/i.test(match[1]))
-      throw new Error(`Invalid original staff photo: ${member.name}`);
-    const original = path.basename(member.photo);
-    const thumbnail = `${match[1]}-thumb.webp`;
-    return { member, source: path.join(assets, original), thumbnail };
-  });
+  const originals = (await fs.readdir(assets)).filter(
+    (name) => /\.(?:png|jpe?g|webp)$/i.test(name) && !/-(?:thumb|preview)\.webp$/i.test(name),
+  );
   const report = [];
-  for (const { member, source, thumbnail } of entries) {
-    const thumbInfo = await createVariant(source, path.join(assets, thumbnail));
+  for (const member of roster.members) {
+    const match = /^\/assets\/staff\/([a-z0-9_-]+)\.(?:png|jpe?g|webp)$/i.exec(member.photo);
+    if (!match) throw new Error(`Invalid local staff photo: ${member.name}`);
+    if (/-thumb$/i.test(match[1])) throw new Error(`Invalid source staff photo: ${member.name}`);
+    const stem = match[1].replace(/-preview$/i, '');
+    const original = originals.find((name) => path.parse(name).name === stem);
+    if (!original) throw new Error(`Original photo missing: ${member.name}`);
+    const source = path.join(assets, original);
+    const thumbnail = `${stem}-thumb.webp`;
+    const preview = `${stem}-preview.webp`;
+    const thumbInfo = await createVariant(source, path.join(assets, thumbnail), BUDGETS.thumbnail);
+    const previewInfo = await createVariant(source, path.join(assets, preview), BUDGETS.preview);
+    member.photo = `/assets/staff/${preview}`;
     member.photoThumbnail = `/assets/staff/${thumbnail}`;
-    report.push({ name: member.name, originalBytes: (await fs.stat(source)).size, thumbInfo });
+    report.push({
+      name: member.name,
+      originalBytes: (await fs.stat(source)).size,
+      thumbInfo,
+      previewInfo,
+    });
   }
-  // This is a bulk manifest update: preserve photo and all member content.
   await fs.writeFile(rosterFile, `${JSON.stringify(roster, null, 2)}\n`);
   return report;
 }
@@ -66,7 +76,9 @@ if (require.main === module) {
             count: report.length,
             originalBytes: report.reduce((sum, item) => sum + item.originalBytes, 0),
             thumbnailBytes: report.reduce((sum, item) => sum + item.thumbInfo.bytes, 0),
+            previewBytes: report.reduce((sum, item) => sum + item.previewInfo.bytes, 0),
             largestThumbnail: Math.max(...report.map((item) => item.thumbInfo.bytes)),
+            largestPreview: Math.max(...report.map((item) => item.previewInfo.bytes)),
           },
           null,
           2,

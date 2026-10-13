@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/sync-site-footer.mjs",
     "dev": "vite",
     "preview": "vite preview",
+    "prebuild": "node scripts/sync-site-footer.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

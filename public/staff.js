@@ -20,7 +20,7 @@
 
   function staffThumbnailPath(photo) {
     return /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(photo || '')
-      ? photo.replace(/\.(?:png|jpe?g|webp)$/i, '-thumb.webp')
+      ? photo.replace(/(?:-(?:thumb|preview))?\.(?:png|jpe?g|webp)$/i, '-thumb.webp')
       : '';
   }
 
@@ -75,6 +75,12 @@
         /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photo)
           ? member.photo
           : '';
+      const photoThumbnail =
+        typeof member.photoThumbnail === 'string' &&
+        member.photoThumbnail !== photo &&
+        /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photoThumbnail)
+          ? member.photoThumbnail
+          : staffThumbnailPath(photo);
       return {
         name,
         groups,
@@ -88,8 +94,7 @@
         ],
         introduction: introduction.trim() === '【请输入文本】' ? '' : introduction,
         photo,
-        // Older rosters can use the generated naming convention, never the original as a fallback.
-        photoThumbnail: staffThumbnailPath(photo),
+        photoThumbnail,
       };
     });
     const sourceDate = /^\d{4}-\d{2}-\d{2}$/.test(data.sourceDate || '') ? data.sourceDate : '';
@@ -185,7 +190,8 @@
         photo.hidden = true;
         fallback.hidden = false;
       });
-      photo.src = staffThumbnailPath(member.photo);
+      // Prefer the published thumbnail; legacy rosters derive it without downloading a full photo.
+      photo.src = member.photoThumbnail || staffThumbnailPath(member.photo);
       avatar.append(photo);
     }
     const copy = doc.createElement('div');
@@ -319,7 +325,7 @@
         dialog.setAttribute('aria-busy', 'false');
       });
       if (!dialog.open) dialog.showModal();
-      // No original photo is requested until an explicit open action.
+      // The larger published photo is requested only after an explicit open action.
       image.src = member.photo;
       close.focus();
     };

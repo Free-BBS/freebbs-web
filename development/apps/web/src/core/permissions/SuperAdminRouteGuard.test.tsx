@@ -15,11 +15,11 @@ const policyOnlyUser: PresentationUser = {
   policies: [{ action: 'admin.manage', effect: 'allow' }],
 };
 
-function DashboardMarker() {
+function CommunityMarker() {
   const navigationType = useNavigationType();
   return (
     <>
-      <p>dashboard content</p>
+      <p>community content</p>
       <p data-testid="navigation-type">{navigationType}</p>
     </>
   );
@@ -37,17 +37,41 @@ function renderGuard(user: PresentationUser) {
             </SuperAdminRouteGuard>
           }
         />
-        <Route path="/dashboard" element={<DashboardMarker />} />
+        <Route path="/community" element={<CommunityMarker />} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
 describe('SuperAdminRouteGuard', () => {
-  it('redirects a policy-only administrator to the dashboard with replacement', () => {
+  it.each([
+    {
+      developmentAccess: 'member' as const,
+      viewer: { uid: 'lead', displayName: '旧负责人', canManageDevelopment: false },
+    },
+    { developmentAccess: 'member' as const },
+    {
+      developmentAccess: 'member' as const,
+      viewer: { uid: 'lead', displayName: '资格不一致', canManageDevelopment: true },
+    },
+  ])('rejects a stale reserved role without trusted lead access: %j', (qualification) => {
+    renderGuard({ ...policyOnlyUser, roles: ['platform.super_admin'], ...qualification });
+    expect(screen.getByText('community content')).toBeInTheDocument();
+    expect(screen.queryByText('governance content')).not.toBeInTheDocument();
+  });
+  it('allows a main-site lead with trusted access qualification', () => {
+    renderGuard({
+      ...policyOnlyUser,
+      roles: ['platform.super_admin'],
+      developmentAccess: 'lead',
+      viewer: { uid: 'lead', displayName: '负责人', canManageDevelopment: true },
+    });
+    expect(screen.getByText('governance content')).toBeInTheDocument();
+  });
+  it('redirects a policy-only administrator to the community with replacement', () => {
     renderGuard(policyOnlyUser);
 
-    expect(screen.getByText('dashboard content')).toBeInTheDocument();
+    expect(screen.getByText('community content')).toBeInTheDocument();
     expect(screen.getByTestId('navigation-type')).toHaveTextContent('REPLACE');
     expect(screen.queryByText('governance content')).not.toBeInTheDocument();
   });
@@ -57,10 +81,12 @@ describe('SuperAdminRouteGuard', () => {
       ...policyOnlyUser,
       uid: 'super-admin',
       roles: ['platform.super_admin'],
+      developmentAccess: 'lead',
+      viewer: { uid: 'super-admin', displayName: '负责人', canManageDevelopment: true },
       policies: [],
     });
 
     expect(screen.getByText('governance content')).toBeInTheDocument();
-    expect(screen.queryByText('dashboard content')).not.toBeInTheDocument();
+    expect(screen.queryByText('community content')).not.toBeInTheDocument();
   });
 });

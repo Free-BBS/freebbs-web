@@ -1,0 +1,65 @@
+.sports-card-form,
+.sports-homepage-editor {
+  display: grid;
+  gap: 1rem;
+  padding: 1.4rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: var(--surface-raised);
+}
+.sports-card-form label,
+.sports-homepage-editor label {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+.sports-card-form input,
+.sports-card-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.sports-card-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+.sports-maintenance-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.sports-homepage {
+  display: grid;
+  gap: 1rem;
+}
+.sports-homepage .department-document {
+  width: 100%;
+  border: 0;
+  border-radius: 0.8rem;
+}
+.sports-homepage-preview {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  background: var(--surface-muted);
+  border-radius: 0.8rem;
+}
+
+.sports-card-form,
+.sports-homepage,
+.sports-homepage-editor,
+.sports-homepage-preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sports-homepage-editor input[type='file'] {
+  max-width: 100%;
+  min-width: 0;
+}
+.sports-card-form input,
+.sports-card-form textarea {
+  background: var(--surface-raised);
+  color: var(--color-text);
+  border: 1px solid var(--border-subtle);
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.55rem;
+}

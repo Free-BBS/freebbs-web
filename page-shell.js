@@ -34,6 +34,13 @@ function preparePageShell(source) {
   });
   if (!html.includes('href="/site-footer.css"'))
     html = html.replace('</head>', '<link rel="stylesheet" href="/site-footer.css"></head>');
+  if (html.includes('src="/app.js"') && !html.includes('src="/identity-badges.js"')) {
+    html = html.replace(
+      '<script src="/app.js">',
+      '<script src="/identity-badges.js"></script>\n<script src="/app.js">',
+    );
+    html = html.replace('</head>', '<link rel="stylesheet" href="/identity-badges.css"></head>');
+  }
   // Apply saved font size and theme before any page content can paint. The same
   // preference module still executes once, before app.js, including on auth pages.
   const typography = /<script\b[^>]*src=["']\/typography\.js["'][^>]*>\s*<\/script>/;

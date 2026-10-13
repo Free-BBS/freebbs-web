@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import { MainSiteHeader, mainSiteTypography } from './MainSiteHeader.js';
+import type { ApiClient } from '../core/api/client.js';
 
 const user = {
   uid: 'u123456',
@@ -20,6 +21,17 @@ afterEach(() => {
 });
 
 describe('MainSiteHeader', () => {
+  it.each(['/events', '/events/activity-night-run'])(
+    'keeps the 萬事屋 shell title on existing activity route %s',
+    (route) => {
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('heading', { name: '萬事屋' })).toBeInTheDocument();
+    },
+  );
   it('matches the learning shell controls and shows real balances', async () => {
     window.localStorage.setItem('free_bbs_auth_token', 'test-token');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -38,11 +50,23 @@ describe('MainSiteHeader', () => {
 
     render(
       <MemoryRouter>
-        <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />
+        <MainSiteHeader
+          user={user}
+          authMode="main"
+          themeMode="light"
+          onToggleTheme={vi.fn()}
+          client={{
+            request: vi.fn(async (path: string) =>
+              path === '/notifications/unread-count'
+                ? { unreadCount: 2 }
+                : { notifications: [], unreadCount: 0, nextCursor: null },
+            ) as ApiClient['request'],
+          }}
+        />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: '发展端 / 开始探索' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '無界广场' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '全站搜索' })).toHaveAttribute('href', '/search');
     expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('button', { name: '退出' })).not.toBeInTheDocument();
@@ -256,7 +280,7 @@ describe('MainSiteHeader', () => {
     expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
   });
 
-  it('opens the main-site inbox and marks an item read', async () => {
+  it('opens the development inbox and marks an item read without the learning inbox', async () => {
     window.localStorage.setItem('free_bbs_auth_token', 'test-token');
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -289,9 +313,36 @@ describe('MainSiteHeader', () => {
       throw new Error(`Unexpected request: ${path}`);
     });
     vi.stubGlobal('fetch', fetchMock);
+    const developmentRequest = vi.fn(async (path: string) => {
+      if (path === '/notifications/unread-count') return { unreadCount: 1 };
+      if (path === '/events/notifications')
+        return { notifications: [], unreadCount: 0, nextCursor: null };
+      if (path === '/notifications')
+        return [
+          {
+            id: '42',
+            title: '新通知',
+            body: '欢迎回来',
+            link: null,
+            readAt: null,
+            createdAt: '2026-09-18T10:00:00Z',
+            kind: 'announcement',
+            authorUid: 'admin',
+            authorDisplayName: '管理员',
+          },
+        ];
+      if (path === '/notifications/42/read') return { updated: true, id: '42' };
+      throw new Error(path);
+    });
     render(
       <MemoryRouter>
-        <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />
+        <MainSiteHeader
+          user={user}
+          authMode="main"
+          themeMode="light"
+          onToggleTheme={vi.fn()}
+          client={{ request: developmentRequest as ApiClient['request'] }}
+        />
       </MemoryRouter>,
     );
 
@@ -301,9 +352,12 @@ describe('MainSiteHeader', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '通知，无未读' })).toBeInTheDocument(),
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/notifications/42/read',
+    expect(developmentRequest).toHaveBeenCalledWith(
+      '/notifications/42/read',
       expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock.mock.calls.some(([path]) => String(path).includes('/notifications'))).toBe(
+      false,
     );
   });
 });

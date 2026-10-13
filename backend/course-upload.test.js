@@ -336,7 +336,7 @@ test('token access rechecks permissions, username, expiration, revocation, and c
   assert.equal((await request('/courses/signals/nodes/SS-01-01')).status, 403);
   pool.state.user.is_admin = 1;
   assert.equal((await request('/courses/signals/nodes/SS-01-01')).status, 200);
-  pool.state.user.username = '旧用户';
+  pool.state.user.username = '旧 用户';
   assert.equal((await request('/courses')).status, 403);
   pool.state.user.username = 'fixed_user';
   pool.state.tokens[0].expires_at = new Date(0);

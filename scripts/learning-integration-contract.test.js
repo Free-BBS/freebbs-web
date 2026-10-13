@@ -371,23 +371,37 @@ function assertBefore(scripts, earlier, later) {
   assert.ok(scripts.indexOf(earlier) < scripts.indexOf(later), `${earlier} must precede ${later}`);
 }
 
-test('user administration loads teacher identity and learning analytics resources together', () => {
+test('user administration retains current certification controls alongside learning analytics and research', () => {
   const html = read('public/adminusers.html');
   const scripts = scriptOrder(html);
   const styles = [...html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/g)].map(
     (match) => match[1].split('?')[0],
   );
-  for (const stylesheet of ['/account-identity.css', '/learning-analytics.css']) {
+  for (const stylesheet of [
+    '/account-identity.css',
+    '/user-certifications.css',
+    '/learning-analytics.css',
+    '/learning-research.css',
+  ]) {
     assert.equal(styles.filter((source) => source === stylesheet).length, 1);
     assert.ok(read(`public${stylesheet}`).trim());
   }
-  for (const script of ['/admin-account-credentials.js', '/learning-analytics.js']) {
+  for (const script of [
+    '/admin-account-credentials.js',
+    '/admin-certifications.js',
+    '/learning-analytics.js',
+    '/learning-research.js',
+  ]) {
     assert.equal(scripts.filter((source) => source === script).length, 1);
     assertBefore(scripts, '/app.js', script);
     assert.ok(read(`public${script}`).trim());
   }
   assert.match(html, /id="admin-student-requests"/);
   assert.match(html, /id="admin-learning-data"/);
+  assert.match(html, /id="admin-platform-research"/);
+  assert.match(html, /data-learning-research-admin/);
+  assert.match(html, /id="certifications"/);
+  assert.match(html, /id="admin-certification-list"/);
 });
 
 test('CI retains teacher account and learning regression suites after synchronization', () => {

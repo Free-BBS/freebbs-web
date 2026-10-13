@@ -114,19 +114,14 @@ async function changeUsername({ pool, userId, username, expectedUsername, allowP
 }
 
 function isValidUsername(value) {
-  return (
-    typeof value === 'string' &&
-    value.length >= 3 &&
-    value.length <= 64 &&
-    !/[^A-Za-z0-9_]/.test(value)
-  );
+  return typeof value === 'string' && /^[A-Za-z0-9_]{3,64}$/.test(value);
 }
 
 function enforceUsername(user, response) {
   if (isValidUsername(user.username)) return true;
   response.status(403).json({
     code: 'username_change_required',
-    message: '请先修改用户名，仅可使用英文字母、数字和下划线',
+    message: '请先免费修改用户名，须为 3 至 64 位英文字母、数字或下划线',
     requiresUsernameChange: true,
   });
   return false;

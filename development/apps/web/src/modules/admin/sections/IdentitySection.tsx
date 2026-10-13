@@ -9,10 +9,14 @@ export function IdentitySection({
   section,
   roles,
   onRolesChange,
+  labelsForRoles = identityLabels,
+  readonly = false,
 }: {
   section: DevelopmentIdentitySection;
   roles: RoleKey[];
   onRolesChange: (roles: RoleKey[]) => void;
+  labelsForRoles?: (roles: readonly RoleKey[]) => string[];
+  readonly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selectedRoles = new Set(roles);
@@ -22,6 +26,7 @@ export function IdentitySection({
   const selectedInSection = sectionRoleKeys.filter((roleKey) => selectedRoles.has(roleKey));
 
   function toggle(groupIndex: number, roleKey: RoleKey) {
+    if (readonly) return;
     const group = section.groups[groupIndex];
     if (!group) return;
     const groupKeys = new Set(group.options.map(({ roleKey: key }) => key));
@@ -41,7 +46,7 @@ export function IdentitySection({
         <span>{section.label}</span>
         <small>
           {selectedInSection.length
-            ? `已选 ${selectedInSection.length} 项 · ${identityLabels(selectedInSection).join('、')}`
+            ? `已选 ${selectedInSection.length} 项 · ${labelsForRoles(selectedInSection).join('、')}`
             : '尚未选择'}
         </small>
       </button>
@@ -63,6 +68,7 @@ export function IdentitySection({
                       type="button"
                       aria-label={`${group.label}：${identity.label}`}
                       aria-pressed={selected}
+                      disabled={readonly}
                       onClick={() => toggle(groupIndex, identity.roleKey)}
                     >
                       {identity.label}

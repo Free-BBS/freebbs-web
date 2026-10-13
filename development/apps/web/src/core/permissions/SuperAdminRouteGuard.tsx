@@ -9,8 +9,8 @@ export interface SuperAdminRouteGuardProps {
 }
 
 export function SuperAdminRouteGuard({ children, user }: SuperAdminRouteGuardProps) {
-  if (user === null || !isSuperAdmin(user)) {
-    return <Navigate to="/dashboard" replace />;
+  if (user === null || user.previewing || !isSuperAdmin(user)) {
+    return <Navigate to="/community" replace />;
   }
 
   return <>{children}</>;

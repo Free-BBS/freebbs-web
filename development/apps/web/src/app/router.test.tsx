@@ -57,11 +57,17 @@ describe('application routes', () => {
     ['/information/proposals', 'information/proposals'],
     ['/information/proposals/proposal-1', 'information/proposals/:proposalId'],
     ['/events/activity-1', 'events/:activityId'],
+    ['/collections/activities', 'collections/activities'],
+    [
+      '/collections/activities/native_collection/form-1',
+      'collections/activities/:source/:activityId',
+    ],
     ['/sports/team-1', 'sports/:teamId'],
     ['/shop', 'shop'],
     ['/inventory', 'inventory'],
     ['/profile', 'profile'],
     ['/settings', 'settings'],
+    ['/system-settings', 'system-settings'],
     ['/liaison/problems/problem-1', 'liaison/problems/:problemId'],
   ])('matches %s to its focused module route', (pathname, expectedPath) => {
     expect(leafRoute(pathname)?.path).toBe(expectedPath);
@@ -73,15 +79,25 @@ describe('application routes', () => {
     expect(redirectTarget('/interest-groups')).toBe('/growth');
   });
 
-  it('keeps unknown paths on the dashboard fallback', () => {
+  it('opens the community first and retires the old dashboard', () => {
+    expect(redirectTarget('/')).toBe('/community');
+    expect(redirectTarget('/dashboard')).toBe('/community');
+    expect(leafRoute('/collections/workbench/new')?.path).toBe(
+      'collections/workbench/:collectionId',
+    );
+  });
+
+  it('keeps unknown paths on the community fallback', () => {
     const route = leafRoute('/not-a-module');
 
     expect(route?.path).toBe('*');
-    expect(redirectTarget('/not-a-module')).toBe('/dashboard');
+    expect(redirectTarget('/not-a-module')).toBe('/community');
   });
 
-  it('redirects an unauthorized administrator to the dashboard', async () => {
-    mockRequest.mockResolvedValue([]);
+  it('redirects an unauthorized administrator to the community', async () => {
+    mockRequest.mockImplementation(async (path: string) =>
+      path === '/community/trending' ? { items: [], updatedAt: '2026-10-09T00:00:00Z' } : [],
+    );
     mockUseAuth.mockReturnValue({
       status: 'authenticated',
       user: student,
@@ -99,7 +115,7 @@ describe('application routes', () => {
     });
     render(<RouterProvider router={appRouter} />);
 
-    await waitFor(() => expect(appRouter.state.location.pathname).toBe('/development/dashboard'));
+    await waitFor(() => expect(appRouter.state.location.pathname).toBe('/development/community'));
   });
 
   it('loads and displays the requested proposal on a direct detail route', async () => {

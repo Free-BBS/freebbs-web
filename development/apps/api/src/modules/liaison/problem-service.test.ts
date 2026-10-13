@@ -144,10 +144,13 @@ describe('liaison problem service', () => {
     });
   });
 
-  it('binds review only to the configured development and Youth League leads', () => {
-    expect(ROLE_PERMISSION_CATALOG['platform.super_admin']).toContainEqual({
-      action: 'liaison.problem.review',
-      resource: 'liaison_problem',
+  it('binds global business review to explicit administrators and keeps Youth League review', () => {
+    expect(ROLE_PERMISSION_CATALOG['platform.super_admin']).not.toContainEqual(
+      expect.objectContaining({ action: 'liaison.problem.review' }),
+    );
+    expect(ROLE_PERMISSION_CATALOG['platform.admin']).toContainEqual({
+      action: '*',
+      resource: '*',
     });
     expect(ROLE_PERMISSION_CATALOG['affiliation.tuanwei_lead']).toContainEqual({
       action: 'liaison.problem.review',

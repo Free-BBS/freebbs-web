@@ -1,5 +1,6 @@
 import type { UserContext } from './auth.js';
 import type { RoleKey } from './modules.js';
+import { isDevelopmentBusinessAdmin } from './system-settings.js';
 
 export type FestivalSubmissionStatus = 'private' | 'pending' | 'approved' | 'rejected';
 
@@ -34,9 +35,13 @@ const reviewerRoles: readonly RoleKey[] = [
   'department.arts_director',
   'domain.arts_lead',
   'affiliation.tuanwei_lead',
-  'platform.super_admin',
 ];
 
-export function canReviewFestival(user: Pick<UserContext, 'roles'> | null | undefined): boolean {
-  return user?.roles.some((role) => reviewerRoles.includes(role)) ?? false;
+export function canReviewFestival(
+  user: Pick<UserContext, 'roles' | 'businessAdmin'> | null | undefined,
+): boolean {
+  return (
+    isDevelopmentBusinessAdmin(user) ||
+    (user?.roles.some((role) => reviewerRoles.includes(role)) ?? false)
+  );
 }

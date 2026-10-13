@@ -1,3 +1,4 @@
+import { canReadPublishedActivity } from '../collections/registrations.js';
 import type { ScopeRef } from '@freebbs-development/contracts';
 import type { SocialOrganizationId } from '@freebbs-development/contracts';
 
@@ -13,6 +14,9 @@ import type {
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { canTransition } from '../../core/workflow/state-machine.js';
+import { activityWithWorkspaceSchedule } from './workspace-schedule.js';
+import { readActivityWorkspace } from './workspace-storage.js';
+import { resolve } from 'node:path';
 import {
   canCreateForOrganization,
   canUpdateOrganization,
@@ -82,18 +86,25 @@ export class EventsService {
   constructor(
     private readonly store: DevelopmentStore,
     private readonly now: () => Date = () => new Date(),
+    private readonly uploadDirectory?: string,
   ) {}
 
   async list(actor: AuthorizationContext, filters: ListFilters): Promise<ActivityRecord[]> {
-    const records = await this.store.activities.list(filters);
-    return records.filter(
-      (record) =>
-        (record.status === 'published' && can(actor, 'events.read', record.scope)) ||
-        canManage(actor, record) ||
-        (record.status === 'pending' && can(actor, 'events.approve', record.scope)) ||
-        (record.technicalSupportStatus === 'requested' &&
-          can(actor, 'events.technical_support', record.scope)),
+    const { status, ...sourceFilters } = filters;
+    const records = await this.store.activities.list(sourceFilters);
+    const scheduled = await Promise.all(
+      records
+        .filter(
+          (record) =>
+            canReadPublishedActivity(actor, record) ||
+            canManage(actor, record) ||
+            (record.status === 'pending' && can(actor, 'events.approve', record.scope)) ||
+            (record.technicalSupportStatus === 'requested' &&
+              can(actor, 'events.technical_support', record.scope)),
+        )
+        .map((record) => activityWithWorkspaceSchedule(record, this.uploadDirectory)),
     );
+    return scheduled.filter((record) => status === undefined || record.status === status);
   }
 
   async create(actor: AuthorizationContext, input: ActivityInput): Promise<ActivityRecord> {
@@ -154,6 +165,15 @@ export class EventsService {
         canCreateForOrganization(actor, current.organizationId) &&
         canCreateForOrganization(actor, target.organizationId);
       if (!managerMove && !creatorMove) throw activityNotFound();
+      if (patch.startsAt !== undefined || patch.endsAt !== undefined) {
+        const { schedule } = await readActivityWorkspace(
+          this.uploadDirectory ?? resolve('.data/collection-uploads'),
+          'development_activity',
+          id,
+        );
+        if (schedule)
+          throw new HttpError(409, 'activity_schedule_managed', '请在活动工作区调整活动安排');
+      }
       const updated = await store.activities.update(id, patch);
       if (updated === null) throw activityNotFound();
       await recordAuditEvent(store, {
@@ -179,16 +199,19 @@ export class EventsService {
     const result = await this.store.transaction<TransitionResult<ActivityRecord>>(async (store) => {
       const current = await store.activities.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
-      const from = current.status as ActivityStatus;
-      const approvalEdge = from === 'pending' && (to === 'approved' || to === 'rejected');
+      const storedFrom = current.status as ActivityStatus;
+      const approvalEdge = storedFrom === 'pending' && (to === 'approved' || to === 'rejected');
       const creatorEdge =
-        (from === 'draft' && to === 'pending') || (from === 'rejected' && to === 'draft');
+        (storedFrom === 'draft' && to === 'pending') ||
+        (storedFrom === 'rejected' && to === 'draft');
       const permitted = approvalEdge
         ? can(actor, 'events.approve', current.scope) && canUpdateOrganization(actor, current)
         : creatorEdge
           ? canManage(actor, current)
           : can(actor, 'events.update', current.scope) && canUpdateOrganization(actor, current);
       if (!permitted) return { kind: 'missing' };
+      const from = (await activityWithWorkspaceSchedule(current, this.uploadDirectory))
+        .status as ActivityStatus;
       if (
         !Object.hasOwn(ACTIVITY_TRANSITIONS, from) ||
         !canTransition(ACTIVITY_TRANSITIONS, from, to)
@@ -204,7 +227,10 @@ export class EventsService {
         resourceId: id,
         details: { from, to, outcome: 'accepted', scope: updated.scope },
       });
-      return { kind: 'updated', record: updated };
+      return {
+        kind: 'updated',
+        record: await activityWithWorkspaceSchedule(updated, this.uploadDirectory),
+      };
     });
     if (result.kind === 'missing') throw activityNotFound();
     if (result.kind === 'rejected') {
@@ -290,7 +316,11 @@ export class EventsService {
     activityId: string,
   ): Promise<ActivityRegistrationRecord> {
     return this.store.transaction(async (store) => {
-      const activity = await store.activities.getForUpdate(activityId);
+      const sourceActivity = await store.activities.getForUpdate(activityId);
+      const activity =
+        sourceActivity === null
+          ? null
+          : await activityWithWorkspaceSchedule(sourceActivity, this.uploadDirectory);
       const routeScope = { type: 'activity', id: activityId } as const;
       if (activity === null || !canRegistration(actor, 'events.register', routeScope)) {
         throw activityNotFound();
@@ -303,8 +333,9 @@ export class EventsService {
         );
       }
       if (
-        activity.registrationDeadline !== null &&
-        Date.parse(activity.registrationDeadline) <= this.now().getTime()
+        [activity.registrationDeadline, activity.endsAt].some(
+          (boundary) => boundary != null && Date.parse(boundary) <= this.now().getTime(),
+        )
       ) {
         throw new HttpError(
           409,

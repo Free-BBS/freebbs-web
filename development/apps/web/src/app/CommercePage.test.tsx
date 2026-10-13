@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserContext } from '@freebbs-development/contracts';
 
 import { CommercePage } from './CommercePage.js';
+const auth = vi.hoisted(() => ({ user: null as UserContext | null }));
+vi.mock('../core/auth/AuthProvider.js', () => ({ useOptionalAuth: () => auth }));
 
 function renderCommerce() {
   return render(
@@ -12,6 +15,7 @@ function renderCommerce() {
         <Route path="/inventory" element={<CommercePage section="inventory" />} />
         <Route path="/profile" element={<CommercePage section="profile" userUid="student-1" />} />
         <Route path="/settings" element={<CommercePage section="settings" />} />
+        <Route path="/ranch" element={<CommercePage section="ranch" />} />
         <Route path="/sports" element={<div>无体育</div>} />
       </Routes>
     </MemoryRouter>,
@@ -19,6 +23,30 @@ function renderCommerce() {
 }
 
 describe('development commerce', () => {
+  beforeEach(() => {
+    auth.user = null;
+  });
+  it('keeps connector business controls hidden for a lead-only identity on personal settings', () => {
+    auth.user = {
+      uid: 'lead',
+      displayName: '负责人',
+      avatarUrl: null,
+      baseRole: 'student',
+      roles: ['platform.super_admin'],
+      tags: [],
+      developmentAccess: 'lead',
+    };
+    render(
+      <MemoryRouter>
+        <CommercePage section="settings" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: '发展端设置' })).not.toBeInTheDocument();
+    expect(screen.getByTitle('FREE-BBS 设置')).toHaveAttribute(
+      'src',
+      '/settings?embed=development',
+    );
+  });
   it('loads the main-site shop inside development and returns to the previous module', () => {
     renderCommerce();
     expect(screen.queryByRole('heading', { name: '商店' })).not.toBeInTheDocument();
@@ -66,5 +94,81 @@ describe('development commerce', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '返回发展端' }));
     expect(screen.getByText('无体育')).toBeInTheDocument();
+  });
+
+  it('keeps warehouse profile and ranch links in one development shell with their uid', async () => {
+    renderCommerce();
+    const openFromFrame = (title: string, path: string) => {
+      const frame = screen.getByTitle(title) as HTMLIFrameElement;
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          source: frame.contentWindow,
+          data: { type: 'freebbs:development-commerce-navigation', path },
+        }),
+      );
+    };
+    openFromFrame('FREE-BBS 商店', '/inventory');
+    await screen.findByTitle('FREE-BBS 仓库');
+    openFromFrame('FREE-BBS 仓库', '/profile?uid=u_other#outfits');
+    await waitFor(() =>
+      expect(screen.getByTitle('FREE-BBS 个人主页')).toHaveAttribute(
+        'src',
+        '/profile?uid=u_other&embed=development#outfits',
+      ),
+    );
+    openFromFrame('FREE-BBS 个人主页', '/ranch?uid=u_other');
+    await waitFor(() =>
+      expect(screen.getByTitle('FREE-BBS 电子牧场')).toHaveAttribute(
+        'src',
+        '/ranch?uid=u_other&embed=development',
+      ),
+    );
+    expect(document.querySelectorAll('iframe')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '返回发展端' }));
+    expect(screen.getByText('无体育')).toBeInTheDocument();
+  });
+
+  it('ignores forged, external and unsupported navigation messages', () => {
+    renderCommerce();
+    const frame = screen.getByTitle('FREE-BBS 商店') as HTMLIFrameElement;
+    for (const [origin, source, path] of [
+      ['https://untrusted.example', frame.contentWindow, '/profile?uid=u_other'],
+      [window.location.origin, window, '/profile?uid=u_other'],
+      [window.location.origin, frame.contentWindow, 'https://untrusted.example/profile'],
+      [window.location.origin, frame.contentWindow, '/admin'],
+    ] as const) {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin,
+          source,
+          data: { type: 'freebbs:development-commerce-navigation', path },
+        }),
+      );
+    }
+    expect(screen.getByTitle('FREE-BBS 商店')).toBeInTheDocument();
+  });
+
+  it('fits the embedded content to its validated height without a second scroll frame', async () => {
+    renderCommerce();
+    const frame = screen.getByTitle('FREE-BBS 商店') as HTMLIFrameElement;
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        source: frame.contentWindow,
+        data: { type: 'freebbs:development-commerce-size', height: 1280 },
+      }),
+    );
+    await waitFor(() => expect(frame).toHaveStyle({ height: '1280px' }));
+    for (const height of [-5, NaN, Infinity, '900']) {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          source: frame.contentWindow,
+          data: { type: 'freebbs:development-commerce-size', height },
+        }),
+      );
+    }
+    expect(frame).toHaveStyle({ height: '1280px' });
   });
 });

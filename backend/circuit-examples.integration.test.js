@@ -165,7 +165,7 @@ test(
     }
     const admin = await login('admin');
     const student = await createUser('examples_student', '2026000701');
-    const legacy = await createUser('旧用户名', '2026000702');
+    const legacy = await createUser('旧 用户名', '2026000702');
     let seeds;
     let custom;
     let studentCircuit;

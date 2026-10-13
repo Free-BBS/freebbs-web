@@ -2,10 +2,12 @@ import { expect, test } from '@playwright/test';
 
 test('daily discovery keeps preferences, rotates and targets knowledge', async ({ page }) => {
   await page.goto('./events');
+  await expect(page.locator('.event-card').first()).toBeVisible();
   const discovery = page.getByRole('region', { name: '今日随机发现' });
   await expect(discovery.getByRole('link', { name: '去看看' })).toBeVisible();
   const first = await discovery.getByRole('link', { name: '去看看' }).getAttribute('href');
   await page.reload();
+  await expect(page.locator('.event-card').first()).toBeVisible();
   await expect(discovery.getByRole('link', { name: '去看看' })).toHaveAttribute('href', first!);
   await discovery.getByRole('button', { name: '换一个' }).click();
   await expect(discovery.getByRole('link', { name: '去看看' })).not.toHaveAttribute('href', first!);
@@ -29,7 +31,7 @@ test('mobile map status and preferences remain usable with keyboard', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./events');
   await page.getByRole('button', { name: /frEE bbs MAP/ }).click();
-  await expect(page.getByRole('dialog', { name: 'frEE bbs MAP' })).toContainText('小程序尚未发布');
+  await expect(page.getByRole('dialog', { name: 'frEE bbs MAP' })).toContainText('请在微信中搜索');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
   await page.getByRole('button', { name: '偏好设置' }).click();

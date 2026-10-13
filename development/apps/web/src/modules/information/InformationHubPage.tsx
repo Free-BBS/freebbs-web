@@ -6,6 +6,7 @@ import type {
   InformationReply,
   UserContext,
 } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../core/api/client.js';
 import { InformationFeedCard } from './InformationFeedCard.js';
 import { InformationDetailDialog } from './InformationDetailDialog.js';
@@ -22,24 +23,30 @@ const filters: Array<{ value: InformationFeedFilter; label: string }> = [
 export interface InformationHubPageProps {
   client: ApiClient;
   user: UserContext | null;
+  filter?: InformationFeedFilter;
+  onFilterChange?: (filter: InformationFeedFilter) => void;
 }
 
 function canPublish(user: UserContext | null): boolean {
   if (!user) return false;
-  if (user.roles.includes('platform.super_admin')) return true;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   return (
     (
       user as UserContext & { policies?: Array<{ action: string; effect?: string }> }
     ).policies?.some(
-      (policy) =>
-        policy.effect !== 'deny' &&
-        (policy.action === '*' || policy.action === 'information.announcement.create'),
+      (policy) => policy.effect !== 'deny' && policy.action === 'information.announcement.create',
     ) ?? false
   );
 }
 
-export function InformationHubPage({ client, user }: InformationHubPageProps) {
-  const [filter, setFilter] = useState<InformationFeedFilter>('all');
+export function InformationHubPage({
+  client,
+  user,
+  filter: controlledFilter,
+  onFilterChange,
+}: InformationHubPageProps) {
+  const [localFilter, setFilter] = useState<InformationFeedFilter>('all');
+  const filter = controlledFilter ?? localFilter;
   const [items, setItems] = useState<InformationFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -212,7 +219,10 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
             role="tab"
             type="button"
             aria-selected={filter === option.value}
-            onClick={() => setFilter(option.value)}
+            onClick={() => {
+              if (onFilterChange) onFilterChange(option.value);
+              else setFilter(option.value);
+            }}
           >
             {option.label}
           </button>

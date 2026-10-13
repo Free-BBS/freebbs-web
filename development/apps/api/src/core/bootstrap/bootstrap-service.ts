@@ -297,7 +297,25 @@ export async function ensurePlatformDefinitions(
   ownerUid: string,
 ): Promise<void> {
   await store.transaction(async (transactionStore) => {
-    await ensureBuiltInDefinitions(transactionStore, ownerUid, true);
+    // Routine authentication fills missing definitions; only explicit bootstrap
+    // recovery may overwrite persisted governance or module configuration.
+    await ensureBuiltInDefinitions(transactionStore, ownerUid, false);
+    const admin = (await transactionStore.modules.listForUpdate({ query: 'admin' })).find(
+      (row) => row.moduleId === 'admin',
+    );
+    if (admin && (!admin.enabled || admin.status !== 'enabled')) {
+      await transactionStore.modules.update(admin.id, { enabled: true, status: 'enabled' });
+      await recordAuditEvent(transactionStore, {
+        actorUid: ownerUid,
+        action: 'platform.reserved_admin.recover',
+        resourceType: 'module',
+        resourceId: 'admin',
+        details: {
+          previous: { enabled: admin.enabled, status: admin.status },
+          next: { enabled: true, status: 'enabled' },
+        },
+      });
+    }
   });
 }
 

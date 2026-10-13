@@ -2,6 +2,8 @@ import { createApp } from './app.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import type { UserDirectory } from './core/auth/user-directory.js';
 import { createMySqlStore } from './core/database/mysql-store.js';
+import { startFeedScheduler } from './modules/connectors/feed.js';
+import type { DevelopmentRewardProvider } from '@freebbs-development/contracts';
 
 export interface IntegratedDatabaseConfig {
   host: string;
@@ -19,6 +21,7 @@ export interface IntegratedRuntimeOptions {
   uploadDirectory: string;
   collectionsUploadDirectory: string;
   sportsUploadDirectory?: string;
+  developmentRewardProvider?: DevelopmentRewardProvider;
 }
 
 export interface IntegratedRuntime {
@@ -32,29 +35,47 @@ export async function createIntegratedDevelopmentRuntime(
   const handle = createMySqlStore({ config: options.database });
   try {
     await handle.checkReadiness();
-  } catch (error) {
-    await handle.close();
-    throw error;
-  }
-  const app = createApp({
-    environment: {
+    const environment = {
       ...process.env,
       NODE_ENV: process.env.NODE_ENV ?? 'production',
       AUTH_MODE: 'main',
       HOST: '127.0.0.1',
-    },
-    store: handle.store,
-    databaseMode: 'mysql',
-    getAppliedMigrationCount: handle.getAppliedMigrationCount,
-    checkReadiness: handle.checkReadiness,
-    authMode: 'main',
-    authClient: options.authClient,
-    userDirectory: options.userDirectory,
-    festivalUploadDirectory: options.uploadDirectory,
-    collectionsUploadDirectory: options.collectionsUploadDirectory,
-    ...(options.sportsUploadDirectory
-      ? { sportsUploadDirectory: options.sportsUploadDirectory }
-      : {}),
-  });
-  return { app, close: handle.close };
+    };
+    const app = createApp({
+      environment,
+      store: handle.store,
+      databaseMode: 'mysql',
+      getAppliedMigrationCount: handle.getAppliedMigrationCount,
+      checkReadiness: handle.checkReadiness,
+      authMode: 'main',
+      authClient: options.authClient,
+      userDirectory: options.userDirectory,
+      festivalUploadDirectory: options.uploadDirectory,
+      collectionsUploadDirectory: options.collectionsUploadDirectory,
+      ...(options.sportsUploadDirectory
+        ? { sportsUploadDirectory: options.sportsUploadDirectory }
+        : {}),
+      ...(options.developmentRewardProvider
+        ? { developmentRewardProvider: options.developmentRewardProvider }
+        : {}),
+    });
+    const stopFeed = startFeedScheduler(options.collectionsUploadDirectory, environment);
+    let closing: Promise<void> | undefined;
+    return {
+      app,
+      close: () => {
+        closing ??= Promise.resolve().then(async () => {
+          try {
+            stopFeed();
+          } finally {
+            await handle.close();
+          }
+        });
+        return closing;
+      },
+    };
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
 }

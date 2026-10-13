@@ -22,56 +22,60 @@ const maintainer = {
 };
 
 describe('ActivityDetailPage', () => {
-  it('explains and disables registration after the deadline or when capacity is full', async () => {
-    const registrationUser = {
-      ...student,
-      policies: [
-        {
-          id: 'register',
-          action: 'events.register',
-          resource: 'activity_registration',
-          effect: 'allow' as const,
-        },
-      ],
-    };
-    const request = vi.fn(async (path: string) => {
-      if (path.endsWith('/registrations')) return null;
-      return {
-        id: 'activity-full',
-        title: '已满活动',
-        description: '报名边界展示。',
-        status: 'published',
-        startsAt: null,
-        endsAt: null,
-        location: '',
-        registrationDeadline: '2000-01-01T00:00:00.000Z',
-        capacity: 1,
-        registrationCount: 1,
-        contact: '',
-        organizationId: null,
-        standingActivity: false,
-        clubId: null,
-        ownerUid: 'owner',
-        scope: { type: 'public', id: '*' },
-        milestones: [],
-        fixtures: [],
-        progress: null,
+  it.each(['deadline', 'end'])(
+    'explains and disables registration after the %s boundary',
+    async (boundary) => {
+      const registrationUser = {
+        ...student,
+        policies: [
+          {
+            id: 'register',
+            action: 'events.register',
+            resource: 'activity_registration',
+            effect: 'allow' as const,
+          },
+        ],
       };
-    });
-    render(
-      <MemoryRouter>
-        <ActivityDetailPage
-          activityId="activity-full"
-          client={{ request: request as DevelopmentApi['request'] }}
-          user={registrationUser}
-        />
-      </MemoryRouter>,
-    );
+      const request = vi.fn(async (path: string) => {
+        if (path.endsWith('/registrations')) return null;
+        return {
+          id: 'activity-full',
+          title: '已满活动',
+          description: '报名边界展示。',
+          status: 'published',
+          startsAt: null,
+          endsAt: boundary === 'end' ? '2000-01-01T00:00:00.000Z' : null,
+          location: '',
+          registrationDeadline: boundary === 'deadline' ? '2000-01-01T00:00:00.000Z' : null,
+          capacity: boundary === 'deadline' ? 1 : null,
+          registrationCount: boundary === 'deadline' ? 1 : 0,
+          contact: '',
+          organizationId: null,
+          standingActivity: false,
+          clubId: null,
+          ownerUid: 'owner',
+          scope: { type: 'public', id: '*' },
+          milestones: [],
+          fixtures: [],
+          progress: null,
+        };
+      });
+      render(
+        <MemoryRouter>
+          <ActivityDetailPage
+            activityId="activity-full"
+            client={{ request: request as DevelopmentApi['request'] }}
+            user={registrationUser}
+          />
+        </MemoryRouter>,
+      );
 
-    expect(await screen.findByText('报名状态：报名已截止')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '报名活动' })).toBeDisabled();
-    expect(screen.getByText('名额已满（1 / 1）')).toBeInTheDocument();
-  });
+      expect(await screen.findByText('报名状态：报名已截止')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '报名活动' })).toBeDisabled();
+      if (boundary === 'deadline')
+        expect(screen.getByText('名额已满（1 / 1）')).toBeInTheDocument();
+    },
+  );
 
   it('renders time, location, timeline progress, and competition fixtures', async () => {
     const request = vi.fn(async (path: string) => {
