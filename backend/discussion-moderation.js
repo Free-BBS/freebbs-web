@@ -5,6 +5,7 @@ const { canReadPost } = require('./discussion-visibility');
 const { withSubmissionNotice } = require('./moderation-production');
 const { buildPrivacyPreview, normalizePrivacyText } = require('./moderation-privacy');
 const { sendModerationNotice, notifyAuthor } = require('./moderation-notifications');
+const { MODERATION_RETENTION_DAYS } = require('./moderation-retention');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
@@ -272,7 +273,7 @@ function createDiscussionModeration({
     const [inserted] = await connection.execute(
       `INSERT INTO moderation_submissions
        (id, kind, author_id, request_id, payload_json, attachment_ids_json, content_hash, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(3), INTERVAL 30 DAY))
+       VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(3), INTERVAL ${MODERATION_RETENTION_DAYS} DAY))
        ON DUPLICATE KEY UPDATE id = id`,
       [
         id,
@@ -373,7 +374,7 @@ function createDiscussionModeration({
         throw fail('审核证据已过期，请让作者重新提交。', 409);
       const submission = privateSubmission(row);
       const [attachments] = await connection.execute(
-        'SELECT * FROM moderation_attachments WHERE submission_id = ? ORDER BY id FOR UPDATE',
+        'SELECT *, (expires_at <= NOW(3)) AS expired FROM moderation_attachments WHERE submission_id = ? ORDER BY id FOR UPDATE',
         [id],
       );
       if (
@@ -382,6 +383,7 @@ function createDiscussionModeration({
           (attachment) =>
             attachment.bound_content_hash !== row.content_hash ||
             attachment.purged_at ||
+            (decision === 'approved' && Number(attachment.expired)) ||
             Number(attachment.author_id) !== Number(row.author_id),
         )
       )
@@ -417,11 +419,13 @@ function createDiscussionModeration({
         ],
       );
       if (!updated.affectedRows) throw fail('审核记录已过期或状态已变化，请刷新后重试。', 409);
-      if (decision === 'approved') {
-        await connection.execute(
-          'UPDATE moderation_attachments SET published_id = ? WHERE submission_id = ?',
+      if (decision === 'approved' && attachments.length) {
+        const [publishedAttachments] = await connection.execute(
+          'UPDATE moderation_attachments SET published_id = ? WHERE submission_id = ? AND expires_at > NOW(3) AND purged_at IS NULL AND published_id IS NULL',
           [published.publishedId, id],
         );
+        if (publishedAttachments.affectedRows !== attachments.length)
+          throw fail('审核附件已过期或状态已变化，请刷新后重试。', 409);
       }
       await notifyAuthor(connection, notifications, {
         id,
@@ -764,7 +768,7 @@ function createDiscussionModeration({
       throw fail('图片附件信息无效。');
     await pool.execute(
       `INSERT INTO moderation_attachments (id, author_id, file_name, mime_type, byte_size, sha256, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(3), INTERVAL 30 DAY))`,
+       VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(3), INTERVAL ${MODERATION_RETENTION_DAYS} DAY))`,
       [id, authorId, fileName, mimeType, byteSize, sha256],
     );
     const [rows] = await pool.execute('SELECT * FROM moderation_attachments WHERE id = ?', [id]);
@@ -896,7 +900,11 @@ function createDiscussionModeration({
           if (!entry.isFile() || !FILE_NAME.test(entry.name)) continue;
           const target = path.resolve(root, entry.name);
           const stat = await fs.lstat(target);
-          if (!stat.isFile() || stat.isSymbolicLink() || stat.mtimeMs > Date.now() - 30 * 86400000)
+          if (
+            !stat.isFile() ||
+            stat.isSymbolicLink() ||
+            stat.mtimeMs > Date.now() - MODERATION_RETENTION_DAYS * 86400000
+          )
             continue;
           if (inspected >= limit) {
             capped = true;

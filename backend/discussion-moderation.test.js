@@ -289,10 +289,15 @@ test('orphan cleanup only removes aged UUID files after the database confirms no
   t.after(() => fs.rm(privateDir, { recursive: true, force: true }));
   const oldFile = path.join(privateDir, `${randomUUID()}.webp`);
   const freshFile = path.join(privateDir, `${randomUUID()}.webp`);
+  const retainedFile = path.join(privateDir, `${randomUUID()}.webp`);
   const unrelated = path.join(privateDir, 'do-not-delete.txt');
-  await Promise.all([oldFile, freshFile, unrelated].map((file) => fs.writeFile(file, 'fixture')));
-  const oldTime = new Date(Date.now() - 31 * 86400000);
+  await Promise.all(
+    [oldFile, freshFile, retainedFile, unrelated].map((file) => fs.writeFile(file, 'fixture')),
+  );
+  const oldTime = new Date(Date.now() - 91 * 86400000);
+  const retainedTime = new Date(Date.now() - 31 * 86400000);
   await fs.utimes(oldFile, oldTime, oldTime);
+  await fs.utimes(retainedFile, retainedTime, retainedTime);
   let unavailable = true;
   const pool = {
     async execute(sql) {
@@ -315,5 +320,6 @@ test('orphan cleanup only removes aged UUID files after the database confirms no
   assert.equal((await service.expireAndPurge()).orphansPurged, 1);
   await assert.rejects(fs.stat(oldFile), { code: 'ENOENT' });
   await fs.stat(freshFile);
+  await fs.stat(retainedFile);
   await fs.stat(unrelated);
 });

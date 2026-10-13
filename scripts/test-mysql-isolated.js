@@ -23,12 +23,16 @@ const AUDIT_TEST_TITLE =
 const AUTOMATION_TEST_FILE = 'backend/moderation-automation-store.mysql.test.js';
 const AUTOMATION_TEST_TITLE =
   'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic';
+const RETENTION_TEST_FILE = 'backend/moderation-retention.mysql.test.js';
+const RETENTION_TEST_TITLE =
+  'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically';
 
 const TEST_FILES = [
   MODERATION_TEST_FILE,
   PRIVACY_TEST_FILE,
   AUDIT_TEST_FILE,
   AUTOMATION_TEST_FILE,
+  RETENTION_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -96,6 +100,7 @@ const REQUIRED_MYSQL_TESTS = [
   PRIVACY_TEST_TITLE,
   AUDIT_TEST_TITLE,
   AUTOMATION_TEST_TITLE,
+  RETENTION_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -123,12 +128,19 @@ function selectMysqlTests(args = []) {
   assert.ok(!(workbenchOnly && moderationOnly), 'choose only one isolated MySQL test subset');
   if (moderationOnly)
     return {
-      testFiles: [MODERATION_TEST_FILE, PRIVACY_TEST_FILE, AUDIT_TEST_FILE, AUTOMATION_TEST_FILE],
+      testFiles: [
+        MODERATION_TEST_FILE,
+        PRIVACY_TEST_FILE,
+        AUDIT_TEST_FILE,
+        AUTOMATION_TEST_FILE,
+        RETENTION_TEST_FILE,
+      ],
       requiredTests: [
         MODERATION_TEST_TITLE,
         PRIVACY_TEST_TITLE,
         AUDIT_TEST_TITLE,
         AUTOMATION_TEST_TITLE,
+        RETENTION_TEST_TITLE,
       ],
     };
   if (workbenchOnly)

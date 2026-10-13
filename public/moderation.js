@@ -1676,8 +1676,8 @@
             : {
                 pending: '处理中',
                 approved: '已发布',
-                rejected: '未予发布',
-                expired: '相关材料已到期',
+                rejected: '未发布',
+                expired: '内容记录已不可用',
               }[submission.status];
         const meta = node(
           'p',
@@ -1708,33 +1708,30 @@
         contentColumn.append(original);
         detailGrid.append(contentColumn, decisionColumn);
         el('detail').replaceChildren(detailGrid);
-        if (submission.reason) original.append(node('p', `处理说明：${submission.reason}`));
+        const showDecisionReason =
+          !mine || (submission.status === 'rejected' && submission.decidedBy != null);
+        if (submission.reason && showDecisionReason)
+          original.append(node('p', `处理说明：${submission.reason}`));
         if (evidenceExpired)
           original.append(
             node(
               'p',
-              '相关材料已到期，原文、图片及详细处理记录已清理。已正常发布的内容仍可从讨论区查看。',
+              mine
+                ? '内容记录已不可用。已发布的内容可从讨论区查看。'
+                : '相关材料已到期，原文、图片及详细处理记录已清理。已正常发布的内容仍可从讨论区查看。',
               'moderation-note',
             ),
           );
         if (mine) {
           const help = node('section', undefined, 'moderation-author-help');
           if (submission.status === 'pending')
-            help.append(
-              node(
-                'p',
-                '内容正在处理。需要进一步处理时，将通过站内通知告知；发布后可在讨论区查看。',
-              ),
-            );
+            help.append(node('p', '内容正在处理，结果将通过站内通知更新。'));
           const contact = node('a', '联系 FreeBBS 工作组：feedback@free-bbs.cn');
           contact.href = 'mailto:feedback@free-bbs.cn';
-          help.append(
-            node('p', '如对处理结果有疑问或希望申请复核，请联系我们，并附上本页链接。'),
-            contact,
-          );
+          help.append(node('p', '如对处理结果有疑问，请联系我们，并附上本页链接。'), contact);
           original.append(help);
         }
-        if (submission.expiresAt)
+        if (!mine && submission.expiresAt)
           original.append(
             node('p', `审核数据到期时间：${formatTime(submission.expiresAt)}`, 'moderation-note'),
           );
@@ -1941,19 +1938,20 @@
       }
     }
     function renderViewMode() {
-      const caption = mine ? '内容处理详情' : '审核工作台';
+      const authorView = mine || state.session?.reviewer !== true;
+      const caption = authorView ? '内容处理详情' : '审核工作台';
       document.title = `${caption} | FREE BBS`;
       el('title').textContent = caption;
-      el('intro').hidden = mine;
-      el('mine-title').hidden = !mine;
-      el('queue').hidden = mine;
-      el('layout').className = mine
+      el('intro').hidden = authorView;
+      el('mine-title').hidden = !authorView;
+      el('queue').hidden = authorView;
+      el('layout').className = authorView
         ? 'moderation-layout moderation-author-layout'
         : 'moderation-layout';
-      el('queue-eyebrow').hidden = mine;
-      el('queue-note').hidden = mine;
-      el('status').hidden = mine;
-      el('status-label').hidden = mine;
+      el('queue-eyebrow').hidden = authorView;
+      el('queue-note').hidden = authorView;
+      el('status').hidden = authorView;
+      el('status-label').hidden = authorView;
     }
     async function initialize() {
       reset();
@@ -1963,14 +1961,16 @@
       el('login').href =
         `/login?next=${encodeURIComponent(`/moderation${window.location.search}`)}`;
       el('login').hidden = Boolean(getToken());
-      el('message').textContent = getToken() ? '正在确认审核权限…' : '请先登录，再返回本页查看。';
+      el('message').textContent = getToken() ? '正在加载内容…' : '请先登录，再返回本页查看。';
       if (!getToken()) return;
       try {
         const session = await client.request('/moderation/session');
         if (!valid(generation)) return;
         state.session = session;
         if (!session.enabled) {
-          el('message').textContent = '当前环境尚未启用内容审核。';
+          el('message').textContent = session.reviewer
+            ? '当前环境尚未启用内容审核。'
+            : '当前无法查看内容处理详情。';
           return;
         }
         // Notifications share one detail URL; authors use their own submission view.

@@ -215,7 +215,7 @@ test(
           crypto.createHash('sha256').update(JSON.stringify(item.input)).digest('hex'),
         );
         assert.equal(Number(row.same_expiry), 1);
-        assert.equal(Number(row.lifetime), 30 * 24 * 60 * 60);
+        assert.equal(Number(row.lifetime), 90 * 24 * 60 * 60);
         await assert.rejects(restarted.history({ id: item.id, reviewerId: 2 }), { status: 403 });
       },
     );

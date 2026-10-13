@@ -290,6 +290,24 @@ test('notification detail URL opens the author view without granting review cont
   assert.ok(!h.requests.some(({ url }) => /\/(mine|submissions)\?/.test(url)));
 });
 
+test('notification details keep workbench copy hidden while waiting for account permissions', async () => {
+  const session = deferred();
+  const h = harness({
+    search: '?id=s1',
+    reviewer: false,
+    customFetch: (url, options, defaults) =>
+      url.endsWith('/session') ? session.promise : defaults(url, options),
+  });
+  assert.equal(h.get('title').textContent, '内容处理详情');
+  assert.equal(h.get('intro').hidden, true);
+  assert.equal(h.get('queue').hidden, true);
+  assert.equal(h.get('message').textContent, '正在加载内容…');
+  session.resolve(response({ enabled: true, reviewer: false, isAdmin: false }));
+  await h.app.ready;
+  assert.equal(h.get('intro').hidden, true);
+  assert.equal(h.get('title').textContent, '内容处理详情');
+});
+
 test('notification detail URL opens the review workspace for an active reviewer', async () => {
   const h = harness({ search: '?id=s1', reviewer: true });
   await h.app.ready;
@@ -326,12 +344,13 @@ test('author detail includes private decision reasons, a contact route, withdraw
       kind,
       status: 'rejected',
       reason: '<b>请移除他人联系方式</b>',
+      decidedBy: '2',
       publishedId: '123',
     });
     await h.app.ready;
     assert.match(h.get('detail').textContent, /已撤回/);
     assert.match(h.get('detail').textContent, /<b>请移除他人联系方式<\/b>/);
-    assert.match(h.get('detail').textContent, /申请复核/);
+    assert.match(h.get('detail').textContent, /如对处理结果有疑问，请联系我们/);
     assert.ok(
       h
         .get('detail')
@@ -345,7 +364,7 @@ test('author detail includes private decision reasons, a contact route, withdraw
       publishedUrl: '/discussion?post=123',
     });
     await h.app.openSubmission('s1');
-    assert.match(h.get('detail').textContent, /相关材料已到期/);
+    assert.match(h.get('detail').textContent, /内容记录已不可用/);
     assert.ok(
       h
         .get('detail')
@@ -356,6 +375,76 @@ test('author detail includes private decision reasons, a contact route, withdraw
       !h.requests.some(({ url }) => /\/mine\?|\/submissions\?|\/automation|\/ai-history/.test(url)),
     );
   }
+});
+
+test('author detail displays outcomes without automated explanations or evidence expiry', async () => {
+  for (const kind of ['post', 'comment']) {
+    for (const [status, label] of [
+      ['pending', '处理中'],
+      ['approved', '已发布'],
+      ['rejected', '未发布'],
+      ['expired', '内容记录已不可用'],
+    ]) {
+      const h = harness({ search: '?mine=1&id=s1', reviewer: false });
+      Object.assign(h.submission, {
+        kind,
+        status,
+        reason: status === 'approved' ? '机器审核通过，负责人可复核撤回。' : '待人工复核',
+        decidedBy: null,
+        expiresAt: '2027-01-04T12:34:56Z',
+        evidenceExpired: status === 'expired',
+        contentMarkdown: '测试原文保持完整。',
+        publishedUrl: status === 'approved' ? '/discussion?post=123' : null,
+      });
+      await h.app.ready;
+      const text = h.get('detail').textContent;
+      assert.match(text, new RegExp(label));
+      assert.match(text, /测试原文保持完整/);
+      assert.doesNotMatch(text, /机器审核|人工复核|审核数据|到期|2027|12:34:56|处理说明/);
+      assert.ok(!h.requests.some(({ url }) => /\/automation|\/ai-history|\/policies/.test(url)));
+      assert.equal(h.get('intro').hidden, true);
+      assert.equal(h.get('reviewers').hidden, true);
+    }
+  }
+});
+
+test('author outcome simplification leaves original text and genuine rejection reasons unchanged', async () => {
+  const h = harness({ search: '?mine=1&id=s1', reviewer: false });
+  Object.assign(h.submission, {
+    status: 'rejected',
+    contentMarkdown: '我有一个关于机器审核的建议。',
+    reason: '<b>请移除他人联系方式</b>',
+    decidedBy: '2',
+    expiresAt: '2027-01-04T12:34:56Z',
+  });
+  await h.app.ready;
+  assert.match(h.get('detail').textContent, /我有一个关于机器审核的建议。/);
+  assert.match(h.get('detail').textContent, /处理说明：<b>请移除他人联系方式<\/b>/);
+  assert.doesNotMatch(h.get('detail').textContent, /审核数据到期时间|2027/);
+
+  h.submission.status = 'approved';
+  h.submission.reason = '人工审核通过。';
+  await h.app.openSubmission('s1');
+  assert.match(h.get('detail').textContent, /已发布/);
+  assert.doesNotMatch(h.get('detail').textContent, /人工审核通过|处理说明/);
+});
+
+test('reviewers retain automated outcome explanations and evidence expiry details', async () => {
+  const h = harness({ search: '?id=s1', reviewer: true });
+  Object.assign(h.submission, {
+    status: 'approved',
+    reason: '机器审核通过，负责人可复核撤回。',
+    decidedBy: null,
+    expiresAt: '2027-01-04T12:34:56Z',
+  });
+  await h.app.ready;
+  assert.match(h.get('detail').textContent, /处理说明：机器审核通过，负责人可复核撤回。/);
+  assert.match(h.get('detail').textContent, /审核数据到期时间：/);
+  assert.equal(h.get('intro').hidden, false);
+
+  h.submission.evidenceExpired = true;
+  await h.app.openSubmission('s1');
+  assert.match(h.get('detail').textContent, /相关材料已到期/);
 });
 
 test('forbidden notification details never render another author content', async () => {

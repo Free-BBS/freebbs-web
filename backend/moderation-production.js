@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const NOTICE_VERSION = 'moderation-data-2026-10-12-v1';
+const NOTICE_VERSION = 'moderation-data-2026-10-13-v2';
 const LOCAL = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const NOTICE = Object.freeze({
   version: NOTICE_VERSION,
@@ -10,7 +10,7 @@ const NOTICE = Object.freeze({
     '帖子、评论及其图片将用于内容审核。系统会把送审内容交给无问芯穹模型服务分析，审核负责人可以查看原文、图片和审核结果。',
     '文字会先尝试在本站替换姓名、学号、地址等个人信息，但可能识别不全。图片会在格式转换后发送，画面中的文字、人物和其他信息不会自动遮挡。请不要提交无权提供的他人隐私。',
     '普通内容可能自动发布；政治相关、心理关怀相关及其他需要核查的内容会等待负责人决定。已自动发布的含图内容仍会提醒负责人复核，必要时撤回。心理求助不等于违规或诊断。',
-    '本站审核证据保存 30 天后清理；正常发布的帖子和评论不随审核记录到期删除。数据库备份及供应商处理的数据另按相应约定管理，本站不能代供应商承诺同步删除。',
+    '本站审核证据保存 90 天后清理；正常发布的帖子和评论不随审核记录到期删除。数据库备份及供应商处理的数据另按相应约定管理，本站不能代供应商承诺同步删除。',
     '若不确认，本次内容不会提交或发送给模型。你可以返回修改或取消发布；如需了解数据处理安排，请联系网站管理员。',
   ],
   providerPrivacyUrl: 'https://docs.infini-ai.com/legal/privacy.html',

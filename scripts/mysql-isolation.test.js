@@ -162,6 +162,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/moderation-privacy.mysql.test.js',
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-retention.mysql.test.js',
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
     'backend/circuit-progress.test.js',
@@ -183,7 +184,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/schedule-series.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 23);
+  assert.equal(new Set(TEST_FILES).size, 24);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -208,7 +209,7 @@ test('the isolated runner enables its named test files with matching database op
 });
 
 test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 23);
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 24);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
@@ -245,12 +246,14 @@ test('moderation-only requires publication, privacy and policy audit suite resul
     'backend/moderation-privacy.mysql.test.js',
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-retention.mysql.test.js',
   ]);
   assert.deepEqual(selected.requiredTests, [
     'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic',
     'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence',
     'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts',
     'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic',
+    'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically',
   ]);
   const success = selected.requiredTests
     .map((name, index) => `ok ${index + 1} - ${name}`)

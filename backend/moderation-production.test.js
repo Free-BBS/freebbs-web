@@ -42,6 +42,23 @@ test('production supports a separate data server while test APIs stay disabled',
   assert.equal(noticeFor({}).required, false);
 });
 
+test('the ninety-day notice has a new version and refuses the old thirty-day acceptance', () => {
+  assert.equal(NOTICE_VERSION, 'moderation-data-2026-10-13-v2');
+  assert.match(noticeFor(config()).paragraphs.join(' '), /保存 90 天/);
+  assert.doesNotMatch(noticeFor(config()).paragraphs.join(' '), /保存 30 天/);
+  assert.throws(
+    () =>
+      withSubmissionNotice(
+        {
+          payload: { content: '普通建议' },
+          moderationNoticeVersion: 'moderation-data-2026-10-12-v1',
+        },
+        NOTICE_VERSION,
+      ),
+    { status: 428 },
+  );
+});
+
 for (const [label, patch] of [
   ['unknown mode', { discussionModerationEnvironment: 'typo' }],
   ['test mode with production switch', { discussionModerationEnvironment: 'test' }],

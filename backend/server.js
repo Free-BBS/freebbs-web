@@ -110,6 +110,7 @@ const { createModerationRouter } = require('./moderation-router');
 const { createModerationAiClient } = require('./moderation-ai-client');
 const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
 const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
+const { ensureModerationRetention } = require('./moderation-retention');
 const { createModerationAutomationStore } = require('./moderation-automation-store');
 const { createAutomaticImageReader } = require('./moderation-auto-images');
 const { createModerationImageClient } = require('./moderation-image-client');
@@ -6713,6 +6714,7 @@ async function start() {
   await ensureDiscussionModerationSchema(pool);
   await ensureModerationAuditSchema(pool);
   await moderationAutomationStore.ensureSchema();
+  await ensureModerationRetention(pool);
   const bicycleRefunds = await refundRanchBicyclePurchases(pool);
   if (bicycleRefunds.refunded) {
     console.log(
