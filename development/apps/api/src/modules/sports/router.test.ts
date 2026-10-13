@@ -109,20 +109,20 @@ describe('sports teams API', () => {
     }
   });
 
-  it('hides known and unknown team existence from an unauthorized updater', async () => {
+  it('rejects unauthorized card maintenance while keeping missing teams unavailable', async () => {
     const { app } = fixture();
     const known = await request(app)
       .patch('/api/development/v1/sports/teams')
       .set(student)
       .send({ id: 'team-basketball', name: 'No' })
-      .expect(404);
+      .expect(403);
     const unknown = await request(app)
       .patch('/api/development/v1/sports/teams')
       .set(student)
       .send({ id: 'missing-team', name: 'No' })
       .expect(404);
-    expect(known.body.data.error.code).toBe(unknown.body.data.error.code);
-    expect(known.body.data.error.code).toBe('sports_team_not_found');
+    expect(known.body.data.error.code).toBe('forbidden');
+    expect(unknown.body.data.error.code).toBe('sports_team_not_found');
   });
 });
 

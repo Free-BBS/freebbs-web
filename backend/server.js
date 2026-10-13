@@ -16,6 +16,7 @@ const {
 } = require('./ai-models');
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
 const { createAdminRewardsRouter, ensureAdminRewardTables } = require('./admin-rewards');
+const { createDevelopmentRewardProvider } = require('./development-rewards');
 const {
   createWalletLedgerRouter,
   ensureWalletLedger,
@@ -6783,6 +6784,7 @@ async function start() {
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
     collectionsUploadDirectory: path.join(config.uploadDir, 'development', 'collections'),
     sportsUploadDirectory: path.join(config.uploadDir, 'development', 'sports'),
+    developmentRewardProvider: createDevelopmentRewardProvider({ pool }),
   });
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();

@@ -14,6 +14,7 @@ import type {
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { canTransition } from '../../core/workflow/state-machine.js';
+import { canMaintainSportsCard, loadSportsCardAuthorizer } from './card-authorization.js';
 import { archiveTagAssignment, createTagAssignment } from '../admin/assignment-service.js';
 
 export type SportsTeamStatus = 'draft' | 'active' | 'archived';
@@ -122,21 +123,39 @@ function isActiveCaptain(
 export class SportsService {
   constructor(private readonly store: DevelopmentStore) {}
 
-  async listTeams(actor: AuthorizationContext, filters: ListFilters): Promise<SportsTeamRecord[]> {
-    const records = await this.store.sportsTeams.list(filters);
-    return records.filter((record) => {
-      if (!isCanonicalTeam(record, record.id)) return false;
-      const mayRead =
-        canTeam(actor, 'sports.team.read', record.scope) ||
-        canCheckin(actor, 'sports.checkin.read', record.scope);
-      return (
-        mayRead &&
-        (record.status === 'active' || canTeam(actor, 'sports.team.update', record.scope))
-      );
-    });
+  async listTeams(
+    actor: AuthorizationContext,
+    filters: ListFilters,
+  ): Promise<Array<SportsTeamRecord & { canEditCard: boolean; canEditShowcase: boolean }>> {
+    const [records, cardAccess] = await Promise.all([
+      this.store.sportsTeams.list(filters),
+      loadSportsCardAuthorizer(this.store, actor),
+    ]);
+    const visible = await Promise.all(
+      records.map(async (record) => {
+        if (!isCanonicalTeam(record, record.id)) return null;
+        const canEditCard = cardAccess(record.id);
+        const canEditShowcase = cardAccess(record.id, 'sports.showcase.update');
+        const mayRead =
+          canTeam(actor, 'sports.team.read', record.scope) ||
+          canCheckin(actor, 'sports.checkin.read', record.scope);
+        return mayRead && (record.status === 'active' || canEditCard)
+          ? { ...record, canEditCard, canEditShowcase }
+          : null;
+      }),
+    );
+    return visible.filter(
+      (record): record is SportsTeamRecord & { canEditCard: boolean; canEditShowcase: boolean } =>
+        record !== null,
+    );
   }
 
-  async createTeam(actor: AuthorizationContext, input: SportsTeamInput): Promise<SportsTeamRecord> {
+  async createTeam(
+    actor: AuthorizationContext,
+    input: SportsTeamInput,
+  ): Promise<SportsTeamRecord & { canEditCard: boolean; canEditShowcase: boolean }> {
+    if (!(await canMaintainSportsCard(this.store, actor)))
+      throw new HttpError(403, 'forbidden', 'Sports card create permission is required');
     return this.store.transaction(async (store) => {
       const created = await store.sportsTeams.create({
         ...input,
@@ -154,7 +173,16 @@ export class SportsService {
         resourceId: canonical.id,
         details: { status: canonical.status, scope: canonical.scope },
       });
-      return canonical;
+      return {
+        ...canonical,
+        canEditCard: true,
+        canEditShowcase: await canMaintainSportsCard(
+          store,
+          actor,
+          canonical.id,
+          'sports.showcase.update',
+        ),
+      };
     });
   }
 
@@ -162,12 +190,12 @@ export class SportsService {
     actor: AuthorizationContext,
     id: string,
     patch: SportsTeamPatch,
-  ): Promise<SportsTeamRecord> {
+  ): Promise<SportsTeamRecord & { canEditCard: boolean; canEditShowcase: boolean }> {
     return this.store.transaction(async (store) => {
       const current = await store.sportsTeams.getForUpdate(id);
-      if (!isCanonicalTeam(current, id) || !canTeam(actor, 'sports.team.update', current.scope)) {
-        throw teamNotFound();
-      }
+      if (!isCanonicalTeam(current, id)) throw teamNotFound();
+      if (!(await canMaintainSportsCard(store, actor, id)))
+        throw new HttpError(403, 'forbidden', 'Sports card update permission is required');
       const updated = await store.sportsTeams.update(id, patch);
       if (updated === null) throw teamNotFound();
       await recordAuditEvent(store, {
@@ -177,7 +205,11 @@ export class SportsService {
         resourceId: id,
         details: { changedFields: Object.keys(patch).sort(), scope: updated.scope },
       });
-      return updated;
+      return {
+        ...updated,
+        canEditCard: true,
+        canEditShowcase: await canMaintainSportsCard(store, actor, id, 'sports.showcase.update'),
+      };
     });
   }
 
@@ -185,12 +217,12 @@ export class SportsService {
     actor: AuthorizationContext,
     id: string,
     to: SportsTeamStatus,
-  ): Promise<SportsTeamRecord> {
+  ): Promise<SportsTeamRecord & { canEditCard: boolean; canEditShowcase: boolean }> {
     const result = await this.store.transaction<TransitionResult>(async (store) => {
       const current = await store.sportsTeams.getForUpdate(id);
-      if (!isCanonicalTeam(current, id) || !canTeam(actor, 'sports.team.update', current.scope)) {
-        return { kind: 'missing' };
-      }
+      if (!isCanonicalTeam(current, id)) return { kind: 'missing' };
+      if (!(await canMaintainSportsCard(store, actor, id)))
+        throw new HttpError(403, 'forbidden', 'Sports card update permission is required');
       const from = current.status;
       if (
         !Object.hasOwn(TEAM_TRANSITIONS, from) ||
@@ -225,7 +257,11 @@ export class SportsService {
       });
       throw new HttpError(409, 'invalid_state_transition', 'Invalid sports team state transition');
     }
-    return result.record;
+    return {
+      ...result.record,
+      canEditCard: true,
+      canEditShowcase: await canMaintainSportsCard(this.store, actor, id, 'sports.showcase.update'),
+    };
   }
 
   async listMembers(actor: AuthorizationContext, teamId: string): Promise<SportsTeamMemberView[]> {

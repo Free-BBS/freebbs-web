@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  type ScopeRef,
+  type UserContext,
+} from '@freebbs-development/contracts';
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 
@@ -63,9 +67,9 @@ function matches(pattern: string, permission: string): boolean {
 }
 
 function canMaintain(user: ProposalUser | null | undefined): boolean {
-  if (user?.roles.includes('platform.super_admin')) return true;
-  const policies = (user?.policies ?? []).filter((policy) =>
-    matches(policy.action, 'information.proposal.manage'),
+  if (isDevelopmentBusinessAdmin(user)) return true;
+  const policies = (user?.policies ?? []).filter(
+    (policy) => policy.action !== '*' && matches(policy.action, 'information.proposal.manage'),
   );
   return (
     !policies.some((policy) => policy.effect === 'deny') &&

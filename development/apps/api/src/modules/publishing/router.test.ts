@@ -38,9 +38,10 @@ async function fixture(production = false, store?: DevelopmentStore) {
             : uid === 'otherstaff'
               ? ['department.arts_member']
               : uid === 'admin'
-                ? ['platform.super_admin']
+                ? ['platform.admin']
                 : [],
           tags: [],
+          businessAdmin: uid === 'admin',
         };
         return { status: 200 as const, user };
       },

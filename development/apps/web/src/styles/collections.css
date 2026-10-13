@@ -872,8 +872,11 @@
 .builder-layout {
   display: grid;
   min-width: 0;
-  grid-template-columns: 250px minmax(380px, 1fr) 300px;
+  grid-template-columns: 250px minmax(0, 1fr) 300px;
   align-items: start;
+}
+.builder-layout > * {
+  min-width: 0;
 }
 .builder-library,
 .builder-inspector {
@@ -1320,9 +1323,9 @@
   }
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1240px) {
   .builder-layout {
-    grid-template-columns: 210px minmax(360px, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
   }
   .builder-inspector {
     position: relative;

@@ -13,13 +13,20 @@ describe('canonical department directory', () => {
       const group = contracts.DEVELOPMENT_IDENTITY_GROUPS.find(({ id }) => id === department.id)!;
       expect(department.roleKeys).toEqual(group.options.map(({ roleKey }) => roleKey));
       for (const role of department.roleKeys) {
-        expect(contracts.canEditDepartment([role], department.id)).toBe(true);
+        expect(contracts.canEditDepartment({ roles: [role] }, department.id)).toBe(true);
         expect(contracts.departmentsForRoles([role]).map(({ id }) => id)).toEqual([department.id]);
       }
-      expect(contracts.canEditDepartment(['platform.admin'], department.id)).toBe(false);
-      expect(contracts.canEditDepartment(['platform.super_admin'], department.id)).toBe(true);
+      expect(
+        contracts.canEditDepartment(
+          { roles: ['platform.admin'], businessAdmin: true },
+          department.id,
+        ),
+      ).toBe(true);
+      expect(contracts.canEditDepartment({ roles: ['platform.super_admin'] }, department.id)).toBe(
+        false,
+      );
       const unrelated = directory.find(({ id }) => id !== department.id)!;
-      expect(contracts.canEditDepartment(unrelated.roleKeys, department.id)).toBe(false);
+      expect(contracts.canEditDepartment({ roles: unrelated.roleKeys }, department.id)).toBe(false);
     }
   });
   it('never assigns broad legacy tuanwei or sast to subdivisions', () => {
@@ -34,6 +41,6 @@ describe('canonical department directory', () => {
     ] as const) {
       expect(contracts.legacyDepartmentId(id)).toBe(`student_union.${id}`);
     }
-    expect(contracts.canEditDepartment(['platform.super_admin'], 'unknown')).toBe(false);
+    expect(contracts.canEditDepartment({ roles: ['platform.super_admin'] }, 'unknown')).toBe(false);
   });
 });

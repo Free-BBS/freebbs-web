@@ -27,6 +27,11 @@ import {
   roleStatusPatchSchema,
 } from './schemas.js';
 import { adminActor } from './subjects-router.js';
+import {
+  businessAdminIdentities,
+  effectiveGlobalBusinessAdmins,
+} from '../../core/authorization/business-admin.js';
+import type { UserDirectory } from '../../core/auth/user-directory.js';
 
 export type PermissionBindingInput = z.infer<typeof permissionBindingSchema>;
 
@@ -173,12 +178,31 @@ async function patchRoleStatus(
   roleKey: RoleKey,
   status: 'active' | 'inactive',
   actorUid: string,
+  directory?: UserDirectory,
+  allowedUids: readonly string[] = [],
 ): Promise<RoleRecord> {
   return store.transaction(async (transactionStore) => {
-    const role = (await transactionStore.roles.listForUpdate({ query: roleKey })).find(
-      ({ key }) => key === roleKey,
-    );
+    const definitions = await transactionStore.roles.listForUpdate();
+    const role = definitions.find(({ key }) => key === roleKey);
     if (role === undefined) throw new HttpError(404, 'role_not_found', 'Role not found');
+    if (roleKey === 'platform.admin' && status === 'inactive') {
+      const assignments = await transactionStore.roleAssignments.listForUpdate();
+      const access = await transactionStore.developmentAccess.listForUpdate();
+      const subjects = await transactionStore.subjects.listForUpdate();
+      const identities = await businessAdminIdentities(assignments, directory);
+      if (
+        effectiveGlobalBusinessAdmins(
+          assignments,
+          definitions,
+          subjects,
+          access,
+          new Date(),
+          identities,
+          allowedUids,
+        ).size > 0
+      )
+        throw new HttpError(409, 'last_platform_admin', '平台管理员角色必须保持可用');
+    }
 
     let highestAdminLocks: HighestAdminLocks | undefined;
     if (roleKey === superAdminRoleKey && status === 'inactive') {
@@ -296,7 +320,11 @@ async function replaceRolePermissions(
   });
 }
 
-export function createPermissionsRouter(store: DevelopmentStore): Router {
+export function createPermissionsRouter(
+  store: DevelopmentStore,
+  directory?: UserDirectory,
+  allowedUids?: readonly string[],
+): Router {
   const router = Router();
 
   router.get('/roles', async (_request, response) => {
@@ -314,7 +342,14 @@ export function createPermissionsRouter(store: DevelopmentStore): Router {
   router.patch('/roles/:roleKey', async (request, response) => {
     const roleKey = parse(roleKeySchema, request.params.roleKey);
     const input = parse(roleStatusPatchSchema, request.body);
-    const role = await patchRoleStatus(store, roleKey, input.status, adminActor(response).uid);
+    const role = await patchRoleStatus(
+      store,
+      roleKey,
+      input.status,
+      adminActor(response).uid,
+      directory,
+      allowedUids,
+    );
     send(response, 200, role);
   });
 

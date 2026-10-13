@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { mainSiteHref } from './main-site-api.js';
 import { Link } from 'react-router-dom';
 import { useOptionalAuth } from '../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../core/permissions/Can.js';
 
 interface CommercePageProps {
   section: 'shop' | 'inventory' | 'profile' | 'settings' | 'ranch' | 'ranch-gallery' | 'ranch-dye';
@@ -32,9 +33,7 @@ const sharedRoutes: Record<string, string> = {
 
 export function CommercePage({ section, userUid = '' }: CommercePageProps) {
   const auth = useOptionalAuth();
-  const developmentSettings =
-    auth?.user?.developmentAccess === 'lead' ||
-    auth?.user?.roles.some((role) => ['platform.super_admin', 'platform.admin'].includes(role));
+  const developmentSettings = isBusinessAdmin(auth?.user) && !auth?.user?.previewing;
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate();
   const location = useLocation();

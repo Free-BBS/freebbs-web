@@ -65,7 +65,7 @@ function instrumentCurrentReads<T extends StoredRecord>(
 }
 
 describe('last platform super administrator protection', () => {
-  it('returns last_super_admin before mutating or auditing the only effective assignment', async () => {
+  it('protects the reserved lead on HTTP and keeps internal last-lead recovery protection', async () => {
     const store = createMemoryStore();
     const app = appWithStore(store);
 
@@ -77,17 +77,20 @@ describe('last platform super administrator protection', () => {
     expect(response.body).toEqual({
       data: {
         error: {
-          code: 'last_super_admin',
-          message: 'Cannot revoke the last active platform super administrator',
+          code: 'protected_development_lead',
+          message: '发展端负责人须通过准入管理修改',
         },
       },
       requestId: expect.any(String),
     });
+    await expect(
+      archiveRoleAssignment(store, 'assignment-admin', { actorUid: 'recovery-admin' }),
+    ).rejects.toMatchObject({ status: 409, code: 'last_super_admin' });
     expect(await store.roleAssignments.get('assignment-admin')).toMatchObject({ status: 'active' });
     expect(await store.auditLogs.list({ query: 'admin.role_assignment.revoke' })).toEqual([]);
   });
 
-  it('locks the canonical role before assignments and subjects on the HTTP path', async () => {
+  it('locks and protects reserved HTTP assignments while preserving internal recovery lock order', async () => {
     const baseStore = createMemoryStore();
     await grantSecondSuperAdmin(baseStore, 'main-second-admin');
     const readOrder: string[] = [];
@@ -112,7 +115,14 @@ describe('last platform super administrator protection', () => {
     await request(app)
       .delete('/api/development/v1/admin/role-assignments/assignment-admin')
       .set(adminHeaders)
-      .expect(200);
+      .expect(409);
+
+    expect(readOrder).toEqual(['roles', 'assignments']);
+    expect(await baseStore.roleAssignments.get('assignment-admin')).toMatchObject({
+      status: 'active',
+    });
+    readOrder.length = 0;
+    await archiveRoleAssignment(store, 'assignment-admin', { actorUid: 'recovery-admin' });
 
     expect(readOrder).toEqual(['roles', 'assignments', 'subjects']);
     expect(await baseStore.roleAssignments.get('assignment-admin')).toMatchObject({
@@ -186,6 +196,9 @@ describe('last platform super administrator protection', () => {
       .delete('/api/development/v1/admin/role-assignments/assignment-admin')
       .set(adminHeaders)
       .expect(409);
+    await expect(
+      archiveRoleAssignment(store, 'assignment-admin', { actorUid: 'recovery-admin' }),
+    ).rejects.toMatchObject({ status: 409, code: 'last_super_admin' });
 
     const subject = (await store.subjects.list({ query: 'main-expired-admin' })).find(
       ({ uid }) => uid === 'main-expired-admin',
@@ -196,6 +209,9 @@ describe('last platform super administrator protection', () => {
     await request(app)
       .delete(`/api/development/v1/admin/role-assignments/${expired.id}`)
       .set(adminHeaders)
-      .expect(200);
+      .expect(409);
+    expect(
+      (await archiveRoleAssignment(store, expired.id, { actorUid: 'recovery-admin' })).status,
+    ).toBe('inactive');
   });
 });

@@ -321,6 +321,9 @@
   gap: 0.8rem;
   min-width: 0;
 }
+.module-page[aria-labelledby='sports-team-detail-title'] [aria-label='队员列表'] > li {
+  overflow-wrap: anywhere;
+}
 .cover-dropzone {
   position: relative;
   display: grid !important;

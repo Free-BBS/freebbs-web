@@ -16,3 +16,5 @@ export * from './community.js';
 export * from './activity-workspace.js';
 export * from './collaboration.js';
 export * from './publishing.js';
+export * from './organization-group.js';
+export * from './system-settings.js';

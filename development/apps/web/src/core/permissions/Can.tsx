@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 
-import type { RoleKey, UserContext } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  canManageDevelopmentAccess,
+  type RoleKey,
+  type UserContext,
+} from '@freebbs-development/contracts';
 import { useOptionalAuth } from '../auth/AuthProvider.js';
 
 export interface PresentationPolicy {
@@ -27,13 +32,24 @@ function matches(pattern: string, permission: string): boolean {
   return pattern.endsWith('.*') && permission.startsWith(pattern.slice(0, -1));
 }
 
-export function isSuperAdmin(user: Pick<PresentationUser, 'roles'>): boolean {
-  return user.roles.includes('platform.super_admin');
+export function isSuperAdmin(
+  user: Pick<PresentationUser, 'roles' | 'viewer' | 'developmentAccess' | 'previewing'>,
+): boolean {
+  return canManageDevelopmentAccess(user);
+}
+
+export function isBusinessAdmin(
+  user: Pick<PresentationUser, 'roles' | 'businessAdmin'> | null | undefined,
+): boolean {
+  return isDevelopmentBusinessAdmin(user);
 }
 
 export function hasPresentationPermission(user: PresentationUser, permission: string): boolean {
-  if (isSuperAdmin(user)) return true;
-  const matching = (user.policies ?? []).filter((policy) => matches(policy.action, permission));
+  if (permission.startsWith('admin.')) return isSuperAdmin(user) && !user.previewing;
+  if (isBusinessAdmin(user)) return true;
+  const matching = (user.policies ?? []).filter(
+    (policy) => policy.action !== '*' && matches(policy.action, permission),
+  );
   if (matching.some((policy) => policy.effect === 'deny')) return false;
   return matching.some((policy) => policy.effect === undefined || policy.effect === 'allow');
 }
@@ -54,10 +70,17 @@ export function Can({
   const user = suppliedUser === undefined ? (auth?.user ?? null) : suppliedUser;
   if (user === null) return <>{fallback}</>;
 
-  const superAdmin = isSuperAdmin(user);
+  const businessAdmin = isBusinessAdmin(user);
   const allowed =
-    (role === undefined || superAdmin || user.roles.includes(role)) &&
-    (tag === undefined || superAdmin || user.tags.some((assignment) => assignment.key === tag)) &&
+    (role === undefined ||
+      (role === 'platform.super_admin'
+        ? isSuperAdmin(user)
+        : role === 'platform.admin'
+          ? businessAdmin
+          : user.roles.includes(role) || (businessAdmin && !role.startsWith('platform.')))) &&
+    (tag === undefined ||
+      businessAdmin ||
+      user.tags.some((assignment) => assignment.key === tag)) &&
     (permission === undefined || hasPresentationPermission(user, permission)) &&
     (predicate === undefined || predicate(user));
 

@@ -5,6 +5,8 @@ import {
 import type { RoleKey } from './modules.js';
 import type { SocialOrganizationId } from './organizations.js';
 import type { UnifiedRegistration } from './collections.js';
+import type { UserContext } from './auth.js';
+import { isDevelopmentBusinessAdmin } from './system-settings.js';
 
 export type DepartmentId =
   | `student_union.${'arts_center' | 'sports_center' | 'liaison_center' | 'rights_development_center'}`
@@ -64,12 +66,15 @@ export function departmentsForRoles(roles: readonly RoleKey[]): DepartmentDefini
     department.roleKeys.some((role) => roles.includes(role)),
   );
 }
-export function canEditDepartment(roles: readonly RoleKey[], id: string): boolean {
+export function canEditDepartment(
+  user: Pick<UserContext, 'roles' | 'businessAdmin'>,
+  id: string,
+): boolean {
   const department = departmentById(id);
   return (
     department !== undefined &&
-    (roles.includes('platform.super_admin') ||
-      department.roleKeys.some((role) => roles.includes(role)))
+    (isDevelopmentBusinessAdmin(user) ||
+      department.roleKeys.some((role) => user.roles.includes(role)))
   );
 }
 export function legacyDepartmentId(

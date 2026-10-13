@@ -5,8 +5,9 @@ import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
 import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
+import { MainPreviewSelect } from '../core/auth/MainPreviewSelect.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
-import type { PresentationUser } from '../core/permissions/Can.js';
+import { isBusinessAdmin, isSuperAdmin, type PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { MainSiteFooter } from './MainSiteFooter.js';
@@ -14,6 +15,7 @@ import { useMainSiteTypography } from './main-site-typography.js';
 import {
   visibleModuleManifests,
   ORGANIZATIONS_NAVIGATION,
+  SYSTEM_SETTINGS_NAVIGATION,
   navigationPathname,
   type ModuleStateOverrides,
 } from './module-manifests.js';
@@ -83,41 +85,45 @@ function ModuleNavigation({
     return () => prefetch.remove();
   }, []);
 
+  const navigationModules = visibleModuleManifests(user, moduleStates)
+    .filter((module) => !HIDDEN_SIDEBAR_MODULE_IDS.has(module.id))
+    .flatMap((module) =>
+      module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
+    );
+  if (withLearningLink && isBusinessAdmin(user) && !user.previewing) {
+    navigationModules.push(SYSTEM_SETTINGS_NAVIGATION);
+  }
+
   return (
     <nav ref={navigationRef} className={className} aria-label={label}>
-      {visibleModuleManifests(user, moduleStates)
-        .filter((module) => !HIDDEN_SIDEBAR_MODULE_IDS.has(module.id))
-        .flatMap((module) =>
-          module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
-        )
-        .map((module) => {
-          const isActive =
-            navigationPath === module.route ||
-            navigationPath.startsWith(`${module.route}/`) ||
-            (module.route === '/desk' && deskAliasActive);
-          const content = (
-            <>
-              <span className="module-icon" aria-hidden="true">
-                <img src={module.icon} alt="" />
-              </span>
-              <span className="module-copy">
-                <span className="module-name">{module.name}</span>
-              </span>
-            </>
-          );
+      {navigationModules.map((module) => {
+        const isActive =
+          navigationPath === module.route ||
+          navigationPath.startsWith(`${module.route}/`) ||
+          (module.route === '/desk' && deskAliasActive);
+        const content = (
+          <>
+            <span className="module-icon" aria-hidden="true">
+              <img src={module.icon} alt="" />
+            </span>
+            <span className="module-copy">
+              <span className="module-name">{module.name}</span>
+            </span>
+          </>
+        );
 
-          return (
-            <div data-testid="module-navigation-item" key={module.route}>
-              <Link
-                className={`module-link${isActive ? ' active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-                to={module.route}
-              >
-                {content}
-              </Link>
-            </div>
-          );
-        })}
+        return (
+          <div data-testid="module-navigation-item" key={module.route}>
+            <Link
+              className={`module-link${isActive ? ' active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+              to={module.route}
+            >
+              {content}
+            </Link>
+          </div>
+        );
+      })}
       {withLearningLink ? <LearningSiteLink /> : null}
     </nav>
   );
@@ -221,12 +227,16 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
             user={auth.user as PresentationUser}
           />
           <div className="sidebar-footer">
-            {(auth.user.viewer?.canManageDevelopment ||
-              (auth.authMode === 'demo' && auth.user.roles.includes('platform.super_admin'))) &&
-            !auth.user.previewing ? (
+            {isSuperAdmin(auth.user) ? (
               <NavLink className="sidebar-system-link" to="/admin">
                 <img className="sidebar-system-icon" src={adminIcon} alt="" />
                 <span>管理员模块</span>
+              </NavLink>
+            ) : null}
+            {isBusinessAdmin(auth.user) && !auth.user.previewing ? (
+              <NavLink className="sidebar-system-link" to={SYSTEM_SETTINGS_NAVIGATION.route}>
+                <img className="sidebar-system-icon" src={SYSTEM_SETTINGS_NAVIGATION.icon} alt="" />
+                <span>{SYSTEM_SETTINGS_NAVIGATION.name}</span>
               </NavLink>
             ) : null}
             <LearningSiteLink className="sidebar-learning-link" />
@@ -244,7 +254,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           {auth.user.previewing ? (
             <div className="development-preview-banner" role="status">
               <span>
-                正在以 <strong>{auth.user.displayName}</strong> 的身份预览
+                正在以 <strong>{auth.user.displayName}</strong> 的身份只读预览
               </span>
               <button type="button" onClick={() => auth.setPreviewUser(null)}>
                 退出预览
@@ -254,6 +264,11 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           {auth.authMode === 'demo' ? (
             <div className="demo-preview-toolbar">
               <DemoUserSwitcher />
+            </div>
+          ) : null}
+          {auth.authMode === 'main' && auth.user.viewer?.canPreviewDevelopment ? (
+            <div className="demo-preview-toolbar">
+              <MainPreviewSelect />
             </div>
           ) : null}
 

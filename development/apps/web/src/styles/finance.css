@@ -173,13 +173,33 @@
   background: var(--color-paper-muted);
 }
 
+.finance-record {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.finance-record > header {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.finance-record > header > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.finance-record > header > div:first-child {
+  flex: 1 1 auto;
+}
+
 .finance-record > header h4 {
   font-size: 17px;
+  overflow-wrap: anywhere;
 }
 
 .finance-record-summary > strong {
   font-size: 18px;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .finance-record-meta {
