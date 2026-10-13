@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GrowthSummary } from '@freebbs-development/contracts';
-import { GrowthPage } from './GrowthPage.js';
+import { AchievementCollection } from './AchievementCollection.js';
 
 const summary: GrowthSummary = {
   total: 1,
@@ -55,14 +55,12 @@ const summary: GrowthSummary = {
 };
 
 function setup(uid = 'one', data = summary) {
-  const request = vi.fn(async () => data);
-  const client = { request: request as <T>(path: string) => Promise<T> };
   const view = render(
     <MemoryRouter>
-      <GrowthPage client={client} uid={uid} displayName="林" />
+      <AchievementCollection uid={uid} achievements={data.achievements} />
     </MemoryRouter>,
   );
-  return { ...view, client };
+  return view;
 }
 
 beforeEach(() => {
@@ -131,18 +129,17 @@ describe('growth achievement collection', () => {
     );
     expect(screen.getByLabelText('成长档案展示称号')).toHaveTextContent('初次登场');
     expect(localStorage.getItem('freebbs:growth-title:one')).toBe('first-step');
-    expect(view.client.request).toHaveBeenCalledTimes(1);
     view.rerender(
       <MemoryRouter>
-        <GrowthPage client={view.client} uid="two" displayName="陈" />
+        <AchievementCollection uid="two" achievements={summary.achievements} />
       </MemoryRouter>,
     );
-    expect(screen.queryByLabelText('成长档案展示称号')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('成长档案展示称号')).toHaveTextContent('尚未选择');
     expect(await screen.findByLabelText('成长档案展示称号')).toHaveTextContent('尚未选择');
     expect(localStorage.getItem('freebbs:growth-title:two')).toBeNull();
     view.rerender(
       <MemoryRouter>
-        <GrowthPage client={view.client} uid="one" displayName="林" />
+        <AchievementCollection uid="one" achievements={summary.achievements} />
       </MemoryRouter>,
     );
     expect(await screen.findByLabelText('成长档案展示称号')).toHaveTextContent('初次登场');

@@ -6,7 +6,28 @@ const {
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,
+  readDevelopmentMapTokenDigest,
 } = require('./development-integration');
+
+test('Map verifier loading is bounded and optional without affecting existing backend configuration', async () => {
+  const { mkdtemp, writeFile, rm } = require('node:fs/promises');
+  const path = require('node:path');
+  const { tmpdir } = require('node:os');
+  const root = await mkdtemp(path.join(tmpdir(), 'development-map-verifier-'));
+  try {
+    assert.equal(await readDevelopmentMapTokenDigest(root), undefined);
+    const filename = path.join(root, '.development-map-token.sha256');
+    for (const invalid of ['', 'a'.repeat(63), 'not-a-verifier', 'a'.repeat(4096)]) {
+      await writeFile(filename, invalid);
+      assert.equal(await readDevelopmentMapTokenDigest(root), undefined);
+    }
+    const digest = 'abc123'.repeat(10) + 'abcd';
+    await writeFile(filename, `${digest}\n`);
+    assert.equal(await readDevelopmentMapTokenDigest(root), digest);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('development data uses a peer database schema while inheriting the main server connection', () => {
   const main = {
@@ -170,11 +191,17 @@ test('runtime loader forwards the optional development reward provider without i
         throw new Error('must not run at initialization');
       },
     };
+    const learningProvider = async () => { throw new Error('must not query learning at initialization'); };
+    const digest = 'b'.repeat(64);
+    await writeFile(path.join(root, '.development-map-token.sha256'), digest);
     const options = await loadDevelopmentRuntime({
       repositoryRoot: root,
       developmentRewardProvider: provider,
+      learningAchievementProvider: learningProvider,
     });
     assert.equal(options.developmentRewardProvider, provider);
+    assert.equal(options.learningAchievementProvider, learningProvider);
+    assert.equal(options.developmentMapTokenDigest, digest);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

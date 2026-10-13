@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { GrowthSummary } from '@freebbs-development/contracts';
+import type { AchievementAtlas, GrowthSummary } from '@freebbs-development/contracts';
 import { DetailSection } from '../../components/DetailSection.js';
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
-import type { ApiClient } from '../../core/api/client.js';
-import { AchievementCollection } from './AchievementCollection.js';
+import { growthSessionKey, type GrowthClient } from './growthSession.js';
+import { AchievementAtlasPanel } from './AchievementAtlasPanel.js';
 interface GrowthPageProps {
-  client: Pick<ApiClient, 'request'>;
+  client: GrowthClient;
+  personalAccess?: boolean;
   uid: string;
   displayName: string;
 }
@@ -15,8 +16,19 @@ function activityDate(value: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
-export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
+export function GrowthPage(props: GrowthPageProps) {
+  const personalAccess = props.personalAccess !== false && !props.client.previewUser;
+  return (
+    <GrowthSession
+      key={`${growthSessionKey(props.client, props.uid)}:${personalAccess}`}
+      {...props}
+      personalAccess={personalAccess}
+    />
+  );
+}
+function GrowthSession({ client, uid, displayName, personalAccess }: GrowthPageProps) {
   const [summary, setSummary] = useState<GrowthSummary | null>(null);
+  const [atlas, setAtlas] = useState<AchievementAtlas | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [year, setYear] = useState('all');
@@ -24,6 +36,7 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
   useEffect(() => {
     setYear('all');
     setDomain('all');
+    setAtlas(null);
   }, [uid]);
   useEffect(() => {
     let active = true;
@@ -115,7 +128,13 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
                 <span>探索领域</span>
               </div>
               <div className="growth-total" aria-label="解锁成就">
-                <strong>{summary.achievements.filter((item) => item.unlocked).length}</strong>
+                <strong>
+                  {!personalAccess
+                    ? summary.achievements.filter((item) => item.unlocked).length
+                    : atlas?.uid === uid
+                      ? atlas.achievements.filter((item) => item.unlocked).length
+                      : '—'}
+                </strong>
                 <span>解锁成就</span>
               </div>
             </div>
@@ -125,7 +144,13 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
               ? `包含已结束报名和 ${summary.verifiedTotal ?? 0} 次经组织确认的参与／Map经历。报名记录不等同于实际到场。`
               : '目前以已结束且未取消的报名记录统计；组织确认后的参与记录会单独标记，小程序经历需完成接入后核验。'}
           </p>
-          <AchievementCollection key={uid} uid={uid} achievements={summary.achievements} />
+          {personalAccess ? (
+            <AchievementAtlasPanel client={client} uid={uid} onAtlasLoaded={setAtlas} />
+          ) : (
+            <>
+              <p className="atlas-source-note">请切回本人账号后查看成就图鉴和管理地图连接。</p>
+            </>
+          )}
           <div className="growth-grid">
             <DetailSection
               title="探索版图"

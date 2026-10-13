@@ -188,6 +188,7 @@ function GrowthRoute() {
       client={auth.client}
       uid={auth.user?.uid ?? ''}
       displayName={auth.user?.displayName ?? '同学'}
+      personalAccess={!auth.user?.previewing && !auth.previewUser}
     />
   );
 }

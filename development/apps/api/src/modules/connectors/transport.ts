@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { HttpError } from '../../core/errors/http-error.js';
+import { resolveMapTokenDigest } from '../map-bridge/credentials.js';
 export interface ConnectorMessage {
   channel: 'email' | 'webhook';
   title: string;
@@ -39,7 +40,7 @@ export function connectorStatus(environment: NodeJS.ProcessEnv) {
     {
       id: 'map',
       label: 'Free BBS Map经历接入',
-      configured: Boolean(environment.DEVELOPMENT_MAP_INGEST_TOKEN),
+      configured: Boolean(resolveMapTokenDigest(environment)),
       requirement: 'Map服务端接入令牌和用户标识映射',
     },
     {

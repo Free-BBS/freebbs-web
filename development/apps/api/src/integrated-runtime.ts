@@ -4,6 +4,7 @@ import type { UserDirectory } from './core/auth/user-directory.js';
 import { createMySqlStore } from './core/database/mysql-store.js';
 import { startFeedScheduler } from './modules/connectors/feed.js';
 import type { DevelopmentRewardProvider } from '@freebbs-development/contracts';
+import type { LearningAchievementProvider } from './modules/growth/atlas-service.js';
 
 export interface IntegratedDatabaseConfig {
   host: string;
@@ -22,6 +23,8 @@ export interface IntegratedRuntimeOptions {
   collectionsUploadDirectory: string;
   sportsUploadDirectory?: string;
   developmentRewardProvider?: DevelopmentRewardProvider;
+  learningAchievementProvider?: LearningAchievementProvider;
+  developmentMapTokenDigest?: string;
 }
 
 export interface IntegratedRuntime {
@@ -57,6 +60,12 @@ export async function createIntegratedDevelopmentRuntime(
         : {}),
       ...(options.developmentRewardProvider
         ? { developmentRewardProvider: options.developmentRewardProvider }
+        : {}),
+      ...(options.learningAchievementProvider
+        ? { learningAchievementProvider: options.learningAchievementProvider }
+        : {}),
+      ...(options.developmentMapTokenDigest
+        ? { developmentMapTokenDigest: options.developmentMapTokenDigest }
         : {}),
     });
     const stopFeed = startFeedScheduler(options.collectionsUploadDirectory, environment);
