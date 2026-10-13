@@ -155,7 +155,7 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its nineteen named test files with matching database opt-ins', () => {
+test('the isolated runner enables its twenty-one named test files with matching database opt-ins', () => {
   const expected = [
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
@@ -177,9 +177,10 @@ test('the isolated runner enables its nineteen named test files with matching da
     'backend/teacher-accounts.mysql.test.js',
     'backend/user-certifications.mysql.test.js',
     'backend/schedule-series.mysql.test.js',
+    'backend/learning-research.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 20);
+  assert.equal(new Set(TEST_FILES).size, 21);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -202,16 +203,32 @@ test('the isolated runner enables its nineteen named test files with matching da
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all nineteen live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 19);
+test('the isolated runner requires successful top-level evidence for all twenty-one live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 21);
+  assert.ok(
+    REQUIRED_MYSQL_TESTS.includes(
+      'isolated MySQL: verified identities, notices, privacy, concurrent review and enterprise provisioning',
+    ),
+  );
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
   assert.doesNotThrow(() => validateMysqlTestOutput(complete));
+  const research = REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name));
+  assert.equal(research.length, 1);
+  assert.doesNotThrow(() => validateMysqlTestOutput(`ok 1 - ${research[0]}\n${summary}`, research));
   assert.throws(
-    () => validateMysqlTestOutput(`${successes.slice(1).join('\n')}\n${summary}`),
+    () => validateMysqlTestOutput(summary, research),
     /required MySQL test did not run/,
   );
+  for (const [index, name] of REQUIRED_MYSQL_TESTS.entries()) {
+    const missing = successes.filter((_line, candidate) => candidate !== index);
+    assert.throws(
+      () => validateMysqlTestOutput(`${missing.join('\n')}\n${summary}`),
+      /required MySQL test did not run/,
+      `omitting ${name} must fail even when the remaining tests pass`,
+    );
+  }
   assert.throws(
     () => validateMysqlTestOutput(complete.replace('# skipped 0', '# skipped 1')),
     /must not skip any test/,
@@ -231,4 +248,18 @@ test('the isolated runner requires successful top-level evidence for all ninetee
     () => validateMysqlTestOutput(`${fileOnly}\n${summary}`),
     /required MySQL test did not run/,
   );
+});
+
+test('complete CI retains identity and learning suites alongside the mandatory full MySQL runner', () => {
+  const root = path.join(__dirname, '..');
+  const ci = fs.readFileSync(path.join(root, 'scripts/ci-validate.sh'), 'utf8');
+  const { scripts } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.match(ci, /^npm run test:identity-usability\s*$/m);
+  assert.match(ci, /^npm run test:learning-research\s*$/m);
+  assert.match(ci, /^npm run test:learning-companion\s*$/m);
+  assert.match(scripts['test:identity-usability'], /backend\/user-certifications\.test\.js/);
+  assert.match(scripts['test:identity-usability'], /backend\/user-certifications\.mysql\.test\.js/);
+  assert.match(scripts['test:learning-research'], /backend\/learning-research\.test\.js/);
+  assert.match(scripts['test:learning-companion'], /backend\/learning-companion-sources\.test\.js/);
+  assert.equal(scripts['test:mysql:isolated'], 'node scripts/test-mysql-isolated.js');
 });

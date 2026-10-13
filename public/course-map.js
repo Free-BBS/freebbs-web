@@ -25,18 +25,6 @@
     { key: 'learned', label: '已学习', icon: '✓' },
     { key: 'consolidated', label: '已巩固', icon: '◆' },
   ];
-  const SIGNALS_CHAPTER_TITLES = {
-    'SS-01': '信号与系统基础',
-    'SS-02': '连续系统时域分析',
-    'SS-03': 'Fourier 分析',
-    'SS-04': 'Laplace 与连续系统',
-    'SS-05': '系统响应与信号处理',
-    'SS-06': '信号空间与相关分析',
-    'SS-07': '离散系统时域分析',
-    'SS-08': 'z 变换与数字系统',
-    'SS-11': '反馈系统',
-    'SS-12': '状态空间',
-  };
   const state = {
     course: null,
     nodes: [],
@@ -258,9 +246,7 @@
   }
 
   function chapterTitle(chapterId) {
-    const fallback =
-      courseSlug === 'signals' ? SIGNALS_CHAPTER_TITLES[chapterId] || chapterId : chapterId;
-    return window.FreeBbsLearningContent?.chapterName(state.nodes, chapterId, fallback) || fallback;
+    return window.FreeBbsLearningContent?.chapterName(state.nodes, chapterId) || chapterId;
   }
 
   function courseChapters() {
@@ -1982,6 +1968,11 @@
 
     canvas.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
+      // The structure module owns its controls, text, and graph gestures.
+      // They are not blank clicks in the legacy directory view.
+      if (target?.closest('.course-structure')) {
+        return;
+      }
       if (target?.closest('.course-map-edge-hit')) {
         return;
       }
@@ -2056,6 +2047,14 @@
     document.getElementById('course-map-reset-view')?.addEventListener('click', resetReaderView);
     document.addEventListener('keydown', (event) => {
       if (overviewDrawer?.isOpen()) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        event.defaultPrevented ||
+        state.readerLayout === 'structure' ||
+        target?.closest('input, textarea, select, [contenteditable], dialog[open]')
+      ) {
+        return;
+      }
       if (event.key === 'Escape') {
         hideReaderEdgeTooltip();
       }
@@ -2128,12 +2127,17 @@
       state.progress = readLocalJson(PROGRESS_STORAGE_KEY) || {};
       state.learningNodeId = getLearningNodeId();
       const initialChapters = courseChapters();
-      if (!state.learningNodeId) {
-        state.learningNodeId = initialChapters[0]?.nodes[0]?.id || '';
-      }
       state.activeChapterId =
         chapterIdForNodeId(state.learningNodeId) || initialChapters[0]?.id || '';
       const requestedFocus = params.get('focus');
+      const requestedChapterId =
+        mapPage && window.FreeBbsLearningContent?.isChapterNode(nodeById(requestedFocus))
+          ? chapterIdForNodeId(requestedFocus)
+          : '';
+      if (requestedChapterId) {
+        state.readerLayout = 'structure';
+        state.activeChapterId = requestedChapterId;
+      }
       if (
         mapPage &&
         requestedFocus &&
@@ -2162,6 +2166,8 @@
         bindEditorControls();
       }
       renderMap();
+      // A chapter overview returns to its directory, never a fabricated point focus.
+      if (requestedChapterId) state.structureController?.selectChapter(requestedChapterId);
       setSaveState(editorPage ? '所有修改会自动保存' : '');
       setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
     } catch (error) {

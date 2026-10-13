@@ -10,12 +10,13 @@ const end = source.indexOf('  function getDiscussionBoardSlug(', start);
 assert.ok(start > 0 && end > start);
 const key = 'free_bbs_knowledge_interaction_preferences_v1';
 
-function harness({ storage = new Map(), blocked = false } = {}) {
+function harness({ storage = new Map(), blocked = false, width = 1440 } = {}) {
   const writes = [];
   const calls = [];
   const state = { chatOpen: true, chatTab: 'max', chatMessages: ['private dialogue'] };
   const context = vm.createContext({
     state,
+    window: { innerWidth: width },
     INTERACTION_PREFERENCES_STORAGE_KEY: key,
     localStorage: {
       getItem(name) {
@@ -41,7 +42,7 @@ function harness({ storage = new Map(), blocked = false } = {}) {
   return { context, state, storage, writes, calls };
 }
 
-test('first visit keeps the existing open-Max default without writing preferences', () => {
+test('first desktop visit keeps the open-Max default without writing preferences', () => {
   const fixture = harness();
   fixture.context.restoreInteractionPreferences();
   assert.equal(fixture.state.chatOpen, true);
@@ -51,6 +52,30 @@ test('first visit keeps the existing open-Max default without writing preference
     { action: 'tab', persist: false },
     { action: 'open', focus: false, persist: false },
   ]);
+});
+
+test('first narrow visit keeps reading unobstructed without saving a forced choice', () => {
+  for (const width of [320, 390, 910, 920]) {
+    const fixture = harness({ width });
+    fixture.context.restoreInteractionPreferences();
+    assert.equal(fixture.state.chatOpen, false, `width ${width}`);
+    assert.equal(fixture.state.chatTab, 'max');
+    assert.equal(fixture.writes.length, 0);
+  }
+  const wide = harness({ width: 921 });
+  wide.context.restoreInteractionPreferences();
+  assert.equal(wide.state.chatOpen, true);
+});
+
+test('an explicit narrow-screen open preference takes priority over the initial default', () => {
+  const storage = new Map([[key, '{"open":true,"tab":"max"}']]);
+  const fixture = harness({ storage, width: 390 });
+  fixture.context.restoreInteractionPreferences();
+  assert.equal(fixture.state.chatOpen, true);
+  assert.equal(fixture.writes.length, 0);
+  const blocked = harness({ width: 390, blocked: true });
+  blocked.context.restoreInteractionPreferences();
+  assert.equal(blocked.state.chatOpen, false);
 });
 
 test('closed discussion layout is restored across knowledge points and courses', () => {

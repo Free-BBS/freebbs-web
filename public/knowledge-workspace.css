@@ -600,6 +600,7 @@
   margin: 12px 8px 0 0;
 }
 .learning-plan-alternatives,
+.learning-task-options,
 .learning-quiz-filters {
   display: flex;
   align-items: center;
@@ -722,6 +723,26 @@
 .learning-annotation-comment {
   border-bottom: 1px dotted #9472b1;
 }
+.learning-annotation-underline[data-annotation-color='yellow'],
+.learning-underline-yellow {
+  text-decoration-color: #af7d12;
+}
+.learning-annotation-underline[data-annotation-color='green'],
+.learning-underline-green {
+  text-decoration-color: #3f8953;
+}
+.learning-annotation-underline[data-annotation-color='blue'],
+.learning-underline-blue {
+  text-decoration-color: #247baf;
+}
+.learning-annotation-underline[data-annotation-color='purple'],
+.learning-underline-purple {
+  text-decoration-color: #9472b1;
+}
+.learning-annotation-correction {
+  text-decoration: underline wavy #bd5548;
+  text-underline-offset: 4px;
+}
 .learning-annotation-block {
   outline: 2px solid #9472b177;
   outline-offset: 3px;
@@ -737,6 +758,392 @@
 }
 .knowledge-page.theme-dark .learning-highlight-purple {
   background-color: #9375ba55;
+}
+
+/* Reader-local annotation mode: one icon strip, with notes off the document flow. */
+.knowledge-page #knowledge-reading > .learning-annotation-toolbar[data-annotation-ui='compact'] {
+  flex-wrap: nowrap;
+  gap: 3px;
+  width: max-content;
+  max-width: 100%;
+  margin-block: 10px;
+  padding: 5px 7px;
+  border-radius: 11px;
+  box-sizing: border-box;
+  line-height: 1;
+}
+.knowledge-page
+  .learning-annotation-toolbar[data-annotation-ui='compact']
+  > .learning-annotation-selection,
+.knowledge-page .learning-annotation-toolbar[data-annotation-ui='compact'] > .learning-form-status,
+.knowledge-page
+  .learning-annotation-toolbar[data-annotation-ui='compact']
+  > #learning-annotations-count,
+.knowledge-page
+  .learning-annotation-toolbar[data-annotation-ui='compact']
+  > #learning-annotations-more {
+  display: none;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  button {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  position: relative;
+  width: 36px;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  padding: 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--learning-ink);
+  box-shadow: none;
+  transform: none;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  button:hover,
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  button[aria-expanded='true'] {
+  background: var(--learning-soft);
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+.learning-annotation-icon svg,
+.learning-annotation-menu-toggle svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.learning-annotation-split {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-menu-toggle {
+  width: 18px;
+  padding-inline: 2px;
+}
+.learning-annotation-menu-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.learning-annotation-color-line {
+  position: absolute;
+  inset: auto 7px 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--annotation-tool-color, #e2b93d);
+  pointer-events: none;
+}
+.learning-annotation-color-line[data-annotation-color-preview='underline'] {
+  --annotation-tool-color: #9472b1;
+}
+.learning-annotation-separator {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 22px;
+  margin-inline: 3px;
+  background: var(--learning-line);
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors {
+  position: absolute;
+  inset: calc(100% + 8px) auto auto 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 7px;
+  width: max-content;
+  padding: 9px;
+  border: 1px solid var(--learning-line);
+  border-radius: 11px;
+  background: var(--learning-surface);
+  box-shadow: 0 8px 26px #12343b26;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  button {
+  width: 29px;
+  height: 29px;
+  min-height: 29px;
+  min-width: 29px;
+  border: 1px solid #12343b26;
+  border-radius: 50%;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  [data-annotation-color='yellow'] {
+  background: #f9e4a7;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  [data-annotation-color='green'] {
+  background: #c5e4cd;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  [data-annotation-color='blue'] {
+  background: #c8e3f2;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  [data-annotation-color='purple'] {
+  background: #ded0ef;
+}
+.knowledge-page
+  #knowledge-reading
+  > .learning-annotation-toolbar[data-annotation-ui='compact']
+  .learning-annotation-colors
+  [aria-pressed='true'] {
+  outline: 2px solid var(--ui-accent, #087180);
+  outline-offset: 2px;
+}
+.knowledge-page .learning-annotation-toolbar[data-annotation-ui='compact'] button:focus-visible,
+.knowledge-page .learning-annotation-popover button:focus-visible,
+.knowledge-page .learning-annotation-popover textarea:focus-visible {
+  outline: 2px solid var(--ui-accent, #087180);
+  outline-offset: 3px;
+}
+.knowledge-page .learning-annotation-popover[hidden],
+.knowledge-page .learning-annotation-popover [hidden],
+.knowledge-page .learning-annotation-directory:not([open]) {
+  display: none !important;
+}
+.learning-annotation-popover {
+  position: fixed;
+  top: 96px;
+  left: 24px;
+  /* Above the immersive reader (200) and narrow companion (280), below modal dialogs. */
+  z-index: 285;
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--learning-line);
+  border-radius: 15px;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+  box-shadow: 0 12px 40px #092f3b33;
+  font: 0.95rem / 1.6 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+.learning-annotation-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.learning-note-dialog {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--learning-line);
+  border-radius: 15px;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+}
+.learning-note-dialog::backdrop {
+  background: #092f3b44;
+}
+.learning-note-dialog .learning-card {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.learning-note-dialog-close {
+  display: block;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--learning-muted);
+  color: var(--learning-ink);
+  width: 36px;
+  height: 36px;
+  font: 1.4rem / 1 var(--font-ui);
+}
+.learning-annotation-popover-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.learning-annotation-popover-header > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  min-height: 30px;
+  padding: 4px;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.learning-annotation-popover-header > button:hover {
+  background: var(--learning-soft);
+}
+.learning-annotation-popover-info,
+.learning-annotation-popover .learning-form-status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ui-muted, #60777c);
+}
+.learning-annotation-popover-info:empty,
+.learning-annotation-popover .learning-form-status:empty,
+.learning-annotation-popover-content:empty {
+  display: none;
+}
+.learning-annotation-popover blockquote {
+  margin: 0;
+  max-height: 110px;
+  overflow: auto;
+  padding: 8px 11px;
+  border-left: 3px solid var(--ui-accent, #087180);
+  border-radius: 3px 8px 8px 3px;
+  background: var(--learning-soft);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.learning-annotation-popover .learning-annotation-comment-field {
+  margin: 0;
+  gap: 7px;
+  font-size: 0.92rem;
+}
+.learning-annotation-popover textarea {
+  min-height: 112px;
+  max-height: 36dvh;
+  margin: 0;
+  line-height: 1.65;
+  resize: vertical;
+}
+.learning-annotation-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.learning-annotation-popover-actions button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--learning-line);
+  border-radius: 8px;
+  background: var(--learning-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.learning-annotation-popover-actions button.learning-primary {
+  border-color: var(--ui-accent, #087180);
+  background: var(--ui-accent, #087180);
+  color: #fff;
+}
+.learning-annotation-popover-actions [data-annotation-action='remove'] {
+  color: var(--ui-danger, #af3e4e);
+}
+.learning-annotation-directory {
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--learning-line);
+  border-radius: 16px;
+  padding: 18px;
+  color: var(--learning-ink);
+  background: var(--learning-surface);
+  font-family: var(--font-ui);
+}
+.knowledge-page .learning-annotation-directory #learning-annotation-list {
+  position: static;
+  max-height: none;
+  margin-top: 15px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+@media (max-width: 420px) {
+  .knowledge-page #knowledge-reading > .learning-annotation-toolbar[data-annotation-ui='compact'] {
+    gap: 1px;
+    padding-inline: 4px;
+  }
+  .knowledge-page
+    #knowledge-reading
+    > .learning-annotation-toolbar[data-annotation-ui='compact']
+    button {
+    width: 32px;
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 5px;
+  }
+  .knowledge-page
+    #knowledge-reading
+    > .learning-annotation-toolbar[data-annotation-ui='compact']
+    .learning-annotation-menu-toggle {
+    width: 16px;
+    padding-inline: 1px;
+  }
+  .learning-annotation-separator {
+    margin-inline: 2px;
+  }
+  .learning-annotation-popover {
+    padding: 13px;
+    font-size: max(0.9rem, 16px);
+  }
+  .learning-annotation-popover textarea {
+    font-size: 16px;
+  }
+}
+@media (forced-colors: active) {
+  .learning-annotation-color-line {
+    border-bottom: 3px solid ButtonText;
+  }
+  .learning-annotation-popover,
+  .learning-annotation-directory {
+    border-color: CanvasText;
+  }
 }
 @media (max-width: 620px) {
   .learning-annotation-toolbar {
@@ -792,6 +1199,78 @@
 }
 .knowledge-workbench .knowledge-tool-navigation button {
   font-size: 1rem;
+}
+
+/* Reading size follows the shared user scale; mathematical and code faces stay independent. */
+.knowledge-page {
+  --knowledge-reading-inset: 0px;
+}
+.knowledge-page #knowledge-body {
+  font-size: 1.15rem;
+  line-height: 1.85;
+}
+.knowledge-page .knowledge-history-content .discussion-markdown-body {
+  font-size: 1rem;
+}
+/* A wide course table scrolls locally instead of widening the whole reader. */
+.knowledge-page #knowledge-body table,
+.knowledge-page .knowledge-history-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.knowledge-page #knowledge-body .discussion-table-scroll,
+.knowledge-page .knowledge-history-content .discussion-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.knowledge-page #knowledge-body .discussion-table-scroll table,
+.knowledge-page .knowledge-history-content .discussion-table-scroll table {
+  display: table;
+  width: 100%;
+  max-width: none;
+  overflow: visible;
+  table-layout: auto;
+  margin: 0;
+}
+.knowledge-page #knowledge-body :is(th, td),
+.knowledge-page .knowledge-history-content :is(th, td) {
+  min-width: 6.5rem;
+  padding: 0.55rem 0.7rem;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.knowledge-page #knowledge-body table:focus-visible,
+.knowledge-page .knowledge-history-content table:focus-visible,
+.knowledge-page #knowledge-body .discussion-table-scroll:focus-visible,
+.knowledge-page .knowledge-history-content .discussion-table-scroll:focus-visible {
+  outline: 3px solid var(--learning-accent, #087c8c);
+  outline-offset: 2px;
+}
+.knowledge-page .learning-resource-group a {
+  display: inline-block;
+  padding-block: 0.45rem;
+}
+.knowledge-page .learning-resource-file {
+  overflow-wrap: anywhere;
+}
+.knowledge-page .learning-reading-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font: 1rem var(--font-ui);
+}
+.knowledge-page .learning-reading-size select {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--learning-line);
+  border-radius: 0.65rem;
+  color: var(--learning-ink);
+  background: var(--learning-surface);
+  font: inherit;
 }
 .knowledge-workbench .knowledge-tool-navigation button:focus-visible {
   outline: 3px solid #5297a4;
@@ -849,8 +1328,11 @@
   }
 }
 @media (max-width: 620px) {
+  .knowledge-page {
+    --knowledge-reading-inset: calc(60px + env(safe-area-inset-top, 0px));
+  }
   .knowledge-history {
-    top: calc(60px + env(safe-area-inset-top, 0px));
+    top: var(--knowledge-reading-inset);
   }
   .knowledge-page .knowledge-workbench,
   .knowledge-page .knowledge-workbench.is-tools-collapsed {
@@ -914,4 +1396,96 @@
   .learning-workspace .learning-actions > button {
     flex: 1 1 auto;
   }
+}
+
+/* Narrow interaction is a viewport drawer, never an implicit second reader column. */
+@media (max-width: 920px) {
+  .knowledge-page .knowledge-workbench {
+    --knowledge-chat-top-inset: calc(72px + env(safe-area-inset-top, 0px));
+    --knowledge-chat-bottom-inset: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  .knowledge-page .knowledge-workbench .knowledge-chat,
+  .knowledge-page .knowledge-workbench.is-interaction-open .knowledge-chat {
+    grid-column: auto;
+    grid-row: auto;
+    position: fixed;
+    inset: auto;
+    top: calc(var(--knowledge-chat-viewport-top, 0px) + var(--knowledge-chat-top-inset));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    z-index: 280;
+    width: min(
+      520px,
+      calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))
+    );
+    height: max(
+      0px,
+      calc(
+        var(--knowledge-chat-viewport-height, 100dvh) - var(--knowledge-chat-top-inset) -
+          var(--knowledge-chat-bottom-inset)
+      )
+    );
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    box-sizing: border-box;
+  }
+  .knowledge-page .knowledge-workbench .knowledge-chat-panel {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    border-radius: 16px;
+  }
+  .knowledge-page .knowledge-workbench .knowledge-chat-max-view {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .knowledge-page .knowledge-workbench .knowledge-panel-resizer {
+    display: none !important;
+  }
+}
+@media (max-width: 900px) {
+  .knowledge-page .knowledge-workbench {
+    --knowledge-chat-top-inset: calc(60px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Selected passages get a local, opt-in question prompt inside the existing Max thread. */
+.knowledge-selection-guidance .knowledge-chat-message-body > small {
+  display: block;
+  color: var(--bbs-shell-muted);
+}
+.knowledge-selection-guidance #knowledge-selection-quote {
+  max-height: 8em;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.knowledge-selection-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.knowledge-selection-choices button {
+  padding: 6px 10px;
+  border: 1px solid var(--learning-line);
+  border-radius: 999px;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.knowledge-selection-choices button:focus-visible {
+  outline: 2px solid var(--ui-accent, #087180);
+  outline-offset: 2px;
+}
+.knowledge-selection-choices button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.knowledge-selection-guidance .knowledge-selection-notice {
+  font-size: 0.88em;
+  color: var(--bbs-shell-muted);
 }

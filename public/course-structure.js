@@ -1,9 +1,13 @@
 /* Course structure reader. The editor and published graph data remain independent. */
 (function (root, factory) {
-  const api = factory(root);
+  const content =
+    typeof module !== 'undefined' && module.exports
+      ? require('./learning-content')
+      : root?.FreeBbsLearningContent;
+  const api = factory(root, content);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FreeBbsCourseStructure = api;
-})(typeof window === 'undefined' ? null : window, (root) => {
+})(typeof window === 'undefined' ? null : window, (root, content) => {
   const compare = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
   // Match the existing course-map API contract, including legacy two-part and
   // deeper identifiers. Only the explicit zero-level convention marks a chapter.
@@ -19,6 +23,14 @@
       .join('-');
   const isChapterNode = (node) => /^[A-Z][A-Z0-9]*-[A-Z0-9]+-0+$/.test(node?.id || '');
   const edgeLabel = (edge) => (edge.type === 'ordered' ? '学习顺序' : '补充关联');
+  function abbreviateNodeId(id, limit = 10) {
+    const text = String(id || '');
+    const size = Number.isFinite(limit) ? Math.max(5, Math.floor(limit)) : 10;
+    if (text.length <= size) return text;
+    const head = Math.ceil((size - 1) / 2);
+    const tail = Math.floor((size - 1) / 2);
+    return `${text.slice(0, head)}…${text.slice(-tail)}`;
+  }
   function nodeLevel(node) {
     const raw =
       node.level ||
@@ -53,8 +65,7 @@
         ...group,
         virtual: !group.overview,
         title:
-          group.overview?.title ||
-          group.nodes.find((node) => node.chapterTitle)?.chapterTitle ||
+          content?.chapterName([...group.nodes, group.overview].filter(Boolean), group.id) ||
           group.id,
         nodes: group.nodes.sort((a, b) => compare(a.id, b.id)),
       }));
@@ -171,25 +182,86 @@
       outsideCount: satellites.reduce((sum, group) => sum + group.nodes.length, 0),
     };
   }
+  const PAGE_SIZE = 40;
+  // Keep typed spaces: trimming a live input would make multi-word queries impossible.
+  const normalizeQuery = (value) => (typeof value === 'string' ? value : '');
+  function matchesQuery(model, node, key) {
+    const owner = model.chapters.find((chapter) => chapter.id === chapterId(node.id));
+    return [
+      node.id,
+      node.title,
+      node.chapterTitle,
+      owner?.title,
+      ...(Array.isArray(node.aliases) ? node.aliases : []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(key);
+  }
   function searchNodes(model, query) {
-    const key = String(query || '')
-      .trim()
-      .toLocaleLowerCase();
+    const key = normalizeQuery(query).trim().toLocaleLowerCase();
     if (!key) return [];
     return model.nodes
-      .filter((node) =>
-        [
-          node.id,
-          node.title,
-          node.chapterTitle,
-          ...(Array.isArray(node.aliases) ? node.aliases : []),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLocaleLowerCase()
-          .includes(key),
+      .filter((node) => matchesQuery(model, node, key))
+      .sort((left, right) => compare(left.id, right.id));
+  }
+  function relationGroups(view) {
+    const groups = [
+      { key: 'incoming', title: '可先了解', entries: new Map() },
+      { key: 'outgoing', title: '接着了解', entries: new Map() },
+      { key: 'related', title: '补充联系', entries: new Map() },
+    ];
+    if (view.focus) {
+      for (const edge of view.links) {
+        if (edge.active === false) continue;
+        const incoming = edge.target === view.focus.id;
+        const id = incoming ? edge.source : edge.target;
+        const node = view.knowledgeNodes.find((item) => item.id === id);
+        if (!node || node.id === view.focus.id) continue;
+        const key = edge.type === 'related' ? 'related' : incoming ? 'incoming' : 'outgoing';
+        const group = groups.find((item) => item.key === key);
+        if (!group.entries.has(id)) group.entries.set(id, { node, edges: [] });
+        group.entries.get(id).edges.push(edge);
+      }
+    }
+    return groups.map(({ key, title, entries }) => ({ key, title, items: [...entries.values()] }));
+  }
+  function paginateMatches(matches, page = 0) {
+    const pageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+    const requested = Number.isFinite(page) ? Math.max(0, Math.floor(page)) : 0;
+    const current = Math.min(requested, pageCount - 1);
+    return {
+      page: current,
+      pageCount,
+      total: matches.length,
+      start: matches.length ? current * PAGE_SIZE + 1 : 0,
+      end: Math.min((current + 1) * PAGE_SIZE, matches.length),
+      nodes: matches.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE),
+    };
+  }
+  function pickerMatches(model, picker) {
+    const key = picker.query.trim().toLocaleLowerCase();
+    return model.nodes
+      .filter(
+        (node) =>
+          !isChapterNode(node) &&
+          (!picker.chapterId || chapterId(node.id) === picker.chapterId) &&
+          (!key || matchesQuery(model, node, key)),
       )
-      .slice(0, 40);
+      .sort((left, right) => compare(left.id, right.id));
+  }
+  function normalizePickerState(model, value = {}) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const picker = {
+      chapterId: model.chapters.some((chapter) => chapter.id === raw.chapterId)
+        ? raw.chapterId
+        : '',
+      query: normalizeQuery(raw.query),
+      page: 0,
+    };
+    picker.page = paginateMatches(pickerMatches(model, picker), raw.page).page;
+    return picker;
   }
   function placeNodes(nodes, origin, columns = 3, reusePosition = true) {
     const seen = new Set();
@@ -227,59 +299,13 @@
     let boxes = [];
     const regions = [];
     if (view.focus) {
-      const centerNodes = view.knowledgeNodes.filter(
-        (node) => chapterId(node.id) === view.expanded.id,
-      );
-      const central = placeNodes(
-        centerNodes,
-        compact ? { x: 32, y: 70 } : { x: 72, y: 80 },
+      // Chapter ownership belongs in the directory/text, not in relationship fences.
+      boxes = placeNodes(
+        [view.focus, ...view.knowledgeNodes.filter((node) => node.id !== view.focus.id)],
+        compact ? { x: 24, y: 30 } : { x: 40, y: 40 },
         compact ? 1 : 3,
         !compact,
       );
-      const height = Math.max(140, ...central.map((box) => box.y + box.height));
-      const centerRight = Math.max(
-        compact ? 268 : 320,
-        ...central.map((box) => box.x + box.width + 20),
-      );
-      regions.push({
-        id: view.expanded.id,
-        title: view.expanded.title,
-        x: compact ? 12 : 48,
-        y: compact ? 18 : 28,
-        width: centerRight - (compact ? 12 : 48),
-        height: height - (compact ? 18 : 28) + 24,
-        satellite: false,
-      });
-      boxes.push(...central);
-      let satelliteY = compact ? height + 50 : 28;
-      for (const group of view.satellites) {
-        const groupTop = satelliteY;
-        const satellites = placeNodes(
-          group.nodes,
-          { x: compact ? 32 : centerRight + 64, y: satelliteY + 58 },
-          compact ? 1 : 2,
-          !compact,
-        );
-        const groupHeight = Math.max(
-          148,
-          ...satellites.map((box) => box.y + box.height - groupTop + 20),
-        );
-        const satelliteRight = Math.max(
-          compact ? 268 : centerRight + 315,
-          ...satellites.map((box) => box.x + box.width + 25),
-        );
-        regions.push({
-          id: group.id,
-          title: group.title,
-          x: compact ? 12 : centerRight + 36,
-          y: satelliteY,
-          width: satelliteRight - (compact ? 12 : centerRight + 36),
-          height: groupHeight,
-          satellite: true,
-        });
-        boxes.push(...satellites);
-        satelliteY += groupHeight + 26;
-      }
     } else {
       const macro = placeNodes(
         model.chapters.map((chapter) => ({ id: chapter.id, position: chapter.overview?.position })),
@@ -323,7 +349,8 @@
     let pickerChapterId = '';
     let pickerQuery = '';
     let pickerPage = 0;
-    const pickerPageSize = 40;
+    let searchPage = 0;
+    const filterButtons = new Map();
     const make = (tag, value, className) => {
       const element = document.createElement(tag);
       if (value !== undefined) element.textContent = value;
@@ -355,15 +382,48 @@
     status.setAttribute('role', 'status');
     const results = make('div', undefined, 'course-structure-search-results');
     results.hidden = true;
+    const searchPanel = make('section', undefined, 'course-structure-search-panel');
+    searchPanel.hidden = true;
+    searchPanel.setAttribute('aria-label', '课程查找结果');
+    const searchSummary = make('p', '', 'course-structure-search-summary');
+    searchSummary.setAttribute('role', 'status');
+    const searchPaging = make(
+      'div',
+      undefined,
+      'course-structure-picker-paging course-structure-search-paging',
+    );
+    const previousSearchPage = button(
+      '上一页',
+      () => {
+        searchPage -= 1;
+        renderSearch();
+      },
+      'course-structure-search-previous',
+    );
+    const nextSearchPage = button(
+      '下一页',
+      () => {
+        searchPage += 1;
+        renderSearch();
+      },
+      'course-structure-search-next',
+    );
+    const searchPageCount = make('span');
+    searchPaging.append(previousSearchPage, searchPageCount, nextSearchPage);
+    searchPanel.append(searchSummary, results, searchPaging);
     toolbar.append(
       search,
       button('全局概览', () => navigate({ type: 'reset' })),
-      button('适应全图', () => fit()),
+    );
+    const columns = make('div', undefined, 'course-structure-columns');
+    const graphArea = make('details', undefined, 'course-structure-graph-area');
+    const graphSummary = make('summary', '查看关系图（辅助）');
+    const cameraTools = make('div', undefined, 'course-structure-camera');
+    cameraTools.append(
+      button('重置图位置', () => fit()),
       button('−', () => zoom(0.82)),
       button('+', () => zoom(1.22)),
     );
-    const columns = make('div', undefined, 'course-structure-columns');
-    const graphArea = make('div', undefined, 'course-structure-graph-area');
     const viewer = make('div', undefined, 'course-structure-viewer');
     viewer.tabIndex = 0;
     viewer.setAttribute('aria-label', '知识图谱画布，拖动画布平移，滚轮缩放');
@@ -371,21 +431,35 @@
     const graph = svgNode('g');
     svg.append(graph);
     viewer.append(svg);
-    const help = make('p', '选择一个知识点，查看它的直接关联。', 'course-structure-help');
-    graphArea.append(viewer, help);
-    const sidebar = make('div', undefined, 'course-structure-sidebar');
+    const help = make('p', '拖动或用方向键移动；滚轮、+ / − 缩放。', 'course-structure-help');
+    const legend = make('p', '实线箭头：学习顺序 · 虚线：补充联系', 'course-structure-legend');
+    graphArea.append(graphSummary, cameraTools, legend, viewer, help);
+    const sidebar = make('aside', undefined, 'course-structure-sidebar');
+    sidebar.setAttribute('aria-label', '课程目录');
+    const chapterList = make('nav', undefined, 'course-structure-chapters');
+    chapterList.setAttribute('aria-label', '课程章节');
+    chapterList.append(make('h2', '课程章节'));
+    for (const chapter of model.chapters) {
+      const item = button('', () => navigate({ type: 'select', id: chapter.id }));
+      item.dataset.courseChapterId = chapter.id;
+      item.append(
+        make('strong', chapter.title),
+        make('span', `包含 ${chapter.nodes.length} 个知识点`),
+      );
+      chapterList.append(item);
+    }
     const picker = make('section', undefined, 'course-structure-picker');
     picker.setAttribute('aria-label', '选择知识点');
     const pickerHeading = make('div', undefined, 'course-structure-picker-heading');
     const pickerCount = make('small');
-    pickerHeading.append(make('h2', '知识点'), pickerCount);
+    pickerHeading.append(make('h2', '选择知识点'), pickerCount);
     const pickerChapter = make('select', undefined, 'course-structure-picker-chapter');
     pickerChapter.setAttribute('aria-label', '筛选知识点所属章节');
     const allChapters = make('option', '全部章节');
     allChapters.value = '';
     pickerChapter.append(allChapters);
     for (const chapter of model.chapters) {
-      const option = make('option', `${chapter.id} · ${chapter.title}`);
+      const option = make('option', `${chapter.title} · ${chapter.nodes.length} 个知识点`);
       option.value = chapter.id;
       pickerChapter.append(option);
     }
@@ -414,96 +488,128 @@
     const pageCount = make('span');
     pickerPaging.append(previousPage, pageCount, nextPage);
     picker.append(pickerHeading, pickerChapter, pickerSearch, pickerList, pickerPaging);
-    const details = make('aside', undefined, 'course-structure-details');
+    const details = make('section', undefined, 'course-structure-details');
     details.setAttribute('aria-label', '课程与知识点详情');
-    sidebar.append(picker, details);
-    columns.append(graphArea, sidebar);
-    shell.append(toolbar, results, status, columns);
+    const currentContent = make('section', undefined, 'course-structure-current');
+    currentContent.setAttribute('aria-label', '当前内容与直接关系');
+    currentContent.tabIndex = -1;
+    sidebar.append(chapterList, picker);
+    currentContent.append(details, graphArea);
+    columns.append(sidebar, currentContent);
+    shell.append(toolbar, searchPanel, status, columns);
     container.replaceChildren(shell);
-    function navigate(action) {
+    const pickerSnapshot = () => ({
+      chapterId: pickerChapterId,
+      query: pickerQuery,
+      page: pickerPage,
+    });
+    function applyPicker(value) {
+      const pickerState = normalizePickerState(model, value);
+      pickerChapterId = pickerState.chapterId;
+      pickerQuery = pickerState.query;
+      pickerPage = pickerState.page;
+    }
+    function navigate(action, options = {}) {
       const next = reduceState(state, action, model);
-      if (JSON.stringify(next) === JSON.stringify(state)) return;
+      if (JSON.stringify(next) === JSON.stringify(state) && !options.picker && !options.hideSearch)
+        return;
       const previous = state;
-      history.push({ ...state });
-      state = next;
+      let nextPicker = pickerSnapshot();
       if (['select', 'expand'].includes(action.type)) {
-        pickerChapterId = state.selectedChapterId;
-        pickerQuery = '';
-        pickerPage = 0;
+        nextPicker = { chapterId: next.selectedChapterId, query: '', page: 0 };
       } else if (action.type === 'reset') {
-        pickerChapterId = '';
-        pickerQuery = '';
-        pickerPage = 0;
+        nextPicker = { chapterId: '', query: '', page: 0 };
       } else if (
         action.type === 'locate' ||
-        (state.focusedNodeId && pickerChapterId && pickerChapterId !== state.selectedChapterId)
+        (next.focusedNodeId && pickerChapterId && pickerChapterId !== next.selectedChapterId)
       ) {
-        pickerChapterId = state.selectedChapterId;
-        pickerQuery = '';
-        pickerPage = 0;
+        nextPicker = { chapterId: next.selectedChapterId, query: '', page: 0 };
+      }
+      nextPicker = normalizePickerState(model, options.picker || nextPicker);
+      if (options.revealFocus && next.focusedNodeId) {
+        const index = pickerMatches(model, nextPicker).findIndex(
+          (node) => node.id === next.focusedNodeId,
+        );
+        if (index >= 0) nextPicker.page = Math.floor(index / PAGE_SIZE);
+      }
+      if (
+        JSON.stringify(next) === JSON.stringify(state) &&
+        JSON.stringify(nextPicker) === JSON.stringify(pickerSnapshot()) &&
+        !(options.hideSearch && !searchPanel.hidden)
+      )
+        return;
+      history.push({
+        state: { ...state },
+        picker: pickerSnapshot(),
+        search: { query: search.value, page: searchPage, open: !searchPanel.hidden },
+      });
+      state = next;
+      applyPicker(nextPicker);
+      if (options.hideSearch) {
+        searchPanel.hidden = true;
+        results.hidden = true;
       }
       update(
         action.type !== 'filter' &&
           (action.type !== 'select' ||
             Boolean(previous.focusedNodeId) !== Boolean(state.focusedNodeId)),
       );
+      if (
+        ['focus', 'locate'].includes(action.type) &&
+        next.focusedNodeId !== previous.focusedNodeId
+      ) {
+        currentContent.focus?.({ preventScroll: true });
+        if (root.matchMedia?.('(max-width: 900px)').matches)
+          currentContent.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
     }
     function back() {
       if (history.length) {
-        state = history.pop();
-        pickerChapterId = state.selectedChapterId;
-        pickerQuery = '';
-        const selectedIndex =
-          model.chapters
-            .find((chapter) => chapter.id === pickerChapterId)
-            ?.nodes.findIndex((node) => node.id === state.focusedNodeId) ?? -1;
-        pickerPage = selectedIndex < 0 ? 0 : Math.floor(selectedIndex / pickerPageSize);
+        const restoreBackFocus = document.activeElement === details.children[0];
+        const previous = history.pop();
+        state = previous.state;
+        applyPicker(previous.picker);
+        search.value = normalizeQuery(previous.search.query);
+        searchPage = previous.search.page;
+        renderSearch(previous.search.open);
         update(true);
+        // The focused Back button was replaced; leave unrelated stable controls alone.
+        if (restoreBackFocus) details.children[0]?.focus?.({ preventScroll: true });
       } else root.history.back();
     }
     function renderPicker() {
-      const key = pickerQuery.trim().toLocaleLowerCase();
-      const matches = model.nodes
-        .filter(
-          (node) =>
-            !isChapterNode(node) &&
-            (!pickerChapterId || chapterId(node.id) === pickerChapterId) &&
-            (!key ||
-              [node.id, node.title, ...(Array.isArray(node.aliases) ? node.aliases : [])]
-                .filter(Boolean)
-                .join(' ')
-                .toLocaleLowerCase()
-                .includes(key)),
-        )
-        .sort((left, right) => compare(left.id, right.id));
-      const pages = Math.max(1, Math.ceil(matches.length / pickerPageSize));
-      pickerPage = Math.max(0, Math.min(pickerPage, pages - 1));
+      applyPicker(pickerSnapshot());
+      const page = paginateMatches(pickerMatches(model, pickerSnapshot()), pickerPage);
       pickerChapter.value = pickerChapterId;
       if (pickerSearch.value !== pickerQuery) pickerSearch.value = pickerQuery;
-      pickerCount.textContent = `${matches.length} 个`;
+      pickerCount.textContent = `${page.total} 个`;
       pickerList.replaceChildren();
-      for (const node of matches.slice(
-        pickerPage * pickerPageSize,
-        (pickerPage + 1) * pickerPageSize,
-      )) {
+      for (const node of page.nodes) {
         const item = button('', () => navigate({ type: 'focus', id: node.id }));
         item.dataset.coursePointId = node.id;
         item.setAttribute('aria-pressed', String(state.focusedNodeId === node.id));
         item.append(make('small', node.id), make('span', node.title));
         pickerList.append(item);
       }
-      if (!matches.length) pickerList.append(make('p', '没有匹配的知识点。'));
+      if (!page.total) pickerList.append(make('p', '没有匹配的知识点。'));
       pickerList.scrollTop = 0;
-      pickerPaging.hidden = pages <= 1;
+      pickerPaging.hidden = page.pageCount <= 1;
       previousPage.disabled = pickerPage === 0;
-      nextPage.disabled = pickerPage === pages - 1;
-      pageCount.textContent = `${pickerPage + 1} / ${pages}`;
+      nextPage.disabled = pickerPage === page.pageCount - 1;
+      pageCount.textContent = `${pickerPage + 1} / ${page.pageCount}`;
+      for (const item of chapterList.children)
+        if (item.dataset.courseChapterId)
+          item.setAttribute(
+            'aria-pressed',
+            String(item.dataset.courseChapterId === state.selectedChapterId),
+          );
     }
     pickerChapter.addEventListener('change', () => {
-      pickerChapterId = pickerChapter.value;
-      pickerQuery = '';
-      pickerPage = 0;
-      navigate(pickerChapterId ? { type: 'select', id: pickerChapterId } : { type: 'reset' });
+      const pickerState = normalizePickerState(model, { chapterId: pickerChapter.value });
+      navigate(
+        pickerState.chapterId ? { type: 'select', id: pickerState.chapterId } : { type: 'reset' },
+        { picker: pickerState },
+      );
       renderPicker();
     });
     pickerSearch.addEventListener('input', () => {
@@ -527,11 +633,16 @@
       const width = Math.max(1, viewer.clientWidth);
       const height = Math.max(360, viewer.clientHeight);
       camera.zoom = Math.max(
-        0.18,
+        1,
         Math.min(1.15, (width - 26) / currentLayout.width, (height - 26) / currentLayout.height),
       );
       camera.x = (width - currentLayout.width * camera.zoom) / 2;
       camera.y = (height - currentLayout.height * camera.zoom) / 2;
+      const focus = currentLayout.boxes.find((box) => box.id === state.focusedNodeId);
+      if (focus) {
+        camera.x = 16 - focus.x * camera.zoom;
+        camera.y = 16 - focus.y * camera.zoom;
+      }
       applyCamera();
     }
     function zoom(factor, point) {
@@ -565,24 +676,25 @@
         }),
       );
       const title = box.chapter?.title || box.node?.title || box.id;
+      const idSuffix = `${state.focusedNodeId === box.id ? ' · 当前点' : ''}${level === 'extension' ? ' · ◇ 拓展/选学' : ''}`;
       group.append(
         svgNode(
           'text',
           { x: 14, y: 25, class: 'course-structure-node-id' },
-          `${box.id}${level === 'extension' ? ' · ◇ 拓展/选学' : ''}`,
+          `${abbreviateNodeId(box.id)}${idSuffix}`,
         ),
       );
       group.append(
         svgNode(
           'text',
           { x: 14, y: 49, class: 'course-structure-node-title' },
-          title.length > 16 ? `${title.slice(0, 15)}…` : title,
+          title.length > 8 ? `${title.slice(0, 7)}…` : title,
         ),
       );
       const hint =
         box.kind === 'chapter'
           ? `${box.chapter.nodes.length} 个知识点${box.chapter.virtual ? ' · 暂无板块概览' : ''}`
-          : (box.node.summary || '').slice(0, 20);
+          : '';
       if (hint)
         group.append(
           svgNode(
@@ -591,7 +703,8 @@
             hint,
           ),
         );
-      group.append(svgNode('title', {}, `${box.id} · ${title}`));
+      group.append(svgNode('title', {}, `${box.id} · ${title}${idSuffix}`));
+      group.courseStructureIdSuffix = idSuffix;
       const action = () => {
         if (drag?.moved) return;
         navigate({ type: box.kind === 'chapter' ? 'select' : 'focus', id: box.id });
@@ -604,6 +717,30 @@
         }
       });
       return group;
+    }
+    function fitGraphIdLabel(group, box) {
+      const label = group.children[1];
+      if (typeof label?.getComputedTextLength !== 'function') return;
+      const suffix = group.courseStructureIdSuffix;
+      // Reserve extra breathing room for glyph overhang and a late font/style reflow.
+      const available = box.width - 40;
+      let limit = Math.min(box.id.length, 10);
+      label.textContent = `${abbreviateNodeId(box.id, limit)}${suffix}`;
+      // Closed details may not have measurable SVG text yet; reopening redraws and measures it.
+      if (!label.getComputedTextLength()) {
+        label.textContent = `${abbreviateNodeId(box.id)}${suffix}`;
+        return;
+      }
+      const minimum = box.id.length <= 10 ? box.id.length : 5;
+      while (label.getComputedTextLength() > available && limit > minimum) {
+        limit -= 1;
+        label.textContent = `${abbreviateNodeId(box.id, limit)}${suffix}`;
+      }
+      let suffixLength = suffix.length;
+      while (label.getComputedTextLength() > available && suffixLength > 0) {
+        suffixLength -= 1;
+        label.textContent = `${abbreviateNodeId(box.id, limit)}${suffix.slice(0, suffixLength)}…`;
+      }
     }
     function renderGraph(view, recompute) {
       if (recompute || !currentLayout)
@@ -681,25 +818,26 @@
         group.append(
           svgNode('title', {}, `${edgeLabel(edge)}${edge.note ? `：${edge.note}` : ''}`),
         );
-        if (view.focus)
-          group.append(
-            svgNode('text', { x: (sx + tx) / 2, y: (sy + ty) / 2 - 7 }, edgeLabel(edge)),
-          );
+        // The readable legend and relationship cards carry labels outside SVG nodes.
         graph.append(group);
       }
-      for (const box of currentLayout.boxes) graph.append(graphButton(box));
+      for (const box of currentLayout.boxes) {
+        const group = graphButton(box);
+        graph.append(group);
+        fitGraphIdLabel(group, box);
+      }
       if (recompute) fit();
       else applyCamera();
     }
     function renderDetails(view) {
+      filterButtons.clear();
       details.replaceChildren(button('返回', back, 'course-structure-back'));
       if (view.focus && state.selectedNodeId === view.focus.id) {
         const node = view.focus;
         details.append(
-          make('small', `${node.id} · ${view.expanded.title}`),
+          make('small', `所属章节：${view.expanded.title} · ${node.id}`),
           make('h2', node.title),
         );
-        if (node.summary) details.append(make('p', node.summary));
         const overview = root.FreeBbsKnowledgeOverview?.model(node, course);
         const metadata = make('dl', undefined, 'course-structure-metadata');
         for (const [label, value] of [
@@ -711,12 +849,13 @@
         ]) {
           if (value) metadata.append(make('dt', label), make('dd', String(value)));
         }
-        if (metadata.childNodes.length) details.append(metadata);
-        details.append(
+        const actions = make('div', undefined, 'course-structure-point-actions');
+        actions.append(
           button('学习概览', () => open(node), 'course-structure-primary'),
-          button('返回章节图', () => navigate({ type: 'unfocus' })),
+          button('返回章节目录', () => navigate({ type: 'unfocus' })),
         );
-        details.append(make('h3', '直接连接'));
+        details.append(actions);
+        details.append(make('h3', '当前点的直接关系'));
         const filters = make('div', undefined, 'course-structure-filters');
         for (const [value, label] of [
           ['all', '全部'],
@@ -724,37 +863,51 @@
           ['related', '补充关联'],
         ]) {
           if (value !== 'all' && !view.links.some((edge) => edge.type === value)) continue;
-          const toggle = button(label, () => navigate({ type: 'filter', value }));
+          const toggle = button(label, () => {
+            navigate({ type: 'filter', value });
+            filterButtons.get(value)?.focus?.({ preventScroll: true });
+          });
+          toggle.dataset.courseRelationFilter = value;
+          filterButtons.set(value, toggle);
           toggle.setAttribute('aria-pressed', String(state.filter === value));
           filters.append(toggle);
         }
         details.append(filters);
         const related = make('div', undefined, 'course-structure-relations');
-        const neighborIds = [
-          ...new Set(
-            view.links.flatMap((edge) => [edge.source, edge.target]).filter((id) => id !== node.id),
-          ),
-        ];
-        for (const id of neighborIds) {
-          const target = model.byId.get(id);
-          const links = view.links.filter((edge) => edge.source === id || edge.target === id);
-          const item = make('div');
-          item.append(
-            button(`${target.id} · ${target.title}`, () => navigate({ type: 'focus', id })),
-          );
-          item.append(make('small', [...new Set(links.map(edgeLabel))].join(' · ')));
-          for (const link of links) if (link.note) item.append(make('p', link.note));
-          related.append(item);
+        const groups = relationGroups(view).filter((group) => group.items.length);
+        for (const group of groups) {
+          const section = make('section', undefined, 'course-structure-relation-group');
+          section.dataset.relationGroup = group.key;
+          section.append(make('h4', group.title));
+          for (const { node: target, edges: links } of group.items) {
+            const owner = model.chapters.find((item) => item.id === chapterId(target.id));
+            const item = make('div', undefined, 'course-structure-relation-item');
+            const entry = button(target.title, () => navigate({ type: 'focus', id: target.id }));
+            entry.dataset.courseRelatedId = target.id;
+            item.append(entry, make('small', `所属章节：${owner.title} · ${target.id}`));
+            for (const note of new Set(links.map((link) => link.note).filter(Boolean)))
+              item.append(make('p', note));
+            section.append(item);
+          }
+          related.append(section);
         }
-        if (!neighborIds.length) related.append(make('p', '当前知识点暂无已发布的直接连接。'));
+        if (!view.links.length)
+          related.append(make('p', '尚未发布直接关系，可从目录选择其他知识点。'));
         details.append(related);
         details.append(
           make(
             'p',
-            '学习顺序用于导航；补充关联保留课程组当前发布的说明。',
+            '仅依据课程组发布的学习顺序和补充联系，不表示必须先修。',
             'course-structure-help',
           ),
         );
+        if (metadata.childNodes.length || node.summary) {
+          const information = make('details', undefined, 'course-structure-information');
+          information.append(make('summary', '知识点信息'));
+          if (node.summary) information.append(make('p', node.summary));
+          if (metadata.childNodes.length) information.append(metadata);
+          details.append(information);
+        }
         return;
       }
       const chapter = model.chapters.find((item) => item.id === state.selectedChapterId);
@@ -767,7 +920,9 @@
               (chapter.virtual ? '本章已有知识点，板块概览尚未发布。' : '本章知识概览。'),
           ),
         );
-        details.append(make('p', `${chapter.nodes.length} 个知识点`));
+        details.append(
+          make('p', `本章包含 ${chapter.nodes.length} 个知识点，请从目录选择具体内容。`),
+        );
         const levels = { core: 0, general: 0, extension: 0, unknown: 0 };
         for (const node of chapter.nodes) levels[nodeLevel(node) || 'unknown'] += 1;
         if (levels.core || levels.general || levels.extension)
@@ -800,35 +955,72 @@
     }
     function update(recompute = true) {
       const view = viewModel(model, state);
+      shell.classList.toggle('has-focus', Boolean(view.focus));
       renderGraph(view, recompute);
       renderDetails(view);
       renderPicker();
+      graphSummary.textContent = view.focus
+        ? '查看当前点直连关系图（辅助）'
+        : '查看课程组发布的板块顺序图';
+      legend.textContent =
+        !view.focus && !model.macroEdges.length
+          ? '尚未发布板块之间的学习顺序或补充联系。'
+          : '实线箭头：学习顺序 · 虚线：补充联系';
       status.textContent = !model.chapters.length
         ? '课程知识图谱尚未发布。'
         : view.focus
           ? `聚焦 ${view.focus.title} · ${view.knowledgeNodes.length - 1} 个直接连接知识点${view.satellites.length ? ` · ${view.satellites.length} 个关联板块` : ''}`
           : '章节概览 · 选择一个知识点查看关联';
     }
-    function onSearch() {
-      const matches = searchNodes(model, search.value);
+    function renderSearch(visible = true) {
+      const query = normalizeQuery(search.value);
+      const page = paginateMatches(searchNodes(model, query), searchPage);
+      searchPage = page.page;
+      searchPanel.hidden = !visible || !query.trim();
       results.replaceChildren();
-      results.hidden = !search.value.trim();
-      for (const node of matches)
+      results.hidden = searchPanel.hidden;
+      searchSummary.textContent = `共 ${page.total} 个结果 · 显示 ${page.start}–${page.end}`;
+      for (const node of page.nodes)
         results.append(
           button(`${node.id} · ${node.title}`, () => {
-            navigate({
-              type: isChapterNode(node) ? 'select' : 'locate',
-              id: isChapterNode(node) ? chapterId(node.id) : node.id,
-            });
-            results.hidden = true;
-            search.value = '';
+            navigate(
+              {
+                type: isChapterNode(node) ? 'select' : 'locate',
+                id: isChapterNode(node) ? chapterId(node.id) : node.id,
+              },
+              {
+                picker: {
+                  chapterId: chapterId(node.id),
+                  query: isChapterNode(node) ? '' : query,
+                  page: 0,
+                },
+                revealFocus: true,
+                hideSearch: true,
+              },
+            );
             details.scrollTop = 0;
           }),
         );
-      if (!matches.length && search.value.trim())
-        results.append(make('p', '未找到匹配的已发布知识点。'));
+      if (!page.total && query.trim()) results.append(make('p', '未找到匹配的已发布知识点。'));
+      results.scrollTop = 0;
+      searchPaging.hidden = page.pageCount <= 1;
+      previousSearchPage.disabled = searchPage === 0;
+      nextSearchPage.disabled = searchPage === page.pageCount - 1;
+      searchPageCount.textContent = `${searchPage + 1} / ${page.pageCount}`;
     }
-    search.addEventListener('input', onSearch);
+    search.addEventListener('input', () => {
+      searchPage = 0;
+      renderSearch();
+    });
+    graphArea.addEventListener('toggle', () => {
+      if (graphArea.open) {
+        svg.setAttribute(
+          'viewBox',
+          `0 0 ${Math.max(1, viewer.clientWidth)} ${Math.max(1, viewer.clientHeight)}`,
+        );
+        renderGraph(viewModel(model, state), true);
+      }
+    });
     viewer.addEventListener(
       'wheel',
       (event) => {
@@ -914,6 +1106,7 @@
       clearFocus: () => navigate({ type: 'unfocus' }),
       reset: () => navigate({ type: 'reset' }),
       getState: () => ({ ...state }),
+      getPickerState: () => pickerSnapshot(),
       destroy: () => {
         observer?.disconnect();
         shell.remove();
@@ -928,6 +1121,7 @@
     isValidNodeId,
     chapterId,
     isChapterNode,
+    abbreviateNodeId,
     nodeLevel,
     buildModel,
     initialState,
@@ -935,6 +1129,9 @@
     viewModel,
     layout,
     searchNodes,
+    relationGroups,
+    paginateMatches,
+    normalizePickerState,
     render,
   };
 });

@@ -137,6 +137,7 @@ const {
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const {
   createLearningWorkspaceRouter,
+  createMysqlLearningStore,
   ensureLearningWorkspaceTables,
 } = require('./learning-workspace');
 const {
@@ -147,8 +148,14 @@ const {
 const {
   loadCompanionContext,
   companionHint,
+  companionPreference,
   createMysqlCompanionNodeLoader,
 } = require('./learning-companion');
+const { createCompanionSourcesRouter } = require('./learning-companion-sources');
+const {
+  createLearningResearchRouter,
+  ensureLearningResearchTables,
+} = require('./learning-research');
 const {
   createLearningAnalyticsRouter,
   createMysqlAnalyticsStore,
@@ -1865,7 +1872,8 @@ function buildKnowledgeRagPrompt(question, context) {
     `知识点：${context.knowledgePointTitle || '当前知识点'}`,
     `摘要：${context.knowledgePointSummary || '暂无摘要'}`,
     `当前页面正文：\n${context.knowledgePointMarkdown || '暂无正文'}`,
-    promptHintFromPreference(context.learningStartPreference, context.resources),
+    `当前已发布知识起源${context.knowledgePointOriginTruncated ? '（已节选）' : ''}：\n${context.knowledgePointOriginMarkdown || '暂无起源说明'}`,
+    promptHintFromPreference(companionPreference(context), context.resources),
     companionHint(context),
     '',
     `学生问题：${question}`,
@@ -2853,6 +2861,22 @@ app.use(
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
 app.use('/api/learning', createLearningWorkspaceRouter({ pool, requireAuth }));
+const companionLearningStore = createMysqlLearningStore(pool);
+const companionAssessmentStore = createMysqlAssessmentStore(pool);
+const companionNodeLoader = createMysqlCompanionNodeLoader(pool);
+app.use(
+  '/api/learning-companion',
+  createCompanionSourcesRouter({
+    requireAuth,
+    store: companionAssessmentStore,
+    learningStore: companionLearningStore,
+    loadNode: companionNodeLoader,
+  }),
+);
+app.use(
+  '/api/learning/research',
+  createLearningResearchRouter({ pool, requireAuth, requireAdmin }),
+);
 const learningAnalyticsStore = createMysqlAnalyticsStore(pool);
 const learningStarService = createLearningStarService({
   store: createMysqlLearningStarStore(pool),
@@ -3209,10 +3233,11 @@ app.post('/api/ai/knowledge/chat', async (request, response) => {
 
   try {
     const trustedContext = await loadCompanionContext({
-      store: createMysqlAssessmentStore(pool),
+      store: companionAssessmentStore,
+      learningStore: companionLearningStore,
       user,
       rawContext: payload.context,
-      loadNode: createMysqlCompanionNodeLoader(pool),
+      loadNode: companionNodeLoader,
     });
     const agentPayload = buildKnowledgeRagChatPayload(
       user,
@@ -6603,6 +6628,7 @@ async function start() {
   await ensureLearningWorkspaceTables(pool);
   await ensureLearningAssessmentTables(pool);
   await ensureLearningAnalyticsTables(pool);
+  await ensureLearningResearchTables(pool);
   await ensureLearningStarTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);

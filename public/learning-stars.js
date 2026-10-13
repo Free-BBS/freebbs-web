@@ -55,9 +55,11 @@
     return item;
   }
   function render(container, options, data) {
-    const record = options.nodeId
-      ? data?.nodes?.find((node) => node.nodeId === options.nodeId)
-      : data?.course;
+    const nodeRecord =
+      options.nodeId && data?.node?.nodeId === options.nodeId
+        ? data.node
+        : data?.nodes?.find((node) => node.nodeId === options.nodeId);
+    const record = options.nodeId ? nodeRecord : data?.course;
     container.replaceChildren();
     container.className = 'learning-star-strip';
     container.setAttribute(
@@ -119,7 +121,7 @@
         record.selftest?.eligible &&
         !model.some((star) => star.key === 'self_learning' && star.earned)
       ) {
-        const sync = element('button', '', '同步学习记录');
+        const sync = element('button', '', '更新学习星');
         sync.type = 'button';
         sync.addEventListener('click', async () => {
           const owner = identity();
@@ -134,7 +136,7 @@
           } catch {
             if (owner === identity() && current === generation) {
               sync.disabled = false;
-              sync.textContent = '同步失败，重试';
+              sync.textContent = '更新失败，重试';
             }
           }
         });
@@ -148,14 +150,14 @@
     const current = generation;
     render(container, { ...options, loading: Boolean(owner) });
     if (!owner || !app?.callApi) return;
-    const key = `${owner}:${options.courseSlug}`;
-    if (!requests.has(key))
-      requests.set(
-        key,
-        app.callApi(`/learning-stars/${encodeURIComponent(options.courseSlug)}`, { method: 'GET' }),
-      );
+    const key = JSON.stringify([owner, options.courseSlug, options.nodeId || null]);
+    const endpoint = `/learning-stars/${encodeURIComponent(options.courseSlug)}${
+      options.nodeId ? `/${encodeURIComponent(options.nodeId)}` : ''
+    }`;
+    if (!requests.has(key)) requests.set(key, app.callApi(endpoint, { method: 'GET' }));
+    const request = requests.get(key);
     try {
-      const data = await requests.get(key);
+      const data = await request;
       if (
         current !== generation ||
         owner !== identity() ||
@@ -165,7 +167,7 @@
         return;
       render(container, options, data);
     } catch {
-      requests.delete(key);
+      if (requests.get(key) === request) requests.delete(key);
       if (
         current === generation &&
         owner === identity() &&

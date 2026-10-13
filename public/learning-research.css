@@ -1,0 +1,247 @@
+.learning-research-panel {
+  /* Resolve the site's shared theme tokens on the panel, after the body theme. */
+  --card-bg: var(--ui-surface, #ffffff);
+  --text-color: var(--ui-text, #071317);
+  --border-color: var(--ui-line-strong, #d8e1e4);
+  --surface-soft: var(--ui-surface-soft, #edf2f3);
+  --muted-color: var(--ui-muted, #65747a);
+  --accent-color: var(--ui-accent, #075d68);
+  min-width: 0;
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 18px;
+  background: var(--card-bg, #fff);
+  color: var(--text-color, #132b32);
+  font-size: 16px;
+  line-height: 1.65;
+  scroll-margin-top: calc(var(--desktop-header-height, 100px) + 16px);
+}
+.learning-research-panel[hidden],
+.learning-research-panel [hidden] {
+  display: none !important;
+}
+.learning-research-heading,
+.learning-research-actions,
+.learning-research-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.learning-research-heading {
+  justify-content: space-between;
+}
+.learning-research-heading h3 {
+  margin: 0;
+  font-size: 24px;
+  color: inherit;
+}
+.learning-research-panel h4 {
+  margin: 20px 0 10px;
+  font-size: 19px;
+  color: inherit;
+}
+.learning-research-caption,
+.learning-research-status {
+  margin: 8px 0 12px;
+  color: var(--muted-color, #65747a);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.learning-research-status:empty {
+  display: none;
+}
+.learning-research-panel :is(button, select, input, textarea) {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 10px;
+  background: var(--card-bg, #fff);
+  color: inherit;
+  font: inherit;
+}
+.learning-research-panel button,
+.learning-research-panel summary {
+  cursor: pointer;
+}
+.learning-research-panel button:active {
+  transform: none;
+}
+.learning-research-panel
+  :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent-color, #087480);
+  outline-offset: 3px;
+}
+.learning-research-panel button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.learning-research-panel .learning-research-primary {
+  border-color: var(--accent-color, #087480);
+  font-weight: 650;
+}
+.learning-research-panel fieldset {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 10px;
+}
+.learning-research-tabs {
+  margin: 20px 0 14px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--surface-soft, #f3f7f7);
+}
+.learning-research-tabs button {
+  flex: 1 1 auto;
+  border-color: transparent;
+  background: transparent;
+}
+.learning-research-tabs button[aria-pressed='true'] {
+  border-color: var(--border-color, #d8e1e4);
+  background: var(--card-bg, #fff);
+  color: var(--accent-color, #087480);
+  font-weight: 650;
+}
+.learning-research-form,
+.learning-research-card {
+  padding: 18px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.learning-research-form {
+  margin: 12px 0;
+}
+.learning-research-form summary {
+  min-height: 36px;
+  font-weight: 650;
+}
+.learning-research-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+.learning-research-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.learning-research-field select,
+.learning-research-field input,
+.learning-research-field textarea {
+  width: 100%;
+}
+.learning-research-field-wide {
+  grid-column: 1 / -1;
+}
+.learning-research-field textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.learning-research-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+}
+.learning-research-choice input {
+  min-height: 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  accent-color: var(--accent-color, #087480);
+}
+.learning-research-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 6px 12px;
+}
+.learning-research-options .learning-research-choice {
+  margin: 4px 0;
+  min-height: 36px;
+}
+.learning-research-card {
+  margin: 12px 0;
+}
+.learning-research-card h4 {
+  margin-top: 0;
+}
+.learning-research-quote {
+  margin: 10px 0;
+  white-space: pre-wrap;
+}
+.learning-research-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.learning-research-metric {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 15px;
+  border-radius: 12px;
+  background: var(--surface-soft, #f3f7f7);
+}
+.learning-research-metric strong {
+  font-size: 24px;
+}
+.learning-research-metric small {
+  color: var(--muted-color, #65747a);
+  font-size: 13px;
+}
+.learning-research-table-wrap {
+  max-width: 100%;
+  margin: 12px 0;
+  padding-bottom: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 10px;
+}
+.learning-research-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 14px;
+}
+.learning-research-table :is(th, td) {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color, #d8e1e4);
+  vertical-align: top;
+  min-width: 95px;
+}
+.learning-research-table th {
+  background: var(--surface-soft, #f3f7f7);
+  color: inherit;
+}
+.learning-research-table tr:last-child td {
+  border-bottom: 0;
+}
+.learning-research-warning {
+  padding: 12px 14px;
+  border-inline-start: 3px solid var(--accent-color, #087480);
+  border-radius: 6px;
+  background: var(--surface-soft, #f3f7f7);
+}
+@media (max-width: 600px) {
+  .learning-research-panel {
+    padding: 16px;
+    margin: 18px 0;
+  }
+  .learning-research-heading h3 {
+    font-size: 21px;
+  }
+  .learning-research-form,
+  .learning-research-card {
+    padding: 14px;
+  }
+  .learning-research-actions button {
+    flex: 1 1 auto;
+  }
+}

@@ -2,7 +2,9 @@
 
 在「个人设置 → 课程组 Agent 接入」生成 Token、下载 Skill。Agent 可直接把 Markdown 发布为课程地图中的知识点，更新正文、基本信息、应用、位置和知识点连接，也可上传课程资料与图片。所有用户都可生成 Token；实际课程操作要求用户被分配为该课程的资料负责人，或为站点管理员。教师/助教身份本身不授予课程权限。每次请求重新检查权限、Token 到期/撤销状态与用户名规则。用户名不合规时先登录网站修改。
 
-将 ZIP 解压为 Agent 的 `skills/freebbs-course-upload` 目录（Codex 默认目录为 `~/.codex/skills/freebbs-course-upload`）。Skill 自带仅依赖 Python 3 标准库的脚本。设置 `FREEBBS_BASE_URL` 为站点 origin（例如 `https://free-bbs.cn`），`FREEBBS_UPLOAD_TOKEN` 为个人 Token。请通过本地密钥管理器或安全的环境变量配置注入，不要将 Token 放进命令参数、提交到仓库或粘贴到日志。生产环境只用 HTTPS，本机调试可用 `http://127.0.0.1:3001`。
+本轮随 PR #180 增加 Node.js 完整模板下载/发布工具，使用下面已有 API，不新增批量覆盖、权限升级或整篇草稿接口。工具是否可从正式网站下载须核对部署；仅有课程资料上传权限不代表稿件已经过教学审核。
+
+将 ZIP 解压为 Agent 的 `skills/freebbs-course-upload` 目录（Codex 默认目录为 `~/.codex/skills/freebbs-course-upload`）。Skill 保留仅依赖 Python 3 标准库的旧脚本，新增的完整模板工具位于 `scripts/course-authoring/`，需要 Node.js 18 或以上。设置 `FREEBBS_BASE_URL` 为站点 origin（正式站点 `https://www.free-bbs.cn`），`FREEBBS_UPLOAD_TOKEN` 为个人 Token。请通过本地密钥管理器或安全的环境变量配置注入，不要将 Token 放进命令参数、提交到仓库或粘贴到日志。生产环境只用 HTTPS，本机调试可用 `http://127.0.0.1:3001`。
 
 ## 身份认证及 Token 管理
 
@@ -77,6 +79,39 @@
 | `POST /courses/:slug/map/uploads/images`        | `{imageDataUrl:"data:image/png;base64,..."}`；网页原有图片上传接口                                                    |
 
 这些兼容接口沿用网页的验证与更新行为。为保证“省略字段即保留”以及事务/版本冲突保护，知识点写入优先使用 `/nodes/:nodeId`；图片优先使用 `/images`。
+
+## 下载当前作者稿与提交完整模板（Node.js）
+
+[课程组模板包](https://www.free-bbs.cn/downloads/freebbs-course-authoring.zip) 包含 `README.md`、课程组编写指南、模板、样例和 `tools/` 工具；需部署 PR #180 对应版本才含本轮新工具。Skill 包也带有相同工具，但路径为 `scripts/course-authoring/`。下例在 Skill 目录执行；模板包则将脚本前缀改为 `tools/`。
+
+### 只读下载
+
+先用旧脚本的 `courses` 查明所负责课程标识，然后下载选定课程：
+
+```sh
+python3 scripts/freebbs_course_upload.py courses
+node scripts/course-authoring/下载课程.cjs signals --out 现有课程-20261012
+```
+
+仅 GET 课程地图与逐点作者接口，输出 `课程地图原始.json`，每点的 `知识点/ID/节点原始.json`、`revision.txt`、`基本信息.md`、`背景与应用.md`、`正文.md`，全部成功后才生成 `快照清单.json`。保留完整作者评分配置及节点位置；不读取学生作答、私人笔记或聊天，不下载图片/附件本体，不自动拼完整模板或补编章节/知识起源。输出目录必须不存在，不覆盖已有文件；请求校验后才写本地文件，本地写出失败可能留下部分结果，应保留核查，下次使用新的输出目录。工具复查地图变化，但逐点 GET 不是数据库事务级快照，不能保证全部节点为同一瞬间版本。
+
+公开学生接口的知识点快照可能裁去评分配置及评分答案，不能当完整作者备份。下载出的单独 `正文.md` 也不是完整三分区模板。旧稿缺少真实章名、知识起源、署名或新版字段时，课程组需如实整理、补齐和审核，不能自动伪造来源、审核者或已发布状态。
+
+### 完整三分区模板预检与发布
+
+填写模板内的“课程标识”和“知识点ID”，工具从稿件读取目标，调用 `/courses/:slug/nodes/:nodeId`。更新用准备修改前读取的 64 位 `node.revision`；新建用 `new` 且必须指定两个坐标。默认只校验与 GET 检查，无写入；只有显式 `--publish` 才执行一次 PUT 并 GET 回读核对。
+
+```sh
+node scripts/course-authoring/上传知识点.cjs 完整稿.md --revision "上次读取的64位revision"
+node scripts/course-authoring/上传知识点.cjs 完整稿.md --revision "上次读取的64位revision" --publish
+node scripts/course-authoring/上传知识点.cjs 新知识点.md --revision new --x 200 --y 180
+```
+
+新建发布也需显式追加 `--publish`。完整稿经本包解析器拆分为三个 sections，同时更新名称与概览；不传坐标则保留已有位置，不改关系。只发布用户明确指定且完成教学审核的稿件，不自动批量上传其他文件。稿件格式检查不判断答案、史实或教学适切性。
+
+网站节点正文没有独立整篇草稿开关，保存后即成为可见内容；评分扩展的 `draft` 不会隐藏正文。Node 工具不自动填审核人、切换 `published` 或生成正式通过证据。401/403/409 时停止，409 需回读并人工合并；写入超时或回读失败先核对实际保存结果，不自动重试，也不因回读失败认定 PUT 未成功。
+
+现有 Python `upload-node` 只把 MD 文件当 `knowledgeMarkdown`，不识别完整模板；`--basic-info` 与 `--applications` 可分别更新另外两个分区，未提供的分区保留，空文件会清空对应分区。原有 `get-node`、`map`、`upload-node`、`put-node`、图片/附件和关系命令均继续兼容。只想改正文而不替换其他分区时，使用这套旧分区接口，不把完整模板直接当正文传入。
 
 ## Python 调用示例
 

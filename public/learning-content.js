@@ -11,11 +11,36 @@
   }
   function chapterName(nodes, id, fallback = id) {
     const members = nodes.filter((node) => chapterId(node.id) === id);
-    return (
-      members.find(isChapterNode)?.title ||
-      members.find((node) => node.chapterTitle)?.chapterTitle ||
-      fallback
-    );
+    // An ordinal is not an authored chapter name. Older content may contain a
+    // placeholder zero-level title even when its ordinary points name the unit.
+    const publishedName = (value) => {
+      const name = String(value || '')
+        .replace(/[*`]/g, '')
+        .trim();
+      return !name ||
+        /^(?:第\s*(?:\d+|[零〇一二三四五六七八九十百千]+|[Xx]+)\s*章|(?:chapter|unit)\s*(?:\d+|[ivxlcdm]+|n)|\d+)[.、:：。\s-]*$/i.test(
+          name,
+        ) ||
+        name === id ||
+        (chapterId(name) === id && isChapterNode({ id: name }))
+        ? ''
+        : name;
+    };
+    const overviewName = members
+      .filter(isChapterNode)
+      .map((node) => publishedName(node.title))
+      .find(Boolean);
+    const metadataName = members
+      .map(
+        (node) =>
+          publishedName(node.chapterTitle) ||
+          publishedName(node.metadata?.['章节/单元']) ||
+          publishedName(node.metadata?.['章节']) ||
+          publishedName(node.metadata?.['所属章节']),
+      )
+      .find(Boolean);
+    // Do not invent a subject from the body or an obsolete course-specific list.
+    return overviewName || metadataName || publishedName(fallback) || id;
   }
   function extractHeading(markdown, labels) {
     const lines = String(markdown || '')

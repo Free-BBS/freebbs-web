@@ -48,7 +48,7 @@
       label: '从直觉建立概念',
       steps: [
         step('用例子建立直觉', '先找一个直观情境，再核对定义中的必要术语。', 'content', 8),
-        step('换一种说法', '用自己的话解释核心含义，记录一个还不清楚的地方。', 'notes', 4),
+        step('用批注换一种说法', '用自己的话解释这一句，或只写一个还不清楚的地方。', 'notes', 4),
         check(
           '用已有题目核对概念',
           '选择与当前概念相关的已有题目，核对条件和解释。',
@@ -103,7 +103,12 @@
     'familiar:concepts': {
       label: '把模糊处解释清楚',
       steps: [
-        step('圈出不确定之处', '先写能解释和不能解释的部分，避免把见过当作理解。', 'notes', 4),
+        step(
+          '圈出一处不确定的内容',
+          '选中一处原文，点击“高亮”或“批注”；只标出一个想核对的地方即可。',
+          'notes',
+          4,
+        ),
         step('回看关键条件', '只核对模糊的定义、条件和结论之间的区别。', 'content', 7),
         check(
           '用已有题目核对疑点',
@@ -164,7 +169,7 @@
     'basic:concepts': {
       label: '从会用走向能解释',
       steps: [
-        step('先写自己的解释', '不用套话说明核心概念，并指出它与解题方法的关系。', 'notes', 4),
+        step('批注自己的解释', '用自己的话说明这一处概念，或它与解题方法的关系。', 'notes', 4),
         step('查验条件与例外', '用正文核对哪些条件必要、哪些只是常见情境。', 'content', 5),
         step(
           '对照一条知识联系',
@@ -308,6 +313,13 @@
     const goal = selected.goal || suggested;
     const key = `${selected.level}:${goal}`;
     const plan = PLANS[key];
+    const help = (minutes) => ({
+      title: '带着一个问题求助',
+      description: '当前没有可标注的正文。可向 Max 说明想了解什么，或先暂停；不会自动发送问题。',
+      tool: 'discussion',
+      taskId: 'ask-max',
+      minutes,
+    });
     const steps = plan.steps.map((original, index) => {
       let action = original;
       let view;
@@ -320,21 +332,50 @@
           action = { ...action, tool: 'content' };
         } else
           action = {
-            title: hasContent ? '查阅探索所需的前提' : '记录想查证的问题',
+            title: hasContent ? '查阅探索所需的前提' : '带着一个问题求助',
             description: hasContent
               ? '尚无对应起源或关系材料，先核对正文中的定义与条件。'
-              : '当前没有对应材料，先写问题与需要查证之处。',
-            tool: hasContent ? 'content' : 'notes',
+              : '当前没有对应起源或关系材料。可向 Max 说明想查证什么，或先暂停。',
+            tool: hasContent ? 'content' : 'discussion',
+            ...(!hasContent ? { taskId: 'ask-max' } : {}),
             minutes: action.minutes,
           };
       }
-      if (action.tool === 'content' && !view && !hasContent)
-        action = {
-          title: `记录“${action.title}”的资料缺口`,
-          description: '当前没有正文。先写自己的理解和需要查证之处，不把猜想当作课程结论。',
-          tool: 'notes',
-          minutes: action.minutes,
-        };
+      if (action.tool === 'content' && !view && !hasContent) {
+        if (options.hasOrigin === true) {
+          action = {
+            title: '先看知识为何被引入',
+            description: '正文尚未提供，可先从已有知识起源了解问题背景。',
+            tool: 'content',
+            minutes: action.minutes,
+          };
+          view = 'origin';
+        } else if (hasQuestions)
+          action = {
+            title: '先看一道已有题',
+            description: '正文尚未提供，可先尝试已有题目，看看想核对哪一步；也可以求助或暂停。',
+            tool: 'feedback',
+            minutes: action.minutes,
+          };
+        else action = help(action.minutes);
+      }
+      if (action.tool === 'notes') {
+        if (!hasContent && options.hasOrigin !== true) action = help(action.minutes);
+        else {
+          action = {
+            ...action,
+            description: action.description.includes('选中')
+              ? action.description
+              : `选中一处相关原文，点击“批注”。${action.description}`,
+          };
+          if (!hasContent) {
+            action.tool = 'content';
+            action.description = `在知识起源中${action.description}`;
+            action.taskId = 'annotate-origin';
+            view = 'origin';
+          }
+        }
+      }
       const result = {
         id: `${key}:${index + 1}`,
         title: action.title,
@@ -344,6 +385,7 @@
         completed: false,
         skipped: false,
         ...(view ? { view } : {}),
+        ...(action.taskId ? { taskId: action.taskId } : {}),
       };
       if (action.tool === 'feedback') {
         result.quizView = options.quizView === 'quick' ? 'quick' : 'practice';
@@ -359,7 +401,7 @@
     const reason = selected.goal
       ? `${LEVELS[selected.level]} · ${GOALS[goal]}`
       : `${LEVELS[selected.level]} · 建议先${GOALS[suggested]}，也可更改。`;
-    const hint = `学习起点为学生自述“${LEVELS[selected.level]}”，非测评结论，不代表本知识点能力。${selected.goal ? '本次所选' : '尚未选目标，建议但不强制的'}目标是“${GOALS[goal]}”。建议按“${plan.label}”：${steps.map((action) => action.title).join(' → ')}。可用以下反思问题引导：${questions.join(' ')}这些反思问题不是正式自测题，不作判分；熟悉程度只调整初始支架，不等于题目难度；本策略不替代正式错题和待复核记录，不限制资料或判定星级，用户可自由切换目标。Max应引导思考，不代做，不自动发问或替学生决定路径。`;
+    const hint = `学习起点为学生自述“${LEVELS[selected.level]}”，非测评结论，不代表本知识点能力。${selected.goal ? '本次所选' : '尚未选目标，建议但不强制的'}目标是“${GOALS[goal]}”。建议按“${plan.label}”：${steps.map((action) => action.title).join(' → ')}。可用以下反思问题引导：${questions.join(' ')}这些反思问题不是正式自测题，不作判分；熟悉程度只调整初始支架，不等于题目难度；本策略不替代正式错题和待复核记录，不限制资料或判定星级，用户可自由切换目标。Max 应引导思考，不代做，不自动发问或替学生决定路径。允许只查清一个问题就停下；求助、跳过或暂停不表示失败，也不自动标记完成。`;
     return {
       key,
       level: selected.level,

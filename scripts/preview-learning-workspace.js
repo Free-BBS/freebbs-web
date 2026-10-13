@@ -6,7 +6,13 @@ const path = require('path');
 const syncFs = require('node:fs');
 const crypto = require('node:crypto');
 const { createLearningWorkspaceRouter } = require('../backend/learning-workspace');
+const { getOriginDocumentVersion } = require('../backend/course-maps');
 const { createMemoryLearningStore } = require('./fixtures/learning-memory-store');
+const { createCompanionSourcesRouter } = require('../backend/learning-companion-sources');
+const {
+  createMemoryResearchStore,
+  createLearningResearchRouter,
+} = require('../backend/learning-research');
 const { createCourseRelationsMap } = require('./fixtures/course-relations-map');
 const {
   createLearningAssessmentRouter,
@@ -28,7 +34,11 @@ const { patchScript } = require('./preview-home');
 const { preparePageShell } = require('../page-shell');
 const { parse } = require('../docs/course-authoring/tools/整理知识点.cjs');
 const { check } = require('../docs/course-authoring/tools/检查课程包.cjs');
-const { loadCompanionContext, companionHint } = require('../backend/learning-companion');
+const {
+  loadCompanionContext,
+  companionHint,
+  companionPreference,
+} = require('../backend/learning-companion');
 const { promptHintFromPreference } = require('../public/learning-start');
 
 const root = path.resolve(__dirname, '..');
@@ -151,15 +161,80 @@ const contexts = nodes.map((item) => ({
 }));
 nodes.forEach((item) => {
   item.documentVersion = getAssessmentDocumentVersion(item.markdown);
+  item.originDocumentVersion = getOriginDocumentVersion(
+    contexts.find((context) => context.node_id === item.id),
+  );
 });
 function studentNode(item, isManager = false) {
+  const published = {
+    title: item.title,
+    document_markdown: item.markdown,
+    knowledge_markdown: item.sections?.knowledgeMarkdown,
+    basic_info_markdown: item.sections?.basicInfoMarkdown,
+    applications_markdown: item.sections?.applicationsMarkdown,
+  };
   return {
     ...item,
+    originDocumentVersion: getOriginDocumentVersion(published),
     markdown: isManager ? item.markdown : stripAssessmentBlocks(item.markdown),
     sections: {
       ...item.sections,
       knowledgeMarkdown: isManager ? item.markdown : stripAssessmentBlocks(item.markdown),
+      basicInfoMarkdown: isManager
+        ? item.sections?.basicInfoMarkdown || ''
+        : stripAssessmentBlocks(item.sections?.basicInfoMarkdown),
+      applicationsMarkdown: isManager
+        ? item.sections?.applicationsMarkdown || ''
+        : stripAssessmentBlocks(item.sections?.applicationsMarkdown),
     },
+  };
+}
+function createLearningFixture() {
+  // Each composed lab receives its own copy; the authoring files are never edited.
+  return structuredClone({ course, nodes, edges: sample.edges, contextRows: contexts });
+}
+function createSimulatedLearningChat({ identity, assessmentStore, learningStore, requests = [] }) {
+  return async (req, res) => {
+    if (!identity(req)) return res.status(401).json({ message: '请先登录' });
+    requests.push(req.body);
+    if (String(req.body.question).includes('模拟失败'))
+      return res.status(503).json({ message: '模拟 AI 不可用' });
+    let trustedContext;
+    try {
+      trustedContext = await loadCompanionContext({
+        store: assessmentStore,
+        learningStore,
+        user: identity(req),
+        rawContext: req.body.context,
+      });
+    } catch (error) {
+      return res.status(error.status || 503).json({ message: error.message });
+    }
+    req.body.trustedCompanionContext = trustedContext;
+    req.body.trustedCompanionHint = companionHint(trustedContext);
+    const strategy = promptHintFromPreference(
+      companionPreference(trustedContext),
+      trustedContext.resources,
+    );
+    req.body.trustedStrategyHint = strategy;
+    const concern = req.body.question.includes('下一步学习建议');
+    let answer =
+      trustedContext.courseSlug !== 'signals'
+        ? `**本地模拟入口（不是实时 AI）**\n\n这是「${trustedContext.courseName}」中「${trustedContext.knowledgePointTitle}」的界面与接口演示，不提供该课程的专业教学回答。\n\n模拟服务已读取当前公开演示内容及本人的受控学习策略、自测上下文，仅用于验证同页 Max 的上下文传递。${strategy ? '模拟服务已接收受控策略。' : '尚未提供确认后的起点。'}不宣称学习效果，也不替代课程正文。正式判分和星标不由此回答决定。`
+        : concern
+          ? `**本地演示建议（非真实 AI）**\n\n${req.body.history?.length ? '你刚才提到了卷积的理解问题。' : '目前还没有足够的对话，先给你一个起步办法。'}暂时没理解，不意味着你学不会；我们可以把目标缩小一点。\n\n1. 先画一个矩形脉冲，观察它经过系统后的变化。\n2. 回看“线性”的含义，只确认叠加这一步，不急着完成整段推导。\n3. 用自己的话解释一次“把每份响应加起来”，把仍然不清楚的地方记在复盘里。\n\n累了可以休息一下；也可以带着具体的一步，和同学或老师一起讨论。`
+          : `**本地模拟回答（不是实时 AI）**\n\n${
+              trustedContext.learningStartPreference?.level === 'new'
+                ? '我们先从基本原理开始：单位冲激响应描述系统对一个单位脉冲的响应。对于零状态线性时不变系统，每一小份输入引起平移、缩放的响应；把这些响应累加，就得到卷积。先确认线性、时不变和零状态条件，再看正文示例。'
+                : companionPreference(trustedContext)?.goal === 'explore'
+                  ? '可以从模型边界探索：零状态、线性和时不变假设分别起什么作用？先对照官方正文，再尝试构造一个不满足条件的例子。没有验证的类比只作为待检验问题。'
+                  : '先核对当前题目的条件，再独立尝试。需要时可请求一个步骤提示，完成后对照解析和常见误区。'
+            }\n\n当前页面与右侧 Max 使用同一套学习选择。${strategy ? '模拟服务已接收受控策略。' : '尚未提供确认后的起点。'}正式判分不由此回答决定。`;
+    const personalCount = trustedContext.personalLearningContent?.records?.length || 0;
+    if (personalCount)
+      answer += `\n\n模拟服务已接收你在本知识点保存的 ${personalCount} 条笔记、批注或作答资料。这里仅验证本人资料传递，不表示真实 AI 已诊断掌握程度。`;
+    res.type('text/event-stream');
+    return res.end(`data: ${JSON.stringify({ delta: answer })}\n\n`);
   };
 }
 function bootstrap() {
@@ -182,7 +257,13 @@ function createLearningPreviewApi({
   saveUnavailable = () => false,
 } = {}) {
   const app = express();
-  const store = createMemoryLearningStore();
+  const allowedPathTargets = new Map();
+  for (const context of contextRows) {
+    const key = String(context.course_id);
+    if (!allowedPathTargets.has(key)) allowedPathTargets.set(key, new Set());
+    allowedPathTargets.get(key).add(context.node_id);
+  }
+  const store = createMemoryLearningStore({ allowedPathTargets });
   store.context = async (slug, point) =>
     contextRows.find((item) => item.slug === slug && item.node_id === point) || null;
   const assessmentStore = createMemoryAssessmentStore({
@@ -196,7 +277,36 @@ function createLearningPreviewApi({
   });
   const starsStore = createMemoryLearningStarStore({ contexts: contextRows, assessmentStore });
   const starService = createLearningStarService({ store: starsStore });
+  const researchStore = createMemoryResearchStore({ users: previewUsers });
   app.use(express.json({ limit: '100kb' }));
+  const auth = async (req, res) => {
+    const user = identity(req);
+    if (!user) res.status(401).json({ message: '请先登录' });
+    return user;
+  };
+  app.use(
+    '/api/learning-companion',
+    createCompanionSourcesRouter({
+      requireAuth: auth,
+      store: assessmentStore,
+      learningStore: store,
+    }),
+  );
+  app.use(
+    '/api/learning/research',
+    createLearningResearchRouter({
+      store: researchStore,
+      requireAuth: auth,
+      requireAdmin: async (req, res) => {
+        const user = await auth(req, res);
+        if (user && !user.isAdmin) {
+          res.status(403).json({ message: '仅管理员可查看' });
+          return null;
+        }
+        return user;
+      },
+    }),
+  );
   app.use('/api/learning', (req, res, next) =>
     saveUnavailable() && req.method !== 'GET'
       ? res.status(503).json({ message: '模拟保存失败' })
@@ -260,15 +370,23 @@ function createLearningPreviewApi({
       },
     }),
   );
-  return { app, store, assessmentStore, analyticsStore, starsStore, starService };
+  return { app, store, assessmentStore, analyticsStore, starsStore, starService, researchStore };
 }
-function createLearningPreview({ mapNodes = nodes, mapEdges = sample.edges } = {}) {
+function createLearningPreview({
+  mapNodes = nodes,
+  mapEdges = sample.edges,
+  contextRows = contexts,
+} = {}) {
   const app = express();
   const requests = [];
   let failSave = false;
   const identity = (req) =>
     users[String(req.headers.authorization || '').replace('Bearer learning-preview-', '')];
-  const learningApi = createLearningPreviewApi({ identity, saveUnavailable: () => failSave });
+  const learningApi = createLearningPreviewApi({
+    identity,
+    contextRows,
+    saveUnavailable: () => failSave,
+  });
   const { store, assessmentStore, analyticsStore, starsStore, starService } = learningApi;
   const server = http.createServer(app);
   app.use((req, res, next) => {
@@ -307,40 +425,10 @@ function createLearningPreview({ mapNodes = nodes, mapEdges = sample.edges } = {
       node: studentNode(detail, identity(req)?.id === 3),
     });
   });
-  app.post('/api/ai/knowledge/chat', async (req, res) => {
-    if (!identity(req)) return res.status(401).json({ message: '请先登录' });
-    requests.push(req.body);
-    if (String(req.body.question).includes('模拟失败'))
-      return res.status(503).json({ message: '模拟 AI 不可用' });
-    let trustedContext;
-    try {
-      trustedContext = await loadCompanionContext({
-        store: assessmentStore,
-        user: identity(req),
-        rawContext: req.body.context,
-      });
-    } catch (error) {
-      return res.status(error.status || 503).json({ message: error.message });
-    }
-    req.body.trustedCompanionContext = trustedContext;
-    req.body.trustedCompanionHint = companionHint(trustedContext);
-    const strategy = promptHintFromPreference(
-      trustedContext.learningStartPreference,
-      trustedContext.resources,
-    );
-    const concern = req.body.question.includes('下一步学习建议');
-    const answer = concern
-      ? `**本地演示建议（非真实 AI）**\n\n${req.body.history?.length ? '你刚才提到了卷积的理解问题。' : '目前还没有足够的对话，先给你一个起步办法。'}暂时没理解，不意味着你学不会；我们可以把目标缩小一点。\n\n1. 先画一个矩形脉冲，观察它经过系统后的变化。\n2. 回看“线性”的含义，只确认叠加这一步，不急着完成整段推导。\n3. 用自己的话解释一次“把每份响应加起来”，把仍然不清楚的地方记在复盘里。\n\n累了可以休息一下；也可以带着具体的一步，和同学或老师一起讨论。`
-      : `**本地模拟回答（不是实时 AI）**\n\n${
-          trustedContext.learningStartPreference?.level === 'new'
-            ? '我们先从基本原理开始：单位冲激响应描述系统对一个单位脉冲的响应。对于零状态线性时不变系统，每一小份输入引起平移、缩放的响应；把这些响应累加，就得到卷积。先确认线性、时不变和零状态条件，再看正文示例。'
-            : trustedContext.learningStartPreference?.goal === 'explore'
-              ? '可以从模型边界探索：零状态、线性和时不变假设分别起什么作用？先对照官方正文，再尝试构造一个不满足条件的例子。没有验证的类比只作为待检验问题。'
-              : '先核对当前题目的条件，再独立尝试。需要时可请求一个步骤提示，完成后对照解析和常见误区。'
-        }\n\n当前页面与右侧 Max 使用同一套学习选择。${strategy ? '模拟服务已接收受控策略。' : '尚未提供确认后的起点。'}正式判分不由此回答决定。`;
-    res.type('text/event-stream');
-    res.end(`data: ${JSON.stringify({ delta: answer })}\n\n`);
-  });
+  app.post(
+    '/api/ai/knowledge/chat',
+    createSimulatedLearningChat({ identity, assessmentStore, learningStore: store, requests }),
+  );
   app.get('/api/onboarding', (req, res) =>
     res.json({ version: req.query.version, status: 'skipped', seenAt: '2026-09-30T00:00:00Z' }),
   );
@@ -513,4 +601,12 @@ if (require.main === module) {
     }
   });
 }
-module.exports = { createLearningPreview, createLearningPreviewApi, seedLearningEvidence, users };
+module.exports = {
+  createLearningPreview,
+  createLearningPreviewApi,
+  createLearningFixture,
+  createSimulatedLearningChat,
+  studentNode,
+  seedLearningEvidence,
+  users,
+};

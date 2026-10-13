@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const http = require('node:http');
+const { listenAllowedLoopback } = require('../scripts/fixtures/allowed-loopback');
 const {
   createLearningAssessmentRouter,
   createMemoryAssessmentStore,
@@ -86,13 +87,11 @@ async function fixture(t, content = markdown()) {
   const contexts = [
     { slug: 'signals', course_id: 10, node_id: 'SS-01-01', document_markdown: content },
   ];
-  const store = createMemoryAssessmentStore({
-    contexts,
-    managers: [
-      { userId: 3, courseId: 10 },
-      { userId: 4, courseId: 11 },
-    ],
-  });
+  const managers = [
+    { userId: 3, courseId: 10 },
+    { userId: 4, courseId: 11 },
+  ];
+  const store = createMemoryAssessmentStore({ contexts, managers });
   const events = [];
   const app = express();
   app.use(express.json());
@@ -109,9 +108,7 @@ async function fixture(t, content = markdown()) {
     }),
   );
   const server = http.createServer(app);
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -132,7 +129,7 @@ async function fixture(t, content = markdown()) {
       cache: response.headers.get('cache-control'),
     };
   }
-  return { store, contexts, events, call };
+  return { store, contexts, managers, events, call, base };
 }
 const answer = (questionId = 'choice', value = 'A', extra = {}) => ({
   questionId,
@@ -140,6 +137,30 @@ const answer = (questionId = 'choice', value = 'A', extra = {}) => ({
   requestKey: crypto.randomUUID(),
   ...extra,
 });
+async function storedAttempt(
+  store,
+  context,
+  questionId,
+  rawAnswer,
+  { user = users.student, practice = false } = {},
+) {
+  const assessment = parseAssessmentMarkdown(context.document_markdown);
+  const original = [...assessment.questions, ...assessment.practiceQuestions].find(
+    (question) => question.id === questionId,
+  );
+  assert.ok(original, `Fixture question exists: ${questionId}`);
+  const question = practice ? { ...original, official: false } : original;
+  return store.create(
+    user,
+    context,
+    question,
+    gradeAnswer(question, rawAnswer),
+    crypto.randomUUID(),
+    crypto.randomBytes(32).toString('hex'),
+    assessment.documentVersion,
+    null,
+  );
+}
 
 test('optional published fence extends existing Markdown and strips private scoring metadata', () => {
   const source = markdown();
@@ -438,6 +459,137 @@ test('private attempts remain visible only to author except course-scoped pendin
   assert.equal((await call('GET', '/attempts?review=pending', undefined, 'unrelated')).status, 403);
   assert.equal((await call('GET', '/attempts?review=pending', undefined, 'other')).status, 403);
 });
+
+test('authorized review returns the submitted question snapshot after current content changes without exposing it in ordinary reads', async (t) => {
+  const original = quiz();
+  Object.assign(original.questions[3], {
+    prompt: '提交时条件：仅讨论连续、因果系统。',
+    source: '历史讲义第三节',
+    learningObjective: '核对提交时的因果条件',
+    explanation: 'OLD_REFERENCE_ONLY_AFTER_SUBMIT',
+    misconceptions: 'OLD_MISCONCEPTION_ONLY_AFTER_SUBMIT',
+    scoring: {
+      method: 'manual',
+      rubric: 'OLD_SAVED_REVIEW_RUBRIC',
+      maxScore: 5,
+      passScore: 3,
+    },
+  });
+  const { call, contexts } = await fixture(t, markdown(original));
+  const submitted = await call('POST', '/attempts', answer('explain', '我的历史论证'));
+  assert.equal(submitted.status, 201);
+  assert.equal(submitted.data.attempt.questionSnapshot, undefined);
+  assert.equal(submitted.data.attempt.snapshotAvailability, undefined);
+  const updated = quiz({ version: '2026.2' });
+  updated.questions[3].prompt = '新版本条件：讨论离散、非因果系统。';
+  contexts[0].document_markdown = markdown(updated);
+
+  const review = await call('GET', '/attempts?review=pending', undefined, 'manager');
+  assert.equal(review.status, 200);
+  const attempt = review.data.attempts[0];
+  assert.equal(attempt.snapshotAvailability, 'available');
+  assert.deepEqual(attempt.questionSnapshot, {
+    id: 'explain',
+    type: 'short_answer',
+    prompt: original.questions[3].prompt,
+    questionVersion: original.version,
+    source: original.questions[3].source,
+    learningObjective: original.questions[3].learningObjective,
+  });
+  assert.equal(attempt.gradingBasis, 'OLD_SAVED_REVIEW_RUBRIC');
+  assert.match(attempt.referenceMarkdown, /OLD_REFERENCE_ONLY_AFTER_SUBMIT/);
+  assert.doesNotMatch(
+    JSON.stringify(attempt.questionSnapshot),
+    /"scoring"|"rubric"|"answer"|"explanation"|"misconceptions"|OLD_SAVED_REVIEW_RUBRIC|OLD_REFERENCE_ONLY_AFTER_SUBMIT/,
+  );
+  const current = await call('GET', '/questions');
+  assert.equal(
+    current.data.questions.find((question) => question.id === 'explain').prompt,
+    updated.questions[3].prompt,
+  );
+  assert.equal(current.data.questionSnapshot, undefined);
+  const own = await call('GET', '/attempts');
+  assert.equal(own.data.attempts[0].questionSnapshot, undefined);
+  assert.equal(own.data.attempts[0].snapshotAvailability, undefined);
+  assert.equal((await call('GET', '/attempts?review=pending', undefined, 'unrelated')).status, 403);
+  assert.equal((await call('GET', '/attempts?review=pending', undefined, 'student')).status, 403);
+});
+
+test('review snapshot options use an explicit safe shape and never expose nested scoring or unknown fields', async (t) => {
+  const { call, store } = await fixture(t);
+  await call('POST', '/attempts', answer('explain', '历史选择论证'));
+  const stored = JSON.parse(store.rows[0].question_snapshot);
+  Object.assign(stored, {
+    type: 'single_choice',
+    prompt: '旧题要求：选择适用条件。',
+    answer: 'PRIVATE_TOP_LEVEL_KEY',
+    options: [
+      { id: 'A', text: '旧条件 A', answer: 'PRIVATE_OPTION_KEY', scoring: { answer: 'A' } },
+      { id: 'B', text: '旧条件 B', internal: { rubric: 'PRIVATE_NESTED_KEY' } },
+    ],
+  });
+  store.rows[0].question_snapshot = JSON.stringify(stored);
+  const review = await call('GET', '/attempts?review=pending', undefined, 'manager');
+  const snapshot = review.data.attempts[0].questionSnapshot;
+  assert.deepEqual(snapshot.options, [
+    { id: 'A', text: '旧条件 A' },
+    { id: 'B', text: '旧条件 B' },
+  ]);
+  assert.equal(snapshot.scoring, undefined);
+  assert.equal(snapshot.answer, undefined);
+  assert.doesNotMatch(JSON.stringify(snapshot), /PRIVATE_|internal|rubric|scoring/);
+});
+
+test('missing, malformed or mismatched historical snapshots stay explicitly missing instead of using the current question', async (t) => {
+  const { call, store } = await fixture(t);
+  await call('POST', '/attempts', answer('explain', '旧记录答案'));
+  const stored = JSON.parse(store.rows[0].question_snapshot);
+  for (const snapshot of [
+    null,
+    '',
+    '{invalid json',
+    '[]',
+    JSON.stringify({ ...stored, prompt: '' }),
+    JSON.stringify({ ...stored, id: 'another-question' }),
+    JSON.stringify({ ...stored, questionVersion: 'another-version' }),
+    JSON.stringify({ ...stored, type: 'single_choice', options: [{ id: 'A', text: '不完整' }] }),
+    JSON.stringify({
+      ...stored,
+      type: 'single_choice',
+      options: [
+        { id: 'A', text: '选项一' },
+        { id: 'A', text: '重复选项' },
+      ],
+    }),
+  ]) {
+    store.rows[0].question_snapshot = snapshot;
+    const review = await call('GET', '/attempts?review=pending', undefined, 'manager');
+    assert.equal(review.status, 200);
+    assert.equal(review.data.attempts[0].snapshotAvailability, 'missing');
+    assert.equal(review.data.attempts[0].questionSnapshot, null);
+  }
+});
+
+test('mysql and memory review reads use the same saved snapshot shape while ordinary mysql reads omit it', async (t) => {
+  const { call, store } = await fixture(t);
+  await call('POST', '/attempts', answer('explain', '数据库历史答案'));
+  const row = { ...store.rows[0] };
+  const queries = [];
+  const mysql = createMysqlAssessmentStore({
+    execute: async (sql, values) => {
+      queries.push({ sql, values });
+      return [[row]];
+    },
+  });
+  const context = { course_id: 10, node_id: 'SS-01-01' };
+  const review = await mysql.list(users.manager, context, '', true);
+  assert.equal(review[0].snapshotAvailability, 'available');
+  assert.equal(review[0].questionSnapshot.prompt, '说明计算过程');
+  assert.match(queries[0].sql, /question_snapshot/);
+  const own = await mysql.list(users.student, context, '', false);
+  assert.equal(own[0].questionSnapshot, undefined);
+  assert.equal(own[0].snapshotAvailability, undefined);
+});
 test('server selects question version, official status and score without trusting client metadata', async (t) => {
   const { call, store, events } = await fixture(t);
   const result = await call(
@@ -549,6 +701,200 @@ test('new subjective attempts are pending and only a course manager can review o
   );
   assert.equal((await call('GET', '/attempts')).data.attempts[0].score, 3);
 });
+
+test('an identical reviewer-owned retry confirms a lost receipt, including zero, normalized feedback and the original historical snapshot', async (t) => {
+  const { call, contexts, store, events } = await fixture(t);
+  const submitted = await call('POST', '/attempts', answer('explain', '历史条件下的论证'));
+  const { id, documentVersion } = submitted.data.attempt;
+  const payload = { score: 0, feedback: '  零分，条件仍需补充。\n' };
+  // The first real response is deliberately treated as lost by the caller.
+  const committed = await call('PATCH', `/attempts/${id}/review`, payload, 'manager');
+  assert.equal(committed.status, 200);
+  assert.equal(committed.data.replayed, undefined);
+  const storedBefore = { ...store.rows[0] };
+  contexts[0].document_markdown = markdown(quiz({ version: '2026.2' }));
+  for (const method of ['PATCH', 'POST']) {
+    const replay = await call(
+      method,
+      `/attempts/${id}/review`,
+      { score: 0, feedback: '\n零分，条件仍需补充。  ' },
+      'manager',
+    );
+    assert.equal(replay.status, 200);
+    assert.equal(replay.data.replayed, true);
+    assert.equal(replay.data.attempt.score, 0);
+    assert.equal(replay.data.attempt.feedback, '零分，条件仍需补充。');
+    assert.equal(replay.data.attempt.reviewedBy, '3');
+    assert.equal(replay.data.attempt.documentVersion, documentVersion);
+    assert.equal(replay.data.attempt.questionSnapshot.prompt, '说明计算过程');
+    assert.equal(replay.data.attempt.questionSnapshot.questionVersion, '2026.1');
+    assert.equal(replay.data.attempt.questionSnapshot.scoring, undefined);
+    assert.notEqual(
+      replay.data.attempt.documentVersion,
+      (await call('GET', '/questions')).data.documentVersion,
+    );
+  }
+  assert.deepEqual(
+    store.rows[0],
+    storedBefore,
+    'Confirmation never updates the grade, feedback or timestamp',
+  );
+  assert.equal(
+    events.filter((event) => event.reviewed).length,
+    1,
+    'No duplicate assessment/stars callback',
+  );
+});
+
+test('review confirmation rejects a different actor or payload and checks current permission before any outcome lookup', async (t) => {
+  const { call, store, managers, events } = await fixture(t);
+  const id = (await call('POST', '/attempts', answer('explain', '待复核答案'))).data.attempt.id;
+  const payload = { score: 3, feedback: '已保存的复核说明。' };
+  await call('PATCH', `/attempts/${id}/review`, payload, 'manager');
+  const saved = { ...store.rows[0] };
+  for (const [actor, altered] of [
+    ['admin', payload],
+    ['manager', { ...payload, score: 0 }],
+    ['manager', { ...payload, feedback: '另一个说明' }],
+  ]) {
+    const response = await call('PATCH', `/attempts/${id}/review`, altered, actor);
+    assert.equal(response.status, 409);
+    assert.equal(response.data.attempt, undefined, 'Never expose or claim another saved intent');
+  }
+  let outcomeReads = 0;
+  const originalLookup = store.findReviewResult.bind(store);
+  store.findReviewResult = async (...args) => {
+    outcomeReads += 1;
+    return originalLookup(...args);
+  };
+  managers.splice(0, managers.length);
+  for (const actor of ['manager', 'student', 'unrelated']) {
+    const response = await call('POST', `/attempts/${id}/review`, payload, actor);
+    assert.equal(response.status, 403);
+    assert.equal(response.data.attempt, undefined);
+  }
+  assert.equal(
+    outcomeReads,
+    0,
+    'A revoked or unrelated caller cannot read even a matching outcome',
+  );
+  assert.deepEqual(store.rows[0], saved);
+  assert.equal(events.filter((event) => event.reviewed).length, 1);
+});
+
+test('review confirmation cannot cross course or node scope even for an authorized course manager', async (t) => {
+  const { call, contexts, managers, base, store } = await fixture(t);
+  const id = (await call('POST', '/attempts', answer('explain', '只属于原知识点'))).data.attempt.id;
+  const payload = { score: 3, feedback: '原节点已保存。' };
+  await call('PATCH', `/attempts/${id}/review`, payload, 'manager');
+  contexts.push(
+    { ...contexts[0], slug: 'other-course', course_id: 11 },
+    { ...contexts[0], node_id: 'SS-01-02' },
+  );
+  managers.push({ userId: 3, courseId: 11 });
+  for (const scope of ['/other-course/SS-01-01', '/signals/SS-01-02']) {
+    const response = await fetch(
+      `${base.replace('/signals/SS-01-01', scope)}/attempts/${id}/review`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: 'manager', 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).attempt, undefined);
+  }
+  assert.equal(await store.findReviewResult({ course_id: 11, node_id: 'SS-01-01' }, id), null);
+  assert.equal(await store.findReviewResult({ course_id: 10, node_id: 'SS-01-02' }, id), null);
+});
+
+test('same-intent concurrent review requests commit once and return one replay without duplicate events', async (t) => {
+  const { call, events, store } = await fixture(t);
+  const id = (await call('POST', '/attempts', answer('explain', '并发重试夹具'))).data.attempt.id;
+  const payload = { score: 0, feedback: '相同并发请求。' };
+  const responses = await Promise.all(
+    ['PATCH', 'POST'].map((method) => call(method, `/attempts/${id}/review`, payload, 'manager')),
+  );
+  assert.ok(responses.every((response) => response.status === 200));
+  assert.equal(responses.filter((response) => response.data.replayed).length, 1);
+  assert.equal(events.filter((event) => event.reviewed).length, 1);
+  assert.equal(store.rows[0].score, 0);
+  assert.equal(store.rows[0].reviewed_by, 3);
+});
+
+test('competing reviewers or changed payloads cannot overwrite the first committed result', async (t) => {
+  const { call, store, events } = await fixture(t);
+  for (const contenders of [
+    [
+      ['manager', 3, '同一说明'],
+      ['admin', 3, '同一说明'],
+    ],
+    [
+      ['manager', 0, '首次意图'],
+      ['manager', 5, '不同意图'],
+    ],
+  ]) {
+    const id = (await call('POST', '/attempts', answer('explain', '竞争复核夹具'))).data.attempt.id;
+    const before = events.filter((event) => event.reviewed).length;
+    const results = await Promise.all(
+      contenders.map(([actor, score, feedback]) =>
+        call('PATCH', `/attempts/${id}/review`, { score, feedback }, actor),
+      ),
+    );
+    assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+    const winning = results.find((result) => result.status === 200).data.attempt;
+    const saved = store.rows.find((row) => row.id === id);
+    assert.equal(saved.score, winning.score);
+    assert.equal(saved.feedback, winning.feedback);
+    assert.equal(String(saved.reviewed_by), winning.reviewedBy);
+    assert.equal(events.filter((event) => event.reviewed).length - before, 1);
+    assert.equal(results.find((result) => result.status === 409).data.attempt, undefined);
+  }
+});
+
+test('a pending, missing or invalid-score record is never mistaken for a saved review replay', async (t) => {
+  const { call, events } = await fixture(t);
+  const id = (await call('POST', '/attempts', answer('explain', '仍未复核'))).data.attempt.id;
+  for (const candidate of [id, '999']) {
+    const response = await call(
+      'PATCH',
+      `/attempts/${candidate}/review`,
+      { score: 6, feedback: '超过原满分' },
+      'manager',
+    );
+    assert.equal(response.status, 409);
+    assert.equal(response.data.attempt, undefined);
+  }
+  assert.equal(events.filter((event) => event.reviewed).length, 0);
+});
+
+test('mysql review outcome lookup is parameterized and uses the same historical allowlist as memory', async (t) => {
+  const { call, store: memory } = await fixture(t);
+  const id = (await call('POST', '/attempts', answer('explain', 'SQL形状夹具'))).data.attempt.id;
+  await call('PATCH', `/attempts/${id}/review`, { score: 0, feedback: '保存0分' }, 'manager');
+  const queries = [];
+  const sqlStore = createMysqlAssessmentStore({
+    execute: async (sql, values) => {
+      queries.push({ sql, values });
+      return sql.startsWith('UPDATE') ? [{ affectedRows: 0 }] : [[memory.rows[0]]];
+    },
+  });
+  const context = { course_id: 10, node_id: 'SS-01-01' };
+  assert.equal(await sqlStore.review(users.manager, context, id, 0, '保存0分'), null);
+  assert.equal(
+    queries.length,
+    1,
+    'Outcome lookup occurs only in the already-authorized router branch',
+  );
+  assert.match(queries[0].sql, /status = 'pending_review'/);
+  const outcome = await sqlStore.findReviewResult(context, id);
+  assert.match(queries[1].sql, /WHERE id = \? AND course_id = \? AND node_id = \? LIMIT 1/);
+  assert.deepEqual(queries[1].values, [id, 10, 'SS-01-01']);
+  assert.equal(outcome.score, 0);
+  assert.equal(outcome.reviewedBy, '3');
+  assert.equal(outcome.questionSnapshot.scoring, undefined);
+  assert.deepEqual(outcome, await memory.findReviewResult(context, id));
+});
 test('wrong answers can be privately corrected while preserving original result and blocking cross-account links', async (t) => {
   const { call } = await fixture(t);
   const original = (await call('POST', '/attempts', answer('choice', 'B'))).data.attempt;
@@ -610,6 +956,122 @@ test('inactive courses, invalid identifiers, malformed answer payloads and pagin
   contexts[0].is_active = 0;
   assert.equal((await call('GET', '/questions')).status, 404);
 });
+test('current per-question channels survive 51 and 201 repeated attempts while history stays paginated', async (t) => {
+  for (const repetitions of [51, 201])
+    for (const practice of [false, true])
+      await t.test(`${repetitions} ${practice ? 'practice' : 'formal'} repeats`, async (child) => {
+        const { store, contexts, call } = await fixture(child);
+        const buried = await storedAttempt(store, contexts[0], 'number', '0');
+        const formal = await storedAttempt(store, contexts[0], 'choice', 'A');
+        let newest;
+        for (let index = 0; index < repetitions; index += 1)
+          newest = await storedAttempt(store, contexts[0], 'choice', 'A', { practice });
+        const first = await call('GET', '/attempts');
+        assert.equal(first.status, 200);
+        assert.equal(first.data.attempts.length, 50);
+        assert.ok(first.data.nextCursor);
+        assert.ok(first.data.attempts.every((entry) => entry.questionId === 'choice'));
+        const summary = first.data.currentAttempts;
+        assert.equal(summary.length, practice ? 3 : 2);
+        assert.equal(summary.find((entry) => entry.questionId === 'number').id, buried.id);
+        assert.equal(summary.find((entry) => entry.questionId === 'number').verdict, 'fail');
+        assert.equal(
+          summary.find((entry) => entry.questionId === 'choice' && entry.official).id,
+          practice ? formal.id : newest.id,
+        );
+        if (practice)
+          assert.equal(
+            summary.find((entry) => entry.questionId === 'choice' && !entry.official).id,
+            newest.id,
+          );
+        const second = await call('GET', `/attempts?before=${first.data.nextCursor}`);
+        assert.ok(second.data.attempts.length <= 50);
+        assert.equal(Object.hasOwn(second.data, 'currentAttempts'), false);
+        assert.equal(store.rows.length, repetitions + 2);
+        assert.equal(first.cache, 'private, no-store');
+      });
+});
+
+test('current attempts use exact current public IDs and owner/course/node scope, never review another owner', async (t) => {
+  const { store, contexts, call } = await fixture(t);
+  const context = contexts[0];
+  const formal = await storedAttempt(store, context, 'choice', 'A');
+  const practice = await storedAttempt(store, context, 'choice', 'B', { practice: true });
+  await storedAttempt(store, context, 'number', '1');
+  await storedAttempt(store, context, 'choice', 'B', { user: users.other });
+  await storedAttempt(store, { ...context, course_id: 11 }, 'choice', 'B');
+  await storedAttempt(store, { ...context, node_id: 'SS-02-01' }, 'choice', 'B');
+  await storedAttempt(store, context, 'explain', '另一位同学的推导', { user: users.other });
+  context.document_markdown = markdown(quiz({ questions: [quiz().questions[0]] }));
+  const first = (await call('GET', '/attempts?userId=2')).data;
+  assert.deepEqual(first.currentAttempts.map((entry) => entry.id).sort(), [formal.id, practice.id]);
+  assert.ok(first.currentAttempts.every((entry) => entry.questionId === 'choice'));
+  assert.ok(
+    first.currentAttempts.every(
+      (entry) => !Object.hasOwn(entry, 'userId') && !Object.hasOwn(entry, 'questionSnapshot'),
+    ),
+  );
+  assert.equal((await call('GET', '/attempts', undefined, 'other')).data.currentAttempts.length, 1);
+  assert.deepEqual((await call('GET', '/attempts', undefined, 'manager')).data.currentAttempts, []);
+  const review = await call('GET', '/attempts?review=pending', undefined, 'manager');
+  assert.equal(review.data.attempts.length, 1);
+  assert.equal(Object.hasOwn(review.data, 'currentAttempts'), false);
+  assert.equal((await call('GET', '/attempts?review=pending')).status, 403);
+  assert.equal((await call('GET', '/attempts', undefined, '')).status, 401);
+  context.document_markdown = '# 正文仍可阅读，但已没有当前题目';
+  const empty = (await call('GET', '/attempts')).data;
+  assert.deepEqual(empty.currentAttempts, []);
+  assert.ok(empty.attempts.length > 0, 'Historical UI is not replaced by the current summary');
+});
+
+test('latest state selects across versions before checking compatibility and includes pending formal separately from practice', async (t) => {
+  const { store, contexts, call } = await fixture(t);
+  const original = contexts[0].document_markdown;
+  const old = await storedAttempt(store, contexts[0], 'choice', 'A');
+  contexts[0].document_markdown = markdown(quiz({ version: '2026.2' }));
+  const newer = await storedAttempt(store, contexts[0], 'choice', 'B');
+  const pending = await storedAttempt(store, contexts[0], 'explain', '需要复核的推导');
+  const practice = await storedAttempt(store, contexts[0], 'explain', '练习推导', {
+    practice: true,
+  });
+  contexts[0].document_markdown = original;
+  const response = await call('GET', '/attempts');
+  const selected = response.data.currentAttempts.find((entry) => entry.questionId === 'choice');
+  assert.equal(selected.id, newer.id, 'Rollback must not resurrect an older matching pass');
+  assert.equal(selected.questionVersion, '2026.2');
+  assert.notEqual(selected.documentVersion, response.data.documentVersion);
+  assert.ok(response.data.attempts.some((entry) => entry.id === old.id));
+  assert.equal(
+    response.data.currentAttempts.find((entry) => entry.id === pending.id).status,
+    'pending_review',
+  );
+  assert.equal(
+    response.data.currentAttempts.find((entry) => entry.id === practice.id).official,
+    false,
+  );
+});
+
+test('mysql latest uses scoped case-sensitive per-question/channel max IDs, not a global limit or prefiltered version', async () => {
+  const queries = [];
+  const store = createMysqlAssessmentStore({
+    execute: async (sql, values) => {
+      queries.push({ sql, values });
+      return [[]];
+    },
+  });
+  const context = { course_id: 10, node_id: 'SS-01-01' };
+  assert.deepEqual(await store.latest(users.student, context, []), []);
+  assert.equal(queries.length, 0);
+  await store.latest(users.student, context, ['Q1', 'q1']);
+  assert.equal(queries.length, 1);
+  assert.deepEqual(queries[0].values, [1, 10, 'SS-01-01', 'Q1', 'q1']);
+  assert.match(queries[0].sql, /MAX\(id\)/);
+  assert.match(queries[0].sql, /user_id = \? AND course_id = \? AND node_id = \?/);
+  assert.match(queries[0].sql, /BINARY question_id IN \(\?, \?\)/);
+  assert.match(queries[0].sql, /GROUP BY BINARY question_id, is_official/);
+  assert.doesNotMatch(queries[0].sql, /LIMIT|document_version\s*=|question_version\s*=/);
+});
+
 test('mysql store context, read isolation and pending review use scoped parameterized queries', async () => {
   const queries = [];
   const pool = {

@@ -1,3 +1,4 @@
+// Generate delivery variants from retained originals; never overwrite source photos.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const sharp = require('sharp');
@@ -5,12 +6,13 @@ const sharp = require('sharp');
 const ROOT = path.resolve(__dirname, '..');
 const ASSETS = path.join(ROOT, 'public/assets/staff');
 const ROSTER = path.join(ROOT, 'public/data/staff.json');
+const MAX_THUMBNAIL_BYTES = 800 * 1000;
 const BUDGETS = {
   thumbnail: { width: 176, height: 232, bytes: 24 * 1024 },
   preview: { width: 1200, height: 1200, bytes: 220 * 1024 },
 };
 
-async function createVariant(source, target, budget) {
+async function createVariant(source, target, budget = BUDGETS.thumbnail) {
   if (path.resolve(source) === path.resolve(target))
     throw new Error('Original photos stay unchanged');
   for (const scale of [1, 0.85, 0.7]) {
@@ -25,7 +27,7 @@ async function createVariant(source, target, budget) {
         })
         .webp({ quality, effort: 5 })
         .toBuffer({ resolveWithObject: true });
-      if (data.length <= budget.bytes) {
+      if (data.length <= Math.min(budget.bytes, MAX_THUMBNAIL_BYTES)) {
         await fs.writeFile(target, data);
         return { width: info.width, height: info.height, bytes: data.length };
       }
@@ -34,23 +36,24 @@ async function createVariant(source, target, budget) {
   throw new Error(`Photo exceeds its byte budget: ${path.basename(source)}`);
 }
 
-async function optimizeStaffPhotos() {
-  const roster = JSON.parse(await fs.readFile(ROSTER, 'utf8'));
-  const originals = (await fs.readdir(ASSETS)).filter(
+async function optimizeStaffPhotos({ assets = ASSETS, rosterFile = ROSTER } = {}) {
+  const roster = JSON.parse(await fs.readFile(rosterFile, 'utf8'));
+  const originals = (await fs.readdir(assets)).filter(
     (name) => /\.(?:png|jpe?g|webp)$/i.test(name) && !/-(?:thumb|preview)\.webp$/i.test(name),
   );
   const report = [];
   for (const member of roster.members) {
     const match = /^\/assets\/staff\/([a-z0-9_-]+)\.(?:png|jpe?g|webp)$/i.exec(member.photo);
     if (!match) throw new Error(`Invalid local staff photo: ${member.name}`);
-    const stem = match[1].replace(/-preview$/, '');
+    if (/-thumb$/i.test(match[1])) throw new Error(`Invalid source staff photo: ${member.name}`);
+    const stem = match[1].replace(/-preview$/i, '');
     const original = originals.find((name) => path.parse(name).name === stem);
     if (!original) throw new Error(`Original photo missing: ${member.name}`);
-    const source = path.join(ASSETS, original);
+    const source = path.join(assets, original);
     const thumbnail = `${stem}-thumb.webp`;
     const preview = `${stem}-preview.webp`;
-    const thumbInfo = await createVariant(source, path.join(ASSETS, thumbnail), BUDGETS.thumbnail);
-    const previewInfo = await createVariant(source, path.join(ASSETS, preview), BUDGETS.preview);
+    const thumbInfo = await createVariant(source, path.join(assets, thumbnail), BUDGETS.thumbnail);
+    const previewInfo = await createVariant(source, path.join(assets, preview), BUDGETS.preview);
     member.photo = `/assets/staff/${preview}`;
     member.photoThumbnail = `/assets/staff/${thumbnail}`;
     report.push({
@@ -60,7 +63,7 @@ async function optimizeStaffPhotos() {
       previewInfo,
     });
   }
-  await fs.writeFile(ROSTER, `${JSON.stringify(roster, null, 2)}\n`);
+  await fs.writeFile(rosterFile, `${JSON.stringify(roster, null, 2)}\n`);
   return report;
 }
 
@@ -88,4 +91,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { BUDGETS, createVariant, optimizeStaffPhotos };
+module.exports = { BUDGETS, MAX_THUMBNAIL_BYTES, createVariant, optimizeStaffPhotos };

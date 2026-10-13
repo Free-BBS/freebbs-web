@@ -40,6 +40,31 @@ test('accepts Markdown table fields and a canonical participants field', () => {
   );
 });
 
+test('preserves numeric metadata values on the line after their heading', () => {
+  for (const duration of ['60 分钟', '30 分钟', '1.5 小时', '90–120 分钟']) {
+    const markdown = `## 建议学习时长\n\n${duration}\n## 难度\n2 / 5\n## 章节/单元\n1 基础概念`;
+    const fields = readFields(markdown);
+    assert.equal(fields.duration, duration);
+    assert.equal(fields.difficulty, '2 / 5');
+    assert.equal(fields.chapter, '1 基础概念');
+    const node = { sections: { basicInfoMarkdown: markdown } };
+    const original = JSON.stringify(node);
+    assert.equal(model(node).duration, duration);
+    assert.equal(JSON.stringify(node), original);
+  }
+});
+
+test('still accepts numbered field headings, colon fields and table labels', () => {
+  const fields = readFields(
+    '## 1. 建议学习时长\n60 分钟\n2、 难度：3\n### 3.1 章节/单元\n2 微分\n| 4. 重要程度 | 4 |\n5 填写人：同学甲\n6. 修改人：同学乙',
+  );
+  assert.equal(fields.duration, '60 分钟');
+  assert.equal(fields.difficulty, '3');
+  assert.equal(fields.chapter, '2 微分');
+  assert.equal(fields.importance, '4');
+  assert.deepEqual(fields.participants, ['同学甲', '同学乙']);
+});
+
 test('does not invent missing metadata, participants or inferred learning progress', () => {
   const value = model({
     id: 'A1',

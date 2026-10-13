@@ -155,11 +155,27 @@ test('Escape inside the shell minimizes it without also closing the discussion p
 test('selecting another tool hides history without discarding its collapsed state', () => {
   const fixture = harness();
   fixture.toggle.emit('click');
-  for (const tool of ['resources', 'feedback', 'continue', 'notes', 'contribute']) {
+  for (const tool of ['resources', 'feedback', 'continue', 'contribute']) {
     fixture.page.emit('knowledge:tool-select', { detail: { tool } });
     assert.equal(fixture.box.hidden, true);
   }
   fixture.page.emit('knowledge:tool-select', { detail: { tool: 'content' } });
+  assert.equal(fixture.box.hidden, false);
+  assert.equal(fixture.content.hidden, true);
+});
+
+test('annotation mode retains origin visibility and collapse preference on the same reader', () => {
+  const fixture = harness();
+  fixture.page.emit('knowledge:tool-select', { detail: { tool: 'notes' } });
+  assert.equal(fixture.box.hidden, false);
+  assert.equal(fixture.content.hidden, false);
+  fixture.toggle.emit('click');
+  fixture.page.emit('knowledge:view-change', { detail: { view: 'reading' } });
+  assert.equal(fixture.box.hidden, false);
+  assert.equal(fixture.content.hidden, true);
+  fixture.page.emit('knowledge:view-change', { detail: { view: 'overview' } });
+  assert.equal(fixture.box.hidden, true);
+  fixture.page.emit('knowledge:view-change', { detail: { view: 'reading' } });
   assert.equal(fixture.box.hidden, false);
   assert.equal(fixture.content.hidden, true);
 });
@@ -191,7 +207,7 @@ test('history is a purple reading shell, never part of the editable Markdown bod
   const css = fs.readFileSync(path.join(publicDir, 'course.css'), 'utf8');
   const editorCss = fs.readFileSync(path.join(publicDir, 'knowledge-editor.css'), 'utf8');
   assert.match(html, /aria-controls="knowledge-history-content"/);
-  assert.match(html, /src="\/knowledge-history.js"/);
+  assert.match(html, /src="\/knowledge-history.js\?v=20261010-annotation-3"/);
   assert.ok(html.indexOf('id="knowledge-reading"') < html.indexOf('id="knowledge-history"'));
   assert.ok(html.indexOf('id="knowledge-history"') < html.indexOf('id="knowledge-body"'));
   assert.ok(html.indexOf('id="knowledge-title"') < html.indexOf('id="knowledge-history"'));

@@ -1,17 +1,17 @@
-/* An optional, repeatable guide. No grades, analytics consent or learning choices are changed. */
+/* An optional, repeatable guide. No grades or learning choices are changed. */
 (function exposeLearningGuide(root) {
   const steps = [
     {
       title: '先知道要解决什么',
-      text: '概览说明学什么、需要哪些基础。知识起源解释它为何被需要；熟悉的内容可以直接跳过。',
+      text: '概览说明学什么，并提供资料信息。知识起源解释它为何被需要；基础条件以正文为准，熟悉的内容可以直接跳过。',
       action: '看看知识起源',
       navigation: { tool: 'content', view: 'origin' },
     },
     {
       title: '在同一份正文上思考',
       text: '选中文字后可以高亮、划线或写评注。批注只对自己显示；“我的批注”能定位回原文。',
-      action: '打开我的批注',
-      navigation: { tool: 'notes', view: 'reading' },
+      action: '回到正文标注',
+      navigation: { tool: 'content', view: 'reading' },
     },
     {
       title: '练习与自测分开',
@@ -27,7 +27,7 @@
     },
     {
       title: '需要时请 Max 帮忙',
-      text: 'Max 会结合课程内容、你的学习起点和当前任务辅助讲解。它不会替正式题目判分。个人学习记录可复盘证据；过程记录由你选择是否开启。',
+      text: 'Max 会结合课程内容、你的学习起点和当前任务辅助讲解，不替正式题目判分。学习过程自动记录，私人批注和聊天不进入过程统计。',
       action: '打开 Max',
       interaction: { tab: 'max' },
     },

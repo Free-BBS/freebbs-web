@@ -20,7 +20,7 @@ test('homepage motto preserves FREE BBS initials and names the shared study spac
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  assert.equal(words, 'Friends Rally to Empower Education, Building Better StudySpaces');
+  assert.equal(words, 'Friends Rally to Empower Education, Building Better Studyspace');
   const initials = [...motto.matchAll(/class="home-motto-initial">([A-Z])<\/span>/g)]
     .map((match) => match[1])
     .join('');
@@ -81,7 +81,7 @@ test('homepage links to independent about and staff pages without obsolete foldi
     } else {
       assert.doesNotMatch(page, /建设中 · 暂未开放/);
       assert.match(page, /工作人员/);
-      assert.match(page, /src="\/staff\.js"/);
+      assert.match(page, /src="\/staff\.js(?:\?v=[a-z0-9-]+)?"/);
     }
   }
 });

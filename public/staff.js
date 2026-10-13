@@ -18,6 +18,12 @@
     战略部: '战略总负责人',
   };
 
+  function staffThumbnailPath(photo) {
+    return /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(photo || '')
+      ? photo.replace(/(?:-(?:thumb|preview))?\.(?:png|jpe?g|webp)$/i, '-thumb.webp')
+      : '';
+  }
+
   function normalizeStaffRoster(data) {
     if (!data || !Array.isArray(data.members) || data.members.length === 0)
       throw new Error('名录数据不完整');
@@ -71,9 +77,10 @@
           : '';
       const photoThumbnail =
         typeof member.photoThumbnail === 'string' &&
+        member.photoThumbnail !== photo &&
         /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photoThumbnail)
           ? member.photoThumbnail
-          : photo;
+          : staffThumbnailPath(photo);
       return {
         name,
         groups,
@@ -163,14 +170,13 @@
     avatar.append(fallback);
     if (member.photo) {
       avatar.type = 'button';
-      avatar.disabled = true;
+      avatar.disabled = !openPhoto;
       avatar.setAttribute('aria-label', `放大查看${member.name}的照片`);
       avatar.setAttribute('aria-haspopup', 'dialog');
       avatar.addEventListener('click', () => {
         if (!avatar.disabled) openPhoto?.(member, avatar);
       });
       const photo = doc.createElement('img');
-      photo.src = member.photoThumbnail || member.photo;
       photo.alt = '';
       photo.loading = 'lazy';
       photo.decoding = 'async';
@@ -183,8 +189,9 @@
       photo.addEventListener('error', () => {
         photo.hidden = true;
         fallback.hidden = false;
-        avatar.disabled = true;
       });
+      // Prefer the published thumbnail; legacy rosters derive it without downloading a full photo.
+      photo.src = member.photoThumbnail || staffThumbnailPath(member.photo);
       avatar.append(photo);
     }
     const copy = doc.createElement('div');
@@ -253,10 +260,11 @@
     const dialog = doc.getElementById('staff-photo-dialog');
     const name = doc.getElementById('staff-photo-name');
     const close = doc.getElementById('staff-photo-close');
-    const image = doc.getElementById('staff-photo-image');
+    let image = doc.getElementById('staff-photo-image');
     const status = doc.getElementById('staff-photo-status');
     if (!dialog || !name || !close || !image || !status) return undefined;
     let trigger;
+    let generation = 0;
     close.addEventListener('click', () => dialog.close());
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
@@ -274,25 +282,51 @@
         dialog.close();
     });
     dialog.addEventListener('close', () => {
-      if (trigger?.isConnected !== false) trigger?.focus();
-    });
-    image.addEventListener('error', () => {
-      if (!dialog.open) return;
+      // Native close events are queued: a just-reopened dialog must retain its new image.
+      if (dialog.open) return;
+      generation += 1;
+      image.removeAttribute('src');
       image.hidden = true;
-      status.textContent = `${name.textContent}的照片暂时无法显示，请关闭后重试。`;
-      status.hidden = false;
+      dialog.setAttribute('aria-busy', 'false');
+      if (trigger?.isConnected !== false) trigger?.focus();
     });
     return (member, source) => {
       if (!/^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photo || '')) return;
+      generation += 1;
+      const currentGeneration = generation;
       trigger = source;
       name.textContent = member.name;
+      const nextImage = doc.createElement('img');
+      nextImage.id = 'staff-photo-image';
+      nextImage.className = 'staff-photo-image';
+      nextImage.decoding = 'async';
+      nextImage.hidden = true;
+      // A fresh image per opening isolates late events from a previously selected person.
+      image.removeAttribute('src');
+      image.replaceWith(nextImage);
+      image = nextImage;
       image.alt = `${member.name}的照片`;
-      image.decoding = 'async';
-      image.hidden = false;
-      status.hidden = true;
-      status.textContent = '';
-      image.src = member.photo;
+      status.hidden = false;
+      status.textContent = '正在加载完整照片…';
+      dialog.setAttribute('aria-busy', 'true');
+      const isCurrent = () => dialog.open && currentGeneration === generation;
+      image.addEventListener('load', () => {
+        if (!isCurrent()) return;
+        image.hidden = false;
+        status.hidden = true;
+        status.textContent = '';
+        dialog.setAttribute('aria-busy', 'false');
+      });
+      image.addEventListener('error', () => {
+        if (!isCurrent()) return;
+        image.hidden = true;
+        status.textContent = `${member.name}的照片暂时无法显示，请关闭后重试。`;
+        status.hidden = false;
+        dialog.setAttribute('aria-busy', 'false');
+      });
       if (!dialog.open) dialog.showModal();
+      // The larger published photo is requested only after an explicit open action.
+      image.src = member.photo;
       close.focus();
     };
   }
@@ -416,6 +450,7 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       normalizeStaffRoster,
+      staffThumbnailPath,
       selectStaffMembers,
       countCourseGroup,
       partitionStaffMembers,

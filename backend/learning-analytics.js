@@ -23,6 +23,17 @@ const GOALS = ['concepts', 'practice', 'explore'];
 const PATH_TYPES = ['recommended', 'alternative', 'custom'];
 const CHOICE_FIELDS = ['level', 'goal', 'pathType', 'documentVersion'];
 const SCOPE = 'learning_analytics_only';
+const RECORDING_POLICY = Object.freeze({
+  mode: 'required_minimal',
+  version: 2,
+  defaultEnabled: true,
+  canDisable: false,
+});
+const ENABLE_RECORDING_SQL = `INSERT INTO learning_analytics_preferences
+  (user_id, enabled, last_engagement_at, updated_at)
+  VALUES (?, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE
+  last_engagement_at = IF(enabled <> 1, UTC_TIMESTAMP(3), last_engagement_at),
+  updated_at = IF(enabled <> 1, UTC_TIMESTAMP(3), updated_at), enabled = 1`;
 const BROWSER_QUOTA = 120;
 const QUOTA_WINDOW_SECONDS = 60;
 function quotaError(remainingSeconds) {
@@ -132,7 +143,14 @@ function iso(value) {
   return new Date(utc).toISOString();
 }
 function preference(row) {
-  return { enabled: Number(row?.enabled) === 1, updatedAt: iso(row?.updated_at) };
+  return { enabled: true, updatedAt: iso(row?.updated_at), policy: RECORDING_POLICY };
+}
+function requireEnabled(enabled) {
+  if (enabled !== true)
+    throw new AnalyticsError(
+      409,
+      '平台默认记录必要学习过程；可导出或清空历史，清空后继续记录新过程。',
+    );
 }
 function fingerprint(context, event) {
   return crypto
@@ -209,6 +227,15 @@ function sumCounts(rows, initial, convert) {
     return Object.fromEntries(Object.keys(totals).map((key) => [key, totals[key] + values[key]]));
   }, initial);
 }
+function assessmentDataStatus(rows) {
+  return rows.available === false ? 'not_available' : 'available';
+}
+function selftestSummary(rows) {
+  return {
+    ...sumCounts(rows, zeroSelftest(), selftestCounts),
+    assessmentDataStatus: assessmentDataStatus(rows),
+  };
+}
 function evidenceCounts(rows) {
   const comparable = rows.filter((row) => Number(row.graded_attempt_count) >= 2);
   const failed = comparable.filter((row) => row.first_verdict === 'fail');
@@ -222,6 +249,9 @@ function evidenceCounts(rows) {
   const learners = (entries) => new Set(entries.map((row) => String(row.user_id))).size;
   return {
     gradedSequences: rows.length,
+    firstPassSequences: rows.filter((row) => row.first_verdict === 'pass').length,
+    firstFailSequences: rows.filter((row) => row.first_verdict === 'fail').length,
+    sequenceUnit: 'learner_course_node_question_document_and_question_version',
     comparableSequences: comparable.length,
     comparableLearners: learners(comparable),
     failedComparableSequences: failed.length,
@@ -239,7 +269,13 @@ function learningEvidence(evidenceRows, businessRows, participationRows) {
   const courses = new Map();
   evidenceRows.forEach((row) => {
     const id = String(row.course_id);
-    if (!courses.has(id)) courses.set(id, { courseId: id, courseSlug: row.course_slug, rows: [] });
+    if (!courses.has(id))
+      courses.set(id, {
+        courseId: id,
+        courseSlug: row.course_slug,
+        courseName: row.course_name || row.course_slug,
+        rows: [],
+      });
     courses.get(id).rows.push(row);
   });
   const participation = (kind, allowed) =>
@@ -267,6 +303,7 @@ function learningEvidence(evidenceRows, businessRows, participationRows) {
     tools: participation('tool', TOOLS),
     actions: participation('action', ['path_save', 'annotation_save', 'contribution_submit']),
     scope: 'within_window_same_question_and_document_version',
+    assessmentDataStatus: evidenceRows.available === false ? 'not_available' : 'available',
     interpretation: '行为与结果证据不能单独证明平台因果效果；同题复测不等于长期掌握或迁移。',
   };
 }
@@ -337,7 +374,9 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
         userId: String(row.user_id),
         courseId: String(row.course_id),
         courseSlug: row.course_slug || '',
+        courseName: row.course_name || row.course_slug || '',
         nodeId: row.node_id,
+        nodeName: row.node_name || row.node_id,
         events: [],
         attempts: [],
       });
@@ -377,6 +416,16 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
             row.event_source === 'server' &&
             row.event_type === 'assessment' &&
             eventMetadata(row).assessmentRole === 'exploration',
+        )
+        .map((row) => String(eventMetadata(row).attemptId || '')),
+    );
+    const roleLinkedPracticeIds = new Set(
+      unit.events
+        .filter(
+          (row) =>
+            row.event_source === 'server' &&
+            row.event_type === 'assessment' &&
+            ['practice', 'exploration'].includes(eventMetadata(row).assessmentRole),
         )
         .map((row) => String(eventMetadata(row).attemptId || '')),
     );
@@ -449,7 +498,10 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
       ownUnits.push({
         courseId: unit.courseId,
         courseSlug: unit.courseSlug,
+        courseName: unit.courseName,
         nodeId: unit.nodeId,
+        nodeName: unit.nodeName,
+        assessmentDataStatus: assessmentDataStatus(attemptRows),
         initialChoice: first,
         currentChoice: latest,
         revisions,
@@ -465,6 +517,12 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
             .filter((row) => explorationIds.has(String(row.id)))
             .map((row) => String(row.id)),
         ).size,
+        explorationEvidenceKnown: unit.attempts
+          .filter((row) => !Number(row.is_official))
+          .every((row) => roleLinkedPracticeIds.has(String(row.id))),
+        explorationUnattributedAttempts: unit.attempts.filter(
+          (row) => !Number(row.is_official) && !roleLinkedPracticeIds.has(String(row.id)),
+        ).length,
         ...allSequences,
         lastEvidenceAt: orderedRows([...unit.events, ...unit.attempts]).at(-1)?.created_at
           ? iso(orderedRows([...unit.events, ...unit.attempts]).at(-1).created_at)
@@ -473,6 +531,7 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
     }
   }
   const result = {
+    assessmentDataStatus: assessmentDataStatus(attemptRows),
     unit: 'learner_course_node',
     observedUnits: units.size,
     learners: new Set([...units.values()].map((unit) => unit.userId)).size,
@@ -485,6 +544,7 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
     ambiguousTimeUnits,
     cohorts: [...cohorts.values()].map(({ userIds, ...cohort }) => ({
       ...cohort,
+      assessmentDataStatus: assessmentDataStatus(attemptRows),
       learners: userIds.size,
       limitedSample: userIds.size < 5,
     })),
@@ -500,6 +560,306 @@ function journeyEvidence(eventRows, attemptRows, { personal = false } = {}) {
     result.omittedUnits = Math.max(0, ownUnits.length - 200);
   }
   return result;
+}
+function observedUnits(eventRows, attemptRows) {
+  const units = new Map();
+  for (const [rows, field] of [
+    [eventRows, 'events'],
+    [attemptRows, 'attempts'],
+  ])
+    for (const row of rows) {
+      const key = JSON.stringify([String(row.user_id), String(row.course_id), row.node_id]);
+      if (!units.has(key))
+        units.set(key, {
+          userId: String(row.user_id),
+          courseId: String(row.course_id),
+          courseSlug: row.course_slug || '',
+          courseName: row.course_name || row.course_slug || '',
+          nodeId: row.node_id,
+          nodeName: row.node_name || row.node_id,
+          events: [],
+          attempts: [],
+        });
+      units.get(key)[field].push(row);
+    }
+  return [...units.values()];
+}
+function latestOfficialRows(attemptRows) {
+  const latest = new Map();
+  for (const row of orderedRows(attemptRows))
+    if (Number(row.is_official) === 1 && row.question_id) latest.set(String(row.question_id), row);
+  return [...latest.values()];
+}
+function personalInsights(eventRows, attemptRows) {
+  const units = observedUnits(eventRows, attemptRows);
+  const suggestions = [];
+  let needsReviewCount = 0;
+  let waitingForRetryCount = 0;
+  for (const unit of units) {
+    const latest = latestOfficialRows(unit.attempts);
+    // Pending review is a submission backlog, not the latest formal question state.
+    // Practice/exploration and older still-pending attempts remain in the real review queue.
+    const pending = unit.attempts.filter((row) => row.status === 'pending_review');
+    const failed = latest.filter((row) => row.status === 'graded' && row.verdict === 'fail');
+    needsReviewCount += pending.length;
+    waitingForRetryCount += failed.length;
+    const location = {
+      courseSlug: unit.courseSlug,
+      courseName: unit.courseName,
+      nodeId: unit.nodeId,
+      nodeName: unit.nodeName,
+    };
+    const add = (id, reasonLabel, tool, reason, extra = {}) => {
+      suggestions.push({ id, ...location, reasonLabel, tool, reason, ...extra });
+    };
+    if (failed.length)
+      add(
+        'revisit_recorded_question',
+        '回看待订正的自测',
+        'feedback',
+        '最近一次已记录的正式作答有待订正处；可回看原有反馈，也可继续自己的计划。',
+        {
+          quizView: 'mistakes',
+          evidence: { basis: 'latest_observed_official_attempt', count: failed.length },
+        },
+      );
+    if (pending.length)
+      add(
+        'pending_review',
+        '查看待复核作答',
+        'feedback',
+        '有作答仍在等待复核；可查看记录，不必反复提交，也可以先学习其他内容。',
+        {
+          quizView: pending.some((row) => Number(row.is_official) === 1) ? 'quick' : 'practice',
+          evidence: { basis: 'observed_pending_review_submission', count: pending.length },
+        },
+      );
+    if (!failed.length && !pending.length) {
+      const last = orderedRows(unit.events).at(-1);
+      if (unit.attempts.some((row) => Number(row.is_official) === 0))
+        add(
+          'continue_practice',
+          '回到已有练习',
+          'feedback',
+          '你在这里有练习记录，可回看反馈或继续尝试；练习不计正式自测。',
+          { quizView: 'practice', evidence: { basis: 'observed_practice_submission' } },
+        );
+      else if (unit.events.some((row) => eventMetadata(row).action === 'annotation_save'))
+        add(
+          'review_annotation',
+          '回看自己的批注',
+          'notes',
+          '这里有过批注保存，可回到原文核对自己的疑点；记录页不读取批注内容。',
+          { evidence: { basis: 'annotation_save_action' } },
+        );
+      else if (last)
+        add(
+          'resume_reading',
+          '回到这个知识点',
+          'content',
+          '这里有学习过程记录，可继续查阅，也可以只查清一个问题后暂停。',
+          { evidence: { basis: 'observed_process_event' } },
+        );
+    }
+  }
+  const order = {
+    revisit_recorded_question: 0,
+    pending_review: 1,
+    continue_practice: 2,
+    review_annotation: 3,
+    resume_reading: 4,
+  };
+  suggestions.sort((left, right) => order[left.id] - order[right.id]);
+  return {
+    nextSteps: suggestions.slice(0, 3),
+    needsReviewCount,
+    waitingForRetryCount,
+    assessmentDataStatus: attemptRows.available === false ? 'not_available' : 'available',
+    scope: 'latest_observed_official_submission_per_question_in_selected_window',
+    reviewScope: 'all_observed_pending_submissions_in_selected_window',
+    interpretation:
+      '仅供选择下一步，不改变已保存路径。历史版本结果不能认定当前知识掌握；课程更新后需在知识点内核对当前题目。',
+  };
+}
+function analyticsDiagnostics(eventRows, attemptRows, users, journey, processRows = eventRows) {
+  const units = observedUnits(eventRows, attemptRows);
+  // Coverage includes heartbeat-only process records; journey observations intentionally
+  // project only navigation, actions and assessment events for ordered pathway evidence.
+  const processUsers = new Set(processRows.map((row) => String(row.user_id)));
+  const businessUsers = new Set(attemptRows.map((row) => String(row.user_id)));
+  const after = (row, first) => new Date(iso(row.created_at)) > new Date(iso(first.created_at));
+  const transitions = [
+    { id: 'reading_to_attempt', label: '记录阅读 → 之后作答', fromUnits: 0, progressedUnits: 0 },
+    { id: 'practice_to_selftest', label: '练习 → 之后正式自测', fromUnits: 0, progressedUnits: 0 },
+    {
+      id: 'formal_fail_to_retry',
+      label: '正式未通过 → 之后复测',
+      fromUnits: 0,
+      progressedUnits: 0,
+    },
+  ];
+  const attention = new Map();
+  let explorationUnattributedAttempts = 0;
+  for (const unit of units) {
+    const events = orderedRows(unit.events);
+    const attempts = orderedRows(unit.attempts);
+    const roleLinked = new Set(
+      events
+        .filter(
+          (row) =>
+            row.event_source === 'server' &&
+            row.event_type === 'assessment' &&
+            ['practice', 'exploration'].includes(eventMetadata(row).assessmentRole),
+        )
+        .map((row) => String(eventMetadata(row).attemptId || '')),
+    );
+    explorationUnattributedAttempts += attempts.filter(
+      (row) => !Number(row.is_official) && !roleLinked.has(String(row.id)),
+    ).length;
+    const reading = events.find(
+      (row) => row.event_type === 'navigation' && eventMetadata(row).tool === 'content',
+    );
+    if (reading) {
+      transitions[0].fromUnits += 1;
+      if (attempts.some((row) => after(row, reading))) transitions[0].progressedUnits += 1;
+    }
+    const practice = attempts.find((row) => Number(row.is_official) === 0);
+    if (practice) {
+      transitions[1].fromUnits += 1;
+      if (
+        attempts.some(
+          (row) =>
+            Number(row.is_official) === 1 &&
+            after(row, practice) &&
+            row.document_version &&
+            row.document_version === practice.document_version,
+        )
+      )
+        transitions[1].progressedUnits += 1;
+    }
+    const failed = attempts.filter(
+      (row) =>
+        Number(row.is_official) === 1 &&
+        row.status === 'graded' &&
+        row.verdict === 'fail' &&
+        row.question_id &&
+        row.document_version &&
+        row.question_version,
+    );
+    if (failed.length) {
+      transitions[2].fromUnits += 1;
+      if (
+        failed.some((first) =>
+          attempts.some(
+            (row) =>
+              Number(row.is_official) === 1 &&
+              after(row, first) &&
+              row.question_id === first.question_id &&
+              row.document_version === first.document_version &&
+              row.question_version === first.question_version,
+          ),
+        )
+      )
+        transitions[2].progressedUnits += 1;
+    }
+    const latest = latestOfficialRows(attempts);
+    const pendingReviewAttempts = attempts.filter((row) => row.status === 'pending_review').length;
+    const waitingForRetryQuestions = latest.filter(
+      (row) => row.status === 'graded' && row.verdict === 'fail',
+    ).length;
+    if (pendingReviewAttempts || waitingForRetryQuestions) {
+      const key = JSON.stringify([unit.courseId, unit.nodeId]);
+      if (!attention.has(key))
+        attention.set(key, {
+          courseSlug: unit.courseSlug,
+          courseName: unit.courseName,
+          nodeId: unit.nodeId,
+          nodeName: unit.nodeName,
+          pendingReviewAttempts: 0,
+          waitingForRetryQuestions: 0,
+        });
+      const current = attention.get(key);
+      current.pendingReviewAttempts += pendingReviewAttempts;
+      current.waitingForRetryQuestions += waitingForRetryQuestions;
+    }
+  }
+  return {
+    assessmentDataStatus: assessmentDataStatus(attemptRows),
+    coverage: {
+      eligibleUsers: users.length,
+      processLearners: processUsers.size,
+      businessLearners: businessUsers.size,
+      observedLearners: new Set([...processUsers, ...businessUsers]).size,
+      businessOnlyLearners: [...businessUsers].filter((id) => !processUsers.has(id)).length,
+      observedUnits: units.length,
+      denominator: 'all_account_users_not_student_enrolment_or_period_active_users',
+      unit: 'users_except_observedUnits_learner_course_node',
+    },
+    quality: {
+      missingStartUnits: journey.missingStartUnits,
+      missingGoalUnits: journey.missingGoalUnits,
+      unknownChoiceVersionUnits: journey.unknownChoiceVersionUnits,
+      preChoiceAttemptUnits: journey.preChoiceAttemptUnits,
+      ambiguousTimeUnits: journey.ambiguousTimeUnits,
+      missingAssessmentIdentityAttempts: attemptRows.filter(
+        (row) => !row.question_id || !row.document_version || !row.question_version,
+      ).length,
+      explorationUnattributedAttempts,
+      assessmentDataStatus: attemptRows.available === false ? 'not_available' : 'available',
+      limitedSample: new Set(units.map((unit) => unit.userId)).size < 5,
+      startingPointOptional: true,
+    },
+    transitions: transitions.map((value) => ({
+      ...value,
+      assessmentDataStatus: assessmentDataStatus(attemptRows),
+      ratio:
+        attemptRows.available === false || !value.fromUnits
+          ? null
+          : value.progressedUnits / value.fromUnits,
+      scope: 'learner_course_node_ordered_observations_in_selected_window',
+    })),
+    attention: [...attention.values()],
+    notCollected: ['delayedReview', 'transfer', 'causalEffect'],
+    interpretation:
+      '覆盖分母包含教师和管理员账号，不是学生入课人数。未自报起点不等于缺陷；直接查阅或练习是合法路径。转化描述同单元已观察顺序，不代表必须完成的漏斗或平台因果效果。',
+  };
+}
+function learningActivity(activityRows, attemptRows, now = new Date()) {
+  const day = (value) =>
+    new Date(new Date(iso(value)).getTime() + 8 * 3600000).toISOString().slice(0, 10);
+  const days = new Map();
+  for (const row of activityRows)
+    days.set(row.date, {
+      date: row.date,
+      visits: Number(row.visits || 0),
+      activeSeconds: Number(row.active_seconds || 0),
+      attempts: 0,
+    });
+  for (const row of attemptRows) {
+    const date = day(row.created_at);
+    if (!days.has(date)) days.set(date, { date, visits: 0, activeSeconds: 0, attempts: 0 });
+    days.get(date).attempts += 1;
+  }
+  const firstDate = day(new Date(now.getTime() - 13 * 86400000));
+  const lastDate = day(now);
+  const all = [...days.values()].sort((left, right) => left.date.localeCompare(right.date));
+  return {
+    days: all.filter((row) => row.date >= firstDate && row.date <= lastDate),
+    timezone: 'Asia/Shanghai',
+    scope: 'selected_window_intersect_recent_14_calendar_days',
+    displayDays: 14,
+    from: firstDate,
+    to: lastDate,
+    fromDate: firstDate,
+    toDate: lastDate,
+    earlierRecordedDays: all.filter((row) => row.date < firstDate).length,
+    assessmentDataStatus: attemptRows.available === false ? 'not_available' : 'available',
+    interpretation:
+      '仅展示有记录日期；空日期不等于没有学习。活跃时间为前台过程时长，作答次数包含重复提交。',
+  };
+}
+function unavailableRows() {
+  return Object.defineProperty([], 'available', { value: false });
 }
 const PROCESS_SQL = `COUNT(*) AS event_count,
   SUM(e.event_type = 'navigation' AND JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.action')) = 'visit') AS visits,
@@ -550,6 +910,20 @@ async function ensureLearningAnalyticsTables(pool) {
       if (error.code !== 'ER_DUP_KEYNAME') throw error;
     }
   }
+  // Deployment migration: activate existing accounts, including legacy opt-outs,
+  // without backfilling any past activity or inspecting private business text.
+  // Retried startup does not reset engagement clocks or rate-limit counters.
+  await pool.execute(
+    'ALTER TABLE learning_analytics_preferences ALTER COLUMN enabled SET DEFAULT 1',
+  );
+  await pool.execute(`UPDATE learning_analytics_preferences SET
+    last_engagement_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3), enabled = 1
+    WHERE enabled <> 1`);
+  await pool.execute(`INSERT INTO learning_analytics_preferences
+    (user_id, enabled, last_engagement_at, updated_at)
+    SELECT u.id, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3) FROM users u
+    LEFT JOIN learning_analytics_preferences p ON p.user_id = u.id WHERE p.user_id IS NULL
+    ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`);
 }
 function createMysqlAnalyticsStore(pool) {
   async function transaction(work) {
@@ -568,7 +942,7 @@ function createMysqlAnalyticsStore(pool) {
   }
   async function context(where, value, point) {
     const [rows] = await pool.execute(
-      `SELECT c.id AS course_id, c.slug AS course_slug, n.node_id FROM courses c
+      `SELECT c.id AS course_id, c.slug AS course_slug, c.name AS course_name, n.node_id, n.title AS node_name FROM courses c
        JOIN course_map_nodes n ON n.course_id = c.id WHERE c.${where} = ? AND c.is_active = 1 AND n.node_id = ? LIMIT 1`,
       [value, point],
     );
@@ -577,14 +951,14 @@ function createMysqlAnalyticsStore(pool) {
   async function businessRows(userId, since) {
     try {
       const [rows] = await pool.execute(
-        `SELECT a.user_id, a.course_id, ${SELFTEST_SQL} FROM learning_assessment_attempts a
+        `SELECT a.user_id, a.course_id, c.slug AS course_slug, c.name AS course_name, ${SELFTEST_SQL} FROM learning_assessment_attempts a JOIN courses c ON c.id = a.course_id
          WHERE 1 = 1 ${userId ? 'AND a.user_id = ?' : ''} ${since ? 'AND a.created_at >= ?' : ''}
-         GROUP BY a.user_id, a.course_id`,
+         GROUP BY a.user_id, a.course_id, c.slug, c.name`,
         [...(userId ? [userId] : []), ...(since ? [sqlDate(since)] : [])],
       );
       return rows;
     } catch (error) {
-      if (error.code === 'ER_NO_SUCH_TABLE') return [];
+      if (error.code === 'ER_NO_SUCH_TABLE') return unavailableRows();
       throw error;
     }
   }
@@ -601,6 +975,7 @@ function createMysqlAnalyticsStore(pool) {
       return Boolean(user?.id && current);
     },
     async preferences(userId) {
+      await pool.execute(ENABLE_RECORDING_SQL, [userId]);
       const [rows] = await pool.execute(
         'SELECT enabled, CAST(updated_at AS CHAR) AS updated_at FROM learning_analytics_preferences WHERE user_id = ? LIMIT 1',
         [userId],
@@ -608,18 +983,13 @@ function createMysqlAnalyticsStore(pool) {
       return preference(rows[0]);
     },
     async setPreferences(userId, enabled) {
-      await pool.execute(
-        `INSERT INTO learning_analytics_preferences (user_id, enabled, last_engagement_at, updated_at)
-        VALUES (?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE
-        last_engagement_at = IF(enabled <> VALUES(enabled), UTC_TIMESTAMP(3), last_engagement_at),
-        enabled = VALUES(enabled), updated_at = UTC_TIMESTAMP(3)`,
-        [userId, enabled ? 1 : 0],
-      );
+      requireEnabled(enabled);
       return this.preferences(userId);
     },
     async record(userId, current, event) {
       const hash = fingerprint(current, event);
       return transaction(async (connection) => {
+        await connection.execute(ENABLE_RECORDING_SQL, [userId]);
         const [settings] = await connection.execute(
           `SELECT enabled, browser_event_count,
           TIMESTAMPDIFF(MICROSECOND, browser_window_started_at, UTC_TIMESTAMP(3)) / 1000000 AS browser_window_seconds,
@@ -627,7 +997,8 @@ function createMysqlAnalyticsStore(pool) {
           FROM learning_analytics_preferences WHERE user_id = ? FOR UPDATE`,
           [userId],
         );
-        if (Number(settings[0]?.enabled) !== 1) return { recorded: false, reason: 'disabled' };
+        if (Number(settings[0]?.enabled) !== 1)
+          throw new AnalyticsError(503, '必要过程记录策略尚未就绪，请稍后重试');
         const [existing] = await connection.execute(
           'SELECT payload_hash FROM learning_analytics_events WHERE user_id = ? AND request_key = ? LIMIT 1',
           [userId, event.requestKey],
@@ -685,20 +1056,33 @@ function createMysqlAnalyticsStore(pool) {
     },
     async processRows(userId, since) {
       const [rows] = await pool.execute(
-        `SELECT e.user_id, e.course_id, c.slug AS course_slug, ${PROCESS_SQL}
+        `SELECT e.user_id, e.course_id, c.slug AS course_slug, c.name AS course_name, ${PROCESS_SQL}
         FROM learning_analytics_events e JOIN courses c ON c.id = e.course_id
         WHERE 1 = 1 ${userId ? 'AND e.user_id = ?' : ''} ${since ? 'AND e.created_at >= ?' : ''}
-        GROUP BY e.user_id, e.course_id, c.slug`,
+        GROUP BY e.user_id, e.course_id, c.slug, c.name`,
         [...(userId ? [userId] : []), ...(since ? [sqlDate(since)] : [])],
       );
       return rows;
     },
     businessRows,
+    async activityRows(userId, since) {
+      const [rows] = await pool.execute(
+        `SELECT DATE_FORMAT(DATE_ADD(e.created_at, INTERVAL 8 HOUR), '%Y-%m-%d') AS date,
+          SUM(e.event_type = 'navigation' AND JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.action')) = 'visit') AS visits,
+          SUM(e.delta_seconds) AS active_seconds
+        FROM learning_analytics_events e WHERE 1 = 1
+          ${userId ? 'AND e.user_id = ?' : ''} ${since ? 'AND e.created_at >= ?' : ''}
+        GROUP BY date ORDER BY date ASC`,
+        [...(userId ? [userId] : []), ...(since ? [sqlDate(since)] : [])],
+      );
+      return rows;
+    },
     async journeyEventRows(userId, since) {
       const [rows] = await pool.execute(
-        `SELECT e.id, e.user_id, e.course_id, e.node_id, c.slug AS course_slug,
+        `SELECT e.id, e.user_id, e.course_id, e.node_id, n.title AS node_name, c.slug AS course_slug, c.name AS course_name,
           e.event_type, e.event_source, CAST(e.created_at AS CHAR) AS created_at,
           JSON_OBJECT('action', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.action')),
+            'tool', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.tool')),
             'level', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.level')),
             'goal', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.goal')),
             'pathType', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.pathType')),
@@ -706,6 +1090,7 @@ function createMysqlAnalyticsStore(pool) {
             'documentVersion', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.documentVersion')),
             'assessmentRole', JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.assessmentRole'))) AS metadata_json
         FROM learning_analytics_events e JOIN courses c ON c.id = e.course_id
+        LEFT JOIN course_map_nodes n ON n.course_id = e.course_id AND n.node_id = e.node_id
         WHERE e.event_type IN ('navigation', 'action', 'assessment')
           ${userId ? 'AND e.user_id = ?' : ''} ${since ? 'AND e.created_at >= ?' : ''}
         ORDER BY e.created_at ASC, e.id ASC`,
@@ -716,24 +1101,25 @@ function createMysqlAnalyticsStore(pool) {
     async journeyAttemptRows(userId, since) {
       try {
         const [rows] = await pool.execute(
-          `SELECT a.id, a.user_id, a.course_id, a.node_id, c.slug AS course_slug,
+          `SELECT a.id, a.user_id, a.course_id, a.node_id, n.title AS node_name, c.slug AS course_slug, c.name AS course_name,
             a.question_id, a.document_version, a.question_version, a.is_official,
             a.status, a.verdict, CAST(a.created_at AS CHAR) AS created_at
           FROM learning_assessment_attempts a JOIN courses c ON c.id = a.course_id
+          LEFT JOIN course_map_nodes n ON n.course_id = a.course_id AND n.node_id = a.node_id
           WHERE 1 = 1 ${userId ? 'AND a.user_id = ?' : ''} ${since ? 'AND a.created_at >= ?' : ''}
           ORDER BY a.created_at ASC, a.id ASC`,
           [...(userId ? [userId] : []), ...(since ? [sqlDate(since)] : [])],
         );
         return rows;
       } catch (error) {
-        if (error.code === 'ER_NO_SUCH_TABLE') return [];
+        if (error.code === 'ER_NO_SUCH_TABLE') return unavailableRows();
         throw error;
       }
     },
-    async assessmentEvidenceRows(since) {
+    async assessmentEvidenceRows(since, userId = null) {
       try {
         const [rows] = await pool.execute(
-          `SELECT g.user_id, g.course_id, c.slug AS course_slug, g.graded_attempt_count,
+          `SELECT g.user_id, g.course_id, c.slug AS course_slug, c.name AS course_name, g.graded_attempt_count,
           first_attempt.verdict AS first_verdict, last_attempt.verdict AS last_verdict
           FROM (
             SELECT a.user_id, a.course_id, a.node_id, a.question_id,
@@ -742,6 +1128,7 @@ function createMysqlAnalyticsStore(pool) {
             FROM learning_assessment_attempts a
             WHERE a.is_official = 1 AND a.status = 'graded' AND a.verdict IN ('pass', 'fail')
               AND a.document_version <> '' AND a.question_version <> '' AND a.question_id <> ''
+              ${userId ? 'AND a.user_id = ?' : ''}
               ${since ? 'AND a.created_at >= ?' : ''}
             GROUP BY a.user_id, a.course_id, a.node_id, a.question_id,
               a.document_version, BINARY a.question_version
@@ -749,36 +1136,43 @@ function createMysqlAnalyticsStore(pool) {
           JOIN learning_assessment_attempts first_attempt ON first_attempt.id = g.first_id
           JOIN learning_assessment_attempts last_attempt ON last_attempt.id = g.last_id
           JOIN courses c ON c.id = g.course_id`,
-          since ? [sqlDate(since)] : [],
+          [...(userId ? [userId] : []), ...(since ? [sqlDate(since)] : [])],
         );
         return rows;
       } catch (error) {
-        if (error.code === 'ER_NO_SUCH_TABLE') return [];
+        if (error.code === 'ER_NO_SUCH_TABLE') return unavailableRows();
         throw error;
       }
     },
-    async participationRows(since) {
+    async participationRows(since, userId = null) {
       const [rows] = await pool.execute(
         `SELECT e.user_id, 'tool' AS kind,
           JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.tool')) AS value, COUNT(*) AS event_count
         FROM learning_analytics_events e
         WHERE e.event_type = 'navigation'
           AND JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.action')) = 'tool_open'
+          ${userId ? 'AND e.user_id = ?' : ''}
           ${since ? 'AND e.created_at >= ?' : ''}
         GROUP BY e.user_id, value
         UNION ALL
         SELECT e.user_id, 'action' AS kind,
           JSON_UNQUOTE(JSON_EXTRACT(e.metadata_json, '$.action')) AS value, COUNT(*) AS event_count
         FROM learning_analytics_events e WHERE e.event_type = 'action'
+          ${userId ? 'AND e.user_id = ?' : ''}
           ${since ? 'AND e.created_at >= ?' : ''}
         GROUP BY e.user_id, value`,
-        since ? [sqlDate(since), sqlDate(since)] : [],
+        [
+          ...(userId ? [userId] : []),
+          ...(since ? [sqlDate(since)] : []),
+          ...(userId ? [userId] : []),
+          ...(since ? [sqlDate(since)] : []),
+        ],
       );
       return rows;
     },
     async users() {
       const [rows] = await pool.execute(
-        'SELECT u.id, u.username AS nickname, COALESCE(p.enabled, 0) AS enabled FROM users u LEFT JOIN learning_analytics_preferences p ON p.user_id = u.id ORDER BY u.id ASC',
+        'SELECT u.id, u.username AS nickname, 1 AS enabled FROM users u ORDER BY u.id ASC',
       );
       return rows;
     },
@@ -794,9 +1188,9 @@ function createMysqlAnalyticsStore(pool) {
     async remove(userId) {
       return transaction(async (connection) => {
         await connection.execute(
-          `INSERT INTO learning_analytics_preferences (user_id, enabled, updated_at)
-          VALUES (?, 0, UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE enabled = 0,
-          last_engagement_at = NULL, updated_at = UTC_TIMESTAMP(3)`,
+          `INSERT INTO learning_analytics_preferences (user_id, enabled, last_engagement_at, updated_at)
+          VALUES (?, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE enabled = 1,
+          last_engagement_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3)`,
           [userId],
         );
         const [result] = await connection.execute(
@@ -813,11 +1207,24 @@ function createMemoryAnalyticsStore({
   contexts = [],
   users = [],
   businessAttempts = [],
+  initialPreferences = [],
   clock = () => new Date(),
   browserQuotaMaxBuckets = 10000,
 } = {}) {
   const rows = [];
-  const preferences = new Map();
+  const preferences = new Map(initialPreferences.map((row) => [String(row.user_id), { ...row }]));
+  const ensureEnabled = (userId) => {
+    const key = String(userId);
+    let settings = preferences.get(key);
+    if (Number(settings?.enabled) !== 1) {
+      const now = new Date(clock());
+      settings = { ...settings, enabled: true, updated_at: now, last_engagement_at: now };
+      preferences.set(key, settings);
+    }
+    return settings;
+  };
+  for (const user of users) ensureEnabled(user.id);
+  for (const userId of preferences.keys()) ensureEnabled(userId);
   const browserBuckets = new Map();
   const maxBuckets =
     Number.isInteger(browserQuotaMaxBuckets) && browserQuotaMaxBuckets > 0
@@ -852,6 +1259,7 @@ function createMemoryAnalyticsStore({
           user_id: entry.user_id,
           course_id: entry.course_id,
           course_slug: entry.course_slug,
+          course_name: entry.course_name,
           ...(assessment
             ? {
                 attempts: 0,
@@ -944,21 +1352,14 @@ function createMemoryAnalyticsStore({
       );
     },
     async preferences(userId) {
-      return preference(preferences.get(String(userId)));
+      return preference(ensureEnabled(userId));
     },
     async setPreferences(userId, enabled) {
-      const previous = preferences.get(String(userId));
-      const now = new Date(clock());
-      preferences.set(String(userId), {
-        enabled,
-        updated_at: now,
-        last_engagement_at: previous?.enabled === enabled ? previous.last_engagement_at : now,
-      });
+      requireEnabled(enabled);
       return this.preferences(userId);
     },
     async record(userId, current, event) {
-      const settings = preferences.get(String(userId));
-      if (!settings?.enabled) return { recorded: false, reason: 'disabled' };
+      const settings = ensureEnabled(userId);
       const hash = fingerprint(current, event);
       const previous = rows.find(
         (row) => String(row.user_id) === String(userId) && row.request_key === event.requestKey,
@@ -978,7 +1379,9 @@ function createMemoryAnalyticsStore({
         user_id: userId,
         course_id: current.course_id,
         course_slug: current.course_slug || current.slug,
+        course_name: current.course_name || current.name || current.course_slug || current.slug,
         node_id: current.node_id,
+        node_name: current.node_name || current.title || current.node_id,
         event_type: event.type,
         event_source: event.source,
         delta_seconds: delta,
@@ -996,6 +1399,20 @@ function createMemoryAnalyticsStore({
     async businessRows(userId, since) {
       return group(filter(businessAttempts, userId, since), true);
     },
+    async activityRows(userId, since) {
+      const days = new Map();
+      for (const row of filter(rows, userId, since)) {
+        const date = new Date(new Date(row.created_at).getTime() + 8 * 3600000)
+          .toISOString()
+          .slice(0, 10);
+        if (!days.has(date)) days.set(date, { date, visits: 0, active_seconds: 0 });
+        const current = days.get(date);
+        if (row.event_type === 'navigation' && eventMetadata(row).action === 'visit')
+          current.visits += 1;
+        current.active_seconds += Number(row.delta_seconds || 0);
+      }
+      return [...days.values()];
+    },
     async journeyEventRows(userId, since) {
       return filter(rows, userId, since).filter((row) =>
         ['navigation', 'action', 'assessment'].includes(row.event_type),
@@ -1007,11 +1424,26 @@ function createMemoryAnalyticsStore({
         user_id: row.user_id,
         course_id: row.course_id,
         node_id: row.node_id,
+        node_name: (() => {
+          const current = contexts.find(
+            (entry) =>
+              String(entry.course_id) === String(row.course_id) && entry.node_id === row.node_id,
+          );
+          return current?.node_name || current?.title || row.node_id;
+        })(),
         course_slug: (() => {
           const current = contexts.find(
             (context) => String(context.course_id) === String(row.course_id),
           );
           return current?.slug || current?.course_slug || '';
+        })(),
+        course_name: (() => {
+          const current = contexts.find(
+            (context) => String(context.course_id) === String(row.course_id),
+          );
+          return (
+            current?.course_name || current?.name || current?.slug || current?.course_slug || ''
+          );
         })(),
         question_id: row.question_id,
         document_version: row.document_version,
@@ -1022,9 +1454,9 @@ function createMemoryAnalyticsStore({
         created_at: row.created_at,
       }));
     },
-    async assessmentEvidenceRows(since) {
+    async assessmentEvidenceRows(since, userId = null) {
       const groups = new Map();
-      const entries = filter(businessAttempts, null, since)
+      const entries = filter(businessAttempts, userId, since)
         .filter(
           (row) =>
             Number(row.is_official) === 1 &&
@@ -1055,6 +1487,12 @@ function createMemoryAnalyticsStore({
               );
               return current?.slug || current?.course_slug;
             })(),
+            course_name: (() => {
+              const current = contexts.find(
+                (item) => String(item.course_id) === String(row.course_id),
+              );
+              return current?.course_name || current?.name || current?.slug || current?.course_slug;
+            })(),
             first_verdict: row.verdict,
             last_verdict: row.verdict,
             graded_attempt_count: 0,
@@ -1065,9 +1503,9 @@ function createMemoryAnalyticsStore({
       });
       return [...groups.values()];
     },
-    async participationRows(since) {
+    async participationRows(since, userId = null) {
       const groups = new Map();
-      filter(rows, null, since).forEach((row) => {
+      filter(rows, userId, since).forEach((row) => {
         const tool = row.event_type === 'navigation' && row.metadata_json.action === 'tool_open';
         if (!tool && row.event_type !== 'action') return;
         const kind = tool ? 'tool' : 'action';
@@ -1083,7 +1521,7 @@ function createMemoryAnalyticsStore({
       return users.map((user) => ({
         id: user.id,
         nickname: user.nickname || user.username || '',
-        enabled: preferences.get(String(user.id))?.enabled || false,
+        enabled: true,
       }));
     },
     async exportRows(userId, before) {
@@ -1098,9 +1536,9 @@ function createMemoryAnalyticsStore({
       for (let index = rows.length - 1; index >= 0; index -= 1)
         if (String(rows[index].user_id) === String(userId)) rows.splice(index, 1);
       preferences.set(String(userId), {
-        enabled: false,
+        enabled: true,
         updated_at: new Date(clock()),
-        last_engagement_at: null,
+        last_engagement_at: new Date(clock()),
       });
       return ownRows.length;
     },
@@ -1193,7 +1631,15 @@ function createLearningAnalyticsRouter({
     route(async (req, res, user) => {
       allowedKeys(req.body, ['enabled']);
       if (typeof req.body.enabled !== 'boolean')
-        throw new AnalyticsError(400, '请选择开启或关闭过程记录');
+        throw new AnalyticsError(400, '记录策略字段必须为布尔值');
+      if (req.body.enabled === false) {
+        res.status(409).json({
+          code: 'learning_recording_required',
+          message: '平台默认记录必要学习过程；可导出或清空历史，清空后继续记录新过程。',
+          preferences: await store.preferences(user.id),
+        });
+        return;
+      }
       res.json({ preferences: await store.setPreferences(user.id, req.body.enabled) });
     }),
   );
@@ -1213,14 +1659,25 @@ function createLearningAnalyticsRouter({
     '/summary',
     route(async (req, res, user) => {
       const selected = windowStart(req.query.window);
-      const [preferences, processRows, businessRows, journeyEvents, journeyAttempts] =
-        await Promise.all([
-          store.preferences(user.id),
-          store.processRows(user.id, selected.since),
-          store.businessRows(user.id, selected.since),
-          store.journeyEventRows(user.id, selected.since),
-          store.journeyAttemptRows(user.id, selected.since),
-        ]);
+      const [
+        preferences,
+        processRows,
+        businessRows,
+        journeyEvents,
+        journeyAttempts,
+        activityRows,
+        evidenceRows,
+        participationRows,
+      ] = await Promise.all([
+        store.preferences(user.id),
+        store.processRows(user.id, selected.since),
+        store.businessRows(user.id, selected.since),
+        store.journeyEventRows(user.id, selected.since),
+        store.journeyAttemptRows(user.id, selected.since),
+        store.activityRows(user.id, selected.since),
+        store.assessmentEvidenceRows(selected.since, user.id),
+        store.participationRows(selected.since, user.id),
+      ]);
       res.json({
         window: selected.window,
         period: { from: iso(selected.since), to: new Date().toISOString() },
@@ -1231,11 +1688,15 @@ function createLearningAnalyticsRouter({
           courses: processRows.map((row) => ({
             courseId: String(row.course_id),
             courseSlug: row.course_slug,
+            courseName: row.course_name || row.course_slug,
             ...processCounts(row),
           })),
         },
-        selftest: sumCounts(businessRows, zeroSelftest(), selftestCounts),
+        selftest: selftestSummary(businessRows),
+        effectiveness: learningEvidence(evidenceRows, businessRows, participationRows),
         journey: journeyEvidence(journeyEvents, journeyAttempts, { personal: true }),
+        insights: personalInsights(journeyEvents, journeyAttempts),
+        activity: learningActivity(activityRows, journeyAttempts),
         interpretation:
           '访问、活跃时间和手工标记是过程信息；自测提交结果包含重复作答及历史版本，均不等同于知识掌握或能力评价。',
       });
@@ -1277,6 +1738,7 @@ function createLearningAnalyticsRouter({
         participationRows,
         journeyEvents,
         journeyAttempts,
+        activityRows,
       ] = await Promise.all([
         store.processRows(null, selected.since),
         store.businessRows(null, selected.since),
@@ -1285,8 +1747,10 @@ function createLearningAnalyticsRouter({
         store.participationRows(selected.since),
         store.journeyEventRows(null, selected.since),
         store.journeyAttemptRows(null, selected.since),
+        store.activityRows(null, selected.since),
       ]);
       const activeUsers = new Set(processRows.map((row) => String(row.user_id)));
+      const journey = journeyEvidence(journeyEvents, journeyAttempts);
       const courses = new Map();
       processRows.forEach((row) => {
         const key = String(row.course_id);
@@ -1294,6 +1758,7 @@ function createLearningAnalyticsRouter({
           courses.set(key, {
             courseId: key,
             courseSlug: row.course_slug,
+            courseName: row.course_name || row.course_slug,
             ...zeroProcess(),
             users: new Set(),
           });
@@ -1313,9 +1778,17 @@ function createLearningAnalyticsRouter({
         processUserCount: activeUsers.size,
         limitedSample: activeUsers.size < 5,
         process: sumCounts(processRows, zeroProcess(), processCounts),
-        selftest: sumCounts(businessRows, zeroSelftest(), selftestCounts),
+        selftest: selftestSummary(businessRows),
         effectiveness: learningEvidence(evidenceRows, businessRows, participationRows),
-        journey: journeyEvidence(journeyEvents, journeyAttempts),
+        journey,
+        diagnostics: analyticsDiagnostics(
+          journeyEvents,
+          journeyAttempts,
+          users,
+          journey,
+          processRows,
+        ),
+        activity: learningActivity(activityRows, journeyAttempts),
         courses: [...courses.values()].map((course) => ({
           ...course,
           users: course.users.size,
@@ -1332,11 +1805,14 @@ function createLearningAnalyticsRouter({
               [...ownProcess, ...ownBusiness].map((row) => String(row.course_id)),
             ).size,
             process: sumCounts(ownProcess, zeroProcess(), processCounts),
-            selftest: sumCounts(ownBusiness, zeroSelftest(), selftestCounts),
+            selftest: {
+              ...sumCounts(ownBusiness, zeroSelftest(), selftestCounts),
+              assessmentDataStatus: assessmentDataStatus(businessRows),
+            },
           };
         }),
         interpretation:
-          '已授权过程统计与个人自测提交结果分别计数，不做能力排名；小样本不代表整体学习情况。',
+          '必要过程统计与个人自测提交结果分别计数，不做能力排名；小样本不代表整体学习情况，统计关联不代表平台因果效果。',
       });
     }, true),
   );
@@ -1352,4 +1828,8 @@ module.exports = {
   validateClientEvent,
   windowStart,
   journeyEvidence,
+  personalInsights,
+  analyticsDiagnostics,
+  learningActivity,
+  RECORDING_POLICY,
 };

@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const http = require('node:http');
+const { listenAllowedLoopback } = require('./fixtures/allowed-loopback');
 const { toMapNode, createCourseMapsRouter } = require('../backend/course-maps');
 const {
   stripAssessmentBlocks,
@@ -17,6 +19,94 @@ const { createAnchor, stableBlocks } = require('../public/knowledge-annotations'
 
 const root = path.resolve(__dirname, '..');
 const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
+
+test('the human-learning release has coherent fresh cache keys on every changed page asset', () => {
+  const release = '20261010-human-1';
+  const authoringReleases = {
+    'knowledge-overview.js': '20261012-authoring-1',
+    'learning-content.js': '20261012-chapter-names-1',
+    'course-structure.js': '20261012-chapter-names-1',
+    'course-map.js': '20261012-chapter-names-1',
+    'course-upload.js': '20261012-authoring-1',
+  };
+  const humanAssets = new Set([
+    'human-learning-annotations.css',
+    'learning-strategies.js',
+    'learning-next-steps.js',
+    'learning-chat-drafts.js',
+    'knowledge.js',
+    'knowledge-annotations.js',
+    'knowledge-workspace.js',
+  ]);
+  const annotationAssets = new Set([
+    'knowledge-workspace.css',
+    'human-learning-annotations.css',
+    'knowledge-annotations.js',
+    'knowledge.js',
+    'knowledge-history.js',
+    'knowledge-workspace.js',
+    'learning-reader.js',
+  ]);
+  const assets = {
+    'public/knowledge.html': [
+      'knowledge-overview.js',
+      'learning-content.js',
+      'knowledge-workspace.css',
+      'human-learning-annotations.css',
+      'learning-stars.js',
+      'learning-analytics.js',
+      'learning-strategies.js',
+      'learning-start.js',
+      'learning-next-steps.js',
+      'learning-chat-drafts.js',
+      'knowledge.js',
+      'knowledge-history.js',
+      'learning-answer-drafts.js',
+      'learning-assessment.js',
+      'learning-resources.js',
+      'knowledge-annotations.js',
+      'knowledge-workspace.js',
+      'learning-reader.js',
+      'learning-guide.js',
+    ],
+    'public/course.html': [
+      'knowledge-overview.js',
+      'learning-content.js',
+      'course-structure.css',
+      'learning-stars.js',
+      'course-structure.js',
+      'learning-strategies.js',
+      'learning-start.js',
+      'course-map.js',
+    ],
+    'public/course-map-editor.html': ['learning-content.js', 'course-map.js'],
+    'public/settings.html': ['course-upload.js'],
+    'public/adminusers.html': ['learning-analytics.js', 'learning-analytics.css'],
+    'public/profile.html': ['learning-analytics.js', 'learning-analytics.css'],
+  };
+  for (const [file, names] of Object.entries(assets)) {
+    const markup = read(file);
+    for (const asset of names) {
+      const version =
+        authoringReleases[asset] ||
+        (asset === 'knowledge.js'
+          ? '20261011-research-2'
+          : asset === 'knowledge-workspace.js'
+            ? '20261011-research-1'
+            : asset === 'learning-analytics.js'
+              ? '20261011-records-4'
+              : ['learning-analytics.css', 'learning-guide.js'].includes(asset)
+                ? '20261011-records-2'
+                : humanAssets.has(asset)
+                  ? '20261011-human-2'
+                  : annotationAssets.has(asset)
+                    ? '20261010-annotation-3'
+                    : release);
+      assert.ok(markup.includes(`="/${asset}?v=${version}"`), `${file}: ${asset}`);
+      assert.ok(fs.existsSync(path.join(root, 'public', asset)), `${asset} exists locally`);
+    }
+  }
+});
 const SECRET = 'private-course-scoring-contract-marker';
 const quiz = (fence = '```', newline = '\n') =>
   [
@@ -184,9 +274,8 @@ async function mapFixture(t) {
       requireAuth: async (request) => user(request),
     }),
   );
-  const server = await new Promise((resolve) => {
-    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
-  });
+  const server = http.createServer(app);
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -282,23 +371,37 @@ function assertBefore(scripts, earlier, later) {
   assert.ok(scripts.indexOf(earlier) < scripts.indexOf(later), `${earlier} must precede ${later}`);
 }
 
-test('user administration loads teacher identity and learning analytics resources together', () => {
+test('user administration retains current certification controls alongside learning analytics and research', () => {
   const html = read('public/adminusers.html');
   const scripts = scriptOrder(html);
   const styles = [...html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/g)].map(
     (match) => match[1].split('?')[0],
   );
-  for (const stylesheet of ['/account-identity.css', '/learning-analytics.css']) {
+  for (const stylesheet of [
+    '/account-identity.css',
+    '/user-certifications.css',
+    '/learning-analytics.css',
+    '/learning-research.css',
+  ]) {
     assert.equal(styles.filter((source) => source === stylesheet).length, 1);
     assert.ok(read(`public${stylesheet}`).trim());
   }
-  for (const script of ['/admin-account-credentials.js', '/learning-analytics.js']) {
+  for (const script of [
+    '/admin-account-credentials.js',
+    '/admin-certifications.js',
+    '/learning-analytics.js',
+    '/learning-research.js',
+  ]) {
     assert.equal(scripts.filter((source) => source === script).length, 1);
     assertBefore(scripts, '/app.js', script);
     assert.ok(read(`public${script}`).trim());
   }
   assert.match(html, /id="admin-student-requests"/);
   assert.match(html, /id="admin-learning-data"/);
+  assert.match(html, /id="admin-platform-research"/);
+  assert.match(html, /data-learning-research-admin/);
+  assert.match(html, /id="certifications"/);
+  assert.match(html, /id="admin-certification-list"/);
 });
 
 test('CI retains teacher account and learning regression suites after synchronization', () => {
@@ -365,7 +468,13 @@ test('six learning tools share one Max input and annotation questions only open 
   assert.doesNotMatch(html, /id="learning-(?:advice|concern|advice-generate|advice-save)"/);
   const workspace = read('public/knowledge-workspace.js');
   assert.doesNotMatch(workspace, /streamKnowledgeRagResponse\s*\(/);
-  assert.match(workspace, /knowledge:annotation-ask[\s\S]{0,220}openInteraction\('max'/);
+  const annotationAsk = workspace.match(
+    /page\.addEventListener\('knowledge:annotation-ask',[\s\S]*?\n {2}\}\);/,
+  )?.[0];
+  assert.ok(annotationAsk);
+  assert.match(annotationAsk, /openInteraction\(\s*'max'/);
+  assert.match(annotationAsk, /quote: anchor\.quote/);
+  assert.doesNotMatch(annotationAsk, /submitChatPrompt|streamKnowledgeRagResponse/);
   const knowledge = read('public/knowledge.js');
   const openHandler = knowledge.match(
     /page\.addEventListener\('knowledge:open-interaction',[\s\S]*?\n {2}\}\);/,

@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { isDeepStrictEqual } = require('node:util');
-const { canManageCourse, isValidNodeId } = require('./course-maps');
+const { canManageCourse, getOriginDocumentVersion, isValidNodeId } = require('./course-maps');
 
 const ID = /^[1-9]\d{0,18}$/;
 const KEY = /^[a-f0-9-]{36}$/i;
@@ -24,7 +24,8 @@ function object(value, label) {
     throw new LearningError(400, `${label}格式无效`);
   return value;
 }
-function documentVersion(context) {
+function documentVersion(context, section = 'body') {
+  if (section === 'origin') return getOriginDocumentVersion(context);
   return crypto
     .createHash('sha256')
     .update(context.document_markdown || '')
@@ -32,6 +33,8 @@ function documentVersion(context) {
 }
 function validateAnchor(value) {
   const anchor = object(value, '原文定位');
+  if (anchor.section !== undefined && !['body', 'origin'].includes(anchor.section))
+    throw new LearningError(400, '原文区域无效');
   const range = object(anchor.range, '文字范围');
   const nodeId = field(anchor.nodeId, 120, true);
   const version = field(anchor.documentVersion, 64, true);
@@ -67,6 +70,7 @@ function validateAnchor(value) {
   };
   return {
     nodeId,
+    ...(anchor.section === undefined ? {} : { section: anchor.section }),
     documentVersion: version.toLowerCase(),
     blockAnchor,
     range: { start: range.start, end: range.end },
@@ -184,13 +188,16 @@ function metadataFor(entry) {
 }
 function prepareEntryMetadata(entry, context, previous) {
   const next = metadataFor(entry);
-  const version = documentVersion(context);
   for (const anchor of [next.annotation?.anchor, next.anchor].filter(Boolean)) {
+    const version = documentVersion(context, anchor.section || 'body');
     if (anchor.nodeId !== context.node_id) throw new LearningError(400, '评注必须属于当前知识点');
     if (anchor.documentVersion !== version) {
       const priorAnchor = previous?.annotation?.anchor || previous?.anchor;
       if (!priorAnchor || !isDeepStrictEqual(priorAnchor, anchor))
-        throw new LearningError(409, '课程正文已更新，请重新选择原文；当前评注输入不会丢失');
+        throw new LearningError(
+          409,
+          `${anchor.section === 'origin' ? '知识起源' : '课程正文'}已更新，请重新选择原文；当前评注输入不会丢失`,
+        );
     } else anchor.documentVersion = version;
   }
   // Ordinary note edits preserve an existing private annotation when omitted.
@@ -287,7 +294,13 @@ function createMysqlLearningStore(pool) {
   return {
     async context(slug, point) {
       const [rows] = await pool.execute(
-        'SELECT c.id AS course_id, n.node_id, n.document_markdown FROM courses c JOIN course_map_nodes n ON n.course_id = c.id WHERE c.slug = ? AND c.is_active = 1 AND n.node_id = ? LIMIT 1',
+        `SELECT c.id AS course_id, n.node_id, n.title, n.document_markdown,
+                s.knowledge_markdown, s.basic_info_markdown, s.applications_markdown
+         FROM courses c
+         JOIN course_map_nodes n ON n.course_id = c.id
+         LEFT JOIN course_map_node_sections s
+           ON s.course_id = n.course_id AND s.node_id = n.node_id
+         WHERE c.slug = ? AND c.is_active = 1 AND n.node_id = ? LIMIT 1`,
         [slug, point],
       );
       return rows[0] || null;
@@ -371,11 +384,27 @@ function createMysqlLearningStore(pool) {
       );
       return result.affectedRows > 0;
     },
-    async remove(user, context, id) {
+    async remove(user, context, id, revision) {
       const [result] = await pool.execute(
-        "DELETE FROM learning_entries WHERE id = ? AND user_id = ? AND course_id = ? AND node_id = ? AND kind IN ('note', 'reflection', 'path')",
-        [id, user.id, context.course_id, context.node_id],
+        `DELETE FROM learning_entries WHERE id = ? AND user_id = ? AND course_id = ? AND node_id = ? AND kind IN ('note', 'reflection', 'path')${revision === undefined ? '' : ' AND revision = ?'}`,
+        [
+          id,
+          user.id,
+          context.course_id,
+          context.node_id,
+          ...(revision === undefined ? [] : [revision]),
+        ],
       );
+      if (!result.affectedRows && revision !== undefined) {
+        // A conditional delete must not erase a newer edit from another device.
+        // Only an owned, deletable record can disclose a revision conflict.
+        const [rows] = await pool.execute(
+          "SELECT id FROM learning_entries WHERE id = ? AND user_id = ? AND course_id = ? AND node_id = ? AND kind IN ('note', 'reflection', 'path') LIMIT 1",
+          [id, user.id, context.course_id, context.node_id],
+        );
+        if (rows.length)
+          throw new LearningError(409, '个人记录已变更，请刷新后核对；当前内容不会丢失');
+      }
       return result.affectedRows > 0;
     },
     async review(user, context, id, decision, reply) {
@@ -476,7 +505,10 @@ function createLearningWorkspaceRouter({
   router.delete(
     '/:slug/:point/entries/:id',
     route(async (req, res, user, context) => {
-      if (!(await store.remove(user, context, req.params.id)))
+      const revision = req.body?.revision;
+      if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 1))
+        throw new LearningError(400, '请提供有效的个人记录版本号');
+      if (!(await store.remove(user, context, req.params.id, revision)))
         throw new LearningError(404, '个人记录不存在或不可删除');
       res.json({ ok: true });
     }),

@@ -6,18 +6,17 @@ const {
   documentVersion,
 } = require('../../backend/learning-workspace');
 
-function createMemoryLearningStore() {
+function createMemoryLearningStore({ allowedPathTargets = null } = {}) {
   const rows = [];
   let serial = 0;
   const owned = (row, user, context) =>
     row.user === user.id && row.course === context.course_id && row.point === context.node_id;
   const record = ({ user, course, point, key, ...row }) => ({ ...row });
-  function validatePathContext(entry) {
-    if (
-      (entry.path || []).some(
-        (step) => step.point && !['SS-01-00', 'SS-01-01', 'SS-01-02'].includes(step.point),
-      )
-    )
+  function validatePathContext(entry, context) {
+    const allowed = allowedPathTargets
+      ? allowedPathTargets.get(String(context.course_id)) || new Set()
+      : new Set(['SS-01-00', 'SS-01-01', 'SS-01-02']);
+    if ((entry.path || []).some((step) => step.point && !allowed.has(step.point)))
       throw new LearningError(400, '学习路径中的目标必须属于当前课程');
   }
   return {
@@ -28,7 +27,11 @@ function createMemoryLearningStore() {
         ? {
             course_id: slug === 'signals' ? 1 : 2,
             node_id: point,
+            title: '学习预览知识点',
             document_markdown: '学习预览正文',
+            knowledge_markdown: '学习预览正文',
+            basic_info_markdown: '',
+            applications_markdown: '## 知识起源\n\n学习预览起源',
           }
         : null;
     },
@@ -53,7 +56,7 @@ function createMemoryLearningStore() {
         .map(record);
     },
     async create(user, context, entry, key) {
-      validatePathContext(entry);
+      validatePathContext(entry, context);
       const existing = rows.find((row) => row.user === user.id && row.key === key);
       if (existing) {
         if (
@@ -83,7 +86,7 @@ function createMemoryLearningStore() {
       return record(row);
     },
     async update(user, context, id, entry, revision) {
-      validatePathContext(entry);
+      validatePathContext(entry, context);
       const row = rows.find(
         (item) =>
           item.id === id &&
@@ -104,7 +107,7 @@ function createMemoryLearningStore() {
       });
       return true;
     },
-    async remove(user, context, id) {
+    async remove(user, context, id, revision) {
       const index = rows.findIndex(
         (row) =>
           row.id === id &&
@@ -112,6 +115,8 @@ function createMemoryLearningStore() {
           ['note', 'reflection', 'path'].includes(row.kind),
       );
       if (index < 0) return false;
+      if (revision !== undefined && rows[index].revision !== revision)
+        throw new LearningError(409, '个人记录已变更，请刷新后核对；当前内容不会丢失');
       rows.splice(index, 1);
       return true;
     },

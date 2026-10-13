@@ -10,6 +10,7 @@ const {
   recommendedGoal,
   buildStrategy,
 } = require('../public/learning-strategies');
+const { validateEntry } = require('../backend/learning-workspace');
 
 test('four self-described starting points and three intentions define twelve repeatable suggestions', () => {
   assert.deepEqual(Object.values(LEVELS), ['第一次学', '不甚熟悉', '能独立做题', '完整掌握']);
@@ -37,7 +38,7 @@ test('four self-described starting points and three intentions define twelve rep
       assert.match(plan.hint, /非测评结论/);
       assert.match(plan.hint, /不等于题目难度/);
       assert.match(plan.hint, /不限制资料或判定星级/);
-      assert.match(plan.hint, /Max应引导思考，不代做/);
+      assert.match(plan.hint, /Max 应引导思考，不代做/);
       assert.doesNotMatch(plan.hint, /已通过|授星|高能力|低能力/);
       labels.add(plan.label);
       hints.add(plan.hint);
@@ -113,6 +114,64 @@ test('origin and relations are real optional routes, independent of a missing bo
     ).steps[0].questionId,
     undefined,
   );
+});
+
+test('annotation suggestions name a real selected-passage action instead of an absent notebook', () => {
+  for (const level of Object.keys(LEVELS))
+    for (const goal of Object.keys(GOALS)) {
+      const plan = buildStrategy({ level, goal }, { hasContent: true, hasQuestions: false });
+      for (const action of plan.steps.filter((entry) => entry.tool === 'notes')) {
+        assert.match(action.description, /选中/);
+        assert.match(action.description, /批注|高亮/);
+      }
+      assert.match(plan.hint, /求助、跳过或暂停不表示失败/);
+    }
+  const uncertain = buildStrategy({ level: 'familiar', goal: 'concepts' });
+  assert.match(uncertain.steps[0].description, /一处/);
+  assert.doesNotMatch(uncertain.steps[0].description, /先写能解释和不能解释/);
+});
+
+test('missing annotation material opens optional help, or real origin text, never an empty notes tool', () => {
+  for (const level of Object.keys(LEVELS))
+    for (const goal of Object.keys(GOALS)) {
+      const missing = buildStrategy({ level, goal }, { hasContent: false, hasQuestions: false });
+      assert.equal(
+        missing.steps.some((action) => action.tool === 'notes'),
+        false,
+      );
+      assert.ok(missing.steps.some((action) => action.taskId === 'ask-max'));
+      for (const action of missing.steps.filter((entry) => entry.taskId === 'ask-max'))
+        assert.equal(
+          action.tool,
+          'discussion',
+          'Uses an existing persisted tool, not a new grading mode',
+        );
+      const origin = buildStrategy({ level, goal }, { hasContent: false, hasOrigin: true });
+      assert.equal(
+        origin.steps.some((action) => action.tool === 'notes'),
+        false,
+      );
+      for (const action of origin.steps.filter((entry) => entry.description.includes('批注')))
+        assert.equal(action.view, 'origin');
+    }
+});
+
+test('all help and origin-only paths round-trip the existing server contract without new metadata types', () => {
+  for (const level of Object.keys(LEVELS))
+    for (const goal of Object.keys(GOALS))
+      for (const options of [
+        { hasContent: false, hasQuestions: false },
+        { hasContent: false, hasOrigin: true },
+      ]) {
+        const plan = buildStrategy({ level, goal }, options);
+        const entry = validateEntry({
+          kind: 'path',
+          title: '我的学习路径',
+          content: '自己选的步骤',
+          path: plan.steps,
+        });
+        assert.deepEqual(entry.path, plan.steps);
+      }
 });
 
 test('the model is pure and exports in a browser without network, storage or DOM', () => {
