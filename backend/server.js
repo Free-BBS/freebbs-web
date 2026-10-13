@@ -41,6 +41,15 @@ const {
 } = require('./discussion-interactions');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
+const {
+  policy: privacyPolicy,
+  PRIVACY_POLICY_VERSION,
+  ensurePrivacyPolicySchema,
+  createPrivacyPolicyService,
+} = require('./privacy-policy');
+
+const privacyPolicyService = createPrivacyPolicyService({ pool });
+const { createPrivacyPolicyAccess } = require('./privacy-policy-access');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const { createFrontendToolsRouter } = require('./frontend-tools');
 const { createFrontendToolGenerator } = require('./frontend-tool-generation');
@@ -77,7 +86,10 @@ const {
   createAvatarUploadService,
   createMysqlAvatarStore,
 } = require('./avatar-upload');
-const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
+const {
+  mountAiDialogExportRoutes,
+  ensureAiDialogExportAudit,
+} = require('./ai-dialog-export-router');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { maxAgentRoute } = require('./agent-routing');
@@ -393,7 +405,7 @@ const moderationAiTest = createModerationAiTest({
 });
 const backgroundTasks = createBackgroundTaskService({
   pool,
-  getUser: getUserById,
+  getUser: getPrivacyAcceptedUser,
   notifyCompletion: (event) => notifications.notifyBackgroundTask(event),
 });
 let maxDocumentStore = null;
@@ -501,6 +513,13 @@ app.use((request, response, next) => {
 
   next();
 });
+
+app.use(
+  createPrivacyPolicyAccess({
+    verifyToken: verify,
+    requireAccepted: (userId) => privacyPolicyService.requireAccepted(userId),
+  }),
+);
 
 app.use(
   '/api/workbench/connectors/tsinghua/homework',
@@ -2838,7 +2857,17 @@ async function getUserByIdFromUsername(username) {
   return rows[0] || null;
 }
 
-async function requireAuth(request, response, { allowInvalidUsername = false } = {}) {
+async function getPrivacyAcceptedUser(id) {
+  const user = await getUserById(id);
+  if (user) await privacyPolicyService.requireAccepted(user.id);
+  return user;
+}
+
+async function requireAuth(
+  request,
+  response,
+  { allowInvalidUsername = false, allowPrivacyPending = false } = {},
+) {
   const authorization = request.headers.authorization || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   const payload = verify(token);
@@ -2857,7 +2886,49 @@ async function requireAuth(request, response, { allowInvalidUsername = false } =
 
   if (!allowInvalidUsername && !enforceUsername(user, response)) return null;
 
+  if (!allowPrivacyPending) {
+    try {
+      if (String(request.privacyPolicyUserId) !== String(user.id))
+        request.privacyPolicy = await privacyPolicyService.requireAccepted(user.id);
+    } catch (error) {
+      response.status(error.status || 503).json({
+        message: error.status ? error.message : '暂时无法确认隐私政策状态，请稍后重试',
+        code: error.status ? error.code : 'privacy_policy_unavailable',
+      });
+      return null;
+    }
+  }
+
   return user;
+}
+
+app.get('/api/privacy-policy', (_request, response) => {
+  response.set('Cache-Control', 'no-store').json(privacyPolicy);
+});
+for (const [method, route, operation] of [
+  ['get', '/api/privacy-policy/status', (userId) => privacyPolicyService.status(userId)],
+  [
+    'post',
+    '/api/privacy-policy/accept',
+    (userId, body) => privacyPolicyService.accept(userId, body),
+  ],
+]) {
+  app[method](route, async (request, response) => {
+    response.set('Cache-Control', 'no-store');
+    try {
+      const user = await requireAuth(request, response, {
+        allowInvalidUsername: true,
+        allowPrivacyPending: true,
+      });
+      if (!user) return;
+      response.json(await operation(user.id, request.body));
+    } catch (error) {
+      response.status(error.status || 503).json({
+        message: error.status ? error.message : '暂时无法处理隐私政策确认，请稍后重试',
+        code: error.status ? error.code : 'privacy_policy_unavailable',
+      });
+    }
+  });
 }
 
 async function getOptionalAuthUser(request) {
@@ -4836,7 +4907,7 @@ app.post('/api/discussion/posts', async (request, response) => {
           },
           attachmentIds,
           requestId: request.body.requestId,
-          moderationNoticeVersion: request.body.moderationNoticeVersion,
+          moderationNoticeVersion: PRIVACY_POLICY_VERSION,
         }),
       );
       response.status(202).json({ ok: true, message: '已提交审核', moderation: submission });
@@ -5295,7 +5366,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
           },
           attachmentIds,
           requestId: request.body.requestId,
-          moderationNoticeVersion: request.body.moderationNoticeVersion,
+          moderationNoticeVersion: PRIVACY_POLICY_VERSION,
         });
       });
       response
@@ -5549,6 +5620,7 @@ app.post('/api/auth/register', async (request, response) => {
     response.status(201).json({
       token: issueToken(user),
       user,
+      privacyPolicy: await privacyPolicyService.status(user.id),
     });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
@@ -5749,12 +5821,14 @@ app.post('/api/auth/login', async (request, response) => {
       return;
     }
 
+    const privacyStatus = await privacyPolicyService.confirmLogin(row.id, request.body);
     await loginRateLimiter.resetAccount(row);
     const user = toUserProfile(row);
 
     response.json({
       token: issueToken(user),
       user,
+      privacyPolicy: privacyStatus,
     });
   } catch (error) {
     response.status(error.status || 500).json({
@@ -5852,6 +5926,7 @@ app.post('/api/auth/reset-password', async (request, response) => {
       message: '密码已重设',
       token: issueToken(user),
       user,
+      privacyPolicy: await privacyPolicyService.status(user.id),
     });
   } catch (error) {
     response.status(500).json({ message: '重设密码失败', detail: error.message });
@@ -5860,7 +5935,10 @@ app.post('/api/auth/reset-password', async (request, response) => {
 
 app.get('/api/auth/me', async (request, response) => {
   try {
-    const user = await requireAuth(request, response, { allowInvalidUsername: true });
+    const user = await requireAuth(request, response, {
+      allowInvalidUsername: true,
+      allowPrivacyPending: true,
+    });
 
     if (!user) {
       return;
@@ -6205,46 +6283,7 @@ app.get('/api/admin/users', async (request, response) => {
   }
 });
 
-app.get('/api/admin/ai-dialogs/export', async (request, response) => {
-  try {
-    const adminUser = await requireAdmin(request, response);
-
-    if (!adminUser) {
-      return;
-    }
-
-    await ensureAiDialogTables();
-    const exportedAt = new Date();
-    const [[users], [dialogs]] = await Promise.all([
-      pool.execute(
-        `SELECT id, uid, username, full_name, student_id, role
-         FROM users
-         ORDER BY id ASC`,
-      ),
-      pool.execute(
-        `SELECT id, did, user_id, title, messages_json, created_at, updated_at
-         FROM ai_dialogs
-         ORDER BY user_id ASC, created_at ASC, id ASC`,
-      ),
-    ]);
-    const payload = buildAiDialogExport({
-      users,
-      dialogs,
-      exportedBy: adminUser,
-      exportedAt,
-    });
-
-    response.set({
-      'Cache-Control': 'no-store',
-      'Content-Disposition': `attachment; filename="${buildAiDialogExportFileName(exportedAt)}"`,
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Content-Type-Options': 'nosniff',
-    });
-    response.send(JSON.stringify(payload, null, 2));
-  } catch (error) {
-    response.status(500).json({ message: '导出 AI 聊天记录失败', detail: error.message });
-  }
-});
+mountAiDialogExportRoutes(app, { pool, requireAdmin, ensureAiDialogTables });
 
 app.get('/api/admin/system-settings/model', async (request, response) => {
   try {
@@ -6697,6 +6736,8 @@ async function start() {
   await ensureWorkbenchTables(pool);
   await ensureCampusConnectorTables(pool);
   await ensureAiDialogTables();
+  await ensureAiDialogExportAudit(pool);
+  await ensurePrivacyPolicySchema(pool);
   await ensureBackgroundTaskTables(pool);
   await ensureFortuneTables();
   await ensureEconomyTables();
@@ -6734,7 +6775,7 @@ async function start() {
     repositoryRoot: path.join(__dirname, '..'),
     authClient: createDevelopmentAuthClient({
       verifyToken: verify,
-      getUserById,
+      getUserById: getPrivacyAcceptedUser,
       toUserProfile,
     }),
     userDirectory: createDevelopmentUserDirectory(pool),

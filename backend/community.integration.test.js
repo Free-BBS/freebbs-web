@@ -17,7 +17,11 @@ const {
   generateBandChallenge,
   generateWienChallenge,
 } = require('./registration-guard');
-const { solveAuthChallenge: solveChallenge } = require('./test-helpers/auth');
+const {
+  solveAuthChallenge: solveChallenge,
+  privacyAcknowledgement,
+  acceptCurrentPrivacy,
+} = require('./test-helpers/auth');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 
 const runProgram = promisify(execFile);
@@ -213,7 +217,11 @@ test(
       { token, method = 'GET', body, expected = 200, rawRegistration = false } = {},
     ) {
       const requestBody =
-        route === '/auth/register' && !rawRegistration ? await registrationPayload(body) : body;
+        route === '/auth/register' && !rawRegistration
+          ? await registrationPayload(body)
+          : route === '/auth/login'
+            ? { ...privacyAcknowledgement(), ...body }
+            : body;
       const response = await fetch(`${base}${route}`, {
         method,
         headers: {
@@ -224,6 +232,12 @@ test(
       });
       const result = await response.json();
       assert.equal(response.status, expected, `${method} ${route}: ${JSON.stringify(result)}`);
+      if (
+        response.ok &&
+        result.token &&
+        ['/auth/login', '/auth/register', '/auth/reset-password'].includes(route)
+      )
+        result.privacyPolicy = await acceptCurrentPrivacy(base, result.token);
       return result;
     }
     async function login(identifier) {

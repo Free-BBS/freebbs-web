@@ -1684,6 +1684,14 @@
           `${(mine ? authorStatus : STATUS_LABELS[submission.status]) || '未知状态'} · ${submission.kind === 'comment' ? '评论' : '帖子'} · ${formatTime(submission.createdAt)}`,
           'moderation-meta',
         );
+        if (mine && submission.status === 'approved')
+          meta.replaceChildren(
+            node('strong', '已发布', 'moderation-published-badge'),
+            node(
+              'span',
+              ` · ${submission.kind === 'comment' ? '评论' : '帖子'} · ${formatTime(submission.createdAt)}`,
+            ),
+          );
         const author = node('p', `提交者：${submission.author?.username || '用户'}`);
         const body = node('pre', submission.contentMarkdown || '', 'moderation-raw');
         const images = node('div', undefined, 'moderation-images');

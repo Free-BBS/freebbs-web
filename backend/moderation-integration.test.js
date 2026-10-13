@@ -148,6 +148,7 @@ test('actual discussion handlers quarantine posts/comments without publishing, r
   const context = {
     app,
     config: { discussionModerationEnabled: true },
+    PRIVACY_POLICY_VERSION: 'test-global-policy',
     ensureDiscussionTables: async () => {},
     requireAuth: async () => ({ id: 7, username: 'writer', is_admin: false }),
     getDiscussionBoardBySlug: async () => ({ id: 2, slug: 'daily' }),
@@ -178,6 +179,7 @@ test('actual discussion handlers quarantine posts/comments without publishing, r
         title: '合成测试',
         contentMarkdown: '待审正文',
         requestId: randomUUID(),
+        moderationNoticeVersion: 'forged-client-version',
       },
     ],
     [
@@ -200,6 +202,8 @@ test('actual discussion handlers quarantine posts/comments without publishing, r
   assert.equal(submissions[0].kind, 'post');
   assert.equal(submissions[1].kind, 'comment');
   assert.equal(submissions[1].authorId, 7);
+  assert.equal(submissions[0].moderationNoticeVersion, 'test-global-policy');
+  assert.equal(submissions[1].moderationNoticeVersion, 'test-global-policy');
 });
 
 test('review HTTP uses current authenticated identity and never exposes private paths', async (t) => {

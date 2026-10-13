@@ -18,6 +18,8 @@ const TABLES = [
   'moderation_auto_control',
   'moderation_auto_jobs',
   'moderation_image_reviews',
+  'privacy_policy_acceptances',
+  'ai_dialog_export_audit',
 ];
 
 async function inspect({ settings = config, connect, configurationOnly = false } = {}) {
@@ -56,8 +58,8 @@ async function inspect({ settings = config, connect, configurationOnly = false }
         multipleStatements: false,
       });
       const [tables] = await db.execute(
-        'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ?',
-        ['moderation_%'],
+        `SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (${TABLES.map(() => '?').join(', ')})`,
+        TABLES,
       );
       const names = new Set(tables.map((row) => row.name));
       report.databaseChecked = true;

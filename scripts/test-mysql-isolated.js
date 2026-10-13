@@ -27,12 +27,21 @@ const RETENTION_TEST_FILE = 'backend/moderation-retention.mysql.test.js';
 const RETENTION_TEST_TITLE =
   'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically';
 
+const CONSENT_TEST_FILE = 'backend/privacy-policy.mysql.test.js';
+const CONSENT_TEST_TITLE =
+  'isolated MySQL: privacy consent persists across restarts and concurrent confirmations without first-login bypass';
+const EXPORT_TEST_FILE = 'backend/ai-dialog-export.mysql.test.js';
+const EXPORT_TEST_TITLE =
+  'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations';
+
 const TEST_FILES = [
   MODERATION_TEST_FILE,
   PRIVACY_TEST_FILE,
   AUDIT_TEST_FILE,
   AUTOMATION_TEST_FILE,
   RETENTION_TEST_FILE,
+  CONSENT_TEST_FILE,
+  EXPORT_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -101,6 +110,8 @@ const REQUIRED_MYSQL_TESTS = [
   AUDIT_TEST_TITLE,
   AUTOMATION_TEST_TITLE,
   RETENTION_TEST_TITLE,
+  CONSENT_TEST_TITLE,
+  EXPORT_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -134,6 +145,8 @@ function selectMysqlTests(args = []) {
         AUDIT_TEST_FILE,
         AUTOMATION_TEST_FILE,
         RETENTION_TEST_FILE,
+        CONSENT_TEST_FILE,
+        EXPORT_TEST_FILE,
       ],
       requiredTests: [
         MODERATION_TEST_TITLE,
@@ -141,6 +154,8 @@ function selectMysqlTests(args = []) {
         AUDIT_TEST_TITLE,
         AUTOMATION_TEST_TITLE,
         RETENTION_TEST_TITLE,
+        CONSENT_TEST_TITLE,
+        EXPORT_TEST_TITLE,
       ],
     };
   if (workbenchOnly)

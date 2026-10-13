@@ -163,6 +163,8 @@ test('the isolated runner enables its named test files with matching database op
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
     'backend/moderation-retention.mysql.test.js',
+    'backend/privacy-policy.mysql.test.js',
+    'backend/ai-dialog-export.mysql.test.js',
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
     'backend/circuit-progress.test.js',
@@ -184,7 +186,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/schedule-series.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 24);
+  assert.equal(new Set(TEST_FILES).size, 26);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -209,7 +211,7 @@ test('the isolated runner enables its named test files with matching database op
 });
 
 test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 24);
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 26);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
@@ -247,6 +249,8 @@ test('moderation-only requires publication, privacy and policy audit suite resul
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
     'backend/moderation-retention.mysql.test.js',
+    'backend/privacy-policy.mysql.test.js',
+    'backend/ai-dialog-export.mysql.test.js',
   ]);
   assert.deepEqual(selected.requiredTests, [
     'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic',
@@ -254,6 +258,8 @@ test('moderation-only requires publication, privacy and policy audit suite resul
     'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts',
     'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic',
     'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically',
+    'isolated MySQL: privacy consent persists across restarts and concurrent confirmations without first-login bypass',
+    'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations',
   ]);
   const success = selected.requiredTests
     .map((name, index) => `ok ${index + 1} - ${name}`)

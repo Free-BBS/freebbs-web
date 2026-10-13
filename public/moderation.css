@@ -1038,6 +1038,27 @@ main {
   }
 }
 
+.moderation-published-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  margin: 0 4px 4px 0;
+  border: 2px solid #248156;
+  border-radius: 10px;
+  background: #e8f7ed;
+  color: #155d39;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 800;
+}
+@media (prefers-color-scheme: dark) {
+  .moderation-published-badge {
+    border-color: #77c99d;
+    background: #193e2c;
+    color: #adf0c9;
+  }
+}
+
 .moderation-support-library {
   margin-top: 24px;
   padding: 0 18px 18px;

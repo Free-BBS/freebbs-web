@@ -19,7 +19,7 @@
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
-    "test:admin-users": "node --test backend/ai-dialog-export.test.js scripts/admin-users-page.test.js",
+    "test:admin-users": "node --test backend/ai-dialog-export.test.js backend/ai-dialog-export-controls.test.js scripts/admin-users-page.test.js",
     "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-image-results.test.js scripts/max-tetris.test.js scripts/max-images.test.js scripts/max-files.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js backend/max-background-stream.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js backend/agent-circuits.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-layout.test.js scripts/discussion-threads.test.js scripts/discussion-markdown.test.js scripts/discussion-previews.test.js scripts/tool-embeds.test.js backend/discussion-preview.test.js backend/discussion-visibility.test.js scripts/discussion-visibility.test.js",
@@ -120,7 +120,8 @@
     "preview:staff-teacher-calendar": "node scripts/preview-staff-teacher-calendar.js",
     "test:schedule-series:browser": "node scripts/check-schedule-series-browser.js",
     "test:staff-teacher-calendar:browser": "node scripts/check-staff-teacher-calendar-browser.js",
-    "test:moderation-images": "node --test backend/moderation-image-safety.test.js scripts/moderation-image-client.test.js scripts/moderation-image-fixtures.test.js scripts/moderation-image-quality.test.js scripts/moderation-image-evaluation.test.js"
+    "test:moderation-images": "node --test backend/moderation-image-safety.test.js scripts/moderation-image-client.test.js scripts/moderation-image-fixtures.test.js scripts/moderation-image-quality.test.js scripts/moderation-image-evaluation.test.js",
+    "test:privacy-policy": "node --test backend/privacy-policy.test.js backend/privacy-policy-access.test.js scripts/privacy-production-preflight.test.js scripts/moderation-notice.test.js scripts/registration-page.test.js scripts/privacy-consent.test.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",

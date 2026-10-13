@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const {
   NOTICE_VERSION,
   noticeFor,
+  requiredNoticeVersion,
   withSubmissionNotice,
   productionConfigurationIssues,
   assertProductionConfiguration,
@@ -38,14 +39,15 @@ test('production supports a separate data server while test APIs stay disabled',
   assert.deepEqual(productionConfigurationIssues(config()), []);
   assert.equal(automationEnvironmentEnabled(config()), true);
   assert.equal(aiTestEnvironmentEnabled(config()), false);
-  assert.equal(noticeFor(config()).required, true);
+  assert.equal(noticeFor(config()).required, false);
+  assert.equal(requiredNoticeVersion(config()), NOTICE_VERSION);
   assert.equal(noticeFor({}).required, false);
 });
 
-test('the ninety-day notice has a new version and refuses the old thirty-day acceptance', () => {
-  assert.equal(NOTICE_VERSION, 'moderation-data-2026-10-13-v2');
-  assert.match(noticeFor(config()).paragraphs.join(' '), /保存 90 天/);
-  assert.doesNotMatch(noticeFor(config()).paragraphs.join(' '), /保存 30 天/);
+test('moderation uses global privacy acceptance and refuses legacy per-post consent', () => {
+  const { policy } = require('./privacy-policy');
+  assert.equal(NOTICE_VERSION, policy.version);
+  assert.equal(noticeFor(config()).confirmation, 'login');
   assert.throws(
     () =>
       withSubmissionNotice(
@@ -111,10 +113,10 @@ test('manual production moderation remains possible before provider review', () 
   };
   assert.deepEqual(productionConfigurationIssues(value), []);
   assert.equal(automationEnvironmentEnabled(value), false);
-  assert.equal(noticeFor(value).required, true);
+  assert.equal(noticeFor(value).required, false);
 });
 
-test('desktop can accept the notice without loosening the local test boundary', () => {
+test('desktop also confirms the global policy at login without per-post dialogs', () => {
   const value = {
     discussionModerationEnabled: true,
     discussionModerationEnvironment: 'test',
@@ -123,7 +125,8 @@ test('desktop can accept the notice without loosening the local test boundary', 
     apiHost: '127.0.0.1',
     db: { host: '127.0.0.1' },
   };
-  assert.equal(noticeFor(value).required, true);
+  assert.equal(noticeFor(value).required, false);
+  assert.equal(requiredNoticeVersion(value), NOTICE_VERSION);
   assert.equal(noticeFor({ ...value, publicWebUrl: 'https://public.example' }).required, false);
   assert.equal(noticeFor({ ...value, db: { host: '10.20.30.40' } }).required, false);
 });
@@ -167,6 +170,8 @@ test('preflight only reads metadata and never exposes credentials or database er
     '068_moderation_policy_audit.sql',
     '069_moderation_automation.sql',
     '070_moderation_image_reviews.sql',
+    '072_privacy_policy_acceptance.sql',
+    '073_ai_dialog_export_audit.sql',
   ];
   const declared = migrationNames.flatMap((name) =>
     [

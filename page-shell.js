@@ -4,6 +4,7 @@ const SITE_FOOTER = `<footer class="site-footer site-footer-compact" data-shared
   <nav class="footer-links" aria-label="关于平台">
     <a href="/about">关于 FREE BBS</a>
     <a href="/staff">FREE BBS 工作人员名单</a>
+    <a href="/privacy">隐私政策</a>
     <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
     <a href="https://www.eesast.com">电子系学生科协</a>
   </nav>
@@ -34,6 +35,10 @@ function preparePageShell(source) {
   });
   if (!html.includes('href="/site-footer.css"'))
     html = html.replace('</head>', '<link rel="stylesheet" href="/site-footer.css"></head>');
+  if (!html.includes('href="/privacy-policy.css"'))
+    html = html.replace('</head>', '<link rel="stylesheet" href="/privacy-policy.css"></head>');
+  if (!html.includes('src="/privacy-consent.js"'))
+    html = html.replace('</head>', '<script src="/privacy-consent.js" defer></script></head>');
   // Apply saved font size and theme before any page content can paint. The same
   // preference module still executes once, before app.js, including on auth pages.
   const typography = /<script\b[^>]*src=["']\/typography\.js["'][^>]*>\s*<\/script>/;
