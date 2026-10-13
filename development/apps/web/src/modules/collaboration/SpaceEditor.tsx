@@ -4,13 +4,13 @@ import {
   DEPARTMENT_DIRECTORY,
   DEVELOPMENT_IDENTITY_SECTIONS,
   departmentsForRoles,
-  isDevelopmentBusinessAdmin,
   type CollaborationSpace,
   type CollaborationKind,
   type CollaborationColumn,
   type CollaborationSlot,
 } from '@freebbs-development/contracts';
 import { useAuth } from '../../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 import { kinds, iso, roleLabel, ToolIcon } from './collaborationTools.js';
 export function SpaceEditor({
   existing,
@@ -27,7 +27,7 @@ export function SpaceEditor({
 }) {
   const auth = useAuth();
   const [search] = useSearchParams();
-  const departments = isDevelopmentBusinessAdmin(auth.user?.roles ?? [])
+  const departments = isBusinessAdmin(auth.user)
     ? DEPARTMENT_DIRECTORY
     : departmentsForRoles(auth.user?.roles ?? []);
   const [step, setStep] = useState(0);

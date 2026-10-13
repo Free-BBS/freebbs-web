@@ -26,7 +26,7 @@ import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { listModuleManifests } from '../../core/modules/registry.js';
 import { ASSIGNABLE_ROLES } from '../admin/development-users-router.js';
-import { listSettingsUsers, updateSettingsUser } from './users.js';
+import { hasRecipientAccess, listSettingsUsers, updateSettingsUser } from './users.js';
 import {
   appendFeatureAudit,
   ownInbox,
@@ -38,6 +38,7 @@ export interface SystemSettingsOptions {
   store: DevelopmentStore;
   authenticate: (headers: AuthHeaders) => Promise<AuthenticationResult>;
   userDirectory?: UserDirectory;
+  allowedUids?: readonly string[];
   directory?: string;
   nodeEnvironment: string;
   authMode: 'demo' | 'main';
@@ -209,7 +210,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
         return;
       }
       if (
-        (admin && (result.user.previewing || !isDevelopmentBusinessAdmin(result.user.roles))) ||
+        (admin && (result.user.previewing || !isDevelopmentBusinessAdmin(result.user))) ||
         (result.user.previewing && !['GET', 'HEAD'].includes(request.method))
       )
         throw new HttpError(403, 'forbidden', '此身份无操作权限');
@@ -272,16 +273,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
       const user = await requireDirectory().get(userUid);
       const admitted =
         user &&
-        (options.authMode === 'demo' ||
-          grants.some(
-            (grant) =>
-              grant.status === 'active' &&
-              (grant.subjectUid
-                ? grant.subjectUid === user.uid
-                : grant.studentId
-                  ? grant.studentId === user.studentId
-                  : grant.username?.toLocaleLowerCase() === user.username.toLocaleLowerCase()),
-          ));
+        (options.authMode === 'demo' || hasRecipientAccess(user, grants, options.allowedUids));
       if (!user || !admitted)
         throw new HttpError(400, 'invalid_recipient', '接收者不存在或尚未获准进入发展端');
       result.push({
@@ -307,7 +299,13 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
   settings.get('/', async (_request, response) => {
     const state = await requireStorage().read();
     const [users, organizations, teams, modules, audits] = await Promise.all([
-      listSettingsUsers(options.store, requireDirectory(), '', options.authMode === 'demo'),
+      listSettingsUsers(
+        options.store,
+        requireDirectory(),
+        '',
+        options.authMode === 'demo',
+        options.allowedUids,
+      ),
       metadata(state),
       options.store.sportsTeams.list(),
       listModuleManifests(options.store),
@@ -338,6 +336,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
           .trim()
           .slice(0, 80),
         options.authMode === 'demo',
+        options.allowedUids,
       ),
     ),
   );
@@ -351,6 +350,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
         String(request.params.uid),
         parse(userInput, request.body),
         actor(response).uid,
+        options.allowedUids,
       ),
     ),
   );

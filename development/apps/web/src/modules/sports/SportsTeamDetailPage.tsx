@@ -20,7 +20,8 @@ import {
   type SportsTeamStatus,
   type SportsUser,
 } from './SportsPage.js';
-import { TeamShowcase } from './TeamShowcase.js';
+import { TeamHomepage } from './TeamHomepage.js';
+import { SportsCardForm } from './SportsCardForm.js';
 
 interface SportsTeamMemberRecord {
   id: string;
@@ -215,6 +216,7 @@ function RosterImport({
 }
 
 function TeamOperations({
+  canEditCard,
   canCreateCheckins,
   canReadCheckins,
   client,
@@ -222,6 +224,7 @@ function TeamOperations({
   onFeedback,
   onTeamUpdated,
 }: {
+  canEditCard: boolean;
   canCreateCheckins: boolean;
   canReadCheckins: boolean;
   client: DevelopmentApi;
@@ -393,50 +396,52 @@ function TeamOperations({
   const writable = team.status !== 'archived';
   return (
     <>
-      <section aria-labelledby="sports-team-edit-title">
-        <h3 id="sports-team-edit-title">队伍资料</h3>
-        {!editing ? (
-          <button type="button" disabled={busy} onClick={() => setEditing(true)}>
-            编辑队伍信息
-          </button>
-        ) : (
-          <form aria-label="编辑队伍信息" onSubmit={(event) => void saveTeam(event)}>
-            <label>
-              队伍名称
-              <input
-                required
-                value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              公开简介
-              <textarea
-                required
-                value={description}
-                onChange={(event) => setDescription(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              赛季
-              <input value={season} onChange={(event) => setSeason(event.currentTarget.value)} />
-            </label>
-            <label>
-              训练或比赛安排
-              <textarea
-                value={trainingSchedule}
-                onChange={(event) => setTrainingSchedule(event.currentTarget.value)}
-              />
-            </label>
-            <button type="submit" disabled={busy}>
-              保存队伍信息
+      {canEditCard && (
+        <section aria-labelledby="sports-team-edit-title">
+          <h3 id="sports-team-edit-title">队伍资料</h3>
+          {!editing ? (
+            <button type="button" disabled={busy} onClick={() => setEditing(true)}>
+              编辑队伍信息
             </button>
-            <button type="button" disabled={busy} onClick={() => setEditing(false)}>
-              取消编辑
-            </button>
-          </form>
-        )}
-      </section>
+          ) : (
+            <form aria-label="编辑队伍信息" onSubmit={(event) => void saveTeam(event)}>
+              <label>
+                队伍名称
+                <input
+                  required
+                  value={name}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                公开简介
+                <textarea
+                  required
+                  value={description}
+                  onChange={(event) => setDescription(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                赛季
+                <input value={season} onChange={(event) => setSeason(event.currentTarget.value)} />
+              </label>
+              <label>
+                训练或比赛安排
+                <textarea
+                  value={trainingSchedule}
+                  onChange={(event) => setTrainingSchedule(event.currentTarget.value)}
+                />
+              </label>
+              <button type="submit" disabled={busy}>
+                保存队伍信息
+              </button>
+              <button type="button" disabled={busy} onClick={() => setEditing(false)}>
+                取消编辑
+              </button>
+            </form>
+          )}
+        </section>
+      )}
       <section aria-labelledby="sports-members-title">
         <h3 id="sports-members-title">队员与队长</h3>
         {writable && (
@@ -546,24 +551,26 @@ function TeamOperations({
             ))}
         </section>
       )}
-      <section aria-label="队伍状态">
-        <h3>队伍状态</h3>
-        {team.status === 'draft' && (
-          <button type="button" disabled={busy} onClick={() => void transition('active')}>
-            启用队伍
-          </button>
-        )}
-        {team.status === 'active' && (
-          <button type="button" disabled={busy} onClick={() => void transition('archived')}>
-            归档队伍
-          </button>
-        )}
-        {team.status === 'archived' && (
-          <button type="button" disabled={busy} onClick={() => void transition('active')}>
-            恢复队伍
-          </button>
-        )}
-      </section>
+      {canEditCard && (
+        <section aria-label="队伍状态">
+          <h3>队伍状态</h3>
+          {team.status === 'draft' && (
+            <button type="button" disabled={busy} onClick={() => void transition('active')}>
+              启用队伍
+            </button>
+          )}
+          {team.status === 'active' && (
+            <button type="button" disabled={busy} onClick={() => void transition('archived')}>
+              归档队伍
+            </button>
+          )}
+          {team.status === 'archived' && (
+            <button type="button" disabled={busy} onClick={() => void transition('active')}>
+              恢复队伍
+            </button>
+          )}
+        </section>
+      )}
     </>
   );
 }
@@ -667,29 +674,98 @@ export function SportsTeamDetailPage({
   const [team, setTeam] = useState<SportsTeamRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [editingCard, setEditingCard] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
   const loadVersion = useRef(0);
   const actorUid = user?.uid ?? '';
+  const viewContext = useMemo(
+    () => ({ client: activeClient, user, teamId }),
+    [activeClient, user, teamId],
+  );
+  const currentView = useRef(viewContext);
+  currentView.current = viewContext;
+  const statusPending = useRef<AbortController | null>(null);
 
   const loadTeam = useCallback(async () => {
     const version = ++loadVersion.current;
     setError(null);
     setTeam(null);
+    setFeedback(null);
+    setEditingCard(false);
+    setStatusBusy(false);
     try {
       const teams = await activeClient.request<SportsTeamRecord[]>('/sports/teams');
       const found = teams.find((candidate) => candidate.id === teamId) ?? null;
-      if (version !== loadVersion.current) return;
+      if (version !== loadVersion.current || currentView.current !== viewContext) return;
       if (found === null) setError('未找到该代表队，或你没有访问权限。');
       setTeam(found);
     } catch (caught) {
-      if (version !== loadVersion.current) return;
+      if (version !== loadVersion.current || currentView.current !== viewContext) return;
       setError(`代表队加载失败：${errorMessage(caught)}`);
     }
-  }, [activeClient, actorUid, teamId]);
+  }, [activeClient, teamId, viewContext]);
   useEffect(() => {
     void loadTeam();
+    return () => {
+      ++loadVersion.current;
+      statusPending.current?.abort();
+      statusPending.current = null;
+    };
   }, [loadTeam]);
 
-  if (team === null)
+  const operationVersion = loadVersion.current;
+  const isCurrentView = useCallback(
+    (id = teamId) =>
+      currentView.current === viewContext &&
+      loadVersion.current === operationVersion &&
+      id === teamId,
+    [operationVersion, teamId, viewContext],
+  );
+  const handleTeamUpdated = useCallback(
+    (saved: SportsTeamRecord) => {
+      if (isCurrentView(saved.id)) setTeam(saved);
+    },
+    [isCurrentView],
+  );
+  const handleFeedback = useCallback(
+    (message: string) => {
+      if (isCurrentView()) setFeedback(message);
+    },
+    [isCurrentView],
+  );
+
+  async function transitionCard(to: SportsTeamStatus) {
+    if (statusPending.current !== null || !isCurrentView()) return;
+    const controller = new AbortController();
+    statusPending.current = controller;
+    setStatusBusy(true);
+    const isCurrent = () =>
+      isCurrentView() && statusPending.current === controller && !controller.signal.aborted;
+    try {
+      const saved = await activeClient.request<SportsTeamRecord>(
+        `/sports/teams/${encodeURIComponent(teamId)}/transitions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to }),
+          signal: controller.signal,
+        },
+      );
+      if (isCurrent() && isCurrentView(saved.id)) {
+        handleTeamUpdated({ ...saved, canEditCard: true });
+        handleFeedback('队伍状态已更新');
+      }
+    } catch (caught) {
+      if (isCurrent()) handleFeedback(`状态更新失败：${errorMessage(caught)}`);
+    } finally {
+      if (isCurrent()) {
+        statusPending.current = null;
+        setStatusBusy(false);
+      }
+    }
+  }
+
+  if (team === null || team.id !== teamId)
     return (
       <section className="module-page" aria-labelledby="sports-team-detail-title">
         <Link to="/sports">← 返回代表队</Link>
@@ -699,19 +775,28 @@ export function SportsTeamDetailPage({
     );
 
   const canManage = permitted(user, 'sports.team.update', 'sports_team', team.scope);
+  const canEditCard = team.canEditCard ?? canManage;
   const canReadCheckins = permitted(user, 'sports.checkin.read', 'sports_checkin', team.scope);
   const canCreateCheckins = permitted(user, 'sports.checkin.create', 'sports_checkin', team.scope);
-  const canReadShowcase = permitted(user, 'sports.showcase.read', 'sports_showcase', team.scope);
-  const canEditShowcase = permitted(user, 'sports.showcase.update', 'sports_showcase', team.scope);
+  const canEditShowcase =
+    team.canEditShowcase ??
+    (team.canEditCard === undefined
+      ? canEditCard || permitted(user, 'sports.showcase.update', 'sports_showcase', team.scope)
+      : canEditCard);
   return (
     <section className="module-page" aria-labelledby="sports-team-detail-title">
       <Link className="text-link" to="/sports">
         ← 返回代表队
       </Link>
       <TeamSummary team={team} />
-      {(canReadShowcase || canEditShowcase) && (
-        <TeamShowcase client={activeClient} teamId={team.id} canEdit={canEditShowcase} />
-      )}
+      <TeamHomepage
+        key={`${actorUid}:${team.id}`}
+        client={activeClient}
+        teamId={team.id}
+        name={team.name}
+        canEditCard={canEditCard}
+        canEditShowcase={canEditShowcase}
+      />
       <Link
         className="sports-primary-button"
         to={`/collections/tools?team=${encodeURIComponent(team.id)}&kind=attendance`}
@@ -719,15 +804,60 @@ export function SportsTeamDetailPage({
         训练打卡与出勤
       </Link>
       {feedback !== null && <p role="status">{feedback}</p>}
+      {canEditCard && !canManage && (
+        <section aria-label="队伍信息维护">
+          <h3>队伍信息</h3>
+          {editingCard ? (
+            <SportsCardForm
+              key={team.id}
+              client={activeClient}
+              team={team}
+              onCancel={() => setEditingCard(false)}
+              onSaved={(saved) => {
+                if (!isCurrentView(saved.id)) return;
+                handleTeamUpdated({ ...saved, canEditCard: true });
+                setEditingCard(false);
+                handleFeedback('队伍信息已更新');
+              }}
+            />
+          ) : (
+            <button type="button" disabled={statusBusy} onClick={() => setEditingCard(true)}>
+              编辑队伍信息
+            </button>
+          )}
+          <div className="sports-maintenance-actions">
+            {(team.status === 'draft'
+              ? ['active', 'archived']
+              : team.status === 'active'
+                ? ['archived']
+                : ['active']
+            ).map((to) => (
+              <button
+                key={to}
+                type="button"
+                disabled={statusBusy || editingCard}
+                onClick={() => void transitionCard(to as SportsTeamStatus)}
+              >
+                {to === 'archived'
+                  ? '归档队伍'
+                  : team.status === 'archived'
+                    ? '恢复队伍'
+                    : '启用队伍'}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       {canManage ? (
         <TeamOperations
           key={team.id}
+          canEditCard={canEditCard}
           canCreateCheckins={canCreateCheckins}
           canReadCheckins={canReadCheckins}
           client={activeClient}
           initialTeam={team}
-          onFeedback={setFeedback}
-          onTeamUpdated={setTeam}
+          onFeedback={handleFeedback}
+          onTeamUpdated={handleTeamUpdated}
         />
       ) : canReadCheckins || canCreateCheckins ? (
         <CaptainCheckins

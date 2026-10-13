@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiClient } from '../../../core/api/client.js';
 import { useOptionalAuth } from '../../../core/auth/AuthProvider.js';
+import { FirstBusinessAdminSection } from './FirstBusinessAdminSection.js';
 
 interface AccessUser {
   uid: string;
@@ -132,6 +133,7 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
         </p>
       ) : null}
       {loading ? <p role="status">正在读取主站用户名单…</p> : null}
+      <FirstBusinessAdminSection client={client} users={users} onInitialized={setMessage} />
       <div className="development-directory-layout">
         <aside className="development-user-directory" aria-label="用户列表">
           {!users.length && !loading ? <p>没有找到符合条件的用户。</p> : null}

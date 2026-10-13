@@ -85,7 +85,7 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
     suppliedUser === undefined ? (auth?.user ?? null) : suppliedUser
   ) as PageUser | null;
   const managesAcrossOrganizations =
-    user?.roles.includes('platform.admin') === true ||
+    isBusinessAdmin(user) ||
     user?.roles.some((role) => organizationForRole(role)?.level === 'lead') === true;
   const organizations = useMemo(
     () =>

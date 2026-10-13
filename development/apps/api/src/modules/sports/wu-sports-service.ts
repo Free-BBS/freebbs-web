@@ -1,4 +1,8 @@
-import type { SportsMatch, SportsMatchStatus } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  type SportsMatch,
+  type SportsMatchStatus,
+} from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { authorize } from '../../core/authorization/authorize.js';
@@ -9,6 +13,7 @@ import type {
   SportsTeamShowcaseRecord,
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
+import { canMaintainSportsCard, canonicalSportsTeam } from './card-authorization.js';
 
 export interface MatchInput {
   title: string;
@@ -41,8 +46,9 @@ function allowed(
 }
 
 function managesAllSports(actor: AuthorizationContext): boolean {
-  return actor.roles.some((role) =>
-    ['platform.admin', 'domain.sports_lead', 'department.sports_director'].includes(role),
+  return (
+    isDevelopmentBusinessAdmin(actor) ||
+    actor.roles.some((role) => ['domain.sports_lead', 'department.sports_director'].includes(role))
   );
 }
 
@@ -148,8 +154,15 @@ export class WuSportsService {
     markdown: string,
   ): Promise<SportsTeamShowcaseRecord> {
     const scope = { type: 'sports_team', id: teamId };
-    if (!allowed(actor, 'sports.showcase.update', 'sports_showcase', scope))
+    const team = await this.store.sportsTeams.get(teamId);
+    if (
+      authorize(actor, { action: 'sports.showcase.update', resource: 'sports_showcase', scope })
+        .reason === 'explicit-deny' ||
+      !(await canMaintainSportsCard(this.store, actor, teamId, 'sports.showcase.update'))
+    )
       throw new HttpError(403, 'forbidden', 'Sports showcase update permission is required');
+    if (!canonicalSportsTeam(team, teamId))
+      throw new HttpError(404, 'sports_team_not_found', 'Sports team not found');
     const existing = (
       await this.store.sportsTeamShowcases.list({ scopeType: scope.type, scopeId: scope.id })
     ).find((item) => item.teamId === teamId);

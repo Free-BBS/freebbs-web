@@ -1,3 +1,4 @@
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router, type Response } from 'express';
@@ -103,8 +104,8 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
 export function manages(space: CollaborationSpace, actor: UserContext) {
   return (
     actor.uid === space.ownerUid ||
-    actor.roles.includes('platform.admin') ||
-    Boolean(space.departmentId && canEditDepartment(actor.roles, space.departmentId)) ||
+    isDevelopmentBusinessAdmin(actor) ||
+    Boolean(space.departmentId && canEditDepartment(actor, space.departmentId)) ||
     Boolean(
       space.teamId &&
       authorize(actor, {
@@ -139,7 +140,7 @@ function visible(space: CollaborationSpace, actor: UserContext) {
       space.entries.some((entry) => canReviewEntry(space, entry, actor))) ||
     (space.status !== 'draft' &&
       (space.audience === 'all' ||
-        Boolean(space.departmentId && canEditDepartment(actor.roles, space.departmentId))))
+        Boolean(space.departmentId && canEditDepartment(actor, space.departmentId))))
   );
 }
 function view(space: CollaborationSpace, actor: UserContext): CollaborationSpace {
@@ -204,7 +205,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       throw new HttpError(409, 'revision_conflict', '页面已更新，请重新加载后再保存');
   }
   function validateDefinition(value: z.infer<typeof definition>, user: UserContext) {
-    if (value.departmentId && !canEditDepartment(user.roles, value.departmentId))
+    if (value.departmentId && !canEditDepartment(user, value.departmentId))
       throw new HttpError(403, 'department_forbidden', '只能为自己的部门创建协作空间');
     if (value.audience === 'department' && !value.departmentId)
       throw new HttpError(400, 'missing_department', '请选择所属部门');
@@ -314,7 +315,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         input.columns &&
         JSON.stringify(input.columns) !== JSON.stringify(current.columns) &&
         current.ownerUid !== user.uid &&
-        !user.roles.includes('platform.admin')
+        !isDevelopmentBusinessAdmin(user)
       )
         throw new HttpError(403, 'column_configuration_forbidden', '只有创建者可以配置字段权限');
       if (input.teamId !== undefined && input.teamId !== (current.teamId ?? null))
@@ -396,7 +397,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (['availability', 'practice'].includes(space.kind) && !uniqueChoices.length)
         throw new HttpError(400, 'missing_choice', '请选择可用时间或报名志愿');
       if (space.kind === 'shared_table') {
-        if (space.ownerUid !== user.uid && !user.roles.includes('platform.admin'))
+        if (space.ownerUid !== user.uid && !isDevelopmentBusinessAdmin(user))
           for (const column of space.columns)
             if (
               column.editRoleKeys?.length &&
@@ -468,7 +469,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (
         space.kind === 'shared_table' &&
         space.ownerUid !== user.uid &&
-        !user.roles.includes('platform.admin') &&
+        !isDevelopmentBusinessAdmin(user) &&
         space.columns.some(
           (column) =>
             column.editRoleKeys?.length &&

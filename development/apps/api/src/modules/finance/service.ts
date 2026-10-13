@@ -52,8 +52,8 @@ function canMaintain(
   targetOrganizationId: SocialOrganizationId | null | undefined = record.organizationId,
 ): boolean {
   return (
-    canAccessFinanceRecord(actor, record) &&
-    canAccessFinanceOrganization(actor, targetOrganizationId)
+    canAccessFinanceOrganization(actor, record.organizationId, 'update') &&
+    canAccessFinanceOrganization(actor, targetOrganizationId, 'update')
   );
 }
 
@@ -109,7 +109,8 @@ export class FinanceService {
       }
       const freshActor = await loadAuthorizationContext(store, actor, new Date());
       const organizationId = input.organizationId ?? null;
-      if (!canAccessFinanceOrganization(freshActor, organizationId)) throw financeForbidden();
+      if (!canAccessFinanceOrganization(freshActor, organizationId, 'create'))
+        throw financeForbidden();
       assertOrganizationScope(organizationId, input.activityId, input.scope);
       const created = await store.financeRecords.create({
         ...input,
@@ -190,7 +191,7 @@ export class FinanceService {
       const from = current.status as FinanceStatus;
       const reviewEdge = from === 'submitted' && (to === 'approved' || to === 'rejected');
       const permitted = reviewEdge
-        ? canReviewFinance(freshActor)
+        ? canReviewFinance(freshActor, current.organizationId ?? null)
         : canMaintain(freshActor, current);
       if (!permitted) return { kind: 'missing' };
       if (
@@ -233,7 +234,7 @@ export class FinanceService {
       const current = await store.financeRecords.getForUpdate(id);
       if (current === null) throw financeNotFound();
       const freshActor = await loadAuthorizationContext(store, actor, new Date());
-      if (!canReviewFinance(freshActor)) throw financeForbidden();
+      if (!canReviewFinance(freshActor, current.organizationId ?? null)) throw financeForbidden();
       if (current.status !== 'submitted') {
         throw new HttpError(
           409,

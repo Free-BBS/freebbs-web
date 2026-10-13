@@ -7,7 +7,7 @@ import adminIcon from '../assets/icons/admin.svg';
 import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
 import { MainPreviewSelect } from '../core/auth/MainPreviewSelect.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
-import { isSuperAdmin, type PresentationUser } from '../core/permissions/Can.js';
+import { isBusinessAdmin, isSuperAdmin, type PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { MainSiteFooter } from './MainSiteFooter.js';
@@ -90,13 +90,8 @@ function ModuleNavigation({
     .flatMap((module) =>
       module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
     );
-  if (user.roles.includes('platform.admin') && !user.previewing) {
-    const financeIndex = navigationModules.findIndex((module) => module.id === 'finance');
-    navigationModules.splice(
-      financeIndex < 0 ? navigationModules.length : financeIndex + 1,
-      0,
-      SYSTEM_SETTINGS_NAVIGATION,
-    );
+  if (withLearningLink && isBusinessAdmin(user) && !user.previewing) {
+    navigationModules.push(SYSTEM_SETTINGS_NAVIGATION);
   }
 
   return (
@@ -236,6 +231,12 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
               <NavLink className="sidebar-system-link" to="/admin">
                 <img className="sidebar-system-icon" src={adminIcon} alt="" />
                 <span>管理员模块</span>
+              </NavLink>
+            ) : null}
+            {isBusinessAdmin(auth.user) && !auth.user.previewing ? (
+              <NavLink className="sidebar-system-link" to={SYSTEM_SETTINGS_NAVIGATION.route}>
+                <img className="sidebar-system-icon" src={SYSTEM_SETTINGS_NAVIGATION.icon} alt="" />
+                <span>{SYSTEM_SETTINGS_NAVIGATION.name}</span>
               </NavLink>
             ) : null}
             <LearningSiteLink className="sidebar-learning-link" />

@@ -1,3 +1,4 @@
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import {
   SOCIAL_ORGANIZATION_IDS,
   organizationForRole,
@@ -89,7 +90,7 @@ function entryAudience(entry: KnowledgeEntryRecord): 'general' | 'social_org' {
 
 function managesAcrossOrganizations(actor: AuthorizationContext): boolean {
   return (
-    actor.roles.includes('platform.admin') ||
+    isDevelopmentBusinessAdmin(actor) ||
     actor.roles.some((role) => organizationForRole(role)?.level === 'lead')
   );
 }

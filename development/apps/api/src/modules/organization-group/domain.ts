@@ -1,3 +1,4 @@
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import type {
   OrganizationGroupAnswer,
   OrganizationGroupDeadline,
@@ -98,9 +99,9 @@ export function fail(status: number, code: string, message: string): never {
   throw new HttpError(status, code, message);
 }
 export const grantAdministrator = (user: UserContext) =>
-  user.roles.includes('platform.admin') && !user.previewing;
+  isDevelopmentBusinessAdmin(user) && !user.previewing;
 export const manages = (s: OrganizationState, user: UserContext) =>
-  user.roles.includes('platform.admin') || s.managerUids.includes(user.uid);
+  isDevelopmentBusinessAdmin(user) || s.managerUids.includes(user.uid);
 export const departmentMember = (user: UserContext) =>
   user.roles.some((role) =>
     [

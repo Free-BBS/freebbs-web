@@ -138,11 +138,13 @@ export function createApp(options: CreateAppOptions = {}) {
   if (environment.nodeEnv === 'production' && authMode === 'demo') {
     throw new Error('Demo authentication is disabled in production');
   }
+  const previewAllowedUids = [...(options.previewAllowedUids ?? environment.previewAllowedUids)];
+  const allowedDevelopmentUids = authMode === 'main' ? previewAllowedUids : environment.demoUserIds;
   const authenticate = createAuthMiddleware({
     authClient: resolveAuthClient(authMode, options),
     mode: authMode,
     store,
-    allowedUids: options.previewAllowedUids ?? environment.previewAllowedUids,
+    allowedUids: previewAllowedUids,
     userDirectory: options.userDirectory,
   });
   const allowedOrigins = new Set(
@@ -268,6 +270,7 @@ export function createApp(options: CreateAppOptions = {}) {
     store,
     authenticate,
     userDirectory: options.userDirectory,
+    allowedUids: allowedDevelopmentUids,
     directory:
       options.systemSettingsDirectory ??
       options.collectionsUploadDirectory ??
@@ -289,6 +292,7 @@ export function createApp(options: CreateAppOptions = {}) {
       dataMode: databaseMode,
       getAppliedMigrationCount,
       userDirectory: options.userDirectory,
+      allowedUids: allowedDevelopmentUids,
     }),
   );
   const interestGroupsRouter = createClubsRouter({ store, authenticate });
@@ -426,6 +430,9 @@ export function createApp(options: CreateAppOptions = {}) {
     createSportsRouter({
       store,
       authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      homepageDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
       ...(options.sportsUploadDirectory ? { uploadDirectory: options.sportsUploadDirectory } : {}),
     }),
   );

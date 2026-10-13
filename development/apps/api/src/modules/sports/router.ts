@@ -1,4 +1,4 @@
-import type { ApiEnvelope, ScopeRef } from '@freebbs-development/contracts';
+import type { ApiEnvelope } from '@freebbs-development/contracts';
 import { Router, text } from 'express';
 import { z } from 'zod';
 
@@ -14,6 +14,8 @@ import { RosterImportService } from './roster-import-service.js';
 import { SportsService } from './service.js';
 import { WuSportsService } from './wu-sports-service.js';
 import { createSportsImageStorage, inspectSportsImage } from './image-storage.js';
+import { canMaintainSportsCard } from './card-authorization.js';
+import { createSportsHomepageRouter } from './homepage-router.js';
 
 import type { Request, Response } from 'express';
 
@@ -22,6 +24,8 @@ export interface SportsRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
   uploadDirectory?: string;
+  homepageDirectory?: string;
+  nodeEnvironment?: string;
 }
 interface ErrorData {
   error: { code: string; message: string };
@@ -180,10 +184,6 @@ async function requireActor(
   return result.user;
 }
 
-function allowedTeam(actor: AuthorizationContext, action: string, scope?: ScopeRef): boolean {
-  return authorize(actor, { action, resource: 'sports_team', scope }).allowed;
-}
-
 function forbid(response: Response): void {
   send<ErrorData>(response, 403, {
     error: { code: 'forbidden', message: 'Sports team permission is required' },
@@ -214,6 +214,12 @@ export function createSportsRouter(options: SportsRouterOptions): Router {
     }
   });
 
+  router.use(createSportsHomepageRouter(options));
+  router.get('/capabilities', async (request, response) => {
+    const actor = await requireActor(options, request, response);
+    if (actor === null) return;
+    send(response, 200, { canCreate: await canMaintainSportsCard(options.store, actor) });
+  });
   router.get('/teams', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
@@ -302,7 +308,7 @@ export function createSportsRouter(options: SportsRouterOptions): Router {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
     const input = parse(createTeamSchema, request.body);
-    if (!allowedTeam(actor, 'sports.team.create')) return forbid(response);
+    if (!(await canMaintainSportsCard(options.store, actor))) return forbid(response);
     send(response, 201, await service.createTeam(actor, input));
   });
 

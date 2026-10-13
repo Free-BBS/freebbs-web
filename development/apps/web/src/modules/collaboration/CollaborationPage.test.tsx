@@ -667,7 +667,7 @@ it('keeps column restrictions authoritative for department managers editing anot
   expect(screen.getByLabelText(/确认状态/)).toBeDisabled();
   expect(screen.getByLabelText(/确认状态/)).toHaveValue('已核对');
 });
-it('hides record mutation controls in a closed collection', async () => {
+it('keeps review controls available after collection closes while blocking new submissions', async () => {
   const space = refreshedSpace({
     kind: 'review',
     status: 'closed',
@@ -675,20 +675,44 @@ it('hides record mutation controls in a closed collection', async () => {
   });
   detailPage(space);
   fireEvent.click(await screen.findByRole('tab', { name: '记录' }));
-  expect(screen.queryByRole('button', { name: '确认通过' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '退回补充' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '确认通过' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '退回补充' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('tab', { name: '参与填写' }));
+  expect(screen.queryByRole('button', { name: '提交记录' })).not.toBeInTheDocument();
 });
 
-it('hides volunteer assignment actions after collection closes', async () => {
+it('keeps volunteer decisions and manager allocation available after collection closes', async () => {
   const space = refreshedSpace({
     kind: 'practice',
     status: 'closed',
+    canManage: true,
     entries: [record({ assignedSlot: 'slot', assignmentStatus: 'pending' })],
   });
   detailPage(space);
   fireEvent.click(await screen.findByRole('tab', { name: '记录' }));
-  expect(screen.queryByRole('button', { name: '接受安排' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '拒绝安排' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '接受安排' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '拒绝安排' })).toBeEnabled();
+  expect(screen.getByLabelText('调整同学支队')).toBeEnabled();
+  fireEvent.click(screen.getByRole('tab', { name: '管理设置' }));
+  expect(screen.getByRole('button', { name: '按志愿生成安排' })).toBeEnabled();
+});
+
+it('keeps existing table record deletion available after collection closes', async () => {
+  const space = refreshedSpace({
+    kind: 'shared_table',
+    status: 'closed',
+    entries: [record()],
+  });
+  const request = detailPage(space);
+  fireEvent.click(await screen.findByRole('tab', { name: '记录' }));
+  fireEvent.click(screen.getByRole('button', { name: '删除' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
+  await act(async () => {});
+  expect(request).toHaveBeenCalledWith('/collaboration/space/entries/entry', {
+    method: 'DELETE',
+    body: JSON.stringify({ revision: 3 }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 });
 
 it('retains participant and settings drafts throughout attachment background refresh and a new revision', async () => {

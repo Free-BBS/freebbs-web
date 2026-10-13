@@ -18,6 +18,7 @@ const admin: UserContext = {
   avatarUrl: null,
   baseRole: 'student',
   roles: ['platform.admin'],
+  businessAdmin: true,
   tags: [],
 };
 

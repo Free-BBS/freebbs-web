@@ -21,6 +21,9 @@ function sportsUser(uid: string, policies: SportsUser['policies'] = []): SportsU
 describe('SportsTeamDetailPage', () => {
   it('loads the requested team and presents its roster and training schedule', async () => {
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') {
         return Promise.resolve([
           {
@@ -75,6 +78,9 @@ describe('SportsTeamDetailPage', () => {
       },
     ];
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') {
         return Promise.resolve([
           {
@@ -167,7 +173,8 @@ describe('SportsTeamDetailPage', () => {
     await screen.findByRole('heading', { name: '篮球队' });
     expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('选择名单 CSV（姓名,学号）')).not.toBeInTheDocument();
-    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+    expect(request.mock.calls.flat().join(' ')).not.toContain('/members');
   });
 
   it('keeps captain check-in controls on the exact team detail without loading roster management', async () => {
@@ -181,6 +188,9 @@ describe('SportsTeamDetailPage', () => {
       scope: { type: 'sports_team', id: 'team-basketball' },
     };
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') return Promise.resolve([team]);
       if (path.endsWith('/checkins')) return Promise.resolve([]);
       throw new Error(`Unexpected request: ${path}`);
@@ -223,6 +233,9 @@ describe('SportsTeamDetailPage', () => {
       scope: { type: 'sports_team', id: 'team-basketball' },
     };
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') return Promise.resolve([team]);
       if (path.endsWith('/members')) return Promise.resolve([]);
       throw new Error(`Unexpected request: ${path}`);
@@ -259,6 +272,9 @@ describe('SportsTeamDetailPage', () => {
       scope: { type: 'sports_team', id: 'team-basketball' },
     };
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') return Promise.resolve([team]);
       if (path.endsWith('/checkins'))
         return Promise.resolve([
@@ -294,6 +310,9 @@ describe('SportsTeamDetailPage', () => {
       scope: { type: 'sports_team', id: 'team-basketball' },
     };
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') return Promise.resolve([team]);
       throw new Error(`Unexpected request: ${path}`);
     });
@@ -319,6 +338,9 @@ describe('SportsTeamDetailPage', () => {
       { row: 2, name: '张三', studentNumber: '20260001', outcome: 'ready', blocking: false },
     ];
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams')
         return Promise.resolve([
           {
@@ -390,6 +412,9 @@ describe('SportsTeamDetailPage', () => {
     };
     let listCalls = 0;
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') {
         listCalls += 1;
         return new Promise<SportsTeamRecord[]>((resolve) => {
@@ -444,6 +469,9 @@ describe('SportsTeamDetailPage', () => {
     };
     let listCalls = 0;
     const request = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') {
         listCalls += 1;
         if (listCalls === 1) return Promise.resolve([team]);
@@ -490,6 +518,9 @@ describe('SportsTeamDetailPage', () => {
     };
     const request = vi.fn().mockImplementation((path: string, init?: RequestInit) => {
       if (path === '/sports/teams' && init?.method === 'PATCH') return Promise.resolve(team);
+      if (path.endsWith('/homepage'))
+        return Promise.resolve({ html: null, canEdit: false, revision: 0 });
+      if (path.endsWith('/showcase')) return Promise.resolve(null);
       if (path === '/sports/teams') return Promise.resolve([team]);
       if (path.endsWith('/members') || path.endsWith('/checkins')) return Promise.resolve([]);
       throw new Error(`Unexpected request: ${path}`);

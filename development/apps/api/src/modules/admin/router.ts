@@ -17,6 +17,7 @@ import { createPermissionsRouter } from './permissions-router.js';
 import { createSubjectsRouter } from './subjects-router.js';
 import { createSystemRouter } from './system-router.js';
 import { createTagsRouter } from './tags-router.js';
+import { createBusinessAdminBootstrapRouter } from './business-admin-bootstrap-router.js';
 
 type Authenticate = (headers: AuthHeaders) => Promise<AuthenticationResult>;
 
@@ -27,6 +28,7 @@ export interface AdminRouterOptions {
   dataMode: DataMode;
   getAppliedMigrationCount(): Promise<number>;
   userDirectory?: UserDirectory;
+  allowedUids?: readonly string[];
 }
 
 export function createAdminRouter(options: AdminRouterOptions): Router {
@@ -55,11 +57,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       const accessRoute = /^\/development-users(?:\/[^/]+)?\/?$/.test(request.path);
       const accessAudit = request.path === '/audit-logs' && request.method === 'GET';
       const statusRoute = request.path === '/system-status' && request.method === 'GET';
+      const bootstrapRoute =
+        /^\/business-admin-bootstrap\/?$/.test(request.path) &&
+        ['GET', 'POST'].includes(request.method);
       if (
         !accessRoute &&
         !accessAudit &&
         !statusRoute &&
-        !isDevelopmentBusinessAdmin(result.user.roles)
+        !bootstrapRoute &&
+        !isDevelopmentBusinessAdmin(result.user)
       ) {
         response.status(403).json({
           data: {
@@ -81,13 +87,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   router.use('/subjects', createSubjectsRouter(options.store));
   if (options.userDirectory) {
     router.use(
+      '/business-admin-bootstrap',
+      createBusinessAdminBootstrapRouter(options.store, options.userDirectory, options.allowedUids),
+    );
+    router.use(
       '/development-users',
-      createDevelopmentUsersRouter(options.store, options.userDirectory),
+      createDevelopmentUsersRouter(options.store, options.userDirectory, options.allowedUids),
     );
   }
   router.use('/organization-memberships', createOrganizationMembershipsRouter(options.store));
-  router.use(createAssignmentsRouter(options.store));
-  router.use(createPermissionsRouter(options.store));
+  router.use(createAssignmentsRouter(options.store, options.userDirectory, options.allowedUids));
+  router.use(createPermissionsRouter(options.store, options.userDirectory, options.allowedUids));
   router.use(createTagsRouter(options.store));
   router.use(createModulesRouter(options.store));
   router.use(createAuditRouter(options.store));

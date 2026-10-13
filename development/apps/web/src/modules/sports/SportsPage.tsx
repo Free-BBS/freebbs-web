@@ -5,6 +5,7 @@ import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
 import { createApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { SportsPictograms } from './SportsPictograms.js';
+import { SportsCardForm } from './SportsCardForm.js';
 
 export interface DevelopmentApi {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -19,6 +20,8 @@ export interface SportsTeamRecord {
   trainingSchedule: string;
   status: SportsTeamStatus;
   ownerUid?: string;
+  canEditCard?: boolean;
+  canEditShowcase?: boolean;
   scope: ScopeRef;
 }
 
@@ -89,12 +92,15 @@ function conciseSummary(value: string, maximumCodePoints = 180): string {
     : value;
 }
 
-export function SportsPage({ client }: SportsPageProps) {
+export function SportsPage({ client, user: suppliedUser }: SportsPageProps) {
   const defaultClient = useMemo(createApiClient, []);
   const auth = useOptionalAuth();
   const activeClient = client ?? auth?.client ?? defaultClient;
   const [teams, setTeams] = useState<SportsTeamRecord[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [canCreate, setCanCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const actorUid = suppliedUser?.uid ?? auth?.user?.uid ?? '';
 
   const loadTeams = useCallback(async () => {
     setLoadError(null);
@@ -106,8 +112,20 @@ export function SportsPage({ client }: SportsPageProps) {
   }, [activeClient]);
 
   useEffect(() => {
+    let active = true;
+    setCanCreate(false);
+    setCreating(false);
+    void activeClient
+      .request<{ canCreate: boolean }>('/sports/capabilities')
+      .then((value) => {
+        if (active) setCanCreate(value.canCreate === true);
+      })
+      .catch(() => undefined);
     void loadTeams();
-  }, [loadTeams]);
+    return () => {
+      active = false;
+    };
+  }, [activeClient, actorUid, loadTeams]);
 
   return (
     <section className="module-page" aria-labelledby="sports-title">
@@ -136,7 +154,23 @@ export function SportsPage({ client }: SportsPageProps) {
           <p className="eyebrow">队伍名片</p>
           <h3>体育代表队</h3>
         </div>
+        {canCreate && (
+          <button type="button" onClick={() => setCreating((value) => !value)}>
+            添加代表队
+          </button>
+        )}
       </div>
+
+      {canCreate && creating && (
+        <SportsCardForm
+          client={activeClient}
+          onCancel={() => setCreating(false)}
+          onSaved={(saved) => {
+            setTeams((current) => [...(current ?? []), saved]);
+            setCreating(false);
+          }}
+        />
+      )}
 
       {teams === null && loadError === null && <p role="status">正在加载代表队…</p>}
       {loadError !== null && <p role="alert">代表队加载失败：{loadError}</p>}
@@ -171,6 +205,11 @@ export function SportsPage({ client }: SportsPageProps) {
               <Link className="text-link" to={`/sports/${encodeURIComponent(team.id)}`}>
                 查看队伍详情
               </Link>
+              {team.canEditCard && (
+                <Link className="text-link" to={`/sports/${encodeURIComponent(team.id)}`}>
+                  维护名片与首页
+                </Link>
+              )}
             </article>
           ))}
         </div>

@@ -297,7 +297,7 @@ describe('Can', () => {
       ...STUDENT,
       policies: [{ action: 'clubs.update', effect: 'allow' as const }],
     };
-    const superAdmin = { ...STUDENT, roles: ['platform.admin' as const] };
+    const superAdmin = { ...STUDENT, roles: ['platform.admin' as const], businessAdmin: true };
     const { rerender } = render(
       <Can user={captain} tag="sports.team_captain" fallback="Denied">
         Captain tools

@@ -12,6 +12,7 @@ const admin: UserContext & { policies: Array<{ action: string; effect: 'allow' }
   avatarUrl: null,
   baseRole: 'student',
   roles: ['platform.admin'],
+  businessAdmin: true,
   tags: [],
   policies: [{ action: '*', effect: 'allow' }],
 };

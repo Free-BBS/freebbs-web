@@ -8,17 +8,32 @@ import {
 import * as contracts from './index.js';
 describe('separate development authority', () => {
   it('keeps lead authority separate from global business authority', () => {
-    expect(isDevelopmentBusinessAdmin(['platform.super_admin'])).toBe(false);
-    expect(isDevelopmentBusinessAdmin(['platform.admin'])).toBe(true);
+    expect(isDevelopmentBusinessAdmin({ roles: ['platform.super_admin'] })).toBe(false);
+    expect(isDevelopmentBusinessAdmin({ roles: ['platform.admin'], businessAdmin: true })).toBe(
+      true,
+    );
+    expect(isDevelopmentBusinessAdmin({ roles: ['platform.admin'] })).toBe(false);
+    expect(isDevelopmentBusinessAdmin({ roles: ['platform.admin'], businessAdmin: false })).toBe(
+      false,
+    );
+    expect(isDevelopmentBusinessAdmin({ roles: [], businessAdmin: true })).toBe(false);
+    expect(canReviewFestival({ roles: ['platform.admin'] })).toBe(false);
     expect(isDevelopmentLead(['platform.admin'])).toBe(false);
     expect(isDevelopmentLead(['platform.super_admin'])).toBe(true);
-    expect(canEditDepartment(['platform.admin'], 'student_union.arts_center')).toBe(true);
-    expect(canEditDepartment(['platform.super_admin'], 'student_union.arts_center')).toBe(false);
-    expect(canReviewFestival({ roles: ['platform.admin'] })).toBe(true);
+    expect(
+      canEditDepartment(
+        { roles: ['platform.admin'], businessAdmin: true },
+        'student_union.arts_center',
+      ),
+    ).toBe(true);
+    expect(
+      canEditDepartment({ roles: ['platform.super_admin'] }, 'student_union.arts_center'),
+    ).toBe(false);
+    expect(canReviewFestival({ roles: ['platform.admin'], businessAdmin: true })).toBe(true);
     expect(canReviewFestival({ roles: ['platform.super_admin'] })).toBe(false);
     expect(canReviewFestival({ roles: ['department.arts_member'] })).toBe(true);
   });
-  it('requires trusted original lead qualification for main-mode reserved entry while retaining demo lead roles', () => {
+  it('requires trusted original lead qualification for main-mode reserved entry and denies missing qualification metadata', () => {
     const authority = contracts as typeof contracts & {
       canManageDevelopmentAccess: (
         user: Pick<contracts.UserContext, 'roles' | 'viewer' | 'developmentAccess' | 'previewing'>,
@@ -52,7 +67,7 @@ describe('separate development authority', () => {
         developmentAccess: 'member',
       }),
     ).toBe(false);
-    expect(authority.canManageDevelopmentAccess({ roles: ['platform.super_admin'] })).toBe(true);
+    expect(authority.canManageDevelopmentAccess({ roles: ['platform.super_admin'] })).toBe(false);
     expect(authority.canManageDevelopmentAccess({ roles: ['platform.admin'] })).toBe(false);
     expect(
       authority.canManageDevelopmentAccess({ roles: ['platform.super_admin'], previewing: true }),

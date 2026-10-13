@@ -19,6 +19,7 @@ const admin: UserContext = {
   uid: 'demo-admin',
   displayName: '管理员',
   roles: ['platform.admin'],
+  businessAdmin: true,
 };
 const items: InformationFeedItem[] = [
   {

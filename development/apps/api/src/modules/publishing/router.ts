@@ -1,3 +1,4 @@
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router, type Response } from 'express';
@@ -60,8 +61,8 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
 export function managesContent(item: PublishingContent, user: UserContext) {
   return (
     item.ownerUid === user.uid ||
-    user.roles.includes('platform.admin') ||
-    Boolean(item.departmentId && canEditDepartment(user.roles, item.departmentId))
+    isDevelopmentBusinessAdmin(user) ||
+    Boolean(item.departmentId && canEditDepartment(user, item.departmentId))
   );
 }
 export function visibleContent(item: PublishingContent, user: UserContext) {
@@ -69,7 +70,7 @@ export function visibleContent(item: PublishingContent, user: UserContext) {
     managesContent(item, user) ||
     (item.status === 'published' &&
       (item.audience === 'all' ||
-        Boolean(item.departmentId && canEditDepartment(user.roles, item.departmentId))))
+        Boolean(item.departmentId && canEditDepartment(user, item.departmentId))))
   );
 }
 export function createPublishingRouter(
@@ -117,7 +118,7 @@ export function createPublishingRouter(
   function validate(value: z.infer<typeof definition>, user: UserContext) {
     if (
       value.departmentId &&
-      (!departmentById(value.departmentId) || !canEditDepartment(user.roles, value.departmentId))
+      (!departmentById(value.departmentId) || !canEditDepartment(user, value.departmentId))
     )
       throw new HttpError(403, 'department_forbidden', '只能发布到自己的部门');
     if (value.category === 'contacts') value.audience = 'department';

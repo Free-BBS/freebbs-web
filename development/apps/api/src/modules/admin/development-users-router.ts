@@ -7,6 +7,11 @@ import { directoryUserContext, type UserDirectory } from '../../core/auth/user-d
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { adminActor } from './subjects-router.js';
+import { hasRecipientAccess } from '../system-settings/users.js';
+import {
+  businessAdminIdentities,
+  effectiveGlobalBusinessAdmins,
+} from '../../core/authorization/business-admin.js';
 
 const ASSIGNABLE_ROLES = ROLE_KEYS.filter((key) => key !== 'platform.super_admin');
 const publicScope = { type: 'public', id: '*' } as const;
@@ -18,6 +23,7 @@ function send<T>(response: Response, status: number, data: T): void {
 export function createDevelopmentUsersRouter(
   store: DevelopmentStore,
   directory: UserDirectory,
+  allowedUids: readonly string[] = [],
 ): Router {
   const router = Router();
   router.get('/', async (request, response) => {
@@ -34,15 +40,10 @@ export function createDevelopmentUsersRouter(
       response,
       200,
       users.map((user) => {
-        const grant = grants.find(
-          (candidate) =>
-            candidate.status === 'active' &&
-            (candidate.subjectUid === user.uid ||
-              (!candidate.subjectUid && user.studentId && candidate.studentId === user.studentId)),
-        );
+        const grant = grants.find((candidate) => hasRecipientAccess(user, [candidate]));
         return {
           ...user,
-          accessLevel: grant?.accessLevel ?? null,
+          accessLevel: grant?.accessLevel ?? (allowedUids.includes(user.uid) ? 'member' : null),
           roles: assignments
             .filter(
               (row) =>
@@ -70,38 +71,24 @@ export function createDevelopmentUsersRouter(
     if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
     const actor = adminActor(response);
     await store.transaction(async (transactionStore) => {
+      const definitions = await transactionStore.roles.listForUpdate();
       await synchronizeSubject(transactionStore, directoryUserContext(target), new Date());
       const records = await transactionStore.developmentAccess.listForUpdate();
-      const previous = records.find(
-        (record) =>
-          record.status === 'active' &&
-          (record.subjectUid === target.uid ||
-            (!record.subjectUid &&
-              target.studentId !== null &&
-              record.studentId === target.studentId)),
-      );
+      const previous = records.find((record) => hasRecipientAccess(target, [record]));
       if (parsed.data.accessLevel === null) {
         const roles = await transactionStore.roleAssignments.listForUpdate();
         const activeSubjects = await transactionStore.subjects.listForUpdate({ status: 'active' });
-        const admins = roles.filter(
-          (row) =>
-            row.status === 'active' &&
-            row.roleKey === 'platform.admin' &&
-            (row.expiresAt === null || Date.parse(row.expiresAt) > Date.now()),
+        const identities = await businessAdminIdentities(roles, directory);
+        const admins = effectiveGlobalBusinessAdmins(
+          roles,
+          definitions,
+          activeSubjects,
+          records,
+          new Date(),
+          identities,
+          allowedUids,
         );
-        if (
-          admins.some((row) => row.subjectUid === target.uid) &&
-          !admins.some(
-            (row) =>
-              row.subjectUid !== target.uid &&
-              activeSubjects.some(
-                (subject) => subject.uid === row.subjectUid && subject.status === 'active',
-              ) &&
-              records.some(
-                (access) => access.subjectUid === row.subjectUid && access.status === 'active',
-              ),
-          )
-        ) {
+        if (admins.has(target.uid) && admins.size === 1 && !allowedUids.includes(target.uid)) {
           throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
         }
       }

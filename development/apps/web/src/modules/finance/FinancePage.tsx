@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import {
   SOCIAL_ORGANIZATIONS,
   organizationForRole,
+  isDevelopmentBusinessAdmin,
   type ScopeRef,
   type UserContext,
 } from '@freebbs-development/contracts';
@@ -81,15 +82,22 @@ const statusTones: Record<FinanceStatus, StatusBadgeStatus> = {
 
 function leadOrganizationIds(user: FinanceUser | null): string[] {
   if (user === null) return [];
-  if (user.roles.includes('platform.admin')) {
+  if (isDevelopmentBusinessAdmin(user)) {
     return SOCIAL_ORGANIZATIONS.map(({ id }) => id);
   }
-  const own = user.roles.flatMap((role) => {
-    const membership = organizationForRole(role);
-    return membership?.level === 'lead' ? [membership.organizationId] : [];
-  });
-  if (own.includes('tuanwei')) return SOCIAL_ORGANIZATIONS.map(({ id }) => id);
-  return [...new Set(own)];
+  if (
+    isFinanceCounselor(user) ||
+    user.roles.includes('platform.admin') ||
+    user.roles.some((role) => organizationForRole(role)?.level === 'lead')
+  ) {
+    return SOCIAL_ORGANIZATIONS.filter(
+      ({ id }) =>
+        permitted(user, 'finance.record.read', { type: 'social_organization', id }) &&
+        (permitted(user, 'finance.record.create', { type: 'social_organization', id }) ||
+          permitted(user, 'finance.record.update', { type: 'social_organization', id })),
+    ).map(({ id }) => id);
+  }
+  return [];
 }
 
 function memberOrganizationIds(user: FinanceUser | null): string[] {
@@ -104,13 +112,19 @@ function memberOrganizationIds(user: FinanceUser | null): string[] {
   ];
 }
 
-function canReviewFinance(user: FinanceUser | null): boolean {
+function isFinanceCounselor(user: FinanceUser): boolean {
+  return (
+    user.roles.includes('counselor.youth_league_secretary') ||
+    user.roles.includes('counselor.youth_league')
+  );
+}
+
+function canReviewFinance(user: FinanceUser | null, scope?: ScopeRef): boolean {
   if (user === null) return false;
-  if (user.roles.includes('platform.admin')) return true;
-  return user.roles.some((role) => {
-    const membership = organizationForRole(role);
-    return membership?.organizationId === 'tuanwei' && membership.level === 'lead';
-  });
+  if (isDevelopmentBusinessAdmin(user)) return true;
+  return scope
+    ? permitted(user, 'finance.record.review', scope)
+    : hasAnyGrant(user, 'finance.record.review');
 }
 
 function organizationName(organizationId: string | null | undefined): string {
@@ -137,7 +151,7 @@ function matches(pattern: string, value: string): boolean {
 
 function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): boolean {
   if (user === null) return false;
-  if (user.roles.includes('platform.admin')) return true;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   const now = Date.now();
   const policies = (user.policies ?? []).filter(
     (policy) =>
@@ -156,7 +170,7 @@ function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): b
 
 function hasAnyGrant(user: FinanceUser | null, action: string): boolean {
   if (user === null) return false;
-  if (user.roles.includes('platform.admin')) return true;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   const now = Date.now();
   return (user.policies ?? []).some(
     (policy) =>
@@ -175,6 +189,12 @@ function scopeFromDraft(draft: FinanceDraft): ScopeRef {
   return organizationId
     ? { type: 'social_organization', id: organizationId }
     : { type: draft.scopeType.trim(), id: draft.scopeId.trim() };
+}
+
+function financeAuthorizationScope(organizationId: string | null | undefined): ScopeRef {
+  return organizationId?.trim()
+    ? { type: 'social_organization', id: organizationId.trim() }
+    : { type: 'public', id: '*' };
 }
 
 function draftFromRecord(record: FinanceRecord): FinanceDraft {
@@ -341,7 +361,13 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
       setFormError(validated);
       return;
     }
-    if (!permitted(user, 'finance.record.create', validated.scope)) {
+    if (
+      !permitted(
+        user,
+        'finance.record.create',
+        financeAuthorizationScope(createDraft.organizationId),
+      )
+    ) {
       setFormError('你没有在该范围创建财务记录的权限');
       return;
     }
@@ -391,13 +417,9 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
       return;
     }
     const canMove =
-      permitted(user, 'finance.record.update', record.scope) &&
-      permitted(user, 'finance.record.update', validated.scope);
-    const canEditOwn =
-      record.ownerUid === user?.uid &&
-      permitted(user, 'finance.record.create', record.scope) &&
-      permitted(user, 'finance.record.create', validated.scope);
-    if (!canMove && !canEditOwn) {
+      permitted(user, 'finance.record.update', financeAuthorizationScope(record.organizationId)) &&
+      permitted(user, 'finance.record.update', financeAuthorizationScope(editDraft.organizationId));
+    if (!canMove) {
       setFormError('你没有修改当前范围或目标范围的权限');
       return;
     }
@@ -425,17 +447,23 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
   }
 
   function canMaintainRecord(record: FinanceRecord): boolean {
-    return (
-      permitted(user, 'finance.record.update', record.scope) ||
-      (record.ownerUid === user?.uid && permitted(user, 'finance.record.create', record.scope))
+    return permitted(
+      user,
+      'finance.record.update',
+      financeAuthorizationScope(record.organizationId),
     );
   }
 
   function canRunTransition(record: FinanceRecord, to: FinanceStatus): boolean {
     if (to === 'approved' || to === 'rejected') {
-      return canReviewFinance(user) || permitted(user, 'finance.record.approve', record.scope);
+      return canReviewFinance(user, financeAuthorizationScope(record.organizationId));
     }
-    if (to === 'archived') return permitted(user, 'finance.record.update', record.scope);
+    if (to === 'archived')
+      return permitted(
+        user,
+        'finance.record.update',
+        financeAuthorizationScope(record.organizationId),
+      );
     if (to === 'submitted' || to === 'draft') return canMaintainRecord(record);
     return false;
   }
@@ -447,7 +475,9 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
       return;
     }
     const reviewDecision = to === 'approved' || to === 'rejected' ? to : null;
-    const dedicatedReview = reviewDecision !== null && canReviewFinance(user);
+    const dedicatedReview =
+      reviewDecision !== null &&
+      canReviewFinance(user, financeAuthorizationScope(record.organizationId));
     await runAction(record, success, () =>
       client.request<FinanceRecord>(
         dedicatedReview
@@ -557,7 +587,7 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
   const canCreateAtCurrentScope = permitted(
     user,
     'finance.record.create',
-    scopeFromDraft(createDraft),
+    financeAuthorizationScope(createDraft.organizationId),
   );
   const visibleRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN');
@@ -577,8 +607,7 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
   const budgetSummaries = useMemo(() => {
     const available = records ?? [];
     const memberships = memberOrganizationIds(user);
-    const globalViewer =
-      user?.roles.includes('platform.admin') || user?.roles.includes('affiliation.tuanwei_lead');
+    const globalViewer = isDevelopmentBusinessAdmin(user) || canReviewFinance(user);
     const recordOrganizations = [
       ...new Set(
         available.flatMap((record) => (record.organizationId ? [record.organizationId] : [])),
@@ -718,10 +747,16 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
             }
             getKey={(record) => record.id}
             renderRecord={(record) => {
-              const canUpdate = permitted(user, 'finance.record.update', record.scope);
+              const canUpdate = permitted(
+                user,
+                'finance.record.update',
+                financeAuthorizationScope(record.organizationId),
+              );
               const canMaintain = canMaintainRecord(record);
-              const canApprove =
-                canReviewFinance(user) || permitted(user, 'finance.record.approve', record.scope);
+              const canApprove = canReviewFinance(
+                user,
+                financeAuthorizationScope(record.organizationId),
+              );
               const busy = busyId === record.id;
               const editing = editingId === record.id && editDraft !== null;
               return (

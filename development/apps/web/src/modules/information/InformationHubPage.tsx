@@ -6,6 +6,7 @@ import type {
   InformationReply,
   UserContext,
 } from '@freebbs-development/contracts';
+import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../core/api/client.js';
 import { InformationFeedCard } from './InformationFeedCard.js';
 import { InformationDetailDialog } from './InformationDetailDialog.js';
@@ -28,7 +29,7 @@ export interface InformationHubPageProps {
 
 function canPublish(user: UserContext | null): boolean {
   if (!user) return false;
-  if (user.roles.includes('platform.admin')) return true;
+  if (isDevelopmentBusinessAdmin(user)) return true;
   return (
     (
       user as UserContext & { policies?: Array<{ action: string; effect?: string }> }

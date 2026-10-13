@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 import '../../styles/collaboration.css';
 interface Status {
   id: string;
@@ -19,7 +20,7 @@ interface Job {
   error: string;
 }
 export function DevelopmentSettingsPage() {
-  const { client } = useAuth();
+  const { client, user } = useAuth();
   const [status, setStatus] = useState<Status[]>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState('');
@@ -137,7 +138,10 @@ export function DevelopmentSettingsPage() {
         <div>
           <Link to="/settings">← 设置</Link>
           <h1>发展端设置</h1>
-          <p>管理外部连接与消息发送，身份卡片仍在独立的管理员模块中维护。</p>
+          <p>管理外部连接与消息发送。</p>
+          {user && isBusinessAdmin(user) && !user.previewing ? (
+            <Link to="/system-settings">管理社工身份</Link>
+          ) : null}
         </div>
       </header>
       {error && (

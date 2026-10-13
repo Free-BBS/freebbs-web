@@ -28,6 +28,7 @@ async function fixture() {
           avatarUrl: null,
           baseRole: 'student',
           roles: headers['x-user'] === 'admin' ? ['platform.admin'] : [],
+          businessAdmin: headers['x-user'] === 'admin',
           tags: [],
         },
       }),

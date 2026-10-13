@@ -44,7 +44,7 @@ const financeLead = {
     },
     {
       id: 'approve',
-      action: 'finance.record.approve',
+      action: 'finance.record.review',
       resource: 'finance_record',
       effect: 'allow' as const,
     },
@@ -52,9 +52,121 @@ const financeLead = {
 };
 
 describe('FinancePage', () => {
+  it('uses organization grants for activity-linked creation, editing and review', async () => {
+    const linked = {
+      ...existingRecord,
+      status: 'draft',
+      organizationId: 'sports_center',
+      activityId: 'activity-match',
+      scope: { type: 'activity', id: 'activity-match' },
+    };
+    let record = linked;
+    let reviewRecord = {
+      ...linked,
+      id: 'finance-review',
+      title: '关联活动结算',
+      status: 'submitted',
+    };
+    mockRequest.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/finance/records' && !init) return [record, reviewRecord];
+      if (path === '/finance/records' && init?.method === 'PATCH')
+        return (record = { ...record, ...JSON.parse(String(init.body)) });
+      if (path === '/finance/records' && init?.method === 'POST')
+        return { ...record, ...JSON.parse(String(init.body)), id: 'created' };
+      if (path === '/finance/records/finance-review/reviews')
+        return (reviewRecord = { ...reviewRecord, status: 'approved' });
+      throw new Error(path);
+    });
+    render(
+      <FinancePage
+        user={{
+          ...financeLead,
+          roles: ['counselor.youth_league'],
+          policies: [
+            {
+              action: 'finance.*',
+              resource: '*',
+              effect: 'allow',
+              scope: { type: 'social_organization', id: 'sports_center' },
+            },
+          ],
+        }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: `编辑 ${linked.title}` }));
+    await userEvent.clear(screen.getByLabelText('编辑金额（元）'));
+    await userEvent.type(screen.getByLabelText('编辑金额（元）'), '750.50');
+    await userEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await screen.findByText('财务草稿已更新');
+    await userEvent.type(screen.getByLabelText('记录标题'), '比赛活动预算');
+    await userEvent.type(screen.getByLabelText('关联活动 ID（可选）'), 'activity-match');
+    expect(screen.getByRole('button', { name: '保存草稿' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+    await screen.findByText('财务草稿已创建');
+    expect(mockRequest).toHaveBeenCalledWith(
+      '/finance/records',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"organizationId":"sports_center"'),
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: '批准' }));
+    await screen.findByText('财务记录已批准');
+    expect(mockRequest).toHaveBeenCalledWith(
+      '/finance/records/finance-review/reviews',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+  it('does not show global editing to a scoped administrator without finance grants', async () => {
+    mockRequest.mockResolvedValueOnce([{ ...existingRecord, status: 'draft' }]);
+    render(
+      <FinancePage
+        user={{ ...financeLead, roles: ['platform.admin'], businessAdmin: false, policies: [] }}
+      />,
+    );
+    await screen.findByText(existingRecord.title);
+    expect(screen.queryByRole('button', { name: '保存草稿' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: `编辑 ${existingRecord.title}` }),
+    ).not.toBeInTheDocument();
+  });
+  it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+    'lets %s choose organizations and edit their finance records with effective grants',
+    async (role) => {
+      const record = {
+        ...existingRecord,
+        status: 'draft',
+        organizationId: 'sports_center',
+        scope: { type: 'social_organization', id: 'sports_center' },
+      };
+      mockRequest.mockResolvedValueOnce([record]);
+      render(
+        <FinancePage
+          user={{
+            ...financeLead,
+            roles: [role],
+            policies: [
+              ...financeLead.policies,
+              { action: 'finance.record.read', resource: 'finance_record', effect: 'allow' },
+            ],
+          }}
+        />,
+      );
+      await screen.findByText(record.title);
+      const organizations = screen.getByLabelText('组织');
+      expect(within(organizations).getByRole('option', { name: '体育中心' })).toBeInTheDocument();
+      expect(within(organizations).getByRole('option', { name: '文艺中心' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: `编辑 ${record.title}` }));
+      expect(screen.getByRole('button', { name: '保存修改' })).toBeInTheDocument();
+    },
+  );
   it('gives platform administrators finance creation and review controls without policy fixtures', async () => {
     mockRequest.mockResolvedValueOnce([existingRecord]);
-    render(<FinancePage user={{ ...financeLead, roles: ['platform.admin'], policies: [] }} />);
+    render(
+      <FinancePage
+        user={{ ...financeLead, roles: ['platform.admin'], businessAdmin: true, policies: [] }}
+      />,
+    );
     await screen.findByText(existingRecord.title);
     expect(screen.getByRole('button', { name: '保存草稿' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '批准' })).toBeInTheDocument();
@@ -210,7 +322,7 @@ describe('FinancePage', () => {
     );
   });
 
-  it('gates draft creation by the exact live scope with deny precedence', async () => {
+  it('does not substitute record metadata for organization authorization', async () => {
     const scopedUser = {
       ...financeLead,
       policies: [
@@ -219,21 +331,21 @@ describe('FinancePage', () => {
           action: 'finance.record.create',
           resource: 'finance_record',
           effect: 'allow' as const,
-          scope: { type: 'organization', id: 'organization-a' },
+          scope: { type: 'social_organization', id: 'arts_center' },
         },
         {
           id: 'allow-organization-b',
           action: 'finance.record.create',
           resource: 'finance_record',
           effect: 'allow' as const,
-          scope: { type: 'organization', id: 'organization-b' },
+          scope: { type: 'social_organization', id: 'sports_center' },
         },
         {
           id: 'deny-organization-b',
           action: 'finance.record.create',
           resource: 'finance_record',
           effect: 'deny' as const,
-          scope: { type: 'organization', id: 'organization-b' },
+          scope: { type: 'social_organization', id: 'sports_center' },
         },
       ],
     };
@@ -244,15 +356,41 @@ describe('FinancePage', () => {
     const submit = screen.getByRole('button', { name: '保存草稿' });
     expect(submit).toBeDisabled();
 
+    // A record label or linked activity cannot substitute for organization access.
     await userEvent.clear(screen.getByLabelText('范围类型'));
-    await userEvent.type(screen.getByLabelText('范围类型'), 'organization');
+    await userEvent.type(screen.getByLabelText('范围类型'), 'social_organization');
     await userEvent.clear(screen.getByLabelText('范围标识'));
-    await userEvent.type(screen.getByLabelText('范围标识'), 'organization-a');
-    expect(submit).toBeEnabled();
-
-    await userEvent.clear(screen.getByLabelText('范围标识'));
-    await userEvent.type(screen.getByLabelText('范围标识'), 'organization-b');
+    await userEvent.type(screen.getByLabelText('范围标识'), 'arts_center');
     expect(submit).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText('范围标识'));
+    await userEvent.type(screen.getByLabelText('范围标识'), 'sports_center');
+    expect(submit).toBeDisabled();
+  });
+
+  it('applies organization-specific deny precedence when choosing a finance organization', async () => {
+    mockRequest.mockResolvedValueOnce([]);
+    render(
+      <FinancePage
+        user={{
+          ...financeLead,
+          roles: ['counselor.youth_league'],
+          policies: [
+            { action: 'finance.*', resource: '*', effect: 'allow' },
+            {
+              action: 'finance.record.create',
+              resource: 'finance_record',
+              effect: 'deny',
+              scope: { type: 'social_organization', id: 'sports_center' },
+            },
+          ],
+        }}
+      />,
+    );
+    await screen.findByText('暂无财务记录');
+    fireEvent.change(screen.getByLabelText('组织'), { target: { value: 'arts_center' } });
+    expect(screen.getByRole('button', { name: '保存草稿' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('组织'), { target: { value: 'sports_center' } });
+    expect(screen.getByRole('button', { name: '保存草稿' })).toBeDisabled();
   });
 
   it('rechecks transition permission at click time after policy expiry', async () => {
@@ -327,8 +465,12 @@ describe('FinancePage', () => {
     let rejectArchive = true;
     mockRequest.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === '/finance/records' && init === undefined) return [current];
-      if (path === `/finance/records/${current.id}/transitions`) {
-        const body = JSON.parse(String(init?.body)) as { to: Status };
+      if (
+        path === `/finance/records/${current.id}/transitions` ||
+        path === `/finance/records/${current.id}/reviews`
+      ) {
+        const parsed = JSON.parse(String(init?.body)) as { to?: Status; decision?: Status };
+        const body = { to: (parsed.to ?? parsed.decision)! };
         if (body.to === 'archived' && rejectArchive) throw new Error('archive rejected');
         current = { ...current, status: body.to };
         return current;

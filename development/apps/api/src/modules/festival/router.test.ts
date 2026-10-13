@@ -46,6 +46,7 @@ async function fixture(maxUploadBytes = 1024) {
             avatarUrl: null,
             baseRole: 'student' as const,
             roles: roles[uid]!,
+            businessAdmin: uid === 'admin',
             tags: [],
             policies:
               uid === 'blocked'

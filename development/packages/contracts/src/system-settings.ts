@@ -9,20 +9,32 @@ import type { ModuleManifest, ModuleId, RoleKey } from './modules.js';
 import { SOCIAL_ORGANIZATIONS, type SocialOrganizationId } from './organizations.js';
 
 /** Business administration never derives from the reserved development lead role. */
-export function isDevelopmentBusinessAdmin(roles: readonly RoleKey[]): boolean {
-  return roles.includes('platform.admin');
+export function isDevelopmentBusinessAdmin(
+  user: Pick<UserContext, 'roles' | 'businessAdmin'> | null | undefined,
+): boolean {
+  return user?.businessAdmin === true && user.roles.includes('platform.admin');
 }
 export function isDevelopmentLead(roles: readonly RoleKey[]): boolean {
   return roles.includes('platform.super_admin');
 }
-/** Main authority comes from trusted original access metadata; role-only fallback is for demo. */
+/** Original development access is required, including in demo contexts. */
 export function canManageDevelopmentAccess(
   user: Pick<UserContext, 'roles' | 'previewing' | 'viewer' | 'developmentAccess'>,
 ): boolean {
   if (user.previewing || !isDevelopmentLead(user.roles)) return false;
-  if (user.viewer !== undefined && user.viewer.canManageDevelopment !== true) return false;
-  if (user.developmentAccess !== undefined && user.developmentAccess !== 'lead') return false;
-  return true;
+  return user.viewer?.canManageDevelopment === true && user.developmentAccess === 'lead';
+}
+export interface DevelopmentBusinessAdminBootstrapStatus {
+  canInitialize: boolean;
+  globalAdminCount: number;
+}
+export interface DevelopmentBusinessAdminBootstrapInput {
+  uid: string;
+  reason?: string;
+}
+export interface DevelopmentBusinessAdminBootstrapResult {
+  initialized: true;
+  uid: string;
 }
 export type DevelopmentAssignableRole = Exclude<RoleKey, 'platform.super_admin'>;
 export interface SystemSettingsUser {

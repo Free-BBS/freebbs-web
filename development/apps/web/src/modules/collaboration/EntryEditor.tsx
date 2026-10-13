@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import {
-  isDevelopmentBusinessAdmin,
-  type CollaborationSpace,
-  type CollaborationEntry,
-} from '@freebbs-development/contracts';
+import { useEffect, useState } from 'react';
+import { type CollaborationSpace, type CollaborationEntry } from '@freebbs-development/contracts';
 import { useAuth } from '../../core/auth/AuthProvider.js';
+import { isBusinessAdmin } from '../../core/permissions/Can.js';
 import { iso, localDate } from './collaborationTools.js';
 export function EntryEditor({
   space,
@@ -16,7 +13,7 @@ export function EntryEditor({
   onSubmit: (value: Record<string, unknown>) => Promise<boolean>;
 }) {
   const { user } = useAuth();
-  const businessAdministrator = isDevelopmentBusinessAdmin(user?.roles ?? []);
+  const businessAdministrator = isBusinessAdmin(user);
   const previous = ['availability', 'practice'].includes(space.kind)
     ? space.entries.find((entry) => entry.uid === user?.uid)
     : undefined;
@@ -35,6 +32,17 @@ export function EntryEditor({
   const [end, setEnd] = useState('');
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<CollaborationEntry | undefined>(previous);
+  const validChoices = ['availability', 'practice'].includes(space.kind)
+    ? choices.filter((id) => space.slots.some((slot) => slot.id === id))
+    : choices;
+  useEffect(() => {
+    if (!['availability', 'practice'].includes(space.kind)) return;
+    const validIds = new Set(space.slots.map((slot) => slot.id));
+    setChoices((current) => {
+      const next = current.filter((id) => validIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [space.kind, space.slots]);
   return (
     <form
       className="collaboration-entry-editor"
@@ -44,12 +52,15 @@ export function EntryEditor({
         void onSubmit({
           entryId: editing?.id,
           values,
-          choices,
+          choices: validChoices,
           resource,
           startsAt: iso(start),
           endsAt: iso(end),
           text,
-        }).then((success) => setSaved(success));
+        }).then((success) => {
+          setSaved(success);
+          if (success && space.kind === 'review') setEditing(undefined);
+        });
       }}
     >
       <header>
@@ -63,7 +74,7 @@ export function EntryEditor({
                 : '参与这个空间'}
         </h2>
         {['shared_table', 'review', 'materials', 'booking', 'attendance'].includes(space.kind) &&
-          (space.kind === 'shared_table' || editableEntries.length > 0) && (
+          (['shared_table', 'review'].includes(space.kind) || editableEntries.length > 0) && (
             <select
               aria-label={
                 space.kind === 'review'

@@ -23,7 +23,7 @@ export function auditBusinessOverrides(
     if (
       result.status !== 200 ||
       result.user.previewing ||
-      !isDevelopmentBusinessAdmin(result.user.roles)
+      !isDevelopmentBusinessAdmin(result.user)
     ) {
       next();
       return;

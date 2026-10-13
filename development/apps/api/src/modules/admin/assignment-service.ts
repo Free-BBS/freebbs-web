@@ -8,6 +8,11 @@ import type {
   TagAssignmentRecord,
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
+import {
+  businessAdminIdentities,
+  effectiveGlobalBusinessAdmins,
+} from '../../core/authorization/business-admin.js';
+import type { UserDirectory } from '../../core/auth/user-directory.js';
 
 const SUPER_ADMIN_ROLE_KEY: RoleKey = 'platform.super_admin';
 
@@ -30,6 +35,8 @@ export interface AssignmentMutationContext {
   now?: Date;
   /** HTTP identity editing cannot mutate the reserved lead; internal recovery may. */
   allowReservedLeadMutation?: boolean;
+  directory?: UserDirectory;
+  allowedUids?: readonly string[];
 }
 
 const publicScope: ScopeRef = { type: 'public', id: '*' };
@@ -76,6 +83,12 @@ export async function createRoleAssignment(
   const scope = input.scope ?? publicScope;
   validateScope(scope);
   validateExpiry(input.expiresAt, now);
+  if (input.roleKey === 'platform.admin' && (scope.type !== 'public' || scope.id !== '*'))
+    throw new HttpError(
+      400,
+      'invalid_platform_admin_scope',
+      'Platform administrator assignments must use public scope',
+    );
   if (
     input.roleKey === SUPER_ADMIN_ROLE_KEY &&
     (scope.type !== publicScope.type || scope.id !== publicScope.id)
@@ -88,11 +101,12 @@ export async function createRoleAssignment(
   }
 
   return store.transaction(async (transactionStore) => {
+    const definitions =
+      input.roleKey === 'platform.admin'
+        ? await transactionStore.roles.listForUpdate({ query: input.roleKey })
+        : await transactionStore.roles.list({ query: input.roleKey });
     await requireActiveSubject(transactionStore, input.subjectUid);
-    const role = exact(
-      await transactionStore.roles.list({ query: input.roleKey }),
-      (candidate) => candidate.key === input.roleKey,
-    );
+    const role = exact(definitions, (candidate) => candidate.key === input.roleKey);
     if (role === undefined) {
       throw new HttpError(400, 'role_definition_not_found', 'Role definition is not registered');
     }
@@ -280,9 +294,8 @@ export async function archiveRoleAssignment(
 ): Promise<RoleAssignmentRecord> {
   const now = context.now ?? new Date();
   return store.transaction(async (transactionStore) => {
-    const canonicalSuperAdminRole = (
-      await transactionStore.roles.listForUpdate({ query: SUPER_ADMIN_ROLE_KEY })
-    ).find(({ key }) => key === SUPER_ADMIN_ROLE_KEY);
+    const roleDefinitions = await transactionStore.roles.listForUpdate();
+    const canonicalSuperAdminRole = roleDefinitions.find(({ key }) => key === SUPER_ADMIN_ROLE_KEY);
     if (canonicalSuperAdminRole === undefined) {
       throw new Error('Canonical platform super administrator role is missing');
     }
@@ -302,25 +315,36 @@ export async function archiveRoleAssignment(
       throw new HttpError(409, 'assignment_inactive', 'Role assignment is not active');
     }
 
-    if (assignment.roleKey === 'platform.admin' && isCurrent(assignment.expiresAt, now)) {
+    if (
+      assignment.roleKey === 'platform.admin' &&
+      assignment.scope.type === 'public' &&
+      assignment.scope.id === '*' &&
+      isCurrent(assignment.expiresAt, now)
+    ) {
       const [subjects, access] = await Promise.all([
         transactionStore.subjects.listForUpdate({ status: 'active' }),
         transactionStore.developmentAccess.listForUpdate(),
       ]);
-      const other = assignments.some(
-        (row) =>
-          row.id !== assignment.id &&
-          row.subjectUid !== assignment.subjectUid &&
-          row.roleKey === 'platform.admin' &&
-          row.status === 'active' &&
-          isCurrent(row.expiresAt, now) &&
-          subjects.some((subject) => subject.uid === row.subjectUid) &&
-          (access.length === 0 ||
-            access.some(
-              (grant) => grant.subjectUid === row.subjectUid && grant.status === 'active',
-            )),
+      const identities = await businessAdminIdentities(assignments, context.directory);
+      const admins = effectiveGlobalBusinessAdmins(
+        assignments,
+        roleDefinitions,
+        subjects,
+        access,
+        now,
+        identities,
+        context.allowedUids,
       );
-      if (!other)
+      const remaining = effectiveGlobalBusinessAdmins(
+        assignments.filter(({ id }) => id !== assignment.id),
+        roleDefinitions,
+        subjects,
+        access,
+        now,
+        identities,
+        context.allowedUids,
+      );
+      if (admins.has(assignment.subjectUid) && remaining.size === 0)
         throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
     }
 

@@ -11,6 +11,8 @@ export interface UserContext {
   studentId?: string | null;
   baseRole: BaseRole;
   roles: RoleKey[];
+  /** Trusted authorization result for a current public:* platform.admin assignment. */
+  readonly businessAdmin?: boolean;
   tags: PermissionTag[];
   readonly mainSiteAdmin?: boolean;
   developmentAccess?: 'member' | 'lead';
