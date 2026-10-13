@@ -34,7 +34,7 @@ const reviewerRoles: readonly RoleKey[] = [
   'department.arts_director',
   'domain.arts_lead',
   'affiliation.tuanwei_lead',
-  'platform.super_admin',
+  'platform.admin',
 ];
 
 export function canReviewFestival(user: Pick<UserContext, 'roles'> | null | undefined): boolean {

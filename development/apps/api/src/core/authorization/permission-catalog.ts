@@ -47,8 +47,8 @@ export const BASE_STUDENT_PERMISSIONS: readonly PermissionRule[] = [
   },
 ];
 const BASE_ROLE_PERMISSION_CATALOG: Partial<RolePermissionCatalog> = {
-  'platform.super_admin': rules(['*', '*'], ['liaison.problem.review', 'liaison_problem']),
-  'platform.admin': rules(['community.content.moderate', 'community_post']),
+  'platform.super_admin': rules(['admin.manage', 'admin']),
+  'platform.admin': rules(['*', '*']),
   'counselor.youth_league_secretary': rules(
     ['community.wish.respond', 'community_wish'],
     ['community.wish.transition', 'community_wish'],

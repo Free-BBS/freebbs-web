@@ -9,7 +9,7 @@ function organizationScope(organizationId: SocialOrganizationId) {
 }
 
 export function isFinanceSuperAdmin(actor: AuthorizationContext): boolean {
-  return actor.roles.includes('platform.super_admin');
+  return actor.roles.includes('platform.admin');
 }
 
 export function leadOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {

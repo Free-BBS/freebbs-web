@@ -3,6 +3,7 @@ import type { AuthClient } from './core/auth/auth-client.js';
 import type { UserDirectory } from './core/auth/user-directory.js';
 import { createMySqlStore } from './core/database/mysql-store.js';
 import { startFeedScheduler } from './modules/connectors/feed.js';
+import type { DevelopmentRewardProvider } from '@freebbs-development/contracts';
 
 export interface IntegratedDatabaseConfig {
   host: string;
@@ -20,6 +21,7 @@ export interface IntegratedRuntimeOptions {
   uploadDirectory: string;
   collectionsUploadDirectory: string;
   sportsUploadDirectory?: string;
+  developmentRewardProvider?: DevelopmentRewardProvider;
 }
 
 export interface IntegratedRuntime {
@@ -52,6 +54,9 @@ export async function createIntegratedDevelopmentRuntime(
       collectionsUploadDirectory: options.collectionsUploadDirectory,
       ...(options.sportsUploadDirectory
         ? { sportsUploadDirectory: options.sportsUploadDirectory }
+        : {}),
+      ...(options.developmentRewardProvider
+        ? { developmentRewardProvider: options.developmentRewardProvider }
         : {}),
     });
     const stopFeed = startFeedScheduler(options.collectionsUploadDirectory, environment);

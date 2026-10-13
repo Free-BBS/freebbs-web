@@ -501,6 +501,14 @@ function createDemoState(): MemoryState {
     }),
   );
   state.roleAssignments = [
+    stored('assignment-platform-admin', {
+      subjectUid: 'demo-admin',
+      roleKey: 'platform.admin',
+      expiresAt: null,
+      status: 'active',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
     stored('assignment-admin', {
       subjectUid: 'demo-admin',
       roleKey: 'platform.super_admin',

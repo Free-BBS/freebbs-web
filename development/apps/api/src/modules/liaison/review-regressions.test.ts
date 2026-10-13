@@ -148,8 +148,7 @@ describe('liaison review regressions', () => {
       .expect(200);
 
     const superAdminAssignment = (await base.roleAssignments.list()).find(
-      ({ subjectUid, roleKey }) =>
-        subjectUid === 'demo-admin' && roleKey === 'platform.super_admin',
+      ({ subjectUid, roleKey }) => subjectUid === 'demo-admin' && roleKey === 'platform.admin',
     );
     expect(superAdminAssignment).toBeDefined();
     await base.roleAssignments.update(superAdminAssignment!.id, { status: 'inactive' });

@@ -54,7 +54,7 @@ describe('AdminPage shell', () => {
 
     expect(await screen.findByRole('dialog', { name: '操作记录' })).toBeInTheDocument();
     expect(mockRequest).toHaveBeenCalledWith(
-      '/admin/audit-logs?action=admin.development_user.update&page=1&pageSize=20',
+      '/admin/audit-logs?action=admin.development_access.update&page=1&pageSize=20',
     );
   });
 });

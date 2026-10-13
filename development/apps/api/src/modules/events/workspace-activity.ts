@@ -65,7 +65,7 @@ export async function resolveWorkspaceActivity(
       (survey.closesAt != null && Date.parse(survey.closesAt) <= Date.now());
     // Public learning surveys expose registration windows, not event dates or ownership.
     const canEdit =
-      actor.roles.includes('platform.super_admin') &&
+      actor.roles.includes('platform.admin') &&
       authorize(actor, {
         action: 'events.update',
         resource: 'activity',

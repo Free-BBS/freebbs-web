@@ -34,7 +34,7 @@ const artsMember: UserContext = {
 const admin: UserContext = {
   ...ordinary,
   uid: 'admin',
-  roles: ['platform.super_admin'],
+  roles: ['platform.admin'],
 };
 
 const generalEntry = {

@@ -50,8 +50,7 @@ export function resolvePublisher(
   if (
     selected &&
     (!department ||
-      (!actor.roles.includes('platform.super_admin') &&
-        !departments.some(({ id }) => id === selected)))
+      (!actor.roles.includes('platform.admin') && !departments.some(({ id }) => id === selected)))
   )
     throw new HttpError(403, 'forbidden', '不能以未加入的部门发布活动');
   if (department) {
@@ -68,7 +67,7 @@ export function resolvePublisher(
   }
   // Old payloads and actors without a gallery department remain valid.
   const organizations = actorOrganizations(actor);
-  if (actor.roles.includes('platform.super_admin'))
+  if (actor.roles.includes('platform.admin'))
     return { schema, organizationId: requestedOrganization ?? null };
   if (requestedOrganization != null) {
     if (!organizations.includes(requestedOrganization))
@@ -150,7 +149,7 @@ export function canReadPublishedActivity(
   if (
     (activity.scope.type === 'public' && activity.scope.id === '*') ||
     actor.uid === activity.ownerUid ||
-    actor.roles.includes('platform.super_admin')
+    actor.roles.includes('platform.admin')
   )
     return true;
   // Baseline student events.read is unscoped. A private catalog entry needs an

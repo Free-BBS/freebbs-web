@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserContext } from '@freebbs-development/contracts';
 
 import { CommercePage } from './CommercePage.js';
+const auth = vi.hoisted(() => ({ user: null as UserContext | null }));
+vi.mock('../core/auth/AuthProvider.js', () => ({ useOptionalAuth: () => auth }));
 
 function renderCommerce() {
   return render(
@@ -20,6 +23,30 @@ function renderCommerce() {
 }
 
 describe('development commerce', () => {
+  beforeEach(() => {
+    auth.user = null;
+  });
+  it('keeps connector business controls hidden for a lead-only identity on personal settings', () => {
+    auth.user = {
+      uid: 'lead',
+      displayName: '负责人',
+      avatarUrl: null,
+      baseRole: 'student',
+      roles: ['platform.super_admin'],
+      tags: [],
+      developmentAccess: 'lead',
+    };
+    render(
+      <MemoryRouter>
+        <CommercePage section="settings" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: '发展端设置' })).not.toBeInTheDocument();
+    expect(screen.getByTitle('FREE-BBS 设置')).toHaveAttribute(
+      'src',
+      '/settings?embed=development',
+    );
+  });
   it('loads the main-site shop inside development and returns to the previous module', () => {
     renderCommerce();
     expect(screen.queryByRole('heading', { name: '商店' })).not.toBeInTheDocument();

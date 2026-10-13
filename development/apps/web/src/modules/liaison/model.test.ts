@@ -15,6 +15,28 @@ const team = { type: 'liaison_team', id: 'team-1' } as const;
 const outcome = { type: 'liaison_outcome', id: 'outcome-1' } as const;
 
 describe('liaison presentation permissions', () => {
+  it('allows business administrators and refuses legacy lead wildcard authority', () => {
+    expect(
+      hasLiaisonPermission(
+        { ...base, roles: ['platform.admin'] },
+        'liaison.problem.review',
+        'liaison_problem',
+        [problem],
+      ),
+    ).toBe(true);
+    expect(
+      hasLiaisonPermission(
+        {
+          ...base,
+          roles: ['platform.super_admin'],
+          policies: [{ action: '*', resource: '*', effect: 'allow' }],
+        },
+        'liaison.problem.review',
+        'liaison_problem',
+        [problem],
+      ),
+    ).toBe(false);
+  });
   it('fails closed without a compiled allow policy', () => {
     expect(hasLiaisonPermission(base, 'liaison.problem.join', 'liaison_problem', [problem])).toBe(
       false,

@@ -80,18 +80,17 @@ async function canEdit(
   const policies: AuthorizationPolicy[] = (actor.policies ?? []).filter(
     ({ effect }) => effect === 'deny',
   );
-  // The main-site bootstrap administrator has an explicit trusted wildcard
-  // policy before a persistent development-lead assignment exists.
   policies.push(
     ...(actor.policies ?? []).filter(
       (policy) =>
         policy.effect === 'allow' &&
-        policy.id.startsWith('main-site-admin-bootstrap:') &&
+        policy.id.startsWith('business-admin:') &&
         matches(policy, action, resource),
     ),
   );
   for (const assignment of assignments) {
     if (
+      assignment.roleKey === 'platform.super_admin' ||
       assignment.subjectUid !== actor.uid ||
       assignment.status !== 'active' ||
       !actor.roles.includes(assignment.roleKey) ||
@@ -128,7 +127,7 @@ async function canEdit(
           }));
     const departments = departmentsForRoles([assignment.roleKey]);
     const eligible =
-      assignment.roleKey === 'platform.super_admin' ||
+      assignment.roleKey === 'platform.admin' ||
       (target.departmentId
         ? departments.some(({ id }) => id === target.departmentId)
         : target.organizationId != null &&

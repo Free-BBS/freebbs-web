@@ -98,10 +98,9 @@ export function fail(status: number, code: string, message: string): never {
   throw new HttpError(status, code, message);
 }
 export const grantAdministrator = (user: UserContext) =>
-  user.roles.includes('platform.super_admin') ||
-  (user.developmentAccess === 'lead' && !user.previewing);
+  user.roles.includes('platform.admin') && !user.previewing;
 export const manages = (s: OrganizationState, user: UserContext) =>
-  grantAdministrator(user) || s.managerUids.includes(user.uid);
+  user.roles.includes('platform.admin') || s.managerUids.includes(user.uid);
 export const departmentMember = (user: UserContext) =>
   user.roles.some((role) =>
     [
@@ -122,7 +121,8 @@ export function requireAccess(s: OrganizationState, user: UserContext) {
     fail(403, 'module_forbidden', '尚未配置您的组织组访问范围，请联系管理者');
 }
 export function requireManager(s: OrganizationState, user: UserContext) {
-  if (!manages(s, user)) fail(403, 'forbidden', '只有已授权的组织组管理者可以操作');
+  if (user.previewing || !manages(s, user))
+    fail(403, 'forbidden', '只有已授权的组织组管理者可以操作');
 }
 export function revision(current: number, expected: number) {
   if (current !== expected) fail(409, 'revision_conflict', '页面已更新，请重新加载后再保存');

@@ -4,6 +4,7 @@ import {
   DEPARTMENT_DIRECTORY,
   DEVELOPMENT_IDENTITY_SECTIONS,
   departmentsForRoles,
+  isDevelopmentBusinessAdmin,
   type CollaborationSpace,
   type CollaborationKind,
   type CollaborationColumn,
@@ -26,7 +27,7 @@ export function SpaceEditor({
 }) {
   const auth = useAuth();
   const [search] = useSearchParams();
-  const departments = auth.user?.roles.includes('platform.super_admin')
+  const departments = isDevelopmentBusinessAdmin(auth.user?.roles ?? [])
     ? DEPARTMENT_DIRECTORY
     : departmentsForRoles(auth.user?.roles ?? []);
   const [step, setStep] = useState(0);

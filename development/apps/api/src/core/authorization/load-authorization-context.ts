@@ -136,11 +136,31 @@ export async function loadAuthorizationContext(
     (binding) => binding.status === 'active' && catalogDefinition(binding),
   );
   for (const assignment of currentRoleAssignments) {
+    // Existing databases can retain legacy lead wildcard rows. The reserved lead
+    // role never supplies business permissions, even before catalog reconciliation.
+    if (assignment.roleKey === 'platform.admin') {
+      for (const permission of activePermissions.filter(
+        (permission) => !permission.action.startsWith('admin.'),
+      )) {
+        policies.push({
+          id: `business-admin:${assignment.id}:${permission.id}`,
+          action: permission.action,
+          resource: permission.resource,
+          effect: 'allow',
+          expiresAt: assignment.expiresAt,
+          ...(isGlobal(assignment.scope) ? {} : { scope: assignment.scope }),
+        });
+      }
+    }
     for (const binding of activeRoleBindings) {
       if (binding.roleKey !== assignment.roleKey) continue;
+      if (assignment.roleKey === 'platform.super_admin' && !binding.action.startsWith('admin.'))
+        continue;
       const scope = combineScopes(assignment.scope, binding.scope);
       if (scope === null) continue;
       for (const permission of permissionCandidates(binding, activePermissions)) {
+        if (assignment.roleKey === 'platform.admin' && permission.action.startsWith('admin.'))
+          continue;
         policies.push({
           id: `role:${assignment.id}:${binding.id}:${permission.id}`,
           action: permission.action,

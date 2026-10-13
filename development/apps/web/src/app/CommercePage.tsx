@@ -32,9 +32,7 @@ const sharedRoutes: Record<string, string> = {
 
 export function CommercePage({ section, userUid = '' }: CommercePageProps) {
   const auth = useOptionalAuth();
-  const developmentSettings =
-    auth?.user?.developmentAccess === 'lead' ||
-    auth?.user?.roles.some((role) => ['platform.super_admin', 'platform.admin'].includes(role));
+  const developmentSettings = auth?.user?.roles.includes('platform.admin') && !auth.user.previewing;
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
