@@ -75,6 +75,7 @@ mkdir -p "$DEPLOY_DIR"
 echo "[deploy] syncing project to $DEPLOY_DIR"
 rsync -a --delete \
   --exclude ".git" \
+  --exclude ".development-map-token.sha256" \
   --exclude "node_modules" \
   --exclude "uploads" \
   --exclude "database/uploads" \
