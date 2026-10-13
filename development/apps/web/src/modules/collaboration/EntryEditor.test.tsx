@@ -45,6 +45,178 @@ const space: CollaborationSpace = {
 
 beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'student', roles: [] } }));
 
+describe('editing target refresh', () => {
+  it.each([false, true])(
+    'creates a new row with the preserved draft after the selected row is deleted (other rows: %s)',
+    async (hasOtherRows) => {
+      const onSubmit = vi.fn().mockResolvedValue(true);
+      const otherEntry = { ...entry, id: 'other', displayName: '其他同学' };
+      const original: CollaborationSpace = {
+        ...space,
+        kind: 'shared_table',
+        columns: [{ id: 'name', label: '名称', kind: 'text', required: true }],
+        entries: hasOtherRows ? [entry, otherEntry] : [entry],
+      };
+      const view = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+      fireEvent.change(screen.getByLabelText('编辑现有行'), { target: { value: entry.id } });
+      fireEvent.change(screen.getByLabelText(/名称/), { target: { value: '未保存的行草稿' } });
+
+      view.rerender(
+        <EntryEditor
+          space={{ ...original, revision: 2, entries: hasOtherRows ? [otherEntry] : [] }}
+          busy={false}
+          onSubmit={onSubmit}
+        />,
+      );
+
+      expect(screen.getByLabelText('编辑现有行')).toHaveValue('');
+      expect(screen.getByLabelText(/名称/)).toHaveValue('未保存的行草稿');
+      // Do not dispatch change: the browser already displays the new-row option.
+      fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({
+        entryId: undefined,
+        values: { name: '未保存的行草稿' },
+      });
+    },
+  );
+
+  it.each(['review', 'materials', 'booking', 'attendance'] as const)(
+    'clears a deleted %s target while preserving the body draft',
+    async (kind) => {
+      const onSubmit = vi.fn().mockResolvedValue(true);
+      const original = { ...space, kind };
+      const view = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+      fireEvent.change(screen.getByLabelText(kind === 'review' ? '修订退回材料' : '编辑现有记录'), {
+        target: { value: entry.id },
+      });
+      fireEvent.change(screen.getByLabelText('内容与说明'), {
+        target: { value: '保留的正文草稿' },
+      });
+      if (kind === 'booking') {
+        fireEvent.change(screen.getByLabelText('预约资源'), { target: { value: '保留的资源' } });
+        fireEvent.change(screen.getByLabelText('开始时间'), {
+          target: { value: '2026-10-14T10:00' },
+        });
+        fireEvent.change(screen.getByLabelText('结束时间'), {
+          target: { value: '2026-10-14T11:00' },
+        });
+      }
+      view.rerender(
+        <EntryEditor space={{ ...original, entries: [] }} busy={false} onSubmit={onSubmit} />,
+      );
+      expect(screen.getByLabelText('内容与说明')).toHaveValue('保留的正文草稿');
+      fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({
+        entryId: undefined,
+        text: '保留的正文草稿',
+        ...(kind === 'booking' ? { resource: '保留的资源' } : {}),
+      });
+    },
+  );
+
+  it.each(['review', 'attendance'] as const)(
+    'clears the selected %s target when its status no longer permits editing',
+    async (kind) => {
+      const onSubmit = vi.fn().mockResolvedValue(true);
+      const original = { ...space, kind };
+      const view = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+      fireEvent.change(screen.getByLabelText(kind === 'review' ? '修订退回材料' : '编辑现有记录'), {
+        target: { value: entry.id },
+      });
+      fireEvent.change(screen.getByLabelText('内容与说明'), {
+        target: { value: '保留的修订草稿' },
+      });
+      view.rerender(
+        <EntryEditor
+          space={{
+            ...original,
+            entries: [{ ...entry, reviewStatus: kind === 'review' ? 'pending' : 'approved' }],
+          }}
+          busy={false}
+          onSubmit={onSubmit}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({
+        entryId: undefined,
+        text: '保留的修订草稿',
+      });
+    },
+  );
+
+  it('retains a valid selection and its draft when entries refresh', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    const view = render(<EntryEditor space={space} busy={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('修订退回材料'), { target: { value: entry.id } });
+    fireEvent.change(screen.getByLabelText('内容与说明'), { target: { value: '尚未保存的修订' } });
+    view.rerender(
+      <EntryEditor
+        space={{ ...space, revision: 2, entries: [{ ...entry, text: '服务器正文' }] }}
+        busy={false}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.getByLabelText('修订退回材料')).toHaveValue(entry.id);
+    expect(screen.getByLabelText('内容与说明')).toHaveValue('尚未保存的修订');
+    fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({
+      entryId: entry.id,
+      text: '尚未保存的修订',
+    });
+  });
+
+  it('retains the selected row when only another row is deleted', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    const original: CollaborationSpace = {
+      ...space,
+      kind: 'shared_table',
+      columns: [{ id: 'name', label: '名称', kind: 'text', required: true }],
+      entries: [entry, { ...entry, id: 'other' }],
+    };
+    const view = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('编辑现有行'), { target: { value: entry.id } });
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: '保留的行草稿' } });
+    view.rerender(
+      <EntryEditor
+        space={{ ...original, entries: [{ ...entry }] }}
+        busy={false}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.getByLabelText('编辑现有行')).toHaveValue(entry.id);
+    fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({
+      entryId: entry.id,
+      values: { name: '保留的行草稿' },
+    });
+  });
+
+  it.each(['availability', 'practice'] as const)(
+    'preserves the existing %s submission target outside the record selector',
+    async (kind) => {
+      const onSubmit = vi.fn().mockResolvedValue(true);
+      const original = {
+        ...space,
+        kind,
+        slots: [{ id: 'slot', title: '时段', startsAt: '', endsAt: '', capacity: 5 }],
+      };
+      const view = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+      fireEvent.click(screen.getByRole('button', { name: '时段' }));
+      view.rerender(
+        <EntryEditor space={{ ...original, entries: [] }} busy={false} onSubmit={onSubmit} />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({ entryId: entry.id, choices: ['slot'] });
+    },
+  );
+});
+
 describe('review resubmission', () => {
   it('returns to new submission after the last returned material saves successfully', async () => {
     const onSubmit = vi.fn().mockResolvedValue(true);

@@ -40,12 +40,16 @@ export function TeamHomepage({
   const [busy, setBusy] = useState(false);
   const [showLegacy, setShowLegacy] = useState(false);
   const generation = useRef(0);
+  const requestVersion = useRef(0);
+  const acceptedRevision = useRef(-1);
   const selection = useRef(0);
   const pending = useRef<AbortController | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const path = `/sports/teams/${encodeURIComponent(teamId)}/homepage`;
   useEffect(() => {
     const current = ++generation.current;
+    const version = ++requestVersion.current;
+    acceptedRevision.current = -1;
     const controller = new AbortController();
     setHome(null);
     setDraft(null);
@@ -56,10 +60,17 @@ export function TeamHomepage({
     void client
       .request<SportsTeamHomepage>(path, { signal: controller.signal })
       .then((value) => {
-        if (generation.current === current) setHome(value);
+        if (generation.current === current && requestVersion.current === version) {
+          acceptedRevision.current = value.revision;
+          setHome(value);
+        }
       })
       .catch((caught) => {
-        if (generation.current === current && !controller.signal.aborted)
+        if (
+          generation.current === current &&
+          requestVersion.current === version &&
+          !controller.signal.aborted
+        )
           setError(caught instanceof Error ? caught.message : '主页暂时无法加载');
       });
     return () => {
@@ -98,6 +109,8 @@ export function TeamHomepage({
   async function save(remove: boolean) {
     if (!home || !canEdit || busy || (!remove && !draft)) return;
     const current = generation.current;
+    // Starting a write supersedes reads already in flight, including their feedback.
+    const version = ++requestVersion.current;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
@@ -118,13 +131,24 @@ export function TeamHomepage({
             }
           : { method: 'PUT', body, signal: controller.signal },
       );
-      if (current !== generation.current || controller.signal.aborted) return;
+      if (
+        current !== generation.current ||
+        version !== requestVersion.current ||
+        controller.signal.aborted ||
+        saved.revision < acceptedRevision.current
+      )
+        return;
+      acceptedRevision.current = saved.revision;
       setHome(saved);
       setDraft(null);
       if (input.current) input.current.value = '';
       setMessage(remove ? 'HTML 首页已移除，继续展示图文风采' : '代表队首页已发布');
     } catch (caught) {
-      if (current === generation.current && !controller.signal.aborted)
+      if (
+        current === generation.current &&
+        version === requestVersion.current &&
+        !controller.signal.aborted
+      )
         setError(
           `${caught instanceof Error ? caught.message : '保存失败'}；草稿已保留。可刷新主页版本后重试。`,
         );
@@ -136,15 +160,23 @@ export function TeamHomepage({
     }
   }
   async function refresh() {
+    const current = generation.current;
+    const version = ++requestVersion.current;
     try {
-      const current = generation.current;
       const value = await client.request<SportsTeamHomepage>(path);
-      if (current === generation.current) {
+      if (
+        current === generation.current &&
+        version === requestVersion.current &&
+        value.revision >= acceptedRevision.current
+      ) {
+        acceptedRevision.current = value.revision;
         setHome(value);
+        setError('');
         setMessage('已刷新主页版本，上传草稿仍保留');
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '刷新失败');
+      if (current === generation.current && version === requestVersion.current)
+        setError(caught instanceof Error ? caught.message : '刷新失败');
     }
   }
   function cancel() {

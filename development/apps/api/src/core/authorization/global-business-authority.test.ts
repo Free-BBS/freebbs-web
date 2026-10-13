@@ -201,6 +201,115 @@ describe('scope-aware global business authority', () => {
 });
 
 describe('first global business administrator appointment', () => {
+  it.each([false, true])(
+    'recovers after the sole business administrator loses their main-site account (configured fallback: %s)',
+    async (fallback) => {
+      const { app, store, users } = await fixture(true, fallback ? ['global'] : []);
+      if (fallback) {
+        const grant = (await store.developmentAccess.list()).find(
+          ({ subjectUid }) => subjectUid === 'global',
+        )!;
+        await store.developmentAccess.delete(grant.id);
+      }
+      const before = await request(app)
+        .get(`${base}/admin/business-admin-bootstrap`)
+        .set(bearer('lead'))
+        .expect(200);
+      expect(before.body.data).toEqual({ canInitialize: false, globalAdminCount: 1 });
+      users.splice(
+        users.findIndex(({ uid }) => uid === 'global'),
+        1,
+      );
+      await request(app).get(`${base}/me`).set(bearer('global')).expect(401);
+      const status = await request(app)
+        .get(`${base}/admin/business-admin-bootstrap`)
+        .set(bearer('lead'))
+        .expect(200);
+      expect(status.body.data).toEqual({ canInitialize: true, globalAdminCount: 0 });
+      await request(app)
+        .post(`${base}/admin/business-admin-bootstrap`)
+        .set(bearer('local'))
+        .send({ uid: 'target' })
+        .expect(403);
+      await request(app)
+        .post(`${base}/admin/business-admin-bootstrap`)
+        .set(bearer('lead'))
+        .send({ uid: 'target', reason: 'Replace deleted administrator' })
+        .expect(201);
+      await request(app).get(`${base}/system-settings/users`).set(bearer('target')).expect(200);
+      await request(app).get(`${base}/system-settings/users`).set(bearer('lead')).expect(403);
+      await request(app).get(`${base}/admin/development-users`).set(bearer('target')).expect(403);
+      const closed = await request(app)
+        .get(`${base}/admin/business-admin-bootstrap`)
+        .set(bearer('lead'))
+        .expect(200);
+      expect(closed.body.data).toEqual({ canInitialize: false, globalAdminCount: 1 });
+      expect(
+        (await store.auditLogs.list()).find(
+          ({ action }) => action === 'admin.business_admin.initialize',
+        ),
+      ).toMatchObject({
+        actorUid: 'lead',
+        details: { previousGlobalAdminCount: 0, subjectUid: 'target' },
+      });
+    },
+  );
+
+  it.each(['settings', 'assignment', 'access'] as const)(
+    'does not use a deleted account as a survivor when removing the last real admin through %s',
+    async (route) => {
+      const { app, users, assign } = await fixture();
+      const assignment = await assign('lead', 'platform.admin');
+      users.splice(
+        users.findIndex(({ uid }) => uid === 'global'),
+        1,
+      );
+      let result;
+      if (route === 'settings') {
+        const settings = await request(app)
+          .get(`${base}/system-settings/users`)
+          .set(bearer('lead'))
+          .expect(200);
+        const lead = settings.body.data.find((user: { uid: string }) => user.uid === 'lead');
+        result = await request(app)
+          .put(`${base}/system-settings/users/lead`)
+          .set(bearer('lead'))
+          .send({ revision: lead.revision, roles: [], captainTeamIds: [] });
+      } else if (route === 'assignment') {
+        result = await request(app)
+          .delete(`${base}/admin/role-assignments/${assignment.id}`)
+          .set(bearer('lead'));
+      } else {
+        await request(app)
+          .put(`${base}/admin/development-users/other`)
+          .set(bearer('lead'))
+          .send({ accessLevel: 'lead' })
+          .expect(200);
+        result = await request(app)
+          .put(`${base}/admin/development-users/lead`)
+          .set(bearer('lead'))
+          .send({ accessLevel: null });
+      }
+      expect(result.status).toBe(409);
+      expect(result.body.data.error.code).toBe('last_platform_admin');
+    },
+  );
+
+  it('keeps the business administrator role active while a real business admin remains', async () => {
+    const { app, users, assign } = await fixture();
+    await assign('lead', 'platform.admin');
+    users.splice(
+      users.findIndex(({ uid }) => uid === 'global'),
+      1,
+    );
+    const result = await request(app)
+      .patch(`${base}/admin/roles/platform.admin`)
+      .set(bearer('lead'))
+      .send({ status: 'inactive' })
+      .expect(409);
+    expect(result.body.data.error.code).toBe('last_platform_admin');
+  });
+
   it('admits configured fallback users consistently as notification recipients', async () => {
     const { app, store } = await fixture(true, ['global']);
     const access = (await store.developmentAccess.list()).find(

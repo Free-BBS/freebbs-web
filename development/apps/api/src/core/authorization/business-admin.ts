@@ -9,8 +9,8 @@ import type { DirectoryUser, UserDirectory } from '../auth/user-directory.js';
 export async function businessAdminIdentities(
   assignments: readonly RoleAssignmentRecord[],
   directory?: UserDirectory,
-): Promise<DirectoryUser[]> {
-  if (!directory) return [];
+): Promise<DirectoryUser[] | undefined> {
+  if (!directory) return undefined;
   const uids = [
     ...new Set(
       assignments
@@ -34,7 +34,8 @@ export function effectiveGlobalBusinessAdmins(
   subjects: readonly SubjectRecord[],
   access: readonly DevelopmentAccessRecord[],
   now = new Date(),
-  identities: readonly DirectoryUser[] = [],
+  // Undefined supports directory-free demo/internal callers; an empty snapshot is authoritative.
+  identities?: readonly DirectoryUser[],
   allowedUids: readonly string[] = [],
 ): Set<string> {
   if (!roles.some((role) => role.key === 'platform.admin' && role.status === 'active'))
@@ -47,6 +48,7 @@ export function effectiveGlobalBusinessAdmins(
           row.status === 'active' &&
           row.scope.type === 'public' &&
           row.scope.id === '*' &&
+          (identities === undefined || identities.some(({ uid }) => uid === row.subjectUid)) &&
           (row.expiresAt === null || Date.parse(row.expiresAt) > now.getTime()) &&
           subjects.some(
             (subject) => subject.uid === row.subjectUid && subject.status === 'active',
@@ -55,7 +57,7 @@ export function effectiveGlobalBusinessAdmins(
             access.some((grant) => {
               if (grant.status !== 'active') return false;
               if (grant.subjectUid) return grant.subjectUid === row.subjectUid;
-              const identity = identities.find(({ uid }) => uid === row.subjectUid);
+              const identity = identities?.find(({ uid }) => uid === row.subjectUid);
               if (!identity) return false;
               return grant.studentId
                 ? grant.studentId === identity.studentId

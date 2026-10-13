@@ -32,9 +32,20 @@ export function EntryEditor({
   const [end, setEnd] = useState('');
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<CollaborationEntry | undefined>(previous);
+  const editingIsEditable = editableEntries.some((entry) => entry.id === editing?.id);
   const validChoices = ['availability', 'practice'].includes(space.kind)
     ? choices.filter((id) => space.slots.some((slot) => slot.id === id))
     : choices;
+  useEffect(() => {
+    if (
+      ['shared_table', 'review', 'materials', 'booking', 'attendance'].includes(space.kind) &&
+      editing &&
+      !editingIsEditable
+    ) {
+      setEditing(undefined);
+      setSaved(false);
+    }
+  }, [space.kind, editing, editingIsEditable]);
   useEffect(() => {
     if (!['availability', 'practice'].includes(space.kind)) return;
     const validIds = new Set(space.slots.map((slot) => slot.id));
