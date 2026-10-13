@@ -1,0 +1,65 @@
+name: Configure Map Bridge
+
+# Maintainer-reviewed production configuration: this only installs a token verifier.
+# Merge this workflow first, configure the repository Secret, run it on main, then
+# merge the Map feature PR so the existing normal Deploy loads the verifier.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type CONFIGURE MAP to install/replace the Map token verifier (no service restart)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-bbs-production
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirmation == 'CONFIGURE MAP'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/data/www/free-BBS' }}
+      MAP_CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate configuration inputs
+        env:
+          DEVELOPMENT_MAP_INGEST_TOKEN: ${{ secrets.DEVELOPMENT_MAP_INGEST_TOKEN }}
+        run: node scripts/map-bridge-configure.js --validate-inputs
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" -- "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Install only the Map token verifier
+        env:
+          DEVELOPMENT_MAP_INGEST_TOKEN: ${{ secrets.DEVELOPMENT_MAP_INGEST_TOKEN }}
+        run: node scripts/map-bridge-configure.js
