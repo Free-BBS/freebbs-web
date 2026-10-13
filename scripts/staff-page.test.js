@@ -190,6 +190,7 @@ test('public roster contains only approved fields and 34 unique members', () => 
           'introduction',
           'name',
           'photo',
+          'photoThumbnail',
         ].includes(key),
       ),
     );
@@ -207,7 +208,8 @@ test('public roster contains only approved fields and 34 unique members', () => 
     zhang.introduction,
     '苟利于民，不必法古；苟周于事，不必循俗。勠力同心，和衷共济；草木蔓发，春山在望。击鼓催征稳驭舟，奋楫扬帆启新程。',
   );
-  assert.equal(zhang.photo, '/assets/staff/zhang-yichi.png');
+  assert.equal(zhang.photo, '/assets/staff/zhang-yichi-preview.webp');
+  assert.equal(zhang.photoThumbnail, '/assets/staff/zhang-yichi-thumb.webp');
   assert.equal(roster.members.find((member) => member.name === '周柏田').introduction, '');
   assert.match(
     roster.members.find((member) => member.name === '江玮陶').introduction,
@@ -704,13 +706,14 @@ test('a missing photo falls back to the member name', () => {
   assert.equal(fallback.hidden, false);
 });
 
-test('a loaded photo opens its original local image and close restores focus to the same member', () => {
+test('a loaded thumbnail opens the larger local photo and close restores focus to the same member', () => {
   const doc = directoryDocument();
   const member = {
     name: '成员',
     groups: [],
     introduction: '',
-    photo: '/assets/staff/member.png',
+    photo: '/assets/staff/member-preview.webp',
+    photoThumbnail: '/assets/staff/member-thumb.webp',
   };
   const card = createStaffCard(doc, member, 'h2', installStaffPhotoViewer(doc));
   const avatar = card.children[0];
@@ -724,10 +727,15 @@ test('a loaded photo opens its original local image and close restores focus to 
   assert.equal(fallback.hidden, true);
   assert.equal(image.width, 88);
   assert.equal(image.height, 116);
+  assert.equal(image.src, member.photoThumbnail);
+  assert.equal(image.loading, 'lazy');
+  assert.equal(image.decoding, 'async');
   avatar.trigger('click');
   assert.equal(doc.ids['staff-photo-dialog'].open, true);
   assert.equal(doc.ids['staff-photo-name'].textContent, member.name);
-  assert.equal(doc.ids['staff-photo-image'].src, image.src);
+  assert.equal(doc.ids['staff-photo-image'].src, member.photo);
+  assert.notEqual(doc.ids['staff-photo-image'].src, image.src);
+  assert.equal(doc.ids['staff-photo-image'].decoding, 'async');
   assert.equal(doc.ids['staff-photo-image'].alt, '成员的照片');
   assert.equal(doc.ids['staff-photo-close'].focused, true);
   doc.ids['staff-photo-close'].trigger('click');
@@ -994,6 +1002,11 @@ test('staff entry retains shared shell and every local asset exists', () => {
   for (const member of normalizeStaffRoster(roster).members) {
     assert.ok(member.photo, `${member.name} photo`);
     assert.ok(fs.existsSync(path.join(root, 'public', member.photo)), member.photo);
+    assert.ok(member.photoThumbnail, `${member.name} thumbnail`);
+    assert.ok(
+      fs.existsSync(path.join(root, 'public', member.photoThumbnail)),
+      member.photoThumbnail,
+    );
   }
   const photo = fs.readFileSync(path.join(root, 'public/assets/staff/zhang-yichi.png'));
   assert.equal(photo.readUInt32BE(16), 162);

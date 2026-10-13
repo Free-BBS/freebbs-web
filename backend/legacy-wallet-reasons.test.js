@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 const { normalizeAdminAccount } = require('./teacher-accounts');
+const { syncEnterpriseCertification } = require('./user-certifications');
 
 const source = fs.readFileSync(require.resolve('./server'), 'utf8');
 function fragment(start, end) {
@@ -137,6 +138,8 @@ function harness({ authorized = true, failAnnotation = false } = {}) {
     walletLedgerCheckpoint,
     annotateWalletLedger,
     normalizeAdminAccount,
+    syncEnterpriseCertification,
+    readApprovedCertifications: async () => new Map(),
     requireAuth: auth({ id: 8 }),
     requireAdmin: auth({ id: 7, username: 'NotingSr' }),
     normalizeCurrencyType: (value) => value,

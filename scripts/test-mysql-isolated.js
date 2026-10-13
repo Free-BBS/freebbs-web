@@ -30,6 +30,7 @@ const TEST_FILES = [
   'backend/workbench-schedule-planner.mysql.test.js',
   'backend/course-schedule.mysql.test.js',
   'backend/teacher-accounts.mysql.test.js',
+  'backend/user-certifications.mysql.test.js',
   'backend/schedule-series.mysql.test.js',
 ];
 
