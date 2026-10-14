@@ -121,7 +121,7 @@
     "test:schedule-series:browser": "node scripts/check-schedule-series-browser.js",
     "test:staff-teacher-calendar:browser": "node scripts/check-staff-teacher-calendar-browser.js",
     "test:moderation-images": "node --test backend/moderation-image-safety.test.js scripts/moderation-image-client.test.js scripts/moderation-image-fixtures.test.js scripts/moderation-image-quality.test.js scripts/moderation-image-evaluation.test.js",
-    "test:privacy-policy": "node --test backend/privacy-policy.test.js backend/privacy-policy-access.test.js scripts/privacy-production-preflight.test.js scripts/moderation-notice.test.js scripts/registration-page.test.js scripts/privacy-consent.test.js"
+    "test:privacy-policy": "node --test backend/privacy-policy.test.js backend/privacy-policy-access.test.js backend/data-retention.test.js scripts/data-retention-page.test.js scripts/privacy-production-preflight.test.js scripts/moderation-notice.test.js scripts/registration-page.test.js scripts/privacy-consent.test.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",

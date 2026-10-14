@@ -53,6 +53,7 @@ const pageRoutes = new Map([
   ['/system-settings/rewards', '/system-settings-rewards.html'],
   ['/system-settings/course-materials', '/system-settings-course-materials.html'],
   ['/system-settings/model', '/system-settings-model.html'],
+  ['/system-settings/data-retention', '/system-settings-data-retention.html'],
   ['/workbench', '/workbench.html'],
   ['/world', '/world.html'],
 ]);
@@ -94,6 +95,7 @@ const htmlRedirects = new Map([
   ['/system-settings-rewards.html', '/system-settings/rewards'],
   ['/system-settings-course-materials.html', '/system-settings/course-materials'],
   ['/system-settings-model.html', '/system-settings/model'],
+  ['/system-settings-data-retention.html', '/system-settings/data-retention'],
   ['/system-settings.html', '/system-settings'],
   ['/workbench.html', '/workbench'],
   ['/world.html', '/world'],

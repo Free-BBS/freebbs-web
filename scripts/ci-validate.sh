@@ -102,7 +102,7 @@ node --test backend/max-file-uploads.test.js scripts/max-file-preview.test.js ba
 node --check backend/ai-models.js
 node --test backend/ai-models.test.js
 node --check backend/max-images.js
-node --test backend/max-images.test.js
+node --test backend/max-images.test.js backend/max-image-access.test.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js

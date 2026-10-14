@@ -91,6 +91,7 @@ const {
   mountAiDialogExportRoutes,
   ensureAiDialogExportAudit,
 } = require('./ai-dialog-export-router');
+const { mountDataRetentionRoutes } = require('./data-retention');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { maxAgentRoute } = require('./agent-routing');
@@ -139,6 +140,7 @@ const {
   persistGeneratedSsePayload,
   stripGeneratedImages,
 } = require('./max-images');
+const { createMaxImageAccess } = require('./max-image-access');
 const { readMaxBackgroundStream } = require('./max-background-stream');
 const {
   canReadPost,
@@ -567,9 +569,17 @@ app.use((error, _request, response, next) => {
   next(error);
 });
 
+const maxImageAccess = createMaxImageAccess({
+  uploadDir: config.uploadDir,
+  requireAuth,
+  getOptionalAuthUser,
+  pool,
+});
+
 // Apply the same decoding and normalization as the static server before guarding documents.
 app.use(
   '/uploads',
+  maxImageAccess.guardUploads,
   (request, response, next) => {
     try {
       const uploadPath = path.posix.normalize(decodeURIComponent(request.path).replace(/\\/g, '/'));
@@ -2474,6 +2484,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     `discussion-user:${triggerComment.author.id}`,
   );
   let generatedImageCount = 0;
+  let generatedImageFiles = [];
   let agentPayload;
   try {
     const agentResponse = await postAgentChat({
@@ -2520,9 +2531,11 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       const persisted = await persistGeneratedImages(agentPayload, {
         ownerId: triggerComment.author.id,
         uploadDir: config.uploadDir,
+        visibility: 'discussion',
       });
       agentPayload = persisted.payload;
       generatedImageCount = persisted.generatedCount;
+      generatedImageFiles = persisted.files;
     } catch (error) {
       console.error('Failed to persist Max discussion image', error.message);
       agentPayload = stripGeneratedImages(agentPayload);
@@ -2567,6 +2580,18 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     return inserted;
   });
 
+  if (result && generatedImageFiles.length) {
+    try {
+      await maxImageAccess.publishDiscussionImages(generatedImageFiles, {
+        ownerId: triggerComment.author.id,
+        postId,
+        commentId: result.insertId,
+      });
+    } catch {
+      // Failure stays private; a text reference must never confer access by itself.
+      console.error('Max discussion image publication could not be recorded');
+    }
+  }
   return result ? getDiscussionCommentById(result.insertId) : null;
 }
 
@@ -3218,6 +3243,7 @@ backgroundTasks.register('max', runMaxBackgroundTask);
 backgroundTasks.register('circuit_suggest', runCircuitSuggestBackgroundTask);
 backgroundTasks.register('circuit_agent', runCircuitAgentBackgroundTask);
 app.use('/api/ai', createBackgroundTaskRouter({ requireAuth, service: backgroundTasks }));
+app.use('/api/ai/images', maxImageAccess.router);
 
 maxDocumentStore = require('./max-files').registerMaxFiles(app, requireAuth, {
   directory: path.join(config.uploadDir, '.max-documents'),
@@ -6286,6 +6312,7 @@ app.get('/api/admin/users', async (request, response) => {
 });
 
 mountAiDialogExportRoutes(app, { pool, requireAdmin, ensureAiDialogTables });
+mountDataRetentionRoutes(app, { pool, requireAdmin });
 
 app.get('/api/admin/system-settings/model', async (request, response) => {
   try {

@@ -18,9 +18,9 @@ renderer.heading = ({ tokens, depth }) => {
   return `<h${depth} id="${id}">${text}</h${depth}>\n`;
 };
 const policy = {
-  version: 'privacy-2026-10-13-v1',
+  version: 'privacy-2026-10-14-v2',
   title: 'FreeBBS 隐私政策',
-  updatedAt: '2026-10-13',
+  updatedAt: '2026-10-14',
   contentHash: crypto.createHash('sha256').update(markdown).digest('hex'),
   markdown,
   html: marked.parse(markdown, { renderer }),
@@ -33,6 +33,6 @@ fs.writeFileSync(
   path.join(root, 'public/privacy.html'),
   `<!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${policy.title}</title><link rel="stylesheet" href="/privacy-policy.css"></head>
-<body class="privacy-page"><main><nav class="privacy-navigation"><a href="/">返回网站</a><button type="button" onclick="window.print()">打印或保存</button></nav><article class="privacy-policy-document"><h1>${policy.title}</h1><p class="privacy-policy-meta">更新日期：2026 年 10 月 13 日 · 版本 ${policy.version}</p>${policy.html}</article></main></body></html>\n`,
+<body class="privacy-page"><main><nav class="privacy-navigation"><a href="/">返回网站</a><button type="button" onclick="window.print()">打印或保存</button></nav><article class="privacy-policy-document"><h1>${policy.title}</h1><p class="privacy-policy-meta">更新日期：2026 年 10 月 14 日 · 版本 ${policy.version}</p>${policy.html}</article></main></body></html>\n`,
 );
-console.log(`Published ${policy.version} (${policy.contentHash}) from the unchanged policy body.`);
+console.log(`Generated local policy files for ${policy.version} (${policy.contentHash}).`);

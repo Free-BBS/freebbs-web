@@ -484,6 +484,7 @@ function initializeDashboardShell() {
     '/system-settings/announcements': '公告管理',
     '/system-settings/rewards': '奖励方案',
     '/system-settings/model': '模型与密钥',
+    '/system-settings/data-retention': '数据保存',
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
     '/inventory': '仓库',
@@ -5107,6 +5108,7 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
   });
+  window.FreeBbsMaxImageResults?.enhanceImages?.(root);
   enhanceCircuitReferences(root);
   enhanceToolReferences(root);
 }

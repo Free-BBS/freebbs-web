@@ -33,6 +33,9 @@ const CONSENT_TEST_TITLE =
 const EXPORT_TEST_FILE = 'backend/ai-dialog-export.mysql.test.js';
 const EXPORT_TEST_TITLE =
   'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations';
+const RETENTION_INSPECTION_TEST_FILE = 'backend/data-retention.mysql.test.js';
+const RETENTION_INSPECTION_TEST_TITLE =
+  'isolated MySQL: read-only retention uses calendar anniversaries and preserves newer, undated and active AI records';
 
 const TEST_FILES = [
   MODERATION_TEST_FILE,
@@ -42,6 +45,7 @@ const TEST_FILES = [
   RETENTION_TEST_FILE,
   CONSENT_TEST_FILE,
   EXPORT_TEST_FILE,
+  RETENTION_INSPECTION_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -112,6 +116,7 @@ const REQUIRED_MYSQL_TESTS = [
   RETENTION_TEST_TITLE,
   CONSENT_TEST_TITLE,
   EXPORT_TEST_TITLE,
+  RETENTION_INSPECTION_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -147,6 +152,7 @@ function selectMysqlTests(args = []) {
         RETENTION_TEST_FILE,
         CONSENT_TEST_FILE,
         EXPORT_TEST_FILE,
+        RETENTION_INSPECTION_TEST_FILE,
       ],
       requiredTests: [
         MODERATION_TEST_TITLE,
@@ -156,6 +162,7 @@ function selectMysqlTests(args = []) {
         RETENTION_TEST_TITLE,
         CONSENT_TEST_TITLE,
         EXPORT_TEST_TITLE,
+        RETENTION_INSPECTION_TEST_TITLE,
       ],
     };
   if (workbenchOnly)
