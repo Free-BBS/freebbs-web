@@ -7,10 +7,15 @@ test('unaccepted and stale sessions cannot reach uploads, optional auth writes o
   let accepted = false;
   let unavailable = false;
   let processing = 0;
+  let accountLookups = 0;
   const app = express();
   app.use(
     createPrivacyPolicyAccess({
       verifyToken: (token) => (token === 'session' ? { sub: 7 } : null),
+      getUserById: async (id) => {
+        accountLookups += 1;
+        return { id };
+      },
       requireAccepted: async () => {
         if (unavailable) throw new Error('private database failure');
         if (!accepted)
@@ -59,14 +64,99 @@ test('unaccepted and stale sessions cannot reach uploads, optional auth writes o
     assert.equal((await response.json()).code, 'privacy_policy_required');
   }
   assert.equal(processing, 0);
+  assert.equal(accountLookups, 5);
   for (const url of ['/api/privacy-policy/status', '/api/auth/me'])
     assert.equal((await fetch(`${base}${url}`, { headers })).status, 200);
   accepted = true;
   assert.equal((await fetch(`${base}/api/ai/chat`, { method: 'POST', headers })).status, 200);
   assert.equal(processing, 1);
+  assert.equal(accountLookups, 5, 'accepted requests do not add an account query');
   unavailable = true;
   const response = await fetch(`${base}/api/ai/files/parse`, { method: 'POST', headers });
   assert.equal(response.status, 503);
   assert.doesNotMatch(await response.text(), /private database failure/);
   assert.equal(processing, 1);
+  assert.equal(accountLookups, 5, 'privacy storage failure does not query the account');
+});
+
+test('a valid token for a deleted user returns 401 without prompting for policy consent', async () => {
+  let processed = false;
+  let lookedUp;
+  const response = {
+    set(name, value) {
+      this.headers = { [name]: value };
+      return this;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+    },
+  };
+  const middleware = createPrivacyPolicyAccess({
+    verifyToken: () => ({ sub: 999 }),
+    requireAccepted: async () => {
+      throw Object.assign(new Error('请确认隐私政策'), {
+        status: 428,
+        code: 'privacy_policy_required',
+      });
+    },
+    getUserById: async (id) => {
+      lookedUp = id;
+      return null;
+    },
+  });
+  await middleware(
+    { path: '/api/circuits', headers: { authorization: 'Bearer deleted-user' } },
+    response,
+    () => {
+      processed = true;
+    },
+  );
+  assert.equal(lookedUp, 999);
+  assert.equal(processed, false);
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { message: '用户不存在' });
+  assert.deepEqual(response.headers, { 'Cache-Control': 'no-store' });
+});
+
+test('account lookup errors remain unavailable without exposing database details', async () => {
+  let processed = false;
+  const response = {
+    set() {
+      return this;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+    },
+  };
+  const middleware = createPrivacyPolicyAccess({
+    verifyToken: () => ({ sub: 7 }),
+    requireAccepted: async () => {
+      throw Object.assign(new Error('请确认隐私政策'), {
+        status: 428,
+        code: 'privacy_policy_required',
+      });
+    },
+    getUserById: async () => {
+      throw new Error('database-secret-user-password');
+    },
+  });
+  await middleware(
+    { path: '/api/ai/chat', headers: { authorization: 'Bearer session' } },
+    response,
+    () => {
+      processed = true;
+    },
+  );
+  assert.equal(processed, false);
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.body.code, 'privacy_policy_unavailable');
+  assert.doesNotMatch(JSON.stringify(response.body), /database-secret/);
 });

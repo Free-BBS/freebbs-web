@@ -519,6 +519,7 @@ app.use(
   createPrivacyPolicyAccess({
     verifyToken: verify,
     requireAccepted: (userId) => privacyPolicyService.requireAccepted(userId),
+    getUserById,
   }),
 );
 
