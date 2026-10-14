@@ -130,6 +130,7 @@ test('production structure re-render restores only a real active chapter and nev
   for (const activeChapterId of ['SS-07', '', 'SS-99', '<img src=x>']) {
     for (const focusedNodeId of ['', 'SS-02-01']) {
       const calls = [];
+      const options = [];
       const state = {
         readerLayout: 'structure',
         activeChapterId,
@@ -146,10 +147,13 @@ test('production structure re-render restores only a real active chapter and nev
         scroller: null,
         window: {
           FreeBbsCourseStructure: {
-            render: () => ({
-              focusNode: (id) => calls.push(['focus', id]),
-              selectChapter: (id) => calls.push(['chapter', id]),
-            }),
+            render: (settings) => {
+              options.push(settings);
+              return {
+                focusNode: (id) => calls.push(['focus', id]),
+                selectChapter: (id) => calls.push(['chapter', id]),
+              };
+            },
           },
         },
         renderReaderHeader() {},
@@ -164,6 +168,8 @@ test('production structure re-render restores only a real active chapter and nev
             : [],
       );
       assert.equal(state.learningNodeId, before);
+      assert.equal(options.length, 1);
+      assert.equal(options[0].resumeNodeId, 'SS-02-02');
     }
   }
 });

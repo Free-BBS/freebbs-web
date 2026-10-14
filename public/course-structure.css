@@ -19,8 +19,69 @@
   margin-bottom: 12px;
 }
 .course-structure-toolbar input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.course-structure-search-label {
   flex: 1 1 240px;
-  min-width: 140px;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.course-structure-search-label > span,
+.course-structure-picker-search-label > span {
+  color: var(--structure-muted);
+  font-size: 0.875rem;
+}
+.course-structure-picker-search-label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.course-structure-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--structure-line);
+  border-inline-start: 3px solid var(--structure-accent);
+  border-radius: 12px;
+  background: var(--structure-soft);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.course-structure-resume-copy {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.course-structure-resume-copy > strong {
+  font-size: 1.125rem;
+}
+.course-structure-resume-copy > :is(small, span) {
+  color: var(--structure-muted);
+  font-size: 0.875rem;
+}
+.course-structure-resume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.course-structure-resume-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--structure-line);
+  border-radius: 9px;
+  min-height: 44px;
+  padding: 9px 12px;
+  box-sizing: border-box;
+  font: inherit;
+  text-decoration: none;
 }
 .course-structure input,
 .course-structure select,
@@ -40,6 +101,7 @@
   border-color: var(--structure-accent);
 }
 .course-structure button:focus-visible,
+.course-structure a:focus-visible,
 .course-structure input:focus-visible,
 .course-structure select:focus-visible,
 .course-structure summary:focus-visible,
@@ -376,6 +438,32 @@
 .course-structure-search-panel[hidden] {
   display: none;
 }
+.course-structure-search-chapter-group[hidden],
+.course-structure-search-point-group[hidden] {
+  display: none;
+}
+.course-structure-search-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.course-structure-search-chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+  max-height: 18rem;
+  overflow: auto;
+  margin-bottom: 16px;
+}
+.course-structure-search-chapters button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.course-structure-search-chapters small {
+  color: var(--structure-muted);
+  font-size: 0.875rem;
+}
 .course-structure-search-summary {
   margin: 0 0 8px;
   font-size: max(1rem, 16px);
@@ -621,6 +709,20 @@
   }
   .course-structure-search-results {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .course-structure-search-chapters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .course-structure-resume {
+    padding: 16px;
+  }
+  .course-structure-resume-actions {
+    width: 100%;
+  }
+  .course-structure-resume-actions > :is(a, button) {
+    flex: 1 1 auto;
+    text-align: center;
+    min-height: 44px;
   }
   .course-structure.has-focus .course-structure-current {
     order: -1;

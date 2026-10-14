@@ -10,6 +10,9 @@ const {
   viewModel,
   layout,
   searchNodes,
+  searchChapters,
+  resumePoint,
+  revealChapterInList,
   isChapterNode,
   abbreviateNodeId,
   isValidNodeId,
@@ -511,7 +514,7 @@ test('picker normalization rejects malformed scope/query/page without inferring 
   assert.deepEqual(large.knowledgeEdges, []);
 });
 
-function readerFixture(inputNodes, inputEdges = []) {
+function readerFixture(inputNodes, inputEdges = [], fixtureOptions = {}) {
   class Element {
     constructor(tag) {
       this.tag = tag;
@@ -635,6 +638,7 @@ function readerFixture(inputNodes, inputEdges = []) {
     container,
     nodes: inputNodes,
     edges: inputEdges,
+    ...fixtureOptions,
   });
   const all = (predicate, item = container) => [
     ...(predicate(item) ? [item] : []),
@@ -751,7 +755,7 @@ test('chapter ID search selects a real chapter without leaving its point picker 
   const search = h.byLabel('查找课程知识点');
   search.value = 'SS-02-00';
   search.dispatch('input');
-  h.byClass('course-structure-search-results')
+  h.byClass('course-structure-search-chapters')
     .children.find((item) => item.tag === 'button')
     .click();
   assert.equal(h.controller.getState().selectedChapterId, 'SS-02');
@@ -765,6 +769,124 @@ test('chapter ID search selects a real chapter without leaving its point picker 
   h.byClass('course-structure-back').click();
   assert.equal(search.value, 'SS-02-00');
   assert.equal(h.byClass('course-structure-search-panel').hidden, false);
+});
+
+test('legacy chapter names have independent search entries without creating zero-level nodes or opening a document', () => {
+  const points = [
+    { id: 'CAL-11-001', title: '数项级数', chapterTitle: '第11章 级数' },
+    { id: 'CAL-11-002', title: '幂级数', chapterTitle: '第11章 级数' },
+    { id: 'CAL-12-001', title: '含参积分', chapterTitle: '第12章 含参积分' },
+  ];
+  const current = buildModel(points);
+  assert.equal(current.nodes.length, 3);
+  assert.deepEqual(
+    searchChapters(current, '第11章 级数').map((chapter) => chapter.id),
+    ['CAL-11'],
+  );
+  assert.deepEqual(
+    searchChapters(current, 'CAL-12').map((chapter) => chapter.id),
+    ['CAL-12'],
+  );
+  assert.deepEqual(searchChapters(current, ''), []);
+  assert.deepEqual(searchChapters(current, '<img>'), []);
+  let openings = 0;
+  const h = readerFixture(points, [], {
+    onOpenOverview: () => {
+      openings += 1;
+    },
+  });
+  const search = h.byLabel('查找课程知识点');
+  search.value = '第11章 级数';
+  search.dispatch('input');
+  assert.match(h.byClass('course-structure-search-summary').textContent, /1 个章节 · 2 个知识点/);
+  const entry = h.byClass('course-structure-search-chapters').children[0];
+  assert.equal(entry.dataset.courseSearchChapterId, 'CAL-11');
+  entry.click();
+  assert.equal(h.controller.getState().selectedChapterId, 'CAL-11');
+  assert.equal(h.controller.getState().focusedNodeId, '');
+  assert.equal(
+    openings,
+    0,
+    'A derived chapter group must never be opened as a fake authoring node',
+  );
+  assert.deepEqual(h.graphIds(), []);
+  assert.equal(h.byClass('course-structure-search-label').children[0].textContent, '全课程搜索');
+  assert.equal(
+    h.byClass('course-structure-picker-search-label').children[0].textContent,
+    '筛选当前章节',
+  );
+  h.byClass('course-structure-back').click();
+  assert.equal(search.value, '第11章 级数');
+  assert.equal(h.byClass('course-structure-search-panel').hidden, false);
+});
+
+test('resume is a validated ordinary point with explicit read and locate actions rather than an automatic learning transition', () => {
+  const points = matchingPoints(67);
+  const current = buildModel([...points, { id: 'SS-01-00', title: '真实章名' }]);
+  assert.equal(resumePoint(current, 'SS-01-0066').id, 'SS-01-0066');
+  for (const value of ['', null, {}, 'SS-99-01', 'SS-01-00', '<img>'])
+    assert.equal(resumePoint(current, value), null);
+  let openings = 0;
+  const h = readerFixture(points, [], {
+    course: { slug: 'signals', name: '信号与系统' },
+    resumeNodeId: 'SS-01-0066',
+    onOpenOverview: () => {
+      openings += 1;
+    },
+  });
+  const recent = h.byClass('course-structure-resume');
+  assert.equal(recent.dataset.courseResumeId, 'SS-01-0066');
+  assert.match(recent.textContent, /上次看到.*卷积 practice.*继续阅读.*查看位置/);
+  const link = h
+    .byClass('course-structure-resume-actions')
+    .children.find((item) => item.tag === 'a');
+  assert.equal(link.href, '/knowledge?course=signals&point=SS-01-0066&view=reading');
+  assert.equal(h.controller.getState().focusedNodeId, '');
+  assert.equal(openings, 0);
+  h.button('查看位置').click();
+  assert.equal(h.controller.getState().focusedNodeId, 'SS-01-0066');
+  assert.deepEqual(
+    { ...h.controller.getPickerState() },
+    { chapterId: 'SS-01', query: '', page: 1 },
+  );
+  assert.ok(h.point('SS-01-0066'));
+  assert.equal(openings, 0, 'Locating a recent point does not read or submit anything');
+  assert.deepEqual(h.graphIds(), ['SS-01-0066']);
+  for (const resumeNodeId of ['', 'SS-99-01', 'SS-01-00']) {
+    const fresh = readerFixture([...points, { id: 'SS-01-00', title: '真实章名' }], [], {
+      course: { slug: 'signals' },
+      resumeNodeId,
+    });
+    assert.equal(fresh.byClass('course-structure-resume'), undefined);
+  }
+});
+
+test('chapter visibility adjusts only its own scroll offset, with no focus or document scrolling', () => {
+  const list = {
+    clientHeight: 200,
+    clientTop: 0,
+    scrollTop: 100,
+    getBoundingClientRect: () => ({ top: 100 }),
+  };
+  const item = (top, bottom) => ({
+    getBoundingClientRect: () => ({ top, bottom }),
+    focus: () => {
+      throw new Error('Must not change keyboard focus');
+    },
+    scrollIntoView: () => {
+      throw new Error('Must not scroll the document');
+    },
+  });
+  revealChapterInList(list, item(340, 380));
+  assert.equal(list.scrollTop, 184);
+  list.scrollTop = 100;
+  revealChapterInList(list, item(70, 90));
+  assert.equal(list.scrollTop, 66);
+  list.scrollTop = 100;
+  revealChapterInList(list, item(120, 180));
+  assert.equal(list.scrollTop, 100);
+  revealChapterInList(list, item(400, 900));
+  assert.equal(list.scrollTop, 396);
 });
 
 test('a cross-chapter global result reveals the owner-filtered page instead of reusing its global page and returns the prior picker', () => {

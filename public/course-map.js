@@ -970,6 +970,7 @@
         nodes: state.nodes,
         edges: state.edges,
         course: state.course,
+        resumeNodeId: state.learningNodeId,
         onOpenOverview: (node) =>
           overviewDrawer?.open(node, state.course, null, () =>
             state.structureController?.focusNode(node.id),

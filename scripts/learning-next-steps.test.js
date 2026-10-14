@@ -44,6 +44,27 @@ const attempt = (overrides = {}) => ({
 });
 const context = (overrides = {}) => ({ node, map, questions: [question], ...overrides });
 
+test('a reading recommendation suggests a small effort rather than promising mastery or rewriting saved paths', () => {
+  for (const markdown of ['一个简短定义。', '很长的课程段落。'.repeat(1500)]) {
+    const current = { ...node, sections: { knowledgeMarkdown: markdown } };
+    const plan = recommend(context({ node: current }));
+    assert.equal(plan.steps[0].id, 'read-current');
+    assert.equal(plan.steps[0].tool, 'content');
+    assert.equal(
+      plan.steps[0].minutes,
+      10,
+      'the path contract is unchanged; effort is not a measured estimate',
+    );
+    assert.equal(plan.steps[0].title, '先读一小段');
+    assert.match(plan.steps[0].description, /不必一次读完/);
+    assert.equal(current.sections.knowledgeMarkdown, markdown);
+  }
+  const ownPath = [{ id: 'my-read', title: '读懂当前知识点', tool: 'content', minutes: 17 }];
+  const saved = recommend(context({ existingPath: ownPath }));
+  assert.equal(saved.steps[0].title, ownPath[0].title, 'saved personal wording is never rewritten');
+  assert.equal(saved.steps[0].minutes, ownPath[0].minutes);
+});
+
 test('missing or malformed data produces a small actionable path without invented material', () => {
   for (const value of [undefined, null, false, [], 'bad', { node: null, map: false }]) {
     const result = recommend(value);
