@@ -38,7 +38,7 @@ test('organization exhibition opens exact department activity associations', asy
   await page.goto('./organizations');
   await expect(page.getByRole('link', { name: /^走进电子系/ })).toHaveCount(5);
   await page.getByRole('link', { name: '走进电子系学生会', exact: true }).click();
-  await expect(page.getByRole('link', { name: '查看组织报名', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: '查看相关活动', exact: true })).toHaveAttribute(
     'href',
     '/development/collections/registrations?organization=arts_center%2Csports_center%2Cliaison_center%2Crights_development_center',
   );
@@ -58,6 +58,7 @@ test('organization exhibition opens exact department activity associations', asy
 
 test('growth filters work on account records and local sports examples are visible', async ({
   page,
+  request,
 }) => {
   await page.goto('./growth');
   await expect(page.locator('.growth-stats')).toContainText('已结束的活动报名');
@@ -76,8 +77,29 @@ test('growth filters work on account records and local sports examples are visib
     exact: true,
   });
   await expect(live).toContainText('正在进行');
+  const schedule = await request.get('/api/development/v1/sports/matches', {
+    headers: { 'X-Demo-User': 'demo-sports-member' },
+  });
+  const matches = (await schedule.json()).data as Array<{ title: string; startsAt: string }>;
+  const selectMatchDay = async (title: string) => {
+    const match = matches.find((item) => item.title === title);
+    if (!match) throw new Error(`Missing local match fixture: ${title}`);
+    const day = await page.evaluate(
+      (value) =>
+        new Date(value).toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+      match.startsAt,
+    );
+    await page.getByRole('button', { name: day, exact: true }).click();
+  };
+  // The ended fixture falls on the previous date when this runs before 04:00.
+  await selectMatchDay('示例比赛 · 羽毛球｜电子系 vs 经管学院');
   await expect(ended).toContainText('已结束');
   await expect(ended).toContainText('电子系 2–1 经管学院（演示结果）');
+  await selectMatchDay('示例比赛 · 篮球｜电子系 vs 自动化系');
   await expect(page.getByRole('button', { name: '添加比赛', exact: true })).toHaveCount(0);
   await page.getByLabel('Demo user').selectOption('demo-sports-member');
   await expect(page.getByRole('button', { name: '添加比赛', exact: true })).toBeVisible();

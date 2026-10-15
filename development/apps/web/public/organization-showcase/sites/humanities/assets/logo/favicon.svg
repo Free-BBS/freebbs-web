@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.58 -3.42 110.85 110.85" width="64" height="64" role="img" aria-label="人文组">
+  <title>人文组 · 站点图标</title>
+  <!-- 由 tools/make-logo-variants.js 从 mark-b.svg 自动派生，不要手改。
+       与页面徽标的区别：① 画布收紧到字形外框（去掉大量留白）
+       ② 笔画加粗 1.45 倍（13 → 18.85），保证浏览器标签 16px 下仍能看出一撇一捺。
+       要调粗细：改 tools/make-logo-variants.js 里的 SCALE 后重新生成。 -->
+  <g fill="none" stroke-linecap="butt">
+    <path d="M50 24 Q43 48 38 60" stroke="#191817" stroke-width="18.85"/>
+    <path d="M38 61 Q32 72 24 86" stroke="#3a352f" stroke-width="18.85"/>
+    <path d="M40 18 Q55 39 68 53" stroke="#b1502f" stroke-width="18.85"/>
+    <path d="M68 54 Q80 66 96 84" stroke="#8f4025" stroke-width="18.85"/>
+  </g>
+</svg>

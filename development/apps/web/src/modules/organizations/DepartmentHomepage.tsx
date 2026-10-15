@@ -9,6 +9,9 @@ import {
 import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { IsolatedDepartmentDocument } from './IsolatedDepartmentDocument.js';
+import { OrganizationMark } from './OrganizationMark.js';
+import { findShowcase } from './showcase/registry.js';
+import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
 
 export function DepartmentHomepage({
   department,
@@ -132,12 +135,15 @@ export function DepartmentHomepage({
     }
   }
   const entries = activities ? (past ? activities.past : activities.active) : [];
+  const showcase = findShowcase(department.id);
   return (
     <>
-      <header className="department-heading">
+      <header
+        className={`department-heading${showcase && !home?.html ? ' department-heading--curated' : ''}`}
+      >
         <div>
           <p className="organization-eyebrow">{department.organizationName}</p>
-          <h2>{department.name}</h2>
+          {!showcase || home?.html ? <h2>{department.name}</h2> : null}
         </div>
         {department.id === 'tms.position' ? (
           <Link to="/collections/registrations?organization=tms">
@@ -232,10 +238,17 @@ export function DepartmentHomepage({
           html={home.html}
           title={`${department.name}主页`}
         />
+      ) : showcase ? (
+        <CuratedDepartmentShowcase key={department.id} content={showcase} />
       ) : home ? (
-        <div className="department-introduction">
-          <p>{introduction}</p>
-          <p>部门主页正在准备中。</p>
+        <div className="department-introduction sc-default-introduction">
+          <OrganizationMark variant={department.organizationKey} />
+          <div>
+            <span className="sc-sticker">认识一下</span>
+            <h3>校园里，又一个可以相遇的地方。</h3>
+            <p>{introduction}</p>
+            <p className="sc-default-introduction-note">部门主页正在准备中。</p>
+          </div>
         </div>
       ) : !homeError ? (
         <p role="status">正在加载部门主页…</p>

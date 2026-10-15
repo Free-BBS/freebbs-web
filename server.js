@@ -5,6 +5,7 @@ const { sendStatic } = require('./static-response');
 const { preparePageShell } = require('./page-shell');
 const { clientIpForBackend } = require('./proxy-client-ip');
 const { servePausedCodeLab } = require('./code-lab-availability');
+const { serveOrganizationShowcase } = require('./organization-showcase-static');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -226,6 +227,8 @@ const server = http.createServer((request, response) => {
     request.pipe(upstream);
     return;
   }
+
+  if (serveOrganizationShowcase(request, response)) return;
 
   if (requestUrl.pathname.startsWith('/development/')) {
     const relativeUrlPath = requestUrl.pathname.slice('/development/'.length);

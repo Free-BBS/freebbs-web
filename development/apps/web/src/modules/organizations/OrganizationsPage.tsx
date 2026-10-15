@@ -1,9 +1,13 @@
 import { departmentForRoute } from '@freebbs-development/contracts';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import type { ApiClient } from '../../core/api/client.js';
 import { DepartmentHomepage } from './DepartmentHomepage.js';
-import { Link } from 'react-router-dom';
-import { ORGANIZATION_GALLERY, findOrganization, organizationRegistrationPath } from './catalog.js';
+import { findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
+import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
+import { OrganizationShowcaseHome } from './showcase/OrganizationShowcaseHome.js';
+import { findShowcase } from './showcase/registry.js';
 
 export function OrganizationsPage({
   organizationKey,
@@ -16,9 +20,52 @@ export function OrganizationsPage({
   enabled?: boolean;
   client?: Pick<ApiClient, 'request'>;
 }) {
+  const page = useRef<HTMLElement>(null);
+  const { hash } = useLocation();
+  useLayoutEffect(() => {
+    const header = document.querySelector('.main-site-header');
+    if (!header) return;
+    const update = () =>
+      page.current?.style.setProperty(
+        '--sc-header-offset',
+        `${Math.ceil(header.getBoundingClientRect().height) + 12}px`,
+      );
+    update();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
+    observer?.observe(header);
+    return () => observer?.disconnect();
+  }, [organizationKey, departmentKey, enabled]);
+  useEffect(() => {
+    if (hash) {
+      let id = hash.slice(1);
+      try {
+        id = decodeURIComponent(id);
+      } catch {
+        // A malformed fragment should still leave a usable page at its entrance.
+      }
+      const anchor = document.getElementById(id);
+      if (anchor && page.current?.contains(anchor)) {
+        anchor.scrollIntoView({ block: 'start', behavior: 'instant' });
+        return;
+      }
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [organizationKey, departmentKey, hash]);
+  useEffect(() => {
+    const previousTitle = document.title;
+    const group = organizationKey ? findOrganization(organizationKey) : undefined;
+    const item = group?.departments.find(({ key }) => key === departmentKey);
+    const showcase = group
+      ? findShowcase(`${group.key}.${departmentKey ?? 'position'}`)
+      : undefined;
+    document.title = `${showcase?.shortName ?? showcase?.name ?? item?.name ?? group?.name ?? '风采展示'} · FREE BBS`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [organizationKey, departmentKey]);
   if (!enabled)
     return (
-      <section className="module-page organization-page">
+      <section ref={page} className="module-page organization-page">
         <p role="status">风采展示暂未开放，请稍后再来。</p>
       </section>
     );
@@ -26,186 +73,139 @@ export function OrganizationsPage({
   const department = organization?.departments.find(({ key }) => key === departmentKey);
   if ((organizationKey && !organization) || (departmentKey && !department))
     return (
-      <section className="module-page organization-page">
+      <section ref={page} className="module-page organization-page">
         <h2>没有找到这个展区</h2>
         <p>可以从组织首页重新开始浏览。</p>
         <Link to="/organizations">返回风采展示</Link>
       </section>
     );
-
-  const canonicalDepartment =
-    organization && (department || organization.key === 'tms')
-      ? departmentForRoute(organization.key, department?.key ?? 'position')
-      : undefined;
-  if (canonicalDepartment)
+  if (!organization)
     return (
-      <section className={`module-page organization-page organization-page--${organization!.key}`}>
-        <nav className="organization-breadcrumb" aria-label="展厅位置">
-          <Link to="/organizations">风采展示</Link>
-          <span aria-hidden="true">/</span>
-          <Link to={`/organizations/${organization!.key}`}>{organization!.name}</Link>
-          {department ? (
-            <>
-              <span aria-hidden="true">/</span>
-              <span aria-current="page">{department.name}</span>
-            </>
-          ) : null}
-        </nav>
-        <DepartmentHomepage
-          key={canonicalDepartment.id}
-          department={canonicalDepartment}
-          introduction={department?.introduction ?? organization!.introduction}
-          client={client}
-        />
+      <section ref={page} className="module-page organization-page">
+        <OrganizationShowcaseHome />
       </section>
     );
-
+  const canonicalDepartment =
+    department || organization.key === 'tms'
+      ? departmentForRoute(organization.key, department?.key ?? 'position')
+      : undefined;
+  const curated = findShowcase(`${organization.key}.${department?.key ?? 'position'}`);
+  const breadcrumb = (
+    <nav className="organization-breadcrumb" aria-label="展厅位置">
+      <Link to="/organizations">风采展示</Link>
+      <span aria-hidden="true">/</span>
+      <Link to={`/organizations/${organization.key}`}>{organization.name}</Link>
+      {department ? (
+        <>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{curated?.shortName ?? department.name}</span>
+        </>
+      ) : null}
+    </nav>
+  );
+  if (canonicalDepartment || (department && curated))
+    return (
+      <section
+        ref={page}
+        className={`module-page organization-page organization-page--${organization.key}`}
+      >
+        {breadcrumb}
+        {canonicalDepartment ? (
+          <DepartmentHomepage
+            key={canonicalDepartment.id}
+            department={canonicalDepartment}
+            introduction={department?.introduction ?? organization.introduction}
+            client={client}
+          />
+        ) : curated ? (
+          <CuratedDepartmentShowcase content={curated} />
+        ) : null}
+      </section>
+    );
   return (
     <section
-      className={`module-page organization-page${organization ? ` organization-page--${organization.key}` : ''}`}
+      ref={page}
+      className={`module-page organization-page organization-page--${organization.key}`}
     >
-      <nav className="organization-breadcrumb" aria-label="展厅位置">
-        <Link to="/organizations">风采展示</Link>
-        {organization ? (
-          <>
-            <span aria-hidden="true">/</span>
-            <Link to={`/organizations/${organization.key}`}>{organization.name}</Link>
-          </>
-        ) : null}
-        {department ? (
-          <>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">{department.name}</span>
-          </>
-        ) : null}
-      </nav>
-      {!organization ? (
-        <>
-          <header className="organization-gallery-heading">
-            <div>
-              <p className="organization-eyebrow">CAMPUS / PEOPLE & IDEAS</p>
-              <h2>风采展示</h2>
-              <p>走近每一个组织，找到与你相遇的人和事。</p>
-            </div>
-            <span className="organization-gallery-note">同在电子，亲如一家</span>
-          </header>
-          <div className="organization-gallery" aria-label="电子系社工组织">
-            {ORGANIZATION_GALLERY.map((item, index) => (
-              <Link
-                key={item.key}
-                className={`organization-exhibit organization-exhibit--${item.key}`}
-                to={`/organizations/${item.key}`}
-                aria-label={`走进${item.name}`}
-              >
-                <div className="organization-exhibit-top">
-                  <span>校园组织</span>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                </div>
-                <div className="organization-exhibit-art">
-                  <OrganizationMark variant={item.key} />
-                </div>
-                <div className="organization-exhibit-copy">
-                  <h3>{item.name}</h3>
-                  <p>{item.motto}</p>
-                  {item.departments.length ? (
-                    <ul className="organization-department-tags" aria-label={`${item.name}部门`}>
-                      {item.departments.map((department) => (
-                        <li key={department.key}>{department.name}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="organization-focus">
-                      {item.focus.map((focus) => (
-                        <span key={focus}>{focus}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <footer>
-                  <span>
-                    {item.departments.length ? `${item.departments.length} 个部门` : '了解分会'}
-                  </span>
-                  <span>
-                    走进组织 <b aria-hidden="true">↗</b>
-                  </span>
-                </footer>
-              </Link>
+      {breadcrumb}
+      <header className="organization-profile-hero sc-group-hero">
+        <div className="organization-profile-mark">
+          <OrganizationMark variant={organization.key} />
+        </div>
+        <div>
+          <span className="sc-sticker">欢迎来串门！</span>
+          <p className="organization-eyebrow">校园组织 · 电子系</p>
+          <h2>{organization.name}</h2>
+          <p>{organization.introduction}</p>
+          <div className="organization-focus">
+            {organization.focus.map((focus) => (
+              <span key={focus}>{focus}</span>
             ))}
           </div>
-          <p className="organization-gallery-caption">从一次相识开始，到下一次一起行动。</p>
-        </>
-      ) : (
-        <>
-          <header className="organization-profile-hero">
-            <div className="organization-profile-mark">
-              <OrganizationMark variant={organization.key} />
-            </div>
-            <div>
-              <p className="organization-eyebrow">
-                {department ? organization.name : '校园组织 · 电子系'}
-              </p>
-              <h2>{department?.name ?? organization.name}</h2>
-              <p>{department?.introduction ?? organization.introduction}</p>
-              {!department ? (
-                <>
+          {!organization.organizationIds.length ? (
+            <p className="organization-scope-note">
+              目前展示全部活动报名，媒体中心相关活动请查看活动说明。
+            </p>
+          ) : null}
+          <Link
+            className="organization-primary-link"
+            to={organizationRegistrationPath(organization.organizationIds)}
+          >
+            查看相关活动 <span aria-hidden="true">↗</span>
+          </Link>
+        </div>
+      </header>
+      <section className="organization-department-section">
+        <header>
+          <h3>走进各部门</h3>
+          <span>看作品，听故事，一起认识它的日常。</span>
+        </header>
+        <div className="organization-department-grid">
+          {organization.departments.map((item) => {
+            const content = findShowcase(`${organization.key}.${item.key}`);
+            return (
+              <Link
+                className="organization-department-card sc-group-department-card"
+                key={item.key}
+                to={`/organizations/${organization.key}/${item.key}`}
+                aria-label={`了解${content?.shortName ?? item.name}`}
+                aria-describedby={`sc-group-summary-${organization.key}-${item.key}`}
+              >
+                <div className="sc-group-department-art">
+                  {content?.hero ? (
+                    <img
+                      src={content.hero.src}
+                      alt={content.hero.alt}
+                      loading="lazy"
+                      decoding="async"
+                      style={{
+                        objectFit: content.hero.fit ?? 'cover',
+                        objectPosition: content.hero.position,
+                      }}
+                    />
+                  ) : (
+                    <OrganizationMark variant={organization.key} />
+                  )}
+                </div>
+                <div className="sc-group-department-copy">
+                  <h4>{content?.shortName ?? item.name}</h4>
+                  <p id={`sc-group-summary-${organization.key}-${item.key}`}>
+                    {content?.summary ?? item.introduction}
+                  </p>
                   <div className="organization-focus">
-                    {organization.focus.map((focus) => (
+                    {item.focus.map((focus) => (
                       <span key={focus}>{focus}</span>
                     ))}
                   </div>
-                  {!organization.organizationIds.length ? (
-                    <p className="organization-scope-note">
-                      目前展示全部活动报名，媒体中心相关活动请查看活动说明。
-                    </p>
-                  ) : null}
-                  <Link
-                    className="organization-primary-link"
-                    to={organizationRegistrationPath(organization.organizationIds)}
-                  >
-                    查看相关活动 <span aria-hidden="true">↗</span>
-                  </Link>
-                </>
-              ) : null}
-            </div>
-          </header>
-          <>
-            {organization.departments.length ? (
-              <section className="organization-department-section">
-                <header>
-                  <h3>走进各部门</h3>
-                  <span>选择一个部门，了解它的日常。</span>
-                </header>
-                <div className="organization-department-grid">
-                  {organization.departments.map((item, index) => (
-                    <Link
-                      className="organization-department-card"
-                      key={item.key}
-                      to={`/organizations/${organization.key}/${item.key}`}
-                      aria-label={`了解${item.name}`}
-                    >
-                      <span className="organization-department-index" aria-hidden="true">
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                      <div>
-                        <h4>{item.name}</h4>
-                        <p>{item.introduction}</p>
-                        <div className="organization-focus">
-                          {item.focus.map((focus) => (
-                            <span key={focus}>{focus}</span>
-                          ))}
-                        </div>
-                      </div>
-                      <span className="organization-department-arrow" aria-hidden="true">
-                        ↗
-                      </span>
-                    </Link>
-                  ))}
+                  <span className="organization-department-arrow" aria-hidden="true">
+                    ↗
+                  </span>
                 </div>
-              </section>
-            ) : null}
-          </>
-        </>
-      )}
+              </Link>
+            );
+          })}
+        </div>
+      </section>
     </section>
   );
 }

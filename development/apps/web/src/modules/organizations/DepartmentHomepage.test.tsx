@@ -1,8 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationsPage } from './OrganizationsPage.js';
 import { ApiError, type ApiClient } from '../../core/api/client.js';
+
+beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const saved = {
   departmentId: 'student_union.sports_center',
@@ -14,13 +21,32 @@ const saved = {
   editor: null,
 };
 function setup(
-  options: { canEdit?: boolean; conflict?: boolean; error?: boolean; empty?: boolean } = {},
+  options: {
+    canEdit?: boolean;
+    conflict?: boolean;
+    error?: boolean;
+    empty?: boolean;
+    departmentKey?: string;
+    homeError?: boolean;
+    active?: boolean;
+  } = {},
 ) {
   const request = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/activities'))
       return {
         departmentId: saved.departmentId,
-        active: [],
+        active: options.active
+          ? [
+              {
+                id: 'current',
+                source: 'native_collection',
+                title: '本部门当前活动',
+                description: '准确关联的活动',
+                detailsPath: '/collections/registrations?focus=native_collection%3Acurrent',
+                status: 'open',
+              },
+            ]
+          : [],
         past: [
           {
             id: 'old',
@@ -38,13 +64,14 @@ function setup(
       if (options.error) throw new ApiError(400, 'invalid_file', '文件格式无效', null);
       return { ...saved, revision: 3 };
     }
+    if (options.homeError) throw new ApiError(503, 'unavailable', '主页服务暂时不可用', null);
     return { ...saved, canEdit: options.canEdit ?? true, html: options.empty ? null : saved.html };
   });
   const view = render(
     <MemoryRouter>
       <OrganizationsPage
         organizationKey="student_union"
-        departmentKey="sports_center"
+        departmentKey={options.departmentKey ?? 'sports_center'}
         client={{ request: request as ApiClient['request'] }}
       />
     </MemoryRouter>,
@@ -73,6 +100,10 @@ describe('department homepage', () => {
     );
     expect(screen.queryByText('Uploaded only')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '撰写部门文章' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '学生体育中心', level: 2 }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('暂无活跃活动')).toBeInTheDocument();
     expect(
       frame.compareDocumentPosition(screen.getByRole('region', { name: '相关活动' })) &
@@ -119,9 +150,58 @@ describe('department homepage', () => {
     await screen.findByText('文件格式无效');
     expect(screen.getByTitle('体育中心主页预览')).toBeInTheDocument();
   });
-  it('shows a default introduction for an empty page', async () => {
+  it('uses the complete curated exhibition when a registered department has no uploaded override', async () => {
     setup({ empty: true, canEdit: false });
-    await screen.findByText('部门主页正在准备中。');
+    await screen.findByText('暂无活跃活动');
+    expect(screen.getByRole('heading', { name: '学生体育中心', level: 2 })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '体育中心' })).getAllByRole('img'),
+    ).toHaveLength(8);
+    expect(
+      within(screen.getByRole('region', { name: '天天开心' })).getAllByRole('img'),
+    ).toHaveLength(8);
+    expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByTitle('体育中心主页')).not.toBeInTheDocument();
+  });
+  it('keeps the original introduction fallback for departments without a submitted exhibition', async () => {
+    setup({ empty: true, canEdit: false, departmentKey: 'arts_center' });
+    expect(await screen.findByText('部门主页正在准备中。')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '文艺中心', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+  });
+  it('preserves accurate active and past activity destinations alongside the curated fallback', async () => {
+    const { request } = setup({ empty: true, canEdit: false, active: true });
+    expect(await screen.findByRole('link', { name: /本部门当前活动/ })).toHaveAttribute(
+      'href',
+      '/collections/registrations?focus=native_collection%3Acurrent',
+    );
+    expect(screen.queryByRole('link', { name: /昔日活动/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '以往活动' }));
+    expect(screen.getByRole('link', { name: /昔日活动/ })).toHaveAttribute(
+      'href',
+      '/collections/registrations?focus=native_collection%3Aold&includePast=true',
+    );
+    expect(screen.queryByRole('link', { name: /本部门当前活动/ })).not.toBeInTheDocument();
+    expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
+      '/organizations/student_union/sports_center/activities',
+      '/organizations/student_union/sports_center/home',
+    ]);
+  });
+  it('retains the curated content and read-only boundary when the home API is unavailable', async () => {
+    setup({ homeError: true, canEdit: false });
+    expect(await screen.findByRole('alert')).toHaveTextContent('主页服务暂时不可用');
+    expect(screen.getByRole('heading', { name: '学生体育中心', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '撰写部门文章' })).not.toBeInTheDocument();
+  });
+  it('rejects non-HTML uploads without previewing or sending a replacement', async () => {
+    const { request } = setup();
+    const input = await screen.findByLabelText('选择 HTML 文件');
+    fireEvent.change(input, {
+      target: { files: [new File(['bad'], 'notes.txt', { type: 'text/plain' })] },
+    });
+    expect(await screen.findByText('请选择不超过 5 MiB 的 HTML 文件。')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '主页预览' })).not.toBeInTheDocument();
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0);
   });
 });

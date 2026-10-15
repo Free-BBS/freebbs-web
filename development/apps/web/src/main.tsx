@@ -24,6 +24,7 @@ import './styles/learning-registration.css';
 import './styles/community.css';
 import './styles/desk.css';
 import './styles/organizations.css';
+import './styles/organization-showcase.css';
 import './styles/typography.css';
 import './styles/media-capture.css';
 

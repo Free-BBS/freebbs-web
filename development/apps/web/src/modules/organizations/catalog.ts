@@ -178,7 +178,7 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDe
           const details = departmentIntroductions[key];
           return {
             key,
-            name: group.label,
+            name: key === 'planning' ? '智能策划部' : group.label,
             introduction: details?.introduction ?? '了解部门工作，发现可以一起参与的活动。',
             focus: details?.focus ?? [],
             organizationIds:
@@ -187,7 +187,21 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDe
                 : [...definition.organizationIds],
             sharedActivityScope: definition.key !== 'student_union',
           };
-        }),
+        })
+        .concat(
+          definition.key === 'youth_league'
+            ? [
+                {
+                  key: 'research',
+                  name: '调研组',
+                  introduction: '认真倾听，扎实求证。从品牌项目到同学需求，让每一种声音都有回响。',
+                  focus: ['品牌项目调研', '访谈与分析', '同学声音'],
+                  organizationIds: ['tuanwei' as const],
+                  sharedActivityScope: false,
+                },
+              ]
+            : [],
+        ),
     };
   },
 );

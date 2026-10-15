@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Humanities Group mark">
+  <title>人文组 · 几何构成</title>
+  <!-- A · 几何构成
+       字形要点：一撇一捺「同源起笔」，捺的起笔更高更靠左，两笔只在顶部相接、
+       底端向左右张开。笔画是圆头（stroke-linecap: round），圆头半径 6 会超出
+       路径端点，所以底座横线必须留出这 6px，否则会被笔画压住。 -->
+  <defs>
+    <clipPath id="a-frame"><rect x="0" y="0" width="120" height="120" rx="17"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#a-frame)">
+    <rect width="120" height="120" fill="#191817"/>
+
+    <g stroke="#f4f3ee" stroke-width="12" stroke-linecap="round" fill="none">
+      <path d="M50 24 Q40 60 24 86"/>
+      <path d="M40 18 Q62 48 96 84"/>
+    </g>
+
+    <!-- 底座横线：路径最低点 86 + 圆头 6 = 92，圆角方块的圆角从 103 起才明显，
+         所以横线放在 98，既不压笔画也不碰圆角 -->
+    <rect x="24" y="98" width="72" height="4" rx="2" fill="#b1502f"/>
+  </g>
+</svg>
