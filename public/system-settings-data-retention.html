@@ -21,8 +21,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/data-retention.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
   </head>
-  <body class="system-settings-page retention-page">
+  <body class="system-settings-page retention-page admin-settings-detail-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -95,11 +96,18 @@
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
       <main class="main-content settings-main system-settings-main">
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
         <section
           class="system-settings-shell system-settings-detail-shell retention-shell"
           aria-labelledby="retention-title"
         >
-          <a class="system-settings-back" href="/system-settings">← 返回系统设置</a>
           <header class="system-settings-intro">
             <h1 id="retention-title">数据保存</h1>
             <p>核对各类资料的保存安排，及时发现需要处理的记录。</p>
