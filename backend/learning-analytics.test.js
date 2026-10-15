@@ -5,6 +5,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const { listenAllowedLoopback } = require('../scripts/fixtures/allowed-loopback');
 const {
   createLearningAnalyticsRouter,
   createMemoryAnalyticsStore,
@@ -90,9 +91,7 @@ async function fixture(t, options = {}) {
     createLearningAnalyticsRouter({ store, requireAuth, requireAdmin }),
   );
   const server = http.createServer(app);
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -145,14 +144,11 @@ test('every personal and admin endpoint requires authentication and private cach
   }
 });
 
-test('process collection defaults off and cannot be enabled with nonboolean or extra fields', async (t) => {
+test('minimal process collection defaults on and rejects nonboolean or extra policy fields', async (t) => {
   const { call, store } = await fixture(t);
-  assert.equal((await call('GET', '/preferences')).data.preferences.enabled, false);
-  assert.deepEqual((await call('POST', '/events', event())).data, {
-    recorded: false,
-    reason: 'disabled',
-  });
-  assert.equal(store.rows.length, 0);
+  assert.equal((await call('GET', '/preferences')).data.preferences.enabled, true);
+  assert.equal((await call('POST', '/events', event())).data.recorded, true);
+  assert.equal(store.rows.length, 1);
   for (const body of [
     { enabled: 'true' },
     { enabled: 1 },
@@ -309,24 +305,29 @@ test('active seconds use server elapsed time and do not double-count rapid or pa
   assert.equal((await call('GET', '/summary?window=all')).data.process.activeSeconds, 42);
 });
 
-test('turning collection off stops browser and trusted events without deleting existing records', async (t) => {
+test('legacy disable requests return the required policy and cannot stop browser or trusted events', async (t) => {
   const { call, store } = await fixture(t);
   await call('PUT', '/preferences', { enabled: true });
   await call('POST', '/events', event());
-  await call('PUT', '/preferences', { enabled: false });
+  const disabled = await call('PUT', '/preferences', { enabled: false });
+  assert.equal(disabled.status, 409);
+  assert.equal(disabled.data.code, 'learning_recording_required');
+  assert.equal(disabled.data.preferences.enabled, true);
   const results = await Promise.all(
     Array.from({ length: 8 }, () => call('POST', '/events', event())),
   );
-  assert.ok(results.every((result) => result.data.recorded === false));
-  assert.deepEqual(
-    await recordAssessmentEvent(store, {
-      user: users[0],
-      context: contexts[0],
-      attempt: { id: '1', official: true, status: 'graded', verdict: 'pass' },
-    }),
-    { recorded: false, reason: 'disabled' },
+  assert.ok(results.every((result) => result.data.recorded === true));
+  assert.equal(
+    (
+      await recordAssessmentEvent(store, {
+        user: users[0],
+        context: contexts[0],
+        attempt: { id: '1', official: true, status: 'graded', verdict: 'pass' },
+      })
+    ).recorded,
+    true,
   );
-  assert.equal(store.rows.length, 1);
+  assert.equal(store.rows.length, 10);
 });
 
 test('student summary/export/delete always use their own identity, including injected selectors', async (t) => {
@@ -340,24 +341,30 @@ test('student summary/export/delete always use their own identity, including inj
   assert.equal((await call('GET', '/export', undefined, 2)).data.events.length, 1);
   const deleted = await call('DELETE', '/events?userId=2');
   assert.equal(deleted.data.deleted, 1);
-  assert.equal(deleted.data.preferences.enabled, false);
+  assert.equal(deleted.data.preferences.enabled, true);
   assert.equal(store.rows.length, 1);
   assert.equal(String(store.rows[0].user_id), '2');
-  assert.equal((await call('POST', '/events', event())).data.recorded, false);
+  assert.equal((await call('POST', '/events', event())).data.recorded, true);
 });
 
-test('delete versus record races cannot recreate process rows after deletion is acknowledged', async (t) => {
+test('delete clears prior process rows while later new records continue under the same identity', async (t) => {
   const { call, store } = await fixture(t);
   await call('PUT', '/preferences', { enabled: true });
   await Promise.all([
     ...Array.from({ length: 20 }, () => call('POST', '/events', event())),
     call('DELETE', '/events'),
   ]);
+  // Requests serialized after the clear are new records, not resurrected history.
+  const remaining = store.rows.length;
+  assert.ok(remaining <= 20);
+  assert.equal((await call('DELETE', '/events')).data.deleted, remaining);
   assert.equal(store.rows.length, 0);
-  assert.equal((await call('GET', '/preferences')).data.preferences.enabled, false);
+  assert.equal((await call('GET', '/preferences')).data.preferences.enabled, true);
+  await call('POST', '/events', event());
+  assert.equal(store.rows.length, 1);
 });
 
-test('business assessment results remain visible with consent off and survive analytics deletion', async (t) => {
+test('business assessment results remain separate from empty process history and survive analytics deletion', async (t) => {
   const businessAttempts = [
     businessAttempt(),
     businessAttempt({ id: '2', status: 'pending_review', verdict: null }),
@@ -366,7 +373,7 @@ test('business assessment results remain visible with consent off and survive an
   ];
   const { call, store } = await fixture(t, { businessAttempts });
   const summary = (await call('GET', '/summary?window=all')).data;
-  assert.equal(summary.preferences.enabled, false);
+  assert.equal(summary.preferences.enabled, true);
   assert.equal(summary.process.eventCount, 0);
   assert.deepEqual(summary.selftest, {
     attempts: 3,
@@ -375,6 +382,7 @@ test('business assessment results remain visible with consent off and survive an
     failed: 0,
     pendingReview: 1,
     practiceAttempts: 1,
+    assessmentDataStatus: 'available',
   });
   await call('DELETE', '/events');
   assert.equal(store.businessAttempts.length, 4);
@@ -382,14 +390,110 @@ test('business assessment results remain visible with consent off and survive an
   assert.deepEqual((await call('GET', '/export')).data.events, []);
 });
 
-test('explicit starting point, goal and path recording stays off without consent and accepts only bounded enums', async (t) => {
+test('missing assessment storage remains explicitly unavailable throughout personal and admin evidence', async (t) => {
   const { call, store } = await fixture(t);
-  assert.deepEqual((await call('POST', '/events', choiceEvent())).data, {
-    recorded: false,
-    reason: 'disabled',
+  await call('POST', '/events', choiceEvent());
+  const unavailable = () => Object.defineProperty([], 'available', { value: false });
+  store.businessRows = async () => unavailable();
+  store.journeyAttemptRows = async () => unavailable();
+  store.assessmentEvidenceRows = async () => unavailable();
+  const summary = (await call('GET', '/summary?window=all')).data;
+  for (const group of ['selftest', 'effectiveness', 'journey', 'insights', 'activity'])
+    assert.equal(summary[group].assessmentDataStatus, 'not_available', group);
+  assert.equal(summary.journey.units[0].assessmentDataStatus, 'not_available');
+  assert.equal(summary.journey.cohorts[0].assessmentDataStatus, 'not_available');
+  assert.equal(summary.process.eventCount, 1, 'valid process facts remain available');
+  const overview = (await call('GET', '/admin/overview?window=all', undefined, 4)).data;
+  for (const group of ['selftest', 'effectiveness', 'journey', 'diagnostics', 'activity'])
+    assert.equal(overview[group].assessmentDataStatus, 'not_available', group);
+  assert.equal(overview.diagnostics.quality.assessmentDataStatus, 'not_available');
+  assert.ok(overview.users.every((user) => user.selftest.assessmentDataStatus === 'not_available'));
+  assert.ok(
+    overview.diagnostics.transitions.every((row) => row.assessmentDataStatus === 'not_available'),
+  );
+  assert.ok(overview.diagnostics.transitions.every((row) => row.ratio === null));
+  assert.equal(overview.processUserCount, 1);
+});
+
+test('available but empty assessment storage is distinguishable from unavailable storage', async (t) => {
+  const { call } = await fixture(t);
+  const summary = (await call('GET', '/summary?window=all')).data;
+  assert.equal(summary.selftest.assessmentDataStatus, 'available');
+  assert.equal(summary.selftest.attempts, 0);
+  assert.equal(summary.journey.assessmentDataStatus, 'available');
+  const overview = (await call('GET', '/admin/overview?window=all', undefined, 4)).data;
+  assert.equal(overview.diagnostics.assessmentDataStatus, 'available');
+  assert.ok(overview.users.every((user) => user.selftest.assessmentDataStatus === 'available'));
+});
+
+test('admin process coverage counts authorized heartbeat-only records consistently', async (t) => {
+  const { call, advance } = await fixture(t);
+  advance(30);
+  const submission = await call(
+    'POST',
+    '/events',
+    event({
+      type: 'engagement',
+      deltaSeconds: 30,
+      metadata: { tool: 'content', sessionId: crypto.randomUUID() },
+    }),
+  );
+  assert.equal(submission.status, 201);
+  const overview = (await call('GET', '/admin/overview?window=all', undefined, 4)).data;
+  assert.equal(overview.process.visits, 0, 'missing navigation does not manufacture a visit');
+  assert.equal(overview.process.activeSeconds, 30);
+  assert.equal(overview.processUserCount, 1);
+  assert.equal(overview.diagnostics.coverage.processLearners, 1);
+  assert.equal(overview.diagnostics.coverage.observedLearners, 1);
+  assert.equal(overview.diagnostics.coverage.businessOnlyLearners, 0);
+});
+
+test('review support counts every still-pending submission even after a later formal pass or in practice', async (t) => {
+  const { call } = await fixture(t, {
+    businessAttempts: [
+      evidenceAttempt({ status: 'pending_review', verdict: null }),
+      evidenceAttempt({ id: '2', created_at: '2026-10-01T01:01:00Z' }),
+      evidenceAttempt({
+        id: '3',
+        question_id: 'SS-01-01-Q2',
+        is_official: 0,
+        status: 'pending_review',
+        verdict: null,
+        created_at: '2026-10-01T01:02:00Z',
+      }),
+    ],
   });
-  assert.equal(store.rows.length, 0);
-  await call('PUT', '/preferences', { enabled: true });
+  const summary = (await call('GET', '/summary?window=all')).data;
+  assert.equal(summary.selftest.pendingReview, 2);
+  assert.equal(summary.insights.needsReviewCount, 2);
+  assert.equal(summary.insights.waitingForRetryCount, 0);
+  assert.equal(summary.insights.reviewScope, 'all_observed_pending_submissions_in_selected_window');
+  const nextStep = summary.insights.nextSteps.find((step) => step.id === 'pending_review');
+  assert.equal(nextStep.evidence.basis, 'observed_pending_review_submission');
+  assert.equal(nextStep.evidence.count, 2);
+  assert.equal(nextStep.quizView, 'quick', 'formal pending history stays accessible');
+  const overview = (await call('GET', '/admin/overview?window=all', undefined, 4)).data;
+  assert.equal(overview.diagnostics.attention[0].pendingReviewAttempts, 2);
+  assert.equal(overview.diagnostics.attention[0].waitingForRetryQuestions, 0);
+});
+
+test('practice-only manual review suggestions link to the practice view rather than formal selftest', async (t) => {
+  const { call } = await fixture(t, {
+    businessAttempts: [
+      evidenceAttempt({ is_official: 0, status: 'pending_review', verdict: null }),
+    ],
+  });
+  const summary = (await call('GET', '/summary?window=all')).data;
+  assert.equal(summary.insights.needsReviewCount, 1);
+  assert.equal(summary.insights.nextSteps[0].id, 'pending_review');
+  assert.equal(summary.insights.nextSteps[0].quizView, 'practice');
+  assert.doesNotMatch(summary.insights.nextSteps[0].reason, /正式作答/);
+  const overview = (await call('GET', '/admin/overview?window=all', undefined, 4)).data;
+  assert.equal(overview.diagnostics.attention[0].pendingReviewAttempts, 1);
+});
+
+test('explicit starting point, goal and path recording uses the default policy and only bounded enums', async (t) => {
+  const { call, store } = await fixture(t);
   assert.equal((await call('POST', '/events', choiceEvent())).status, 201);
   for (const metadata of [
     { action: 'learning_start_set', level: 'expert' },
@@ -501,11 +605,11 @@ test('cohort retries and corrections require formal graded same-question same-ve
     evidenceAttempt({ id: '4', verdict: 'practice_only', is_official: 0 }),
     evidenceAttempt({ id: '5', verdict: null, status: 'pending_review' }),
   ];
-  let cohort = journeyEvidence([start], attempts).cohorts[0];
+  let [cohort] = journeyEvidence([start], attempts).cohorts;
   assert.equal(cohort.retryUnits, 0);
   assert.equal(cohort.correctedUnits, 0);
   attempts.push(evidenceAttempt({ id: '6', verdict: 'pass' }));
-  cohort = journeyEvidence([start], attempts).cohorts[0];
+  [cohort] = journeyEvidence([start], attempts).cohorts;
   assert.equal(cohort.retryUnits, 1);
   assert.equal(cohort.correctedUnits, 1);
   assert.equal(cohort.practiceUnits, 1);
@@ -707,7 +811,7 @@ test('admin overview is unavailable to students and course managers and exposes 
   const admin = await call('GET', '/admin/overview?window=all', undefined, 4);
   assert.equal(admin.status, 200);
   assert.equal(admin.data.userCount, 4);
-  assert.equal(admin.data.enabledUserCount, 1);
+  assert.equal(admin.data.enabledUserCount, 4);
   assert.equal(admin.data.limitedSample, true);
   assert.equal(admin.data.users[0].nickname, '学生甲');
   assert.equal(admin.data.users[0].courseCount, 1);
@@ -740,6 +844,8 @@ test('effectiveness evidence separates official same-version change from practic
   const evidence = response.data.effectiveness;
   assert.equal(evidence.officialLearners, 3);
   assert.equal(evidence.gradedSequences, 3);
+  assert.equal(evidence.firstPassSequences, 1);
+  assert.equal(evidence.firstFailSequences, 2);
   assert.equal(evidence.comparableSequences, 2);
   assert.equal(evidence.comparableLearners, 2);
   assert.equal(evidence.failedComparableSequences, 1);
@@ -753,7 +859,37 @@ test('effectiveness evidence separates official same-version change from practic
   assert.equal(evidence.scope, 'within_window_same_question_and_document_version');
   assert.match(evidence.interpretation, /不能单独证明平台因果效果/);
   assert.doesNotMatch(JSON.stringify(evidence), /user_id|question_id|answer|rank|percent/);
-  assert.equal((await call('GET', '/summary?window=all')).data.effectiveness, undefined);
+  const personal = (await call('GET', '/summary?window=all')).data.effectiveness;
+  assert.equal(personal.officialLearners, 1);
+  assert.equal(personal.gradedSequences, 2);
+  assert.equal(personal.firstPassSequences, 0);
+  assert.equal(personal.firstFailSequences, 2);
+  assert.equal(personal.improvedSequences, 1);
+  assert.equal(personal.regressedSequences, 0, 'Another learner is not part of personal evidence');
+  assert.doesNotMatch(JSON.stringify(personal), /user_id|question_id|answer|rank|percent/);
+});
+
+test('ever corrected and latest first-to-last change remain distinct, including a later failed retry', async (t) => {
+  const { call } = await fixture(t, {
+    businessAttempts: [
+      evidenceAttempt({ id: '1', verdict: 'fail' }),
+      evidenceAttempt({ id: '2', verdict: 'pass' }),
+      evidenceAttempt({ id: '3', verdict: 'fail' }),
+      evidenceAttempt({ id: '4', verdict: 'pass', question_version: '2' }),
+    ],
+  });
+  const result = (await call('GET', '/summary?window=all')).data;
+  assert.equal(result.effectiveness.gradedSequences, 2);
+  assert.equal(result.effectiveness.firstPassSequences, 1);
+  assert.equal(result.effectiveness.firstFailSequences, 1);
+  assert.equal(result.effectiveness.improvedSequences, 0);
+  assert.equal(result.journey.units[0].correctedQuestions, 1);
+  assert.equal(result.journey.units[0].waitingForRetryQuestions, 1);
+  assert.equal(
+    result.insights.waitingForRetryCount,
+    0,
+    'A newer version has a later observed pass',
+  );
 });
 
 test('improvement never joins different students, nodes, courses, question IDs or either content version', async (t) => {
@@ -822,9 +958,15 @@ test('participation evidence counts authorized tool users and actions, without e
   await call('POST', '/events', event({ metadata: { action: 'tool_open', tool: 'feedback' } }), 3);
   const evidence = (await call('GET', '/admin/overview?window=all', undefined, 4)).data
     .effectiveness;
-  assert.deepEqual(evidence.tools, [{ tool: 'notes', users: 2, events: 3 }]);
+  assert.deepEqual(evidence.tools, [
+    { tool: 'feedback', users: 1, events: 1 },
+    { tool: 'notes', users: 2, events: 3 },
+  ]);
   assert.deepEqual(evidence.actions, [{ action: 'annotation_save', users: 1, events: 1 }]);
   assert.equal(evidence.comparableSequences, 0);
+  const personal = (await call('GET', '/summary?window=all')).data.effectiveness;
+  assert.deepEqual(personal.tools, [{ tool: 'notes', users: 1, events: 2 }]);
+  assert.deepEqual(personal.actions, [{ action: 'annotation_save', users: 1, events: 1 }]);
 });
 
 test('export pagination includes all own analytics records without mixing another user', async (t) => {
@@ -899,8 +1041,9 @@ test('MySQL records lock preferences and deduplicate before insert with trusted 
     event({ type: 'engagement', deltaSeconds: 30, metadata: { sessionId: crypto.randomUUID() } }),
   );
   assert.equal((await store.record(1, contexts[0], body)).deltaSeconds, 5);
-  assert.ok(queries[1].sql.includes('FOR UPDATE'));
-  assert.ok(queries[2].sql.includes('SELECT payload_hash'));
+  assert.ok(queries[1].sql.includes('INSERT INTO learning_analytics_preferences'));
+  assert.ok(queries[2].sql.includes('FOR UPDATE'));
+  assert.ok(queries[3].sql.includes('SELECT payload_hash'));
   const insert = queries.find((query) =>
     query.sql?.includes('INSERT INTO learning_analytics_events'),
   );
@@ -909,7 +1052,7 @@ test('MySQL records lock preferences and deduplicate before insert with trusted 
   assert.deepEqual(queries.slice(-2), ['commit', 'release']);
 });
 
-test('MySQL deletes atomically disable recording first and never touch private business tables', async () => {
+test('MySQL deletes atomically preserve default recording and never touch private business tables', async () => {
   const queries = [];
   const connection = {
     async beginTransaction() {
@@ -936,6 +1079,7 @@ test('MySQL deletes atomically disable recording first and never touch private b
   });
   assert.equal(await store.remove(1), 2);
   assert.match(queries[0].sql, /learning_analytics_preferences/);
+  assert.match(queries[0].sql, /enabled = 1/);
   assert.match(queries[1].sql, /DELETE FROM learning_analytics_events WHERE user_id = \?/);
   assert.deepEqual(queries[1].values, [1]);
   assert.doesNotMatch(
@@ -944,7 +1088,7 @@ test('MySQL deletes atomically disable recording first and never touch private b
   );
 });
 
-test('MySQL recording checks disabled consent under lock before touching the event table', async () => {
+test('MySQL recording fails explicitly if mandatory enablement is not confirmed under lock', async () => {
   const queries = [];
   const connection = {
     async beginTransaction() {
@@ -969,14 +1113,12 @@ test('MySQL recording checks disabled consent under lock before touching the eve
       return connection;
     },
   });
-  assert.deepEqual(await store.record(1, contexts[0], validateClientEvent(event())), {
-    recorded: false,
-    reason: 'disabled',
-  });
-  assert.equal(queries.length, 4);
-  assert.match(queries[1], /FOR UPDATE/);
-  assert.doesNotMatch(queries[1], /learning_analytics_events/);
-  assert.deepEqual(queries.slice(-2), ['commit', 'release']);
+  await assert.rejects(store.record(1, contexts[0], validateClientEvent(event())), { status: 503 });
+  assert.equal(queries.length, 5);
+  assert.match(queries[1], /INSERT INTO learning_analytics_preferences/);
+  assert.match(queries[2], /FOR UPDATE/);
+  assert.doesNotMatch(queries.join('\n'), /learning_analytics_events/);
+  assert.deepEqual(queries.slice(-2), ['rollback', 'release']);
 });
 
 test('MySQL conflicting UUID rolls back and releases the lock without inserting an event', async () => {
@@ -1007,7 +1149,7 @@ test('MySQL conflicting UUID rolls back and releases the lock without inserting 
   });
   await assert.rejects(store.record(1, contexts[0], validateClientEvent(event())), { status: 409 });
   assert.equal(
-    queries.some((query) => query.includes('INSERT INTO')),
+    queries.some((query) => query.includes('INSERT INTO learning_analytics_events')),
     false,
   );
   assert.deepEqual(queries.slice(-2), ['rollback', 'release']);
@@ -1023,8 +1165,8 @@ test('MySQL UTC timestamps bypass driver timezone conversion and are exported as
   });
   assert.equal((await store.preferences(1)).updatedAt, '2026-10-01T02:00:00.123Z');
   await store.exportRows(1, '9');
-  assert.match(queries[0], /CAST\(updated_at AS CHAR\)/);
-  assert.match(queries[1], /CAST\(e.created_at AS CHAR\)/);
+  assert.match(queries[1], /CAST\(updated_at AS CHAR\)/);
+  assert.match(queries[2], /CAST\(e.created_at AS CHAR\)/);
 });
 
 test('migration initializes only analytics tables and aggregate SQL never selects private payloads', async () => {
@@ -1038,14 +1180,13 @@ test('migration initializes only analytics tables and aggregate SQL never select
       return [[]];
     },
   });
-  assert.equal(statements.length, 4);
+  assert.equal(statements.length, 7);
   assert.match(statements[0], /enabled TINYINT\(1\) NOT NULL DEFAULT 0/);
   assert.match(statements[1], /UNIQUE KEY uq_learning_analytics_request \(user_id, request_key\)/);
   assert.match(statements[1], /KEY idx_learning_analytics_retention \(created_at, id\)/);
-  assert.equal(
-    statements.some((sql) => sql.startsWith('ALTER')),
-    false,
-  );
+  assert.match(statements[4], /ALTER COLUMN enabled SET DEFAULT 1/);
+  assert.match(statements[5], /WHERE enabled <> 1/);
+  assert.match(statements[6], /WHERE p.user_id IS NULL/);
   const queries = [];
   const store = createMysqlAnalyticsStore({
     async execute(sql, values) {
@@ -1147,25 +1288,20 @@ test('parallel requests cannot exceed quota and trusted assessments do not consu
   assert.equal((await call('POST', '/events', event())).status, 429);
 });
 
-test('disabled collection spends no quota, consent toggles cannot reset it, and controls remain usable', async (t) => {
+test('default collection is bounded and legacy controls or clearing cannot reset the recording quota', async (t) => {
   const { call, store } = await fixture(t);
-  for (let index = 0; index < 130; index += 1)
-    assert.equal(
-      (await store.record(1, contexts[0], validateClientEvent(event()))).reason,
-      'disabled',
-    );
-  assert.equal(store.quotaSize(), 0);
-  await store.setPreferences(1, true);
   for (let index = 0; index < 120; index += 1)
     await store.record(1, contexts[0], validateClientEvent(event()));
+  assert.equal(store.quotaSize(), 1);
   assert.equal((await call('GET', '/export')).status, 200);
   assert.equal((await call('GET', '/summary')).status, 200);
-  assert.equal((await call('PUT', '/preferences', { enabled: false })).status, 200);
-  assert.equal((await call('POST', '/events', event())).data.reason, 'disabled');
+  assert.equal((await call('PUT', '/preferences', { enabled: false })).status, 409);
+  assert.equal((await call('POST', '/events', event())).status, 429);
   await call('PUT', '/preferences', { enabled: true });
   assert.equal((await call('POST', '/events', event())).status, 429);
   assert.equal((await call('DELETE', '/events')).data.deleted, 120);
-  assert.equal((await call('POST', '/events', event())).data.reason, 'disabled');
+  assert.equal((await call('GET', '/preferences')).data.preferences.enabled, true);
+  assert.equal((await call('POST', '/events', event())).status, 429);
   await call('PUT', '/preferences', { enabled: true });
   assert.equal((await call('POST', '/events', event())).status, 429);
 });
@@ -1247,10 +1383,10 @@ test('MySQL quota is checked under the same preference lock, after UUID deduplic
     status: 429,
     retryAfterSeconds: 43,
   });
-  assert.match(queries[1], /FOR UPDATE/);
-  assert.match(queries[2], /SELECT payload_hash/);
+  assert.match(queries[2], /FOR UPDATE/);
+  assert.match(queries[3], /SELECT payload_hash/);
   assert.equal(
-    queries.some((sql) => sql.startsWith('INSERT')),
+    queries.some((sql) => sql.startsWith('INSERT INTO learning_analytics_events')),
     false,
   );
   assert.deepEqual(queries.slice(-2), ['rollback', 'release']);
@@ -1274,13 +1410,14 @@ test('existing analytics schemas add only missing quota columns and the retentio
     },
   });
   const alterations = statements.filter((sql) => sql.startsWith('ALTER'));
-  assert.equal(alterations.length, 2);
+  assert.equal(alterations.length, 3);
   assert.match(alterations[0], /ADD COLUMN browser_event_count/);
   assert.doesNotMatch(alterations[0], /ADD COLUMN browser_window_started_at/);
   assert.match(alterations[1], /\(created_at, id\)/);
+  assert.match(alterations[2], /ALTER COLUMN enabled SET DEFAULT 1/);
   await ensureLearningAnalyticsTables({
     async execute(sql) {
-      if (sql.startsWith('ALTER')) {
+      if (sql.startsWith('ALTER') && !sql.includes('ALTER COLUMN enabled')) {
         const error = new Error('another process initialized this field');
         error.code = sql.includes('ADD COLUMN') ? 'ER_DUP_FIELDNAME' : 'ER_DUP_KEYNAME';
         throw error;

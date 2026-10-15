@@ -18,6 +18,8 @@ test('mention picker opens on bare @, Chinese-adjacent @, repeated mentions, but
     context.getDiscussionMentionRange({ value, selectionStart: value.length });
   assert.equal(range('@').query, '');
   assert.equal(range('你好@').start, 2);
+  assert.equal(range('请@张亦驰').query, '张亦驰');
+  assert.equal(range('@张老师_2026').query, '张老师_2026');
   assert.equal(range('@alice 再请@bob').query, 'bob');
   assert.equal(range('@alice @').query, '');
   assert.equal(range('mail@example'), null);

@@ -436,6 +436,49 @@ function requestFingerprint(questionId, answer, mode, supersedesAttemptId) {
     JSON.stringify({ questionId, answer, mode, supersedesAttemptId }),
   );
 }
+function toReviewQuestionSnapshot(snapshot, row) {
+  if (
+    !snapshot ||
+    typeof snapshot !== 'object' ||
+    Array.isArray(snapshot) ||
+    snapshot.id !== row.question_id ||
+    typeof snapshot.questionVersion !== 'string' ||
+    !snapshot.questionVersion.trim() ||
+    snapshot.questionVersion !== row.question_version ||
+    !TYPES.includes(snapshot.type) ||
+    typeof snapshot.prompt !== 'string' ||
+    !snapshot.prompt.trim()
+  )
+    return null;
+  const question = {
+    id: snapshot.id,
+    type: snapshot.type,
+    prompt: snapshot.prompt,
+    questionVersion: snapshot.questionVersion,
+  };
+  if (['single_choice', 'multiple_choice'].includes(snapshot.type)) {
+    if (
+      !Array.isArray(snapshot.options) ||
+      snapshot.options.length < 2 ||
+      snapshot.options.length > 12 ||
+      snapshot.options.some(
+        (option) =>
+          !option ||
+          typeof option.id !== 'string' ||
+          !QUESTION_ID.test(option.id) ||
+          typeof option.text !== 'string' ||
+          !option.text.trim(),
+      ) ||
+      new Set(snapshot.options.map((option) => option.id)).size !== snapshot.options.length
+    )
+      return null;
+    question.options = snapshot.options.map((option) => ({ id: option.id, text: option.text }));
+  }
+  if (typeof snapshot.source === 'string') question.source = snapshot.source;
+  if (typeof snapshot.learningObjective === 'string')
+    question.learningObjective = snapshot.learningObjective;
+  return question;
+}
 function toAttempt(row, review = false) {
   const parseJson = (value) => (typeof value === 'string' ? JSON.parse(value) : value);
   let snapshot = {};
@@ -447,6 +490,9 @@ function toAttempt(row, review = false) {
   let assessmentRole = 'practice';
   if (row.is_official) assessmentRole = 'selftest';
   else if (snapshot.assessmentRole === 'exploration') assessmentRole = 'exploration';
+  // Only a course-authorized review receives this allowlisted historical prompt.
+  // Missing legacy snapshots stay missing; the current question is never substituted.
+  const questionSnapshot = review ? toReviewQuestionSnapshot(snapshot, row) : null;
   return {
     id: String(row.id),
     questionId: row.question_id,
@@ -471,7 +517,13 @@ function toAttempt(row, review = false) {
     reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    ...(review ? { userId: String(row.user_id) } : {}),
+    ...(review
+      ? {
+          userId: String(row.user_id),
+          snapshotAvailability: questionSnapshot ? 'available' : 'missing',
+          questionSnapshot,
+        }
+      : {}),
   };
 }
 function assertReplay(row, user, context, fingerprint) {
@@ -532,6 +584,25 @@ function createMysqlAssessmentStore(pool) {
       );
       return rows.map((row) => toAttempt(row, review));
     },
+    async latest(user, context, questionIds) {
+      if (!questionIds.length) return [];
+      // Bound the returned set by the current public question IDs and channel,
+      // not by a global history LIMIT. Select newest IDs across all versions:
+      // filtering versions first could resurrect an older pass after a rollback.
+      const [rows] = await pool.execute(
+        `SELECT ${ATTEMPT_COLUMNS.split(', ')
+          .map((column) => `a.${column}`)
+          .join(', ')}
+         FROM learning_assessment_attempts a JOIN (
+           SELECT MAX(id) AS latest_id FROM learning_assessment_attempts
+           WHERE user_id = ? AND course_id = ? AND node_id = ?
+             AND BINARY question_id IN (${questionIds.map(() => '?').join(', ')})
+           GROUP BY BINARY question_id, is_official
+         ) current_attempts ON current_attempts.latest_id = a.id ORDER BY a.id DESC`,
+        [user.id, context.course_id, context.node_id, ...questionIds],
+      );
+      return rows.map((row) => toAttempt(row));
+    },
     async create(
       user,
       context,
@@ -573,17 +644,19 @@ function createMysqlAssessmentStore(pool) {
       }
       return assertReplay(await this.findByKey(user, key), user, context, fingerprint);
     },
-    async review(user, context, id, score, feedback) {
-      const [result] = await pool.execute(
-        "UPDATE learning_assessment_attempts SET score = ?, feedback = ?, status = 'graded', verdict = IF(is_official = 1, IF(? >= pass_score, 'pass', 'fail'), 'practice_only'), reviewed_by = ? WHERE id = ? AND course_id = ? AND node_id = ? AND status = 'pending_review' AND ? <= max_score",
-        [score, feedback, score, user.id, id, context.course_id, context.node_id, score],
-      );
-      if (!result.affectedRows) return null;
+    async findReviewResult(context, id) {
       const [rows] = await pool.execute(
         `SELECT ${ATTEMPT_COLUMNS} FROM learning_assessment_attempts WHERE id = ? AND course_id = ? AND node_id = ? LIMIT 1`,
         [id, context.course_id, context.node_id],
       );
       return rows[0] ? toAttempt(rows[0], true) : null;
+    },
+    async review(user, context, id, score, feedback) {
+      const [result] = await pool.execute(
+        "UPDATE learning_assessment_attempts SET score = ?, feedback = ?, status = 'graded', verdict = IF(is_official = 1, IF(? >= pass_score, 'pass', 'fail'), 'practice_only'), reviewed_by = ? WHERE id = ? AND course_id = ? AND node_id = ? AND status = 'pending_review' AND ? <= max_score",
+        [score, feedback, score, user.id, id, context.course_id, context.node_id, score],
+      );
+      return result.affectedRows ? this.findReviewResult(context, id) : null;
     },
   };
 }
@@ -646,6 +719,24 @@ function createMemoryAssessmentStore({ contexts = [], managers = [] } = {}) {
         .slice(0, 51)
         .map((row) => toAttempt(row, review));
     },
+    async latest(user, context, questionIds) {
+      const allowed = new Set(questionIds);
+      const latest = new Map();
+      rows.forEach((row) => {
+        if (
+          !matches(row, context) ||
+          String(row.user_id) !== String(user.id) ||
+          !allowed.has(row.question_id)
+        )
+          return;
+        const key = JSON.stringify([row.question_id, Boolean(row.is_official)]);
+        const previous = latest.get(key);
+        if (!previous || BigInt(row.id) > BigInt(previous.id)) latest.set(key, row);
+      });
+      return [...latest.values()]
+        .sort((left, right) => (BigInt(left.id) > BigInt(right.id) ? -1 : 1))
+        .map((row) => toAttempt(row));
+    },
     async create(
       user,
       context,
@@ -693,6 +784,10 @@ function createMemoryAssessmentStore({ contexts = [], managers = [] } = {}) {
         }
       }
       return assertReplay(row, user, context, fingerprint);
+    },
+    async findReviewResult(context, id) {
+      const row = rows.find((item) => String(item.id) === String(id) && matches(item, context));
+      return row ? toAttempt(row, true) : null;
     },
     async review(user, context, id, score, feedback) {
       const row = rows.find(
@@ -774,8 +869,23 @@ function createLearningAssessmentRouter({
         throw new AssessmentError(403, '需要本课程负责人的权限');
       const records = await store.list(user, context, before, review);
       const attempts = records.slice(0, 50);
+      let currentAttempts;
+      if (!before && !review) {
+        const assessment = parseAssessmentMarkdown(context.document_markdown);
+        const questionIds = [
+          ...new Set(
+            [...assessment.questions, ...assessment.practiceQuestions].map(
+              (question) => question.id,
+            ),
+          ),
+        ];
+        // These are latest stored candidates, not a claim that an old-version
+        // record satisfies today's rules. Consumers check versions after selection.
+        currentAttempts = await store.latest(user, context, questionIds);
+      }
       res.json({
         attempts,
+        ...(currentAttempts === undefined ? {} : { currentAttempts }),
         nextCursor: records.length > 50 ? attempts.at(-1).id : null,
         documentVersion: getAssessmentDocumentVersion(context.document_markdown),
       });
@@ -860,7 +970,24 @@ function createLearningAssessmentRouter({
     const score = finite(req.body?.score, 0, 1000, '复核分数');
     const feedback = text(req.body?.feedback, 4000, '复核说明');
     const attempt = await store.review(user, context, req.params.id, score, feedback);
-    if (!attempt) throw new AssessmentError(409, '作答已复核、不存在或分数超过满分，请刷新后核对');
+    if (!attempt) {
+      const previous =
+        typeof store.findReviewResult === 'function'
+          ? await store.findReviewResult(context, req.params.id)
+          : null;
+      if (
+        previous?.status !== 'graded' ||
+        previous.reviewedBy !== String(user.id) ||
+        previous.score !== score ||
+        typeof previous.feedback !== 'string' ||
+        previous.feedback.trim() !== feedback
+      )
+        throw new AssessmentError(409, '作答已复核、不存在或分数超过满分，请刷新后核对');
+      // Confirm only this reviewer's identical saved intent after a lost receipt.
+      // Never rewrite historical grading or emit assessment/stars events twice.
+      res.json({ attempt: previous, replayed: true });
+      return;
+    }
     if (typeof onAssessmentEvent === 'function') {
       try {
         await onAssessmentEvent({ user, context, attempt, reviewed: true });

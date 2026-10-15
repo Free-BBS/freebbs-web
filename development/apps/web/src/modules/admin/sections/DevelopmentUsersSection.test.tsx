@@ -1,10 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../../core/api/client.js';
 import { DevelopmentUsersSection } from './DevelopmentUsersSection.js';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 
-vi.mock('../../../core/auth/AuthProvider.js', () => ({ useOptionalAuth: () => null }));
+const { mockAuth } = vi.hoisted(() => ({ mockAuth: vi.fn(() => null as unknown) }));
+vi.mock('../../../core/auth/AuthProvider.js', () => ({ useOptionalAuth: mockAuth }));
+function LocationMarker() {
+  return <span data-testid="preview-path">{useLocation().pathname}</span>;
+}
 const person = {
   uid: 'u-target',
   username: 'Target',
@@ -21,13 +26,56 @@ function setup(fail = false) {
       if (fail) throw new Error('访问设置保存失败');
       return { updated: true, uid: person.uid };
     }
+    if (path === '/admin/business-admin-bootstrap')
+      return { canInitialize: false, globalAdminCount: 1 };
     if (path.startsWith('/admin/development-users')) return [person];
     throw new Error(path);
   });
-  render(<DevelopmentUsersSection client={{ request: request as ApiClient['request'] }} />);
+  render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <DevelopmentUsersSection client={{ request: request as ApiClient['request'] }} />
+      <LocationMarker />
+    </MemoryRouter>,
+  );
   return request;
 }
 describe('DevelopmentUsersSection access boundary', () => {
+  beforeEach(() => mockAuth.mockReturnValue(null));
+  it('offers real identity preview only from the qualified lead directory', async () => {
+    const setPreviewUser = vi.fn();
+    mockAuth.mockReturnValue({
+      authMode: 'main',
+      setPreviewUser,
+      user: {
+        uid: 'lead',
+        roles: ['platform.super_admin'],
+        developmentAccess: 'lead',
+        viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+      },
+    });
+    setup();
+    await userEvent.click(await screen.findByRole('button', { name: '预览此用户界面' }));
+    expect(setPreviewUser).toHaveBeenCalledWith(person.uid);
+    expect(screen.getByTestId('preview-path')).toHaveTextContent('/community');
+    mockAuth.mockReturnValue(null);
+  });
+  it('does not offer identity preview to a business administrator', async () => {
+    mockAuth.mockReturnValue({
+      authMode: 'main',
+      setPreviewUser: vi.fn(),
+      user: {
+        uid: 'admin',
+        roles: ['platform.admin'],
+        businessAdmin: true,
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: true },
+      },
+    });
+    setup();
+    await screen.findByRole('button', { name: /Target/ });
+    expect(screen.queryByRole('button', { name: '预览此用户界面' })).not.toBeInTheDocument();
+    mockAuth.mockReturnValue(null);
+  });
   it('manages only access and lead appointment without exposing organizational roles', async () => {
     const request = setup();
     await screen.findByRole('button', { name: /Target/ });

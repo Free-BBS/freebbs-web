@@ -31,6 +31,12 @@ import {
 import { createFinanceRouter } from './modules/finance/router.js';
 import { createFestivalRouter } from './modules/festival/router.js';
 import { createGrowthRouter } from './modules/growth/router.js';
+import {
+  createAtlasService,
+  type LearningAchievementProvider,
+} from './modules/growth/atlas-service.js';
+import { createAtlasRouter } from './modules/growth/atlas-router.js';
+import { createMapBridgeRouters } from './modules/map-bridge/router.js';
 import { createInformationRouter } from './modules/information/router.js';
 import { createKnowledgeRouter } from './modules/knowledge/router.js';
 import { createLiaisonRouter } from './modules/liaison/router.js';
@@ -86,6 +92,8 @@ export interface CreateAppOptions {
   learningSurveyResolver?: LearningSurveyResolver;
   developmentRewardProvider?: DevelopmentRewardProvider;
   systemSettingsDirectory?: string;
+  learningAchievementProvider?: LearningAchievementProvider;
+  developmentMapTokenDigest?: string;
 }
 
 function requestId(response: Response): string {
@@ -121,7 +129,12 @@ function resolveAuthClient(mode: AuthMode, options: CreateAppOptions): AuthClien
 }
 
 export function createApp(options: CreateAppOptions = {}) {
-  const environmentSource = options.environment ?? process.env;
+  const environmentSource = options.developmentMapTokenDigest
+    ? {
+        ...(options.environment ?? process.env),
+        DEVELOPMENT_MAP_TOKEN_SHA256: options.developmentMapTokenDigest,
+      }
+    : (options.environment ?? process.env);
   const environment = loadEnvironment(environmentSource);
   const store = options.store ?? createMemoryStore();
   const databaseMode = options.databaseMode ?? 'memory';
@@ -202,6 +215,10 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     `${API_BASE_PATH}/organization-group`,
     express.json({ limit: '8mb', type: 'application/json' }),
+  );
+  app.use(
+    `${API_BASE_PATH}/connectors/map/sync`,
+    express.json({ limit: '256kb', type: 'application/json' }),
   );
   app.use(express.json({ limit: '64kb', type: 'application/json' }));
 
@@ -392,6 +409,25 @@ export function createApp(options: CreateAppOptions = {}) {
         options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
     }),
   );
+  const atlasService = createAtlasService({
+    store,
+    environment: environmentSource,
+    nodeEnvironment: environment.nodeEnv,
+    uploadDirectory: options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    learningAchievementProvider: options.learningAchievementProvider,
+  });
+  const mapBridge = createMapBridgeRouters({
+    store,
+    authenticate,
+    environment: environmentSource,
+    nodeEnvironment: environment.nodeEnv,
+    uploadDirectory: options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    getAtlas: atlasService.getMiniappAtlas,
+    saveShowcase: atlasService.saveMiniappShowcase,
+  });
+  app.use(`${API_BASE_PATH}/connectors/map`, mapBridge.serviceRouter);
+  app.use(`${API_BASE_PATH}/growth/map`, mapBridge.userRouter);
+  app.use(`${API_BASE_PATH}/growth`, createAtlasRouter({ authenticate, service: atlasService }));
   app.use(
     `${API_BASE_PATH}/connectors`,
     createConnectorsRouter({

@@ -99,7 +99,7 @@ describe('development system settings boundaries', () => {
       .get(`${base}/me`)
       .set('Authorization', 'Bearer admin')
       .set('X-Development-Preview-Uid', 'target')
-      .expect(200);
+      .expect(403);
   });
   it('assigns business identities atomically with revision and before/after audit, never access or reserved role', async () => {
     const { app, store } = await fixture();
@@ -409,40 +409,40 @@ describe('development system settings boundaries', () => {
         ?.status,
     ).toBe('pending');
   });
-  it('never writes from preview or spoofs reserved settings authority', async () => {
+  it('lets lead previews read target administrator settings without writes or reserved authority', async () => {
     const { app, store } = await fixture();
     const preview = await request(app)
       .get(`${base}/me`)
-      .set('Authorization', 'Bearer admin')
-      .set('X-Development-Preview-Uid', 'lead')
+      .set('Authorization', 'Bearer lead')
+      .set('X-Development-Preview-Uid', 'admin')
       .expect(200);
     expect(preview.body.data).toMatchObject({
-      uid: 'lead',
+      uid: 'admin',
       previewing: true,
-      viewer: { uid: 'admin', canManageDevelopment: false, canPreviewDevelopment: true },
+      viewer: { uid: 'lead', canManageDevelopment: true, canPreviewDevelopment: true },
     });
     await request(app)
       .get(`${base}/knowledge/entries`)
-      .set('Authorization', 'Bearer admin')
+      .set('Authorization', 'Bearer lead')
       .set('X-Development-Preview-Uid', 'member')
       .expect(200);
     await request(app)
       .post(`${base}/finance/records`)
-      .set('Authorization', 'Bearer admin')
-      .set('X-Development-Preview-Uid', 'lead')
+      .set('Authorization', 'Bearer lead')
+      .set('X-Development-Preview-Uid', 'admin')
       .send({ title: '无权预览写入', kind: 'budget', amountCents: 10, scope })
       .expect(403);
     await request(app)
       .get(`${base}/system-settings`)
-      .set('Authorization', 'Bearer admin')
+      .set('Authorization', 'Bearer lead')
       .set('X-Development-Preview-Uid', 'admin')
-      .expect(403);
+      .expect(200);
     await request(app)
       .get(`${base}/admin/development-users`)
-      .set('Authorization', 'Bearer admin')
+      .set('Authorization', 'Bearer lead')
       .set('X-Development-Preview-Uid', 'lead')
       .expect(403);
-    for (const uid of ['lead', 'member'])
+    for (const uid of ['admin', 'member'])
       await request(app)
         .get(`${base}/me`)
         .set('Authorization', `Bearer ${uid}`)
@@ -462,6 +462,78 @@ describe('development system settings boundaries', () => {
     expect((await store.auditLogs.list()).filter((row) => row.actorUid === 'admin')).toHaveLength(
       0,
     );
+  });
+  it('reads administrator target settings in lead preview and rejects settings writes without side effects', async () => {
+    const grant = vi.fn();
+    const { app, store } = await fixture({ developmentRewardProvider: { grant } });
+    await store.roleAssignments.create({
+      subjectUid: 'member',
+      roleKey: 'platform.admin',
+      ownerUid: 'admin',
+      status: 'active',
+      expiresAt: null,
+      scope: { type: 'social_organization', id: 'arts_center' },
+    });
+    const headers = { Authorization: 'Bearer lead', 'X-Development-Preview-Uid': 'admin' };
+    for (const endpoint of [
+      '',
+      '/users',
+      '/organizations',
+      '/modules',
+      '/audit-logs',
+      '/notifications',
+      '/rewards',
+    ])
+      await request(app).get(`${base}/system-settings${endpoint}`).set(headers).expect(200);
+    const subjects = await store.subjects.list();
+    const assignments = await store.roleAssignments.list();
+    const modules = await store.modules.list();
+    const audit = await store.auditLogs.list();
+    const before = await request(app).get(`${base}/system-settings`).set(headers).expect(200);
+    for (const endpoint of ['/users/target', '/organizations', '/modules']) {
+      const blocked = await (
+        endpoint.startsWith('/users/')
+          ? request(app).put(`${base}/system-settings${endpoint}`)
+          : request(app).patch(`${base}/system-settings${endpoint}`)
+      )
+        .set(headers)
+        .send({ revision: 0, roles: ['platform.admin'], modules: [] })
+        .expect(403);
+      expect(blocked.body.data.error.code).toBe('preview_read_only');
+    }
+    for (const endpoint of ['/notifications', '/rewards']) {
+      const blocked = await request(app)
+        .post(`${base}/system-settings${endpoint}`)
+        .set(headers)
+        .send({
+          requestId: 'preview',
+          recipientUids: ['target'],
+          title: 'Preview',
+          body: 'Preview',
+          reason: 'Preview',
+          electric: 10,
+          magnetic: 0,
+        })
+        .expect(403);
+      expect(blocked.body.data.error.code).toBe('preview_read_only');
+    }
+    const after = await request(app).get(`${base}/system-settings`).set(headers).expect(200);
+    expect(after.body.data).toEqual(before.body.data);
+    expect(await store.subjects.list()).toEqual(subjects);
+    expect(await store.roleAssignments.list()).toEqual(assignments);
+    expect(await store.modules.list()).toEqual(modules);
+    expect(await store.auditLogs.list()).toEqual(audit);
+    expect(grant).not.toHaveBeenCalled();
+    for (const target of ['lead', 'member', 'target'])
+      await request(app)
+        .get(`${base}/system-settings`)
+        .set('Authorization', 'Bearer lead')
+        .set('X-Development-Preview-Uid', target)
+        .expect(403);
+    await request(app)
+      .get(`${base}/system-settings`)
+      .set('Authorization', 'Bearer lead')
+      .expect(403);
   });
   it('grants a reward batch once and persists development-only notice and audit across retries', async () => {
     let calls = 0;
@@ -972,7 +1044,7 @@ describe('development system settings boundaries', () => {
   });
   it('allows read-only administrator-target organization-group preview without granting manager mutation authority', async () => {
     const { app } = await fixture();
-    const headers = { Authorization: 'Bearer admin', 'X-Development-Preview-Uid': 'admin' };
+    const headers = { Authorization: 'Bearer lead', 'X-Development-Preview-Uid': 'admin' };
     const workspace = await request(app)
       .get(`${base}/organization-group/workspace`)
       .set(headers)

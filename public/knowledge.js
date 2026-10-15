@@ -31,6 +31,8 @@
     chatTab: 'max',
     chatMessages: [],
     chatSending: false,
+    chatSelection: null,
+    chatSelectionDraft: '',
     interactionWidth: 0,
     toolsCollapsed: false,
     discussionPosts: [],
@@ -48,7 +50,8 @@
     discussionComposeMode: 'edit',
     discussionSessionUid: '',
     discussionSessionVersion: 0,
-    view: params.get('view') === 'reading' ? 'reading' : 'overview',
+    // The map already offers an overview. A direct knowledge link is a reading destination.
+    view: params.get('view') === 'overview' ? 'overview' : 'reading',
   };
   const discussionDateFormatter = new Intl.DateTimeFormat('zh-CN', {
     month: 'numeric',
@@ -72,7 +75,9 @@
   }
 
   function courseDirectoryHref() {
-    return `/course?course=${encodeURIComponent(courseSlug)}`;
+    const query = new URLSearchParams({ course: courseSlug });
+    if (state.node?.id) query.set('focus', state.node.id);
+    return `/course?${query.toString()}`;
   }
 
   function setSequenceLink(linkId, titleId, targetNode, emptyLabel) {
@@ -194,6 +199,13 @@
 
   function setKnowledgeView(view, { focus = false } = {}) {
     const nextView = view === 'reading' ? 'reading' : 'overview';
+    // Do not turn pending public material into an apparently available empty document.
+    if (nextView === 'reading' && !state.node) return;
+    if (state.view !== nextView) {
+      page.dispatchEvent(
+        new CustomEvent('knowledge:before-view-change', { detail: { view: nextView } }),
+      );
+    }
     state.view = nextView;
     const overview = document.getElementById('knowledge-overview');
     const reading = document.getElementById('knowledge-reading');
@@ -204,10 +216,14 @@
         detail: { view: nextView, activateContent: focus },
       }),
     );
+    if (nextView === 'reading' && state.node) saveCurrentLearningNode(state.node.id);
 
     if (focus) {
       const target = nextView === 'reading' ? reading : overview;
-      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Returning from the overview continues the learner's paragraph, not the document header.
+      const resumed = nextView === 'reading' && window.FreeBbsLearningReader?.restore?.();
+      target?.focus({ preventScroll: true });
+      if (!resumed) target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
@@ -276,8 +292,36 @@
     setToolsStatus(`${wasActive ? '已移除' : '已添加'}「${label}」${suffix}`);
   }
 
+  function setKnowledgeLoading(isLoading) {
+    page.setAttribute('aria-busy', String(Boolean(isLoading)));
+    const readingButton = document.getElementById('knowledge-start-reading');
+    if (readingButton) readingButton.disabled = Boolean(isLoading);
+    const readingLabel = document.getElementById('knowledge-start-reading-label');
+    if (readingLabel) readingLabel.textContent = isLoading ? '正在载入正文…' : '开始阅读正文';
+    const readingArrow = document.getElementById('knowledge-start-reading-arrow');
+    if (readingArrow) readingArrow.hidden = Boolean(isLoading);
+  }
+
   function showPageError(message) {
-    page.innerHTML = `<section class="course-empty course-material-error">${escapeHtml(message)}</section>`;
+    page.setAttribute('aria-busy', 'false');
+    const confirmedCourse = state.course?.slug;
+    const canReturnToCourse =
+      typeof confirmedCourse === 'string' && /^[a-z0-9][a-z0-9-]{0,119}$/.test(confirmedCourse);
+    const returnHref = canReturnToCourse
+      ? `/course?${new URLSearchParams({ course: confirmedCourse })}`
+      : '/world';
+    page.innerHTML = `
+      <section class="course-empty course-material-error" role="alert">
+        <p>${escapeHtml(message)}</p>
+        <div class="learning-actions">
+          <button class="bbs-action" data-action-tone="primary" id="knowledge-reload-page" type="button">重新加载</button>
+          <a class="bbs-action" id="knowledge-error-return" href="${returnHref}">${canReturnToCourse ? '返回课程' : '返回学习世界'}</a>
+        </div>
+      </section>`;
+    // Reload is explicit and restores fresh authenticated state; do not rerun bound handlers.
+    document.getElementById('knowledge-reload-page')?.addEventListener('click', () => {
+      window.location.reload();
+    });
   }
 
   function bindTagControls() {
@@ -300,7 +344,7 @@
       button.disabled = !scope;
     });
     renderTags();
-    saveCurrentLearningNode(state.node.id);
+    if (state.view === 'reading') saveCurrentLearningNode(state.node.id);
     page.dispatchEvent(
       new CustomEvent('knowledge:tags-change', { detail: { tags: { ...state.tags } } }),
     );
@@ -349,6 +393,35 @@
     }
   }
 
+  function revealNarrowChatControl(target) {
+    if (!window.matchMedia?.('(max-width: 920px)').matches) return;
+    const view = target?.closest('.knowledge-chat-view');
+    if (!view) return;
+    const controlBounds = target.getBoundingClientRect();
+    const viewBounds = view.getBoundingClientRect();
+    // Only scroll the drawer's own content, never the saved reading scroller.
+    if (controlBounds.bottom > viewBounds.bottom)
+      view.scrollTop += controlBounds.bottom - viewBounds.bottom + 8;
+    else if (controlBounds.top < viewBounds.top)
+      view.scrollTop -= viewBounds.top - controlBounds.top + 8;
+  }
+
+  let chatFocusGeneration = 0;
+  function syncChatViewport() {
+    const workbench = document.getElementById('knowledge-workbench');
+    if (!workbench) return;
+    const viewport = window.visualViewport;
+    const height = Number(viewport?.height) || window.innerHeight;
+    const top = Math.max(0, Number(viewport?.offsetTop) || 0);
+    workbench.style.setProperty('--knowledge-chat-viewport-height', `${Math.floor(height)}px`);
+    workbench.style.setProperty('--knowledge-chat-viewport-top', `${top}px`);
+    const generation = chatFocusGeneration;
+    window.requestAnimationFrame(() => {
+      if (state.chatOpen && generation === chatFocusGeneration)
+        revealNarrowChatControl(document.activeElement);
+    });
+  }
+
   function setToolsCollapsed(isCollapsed, persist = false) {
     const workbench = document.getElementById('knowledge-workbench');
     const toggle = document.getElementById('knowledge-tools-toggle');
@@ -382,6 +455,7 @@
       storedWidth = 0;
     }
     setInteractionWidth(storedWidth || window.innerWidth / 3);
+    syncChatViewport();
     setToolsCollapsed(toolsCollapsed);
 
     toolsToggle?.addEventListener('click', () => {
@@ -471,7 +545,12 @@
       event.preventDefault();
       setInteractionWidth(nextWidth, true);
     });
-    window.addEventListener('resize', () => setInteractionWidth(state.interactionWidth));
+    window.addEventListener('resize', () => {
+      setInteractionWidth(state.interactionWidth);
+      syncChatViewport();
+    });
+    window.visualViewport?.addEventListener('resize', syncChatViewport);
+    window.visualViewport?.addEventListener('scroll', syncChatViewport);
   }
 
   function setChatOpen(isOpen, { focus = true, persist = true } = {}) {
@@ -486,6 +565,9 @@
       return;
     }
 
+    chatFocusGeneration += 1;
+    const focusGeneration = chatFocusGeneration;
+    const keepReading = focus && window.FreeBbsLearningReader?.capture?.();
     state.chatOpen = Boolean(isOpen);
     if (persist) persistInteractionPreferences();
     workbench.classList.toggle('is-interaction-open', state.chatOpen);
@@ -501,14 +583,19 @@
       tooltip.textContent = state.chatOpen ? '关闭交互区' : '打开交互区';
     }
     if (!state.chatOpen && focus) {
-      toggle.focus();
+      toggle.focus({ preventScroll: true });
     } else if (state.chatOpen && focus) {
       const focusTarget =
         state.chatTab === 'max'
           ? input
           : document.querySelector(`[data-knowledge-chat-tab="${state.chatTab}"]`);
-      window.setTimeout(() => focusTarget?.focus(), 0);
+      window.setTimeout(() => {
+        if (!state.chatOpen || focusGeneration !== chatFocusGeneration) return;
+        focusTarget?.focus({ preventScroll: true });
+        revealNarrowChatControl(focusTarget);
+      }, 0);
     }
+    if (keepReading) window.requestAnimationFrame(() => window.FreeBbsLearningReader?.restore?.());
   }
 
   function renderChatMessage(content, message, { plainText = false } = {}) {
@@ -568,9 +655,103 @@
     }
   }
 
+  function selectionHelpPrompt(selection, mode = 'question') {
+    const source = selection.source === 'origin' ? '知识起源' : '正文';
+    // Keep the complete question visible and editable, within the API's 4,000-character limit.
+    const quote = selection.quote.slice(0, 3300);
+    const excerpt = `${quote}${quote.length < selection.quote.length ? '…（引用已截取）' : ''}`;
+    const instructions = {
+      explain: '请从必要的基础开始，分步解释这段内容，并说明关键条件。',
+      check: '请围绕这段内容问我一个检查理解的问题，先不要给答案。这不计正式自测或星标。',
+      question: '我的问题是：',
+    };
+    return `关于${source}中选中的内容「${excerpt}」，${instructions[mode] || instructions.question}`;
+  }
+
+  function draftSelectionHelp(mode = 'question') {
+    const input = document.getElementById('knowledge-chat-input');
+    if (!input || !state.chatSelection || state.chatSending) return false;
+    const notice = document.getElementById('knowledge-selection-notice');
+    const hasOwnDraft = input.value.trim() && input.value !== state.chatSelectionDraft;
+    if (hasOwnDraft) {
+      if (notice) notice.textContent = '已保留你的问题草稿，发送或清空后可选择帮助方式。';
+      input.focus({ preventScroll: true });
+      return false;
+    }
+    const prompt = selectionHelpPrompt(state.chatSelection, mode);
+    input.value = prompt;
+    state.chatSelectionDraft = prompt;
+    persistChatDraft();
+    if (notice) notice.textContent = '可修改问题，点击“发送”后再交给 Max。';
+    input.focus({ preventScroll: true });
+    return true;
+  }
+
+  function showSelectionHelp(rawSelection) {
+    if (!rawSelection || typeof rawSelection.quote !== 'string' || !rawSelection.quote.trim())
+      return false;
+    if (rawSelection.nodeId && rawSelection.nodeId !== (state.node?.id || nodeId)) return false;
+    const source = rawSelection.source === 'origin' ? 'origin' : 'annotation';
+    const currentVersion =
+      source === 'origin' ? state.node?.originDocumentVersion : state.node?.documentVersion;
+    if (
+      rawSelection.documentVersion &&
+      currentVersion &&
+      rawSelection.documentVersion !== currentVersion
+    )
+      return false;
+    state.chatSelection = { quote: rawSelection.quote.slice(0, 8000), source };
+    document.getElementById('knowledge-selection-guidance')?.remove();
+    const thread = document.getElementById('knowledge-chat-thread');
+    if (!thread) return false;
+    // This is a local choice prompt, never a generated answer, conversation record, or API call.
+    const item = document.createElement('article');
+    item.id = 'knowledge-selection-guidance';
+    item.className = 'knowledge-chat-message is-assistant knowledge-selection-guidance';
+    const author = document.createElement('span');
+    author.textContent = 'Max · 学习引导';
+    const body = document.createElement('div');
+    body.className = 'knowledge-chat-message-body';
+    const label = document.createElement('small');
+    label.textContent = source === 'origin' ? '已选知识起源' : '已选正文';
+    const quote = document.createElement('blockquote');
+    quote.id = 'knowledge-selection-quote';
+    quote.textContent = state.chatSelection.quote;
+    const question = document.createElement('p');
+    question.textContent = '这部分你理解了吗？想检查理解，还是需要我解释一下？';
+    const choices = document.createElement('div');
+    choices.className = 'knowledge-selection-choices';
+    choices.setAttribute('aria-label', '选择这段内容的帮助方式');
+    for (const [mode, title] of [
+      ['explain', '解释一下'],
+      ['check', '检查理解'],
+      ['question', '我自己提问'],
+    ]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.selectionHelp = mode;
+      button.textContent = title;
+      button.disabled = state.chatSending;
+      button.addEventListener('click', () => draftSelectionHelp(mode));
+      choices.append(button);
+    }
+    const notice = document.createElement('p');
+    notice.id = 'knowledge-selection-notice';
+    notice.className = 'knowledge-selection-notice';
+    notice.setAttribute('role', 'status');
+    body.append(label, quote, question, choices, notice);
+    item.append(author, body);
+    thread.append(item);
+    thread.scrollTop = thread.scrollHeight;
+    draftSelectionHelp();
+    return true;
+  }
+
   function buildKnowledgeChatRequest(prompt) {
     const course = state.course || {};
     const node = state.node || {};
+    const goal = window.FreeBbsLearningWorkspace?.currentGoal?.() || '';
+    const task = state.learningTask || {};
 
     return {
       question: prompt,
@@ -583,7 +764,8 @@
         knowledgePointSummary: node.summary || '',
         knowledgePointMarkdown: node.markdown || '',
         learningStartPreference: window.FreeBbsLearningStart?.currentPreference() || null,
-        learningTask: state.learningTask || null,
+        learningTask:
+          Object.keys(task).length || goal ? { ...task, ...(goal ? { goal } : {}) } : null,
       },
     };
   }
@@ -595,17 +777,18 @@
     const statusElement = document.getElementById('knowledge-chat-status');
 
     if (input) {
-      input.disabled = state.chatSending;
+      // Let the learner think ahead while a reply is pending. Only another send is blocked.
+      input.disabled = false;
     }
     if (sendButton) {
       sendButton.disabled = state.chatSending;
     }
-    document.querySelectorAll('[data-chat-prompt]').forEach((button) => {
+    document.querySelectorAll('[data-chat-prompt], [data-selection-help]').forEach((button) => {
       const promptButton = button;
       promptButton.disabled = state.chatSending;
     });
     if (statusElement) {
-      statusElement.textContent = status || 'RAG Agent · 对话不会写入课程讨论区';
+      statusElement.textContent = status || 'Max 小题不计正式自测 · 对话不写入讨论区';
     }
   }
 
@@ -616,8 +799,6 @@
     }
 
     setChatOpen(true);
-    appendChatMessage('user', prompt);
-
     if (!app?.userState?.token) {
       appendChatMessage('assistant', '请先登录后再向 Max 提问。');
       return;
@@ -627,11 +808,17 @@
       return;
     }
 
+    const input = document.getElementById('knowledge-chat-input');
+    const submittedInput = input?.value;
+    const submittedOwnDraft = submittedInput?.trim() === prompt;
+    persistChatDraft();
+    appendChatMessage('user', prompt);
     const answerContent = appendChatMessage('assistant', '正在检索课程资料', { loading: true });
     const sessionToken = app.userState.token;
     const generation = chatGeneration;
     let answer = '';
     setChatSending(true);
+    page.dispatchEvent(new CustomEvent('knowledge:chat-start', { detail: {} }));
 
     try {
       await app.streamKnowledgeRagResponse(buildKnowledgeChatRequest(prompt), (delta) => {
@@ -648,11 +835,23 @@
       page.dispatchEvent(
         new CustomEvent('knowledge:answer', { detail: { answer, element: answerContent } }),
       );
+      // A delayed reply must never remove a different, newly typed question.
+      if (submittedOwnDraft && input?.value === submittedInput) {
+        input.value = '';
+        state.chatSelectionDraft = '';
+        persistChatDraft();
+        setChatDraftNotice('');
+      }
       setChatSending(false);
     } catch (error) {
       if (app.userState.token !== sessionToken || generation !== chatGeneration) return;
       updateChatMessage(answerContent, `请求失败：${error.message || 'AI 服务暂时不可用'}`);
-      setChatSending(false, 'RAG Agent 暂时不可用，请稍后重试');
+      setChatSending(
+        false,
+        input?.value.trim()
+          ? 'Max 暂时不可用，问题草稿已保留，可稍后再发。'
+          : 'Max 暂时不可用，可稍后再试。',
+      );
     }
   }
 
@@ -671,7 +870,14 @@
     setChatOpen(true);
     const input = document.getElementById('knowledge-chat-input');
     if (state.chatTab === 'max' && input && !state.chatSending) {
-      if (event.detail?.prompt) input.value = String(event.detail.prompt).slice(0, 8000);
+      if (event.detail?.selectionContext) {
+        showSelectionHelp(event.detail.selectionContext);
+      } else if (event.detail?.prompt) {
+        if (!input.value.trim()) {
+          input.value = String(event.detail.prompt).slice(0, 4000);
+          persistChatDraft();
+        } else setChatDraftNotice('已保留你的问题草稿。');
+      }
       input.focus({ preventScroll: true });
     }
   });
@@ -681,6 +887,36 @@
   });
   page.addEventListener('knowledge:show-content', () => setKnowledgeView('reading'));
   let pendingQuestionNavigation = null;
+  function focusLearningTask(detail = {}) {
+    const tools = [
+      'content',
+      'notes',
+      'feedback',
+      'discussion',
+      'continue',
+      'resources',
+      'contribute',
+    ];
+    const tool = tools.includes(detail.tool) ? detail.tool : 'content';
+    state.learningTask = {
+      tool,
+      ...(tool === 'feedback' && ['practice', 'quick', 'mistakes'].includes(detail.quizView)
+        ? { quizView: detail.quizView }
+        : {}),
+      ...(tool === 'feedback' &&
+      typeof detail.questionId === 'string' &&
+      /^[A-Za-z0-9._:-]{1,120}$/.test(detail.questionId)
+        ? { questionId: detail.questionId }
+        : {}),
+      ...(tool === 'content' && detail.view === 'origin' ? { view: 'origin' } : {}),
+    };
+  }
+  page.addEventListener('knowledge:task-focus', (event) => focusLearningTask(event.detail));
+  page.addEventListener('knowledge:tool-select', (event) => {
+    // Changing tools must not leave Max on a question that is no longer being studied.
+    pendingQuestionNavigation = null;
+    focusLearningTask(event.detail);
+  });
   function navigateLearning(detail = {}) {
     if (detail.view === 'relations') {
       const query = new URLSearchParams({ course: courseSlug, focus: state.node?.id || nodeId });
@@ -777,22 +1013,124 @@
     }),
   );
   let chatSessionToken = app?.userState?.token || '';
+  let chatSessionUid = app?.userState?.uid || '';
   let chatGeneration = 0;
+  let chatDraftStore = null;
+  let chatDraftIdentity = '';
+  let chatDraftVersionBlocked = false;
+
+  function chatDraftContext() {
+    return {
+      courseSlug,
+      nodeId: state.node?.id || nodeId,
+      documentVersion: state.node?.documentVersion || '',
+      originDocumentVersion: state.node?.originDocumentVersion || '',
+    };
+  }
+
+  function activeChatDraftIdentity() {
+    return app?.userState?.uid && app?.userState?.token
+      ? JSON.stringify([app.userState.uid, app.userState.token])
+      : '';
+  }
+
+  function setChatDraftNotice(message) {
+    const notice = document.getElementById('knowledge-chat-draft-status');
+    if (!notice) return;
+    notice.textContent = message;
+    notice.hidden = !message;
+  }
+
+  function persistChatDraft() {
+    if (
+      chatDraftVersionBlocked ||
+      !chatDraftIdentity ||
+      chatDraftIdentity !== activeChatDraftIdentity()
+    )
+      return false;
+    const text = document.getElementById('knowledge-chat-input')?.value || '';
+    return chatDraftStore?.save(chatDraftContext(), text.trim() ? { text } : null) === true;
+  }
+
+  async function restoreChatDraft() {
+    if (!state.node || !activeChatDraftIdentity()) return;
+    const input = document.getElementById('knowledge-chat-input');
+    if (!input) return;
+    const generation = chatGeneration;
+    const identity = activeChatDraftIdentity();
+    if (!chatDraftStore) {
+      let storage = null;
+      try {
+        storage = window.sessionStorage;
+      } catch {
+        // In-page questions and the leave warning remain usable without storage.
+      }
+      chatDraftStore = window.FreeBbsLearningChatDrafts?.createDraftStore({
+        storage,
+        crypto: window.crypto,
+      });
+    }
+    const ready = await chatDraftStore?.bind(app.userState.uid, app.userState.token);
+    if (generation !== chatGeneration || identity !== activeChatDraftIdentity()) return;
+    chatDraftIdentity = ready ? identity : '';
+    if (!ready) {
+      if (input.value.trim()) setChatDraftNotice('问题暂存在本页，离开前请保留。');
+      return;
+    }
+    // Never replace a question typed while the account or material was loading.
+    if (input.value) {
+      if (persistChatDraft()) setChatDraftNotice('');
+      return;
+    }
+    const draft = chatDraftStore.read(chatDraftContext());
+    if (draft) {
+      input.value = draft.text;
+      setChatDraftNotice('已恢复未发送的问题。');
+    }
+  }
+
   function clearChatForSession() {
     chatGeneration += 1;
+    chatDraftStore?.clear();
+    chatDraftStore = null;
+    chatDraftIdentity = '';
+    chatDraftVersionBlocked = false;
+    setChatDraftNotice('');
     state.chatMessages = [];
+    state.chatSelection = null;
+    state.chatSelectionDraft = '';
     state.learningTask = null;
     pendingQuestionNavigation = null;
     document.getElementById('knowledge-chat-thread')?.replaceChildren();
+    // Session initialization can run before the node loads. Keep the public welcome mount alive.
+    const welcome = appendChatMessage(
+      'assistant',
+      state.node
+        ? `一起梳理「${state.node.title}」。需要时，我可以讲解原理、举例或提示下一步。`
+        : '需要时，我可以讲解原理、举例或提示下一步。',
+    );
+    if (welcome) welcome.id = 'knowledge-chat-welcome';
     const input = document.getElementById('knowledge-chat-input');
     if (input) input.value = '';
   }
   window.addEventListener('freebbs:session-change', () => {
     const token = app?.userState?.token || '';
-    if (token === chatSessionToken) return;
+    const uid = app?.userState?.uid || '';
+    if (token === chatSessionToken && uid === chatSessionUid) return;
+    // Confirming the initial token is not an account switch. Keep text just typed while
+    // /auth/me was pending; no previously restored private history exists at this point.
+    const initialConfirmation =
+      !chatSessionUid && uid && token && token === chatSessionToken && !state.chatMessages.length;
+    const input = document.getElementById('knowledge-chat-input');
+    const provisionalDraft = initialConfirmation ? input?.value || '' : '';
     chatSessionToken = token;
+    chatSessionUid = uid;
     clearChatForSession();
+    if (input && provisionalDraft) input.value = provisionalDraft;
     setChatSending(false);
+    restoreChatDraft().catch(() => {
+      if (input?.value.trim()) setChatDraftNotice('问题暂存在本页，离开前请保留。');
+    });
   });
   window.addEventListener('storage', (event) => {
     if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
@@ -810,14 +1148,16 @@
   }
 
   function readInteractionPreferences() {
+    // Small screens start with an unobstructed document; an explicit choice always wins.
+    const defaultOpen = window.innerWidth > 920;
     try {
       const stored = JSON.parse(localStorage.getItem(INTERACTION_PREFERENCES_STORAGE_KEY));
       return {
-        open: typeof stored?.open === 'boolean' ? stored.open : true,
+        open: typeof stored?.open === 'boolean' ? stored.open : defaultOpen,
         tab: stored?.tab === 'discussion' ? 'discussion' : 'max',
       };
     } catch {
-      return { open: true, tab: 'max' };
+      return { open: defaultOpen, tab: 'max' };
     }
   }
 
@@ -1656,12 +1996,19 @@
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const prompt = input?.value;
-      if (input) {
-        input.value = '';
-      }
       await submitChatPrompt(prompt);
-      if (input) {
-        input.focus();
+    });
+    input?.addEventListener('input', () => {
+      chatDraftVersionBlocked = false;
+      if (persistChatDraft()) setChatDraftNotice('');
+      else if (input.value.trim()) setChatDraftNotice('问题暂存在本页，离开前请保留。');
+      else setChatDraftNotice('');
+    });
+    window.addEventListener('pagehide', persistChatDraft);
+    window.addEventListener('beforeunload', (event) => {
+      if ((input?.value.trim() && !persistChatDraft()) || state.chatSending) {
+        event.preventDefault();
+        event.returnValue = '';
       }
     });
     document.querySelectorAll('[data-chat-prompt]').forEach((button) => {
@@ -1699,7 +2046,15 @@
     });
     discussionBack?.addEventListener('click', () => showDiscussionList({ focus: true }));
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && state.chatOpen) {
+      const annotationLayerOpen = document.querySelector(
+        '.learning-annotation-colors:not([hidden]), #learning-annotation-popover:not([hidden])',
+      );
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !annotationLayerOpen &&
+        state.chatOpen
+      ) {
         setChatOpen(false);
         toggle?.focus();
       }
@@ -1710,10 +2065,15 @@
     const origin = window.FreeBbsLearningContent?.originMarkdown(node.sections) || '';
     const history = document.getElementById('knowledge-history-prose');
     if (history) {
+      history.toggleAttribute('data-learning-document-empty', !origin);
       history.innerHTML = origin ? app.renderMarkdownContent(origin) : '';
       app.enhanceMarkdownContent(history);
     }
-    document.getElementById('knowledge-history-empty')?.toggleAttribute('hidden', Boolean(origin));
+    const historyEmpty = document.getElementById('knowledge-history-empty');
+    if (historyEmpty) {
+      historyEmpty.textContent = '本知识点尚未提供起源说明。';
+      historyEmpty.toggleAttribute('hidden', Boolean(origin));
+    }
     if (window.FreeBbsLearningContent?.isChapterNode(node))
       document
         .getElementById('knowledge-body')
@@ -1743,9 +2103,9 @@
       `一起梳理「${node.title}」。需要时，我可以讲解原理、举例或提示下一步。`;
 
     const body = document.getElementById('knowledge-body');
-    body.innerHTML = app.renderMarkdownContent(
-      markdown || '*这个知识结点还没有挂载 Markdown 文档。*',
-    );
+    // Keep the UI empty-state copy distinct from course-authored material.
+    body.toggleAttribute('data-learning-document-empty', !markdown);
+    body.innerHTML = app.renderMarkdownContent(markdown || '*这个知识点的正文暂未提供。*');
     app.enhanceMarkdownContent(body);
 
     const supplementary = document.getElementById('knowledge-supplementary');
@@ -1785,11 +2145,33 @@
     if (!node || !state.node || node.id !== state.node.id) {
       return;
     }
+    if (
+      node.documentVersion !== state.node.documentVersion ||
+      node.originDocumentVersion !== state.node.originDocumentVersion
+    ) {
+      // A reply based on old material must not append to, or unlock, a newer question.
+      chatGeneration += 1;
+      state.chatMessages = [];
+      document
+        .querySelectorAll('#knowledge-chat-thread .is-loading .knowledge-chat-message-body')
+        .forEach((content) => updateChatMessage(content, '课程资料已更新，请核对引用后重新提问。'));
+      setChatSending(false);
+      chatDraftStore?.save(chatDraftContext(), null);
+      chatDraftVersionBlocked = Boolean(
+        document.getElementById('knowledge-chat-input')?.value.trim(),
+      );
+      state.chatSelection = null;
+      state.chatSelectionDraft = '';
+      document.getElementById('knowledge-selection-guidance')?.remove();
+      if (chatDraftVersionBlocked)
+        setChatDraftNotice('课程内容已更新，请核对问题中的引用后再发送。');
+    }
     state.node = node;
     renderKnowledgeContent(node);
   });
 
   async function initialize() {
+    setKnowledgeLoading(true);
     bindTagControls();
     bindWorkspaceControls();
     bindChatControls();
@@ -1821,15 +2203,16 @@
       state.course = course;
       state.node = node;
       state.map = map;
-      saveCurrentLearningNode(node.id);
 
       document.getElementById('knowledge-course-link').href = courseDirectoryHref();
       document.getElementById('knowledge-course-name').textContent = course.name;
       renderKnowledgeContent(node);
+      await restoreChatDraft();
 
       state.tags = getStoredTags();
       renderTags();
       renderKnowledgeSequence(map);
+      setKnowledgeLoading(false);
       syncDiscussionContext();
       loadDiscussionPosts();
       page.dispatchEvent(new CustomEvent('knowledge:loaded', { detail: { course, node } }));

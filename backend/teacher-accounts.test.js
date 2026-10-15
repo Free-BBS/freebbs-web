@@ -2,9 +2,13 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { once } = require('node:events');
 const express = require('express');
-const { normalizeAdminAccount, createTeacherAccountsRouter } = require('./teacher-accounts');
+const {
+  normalizeAdminAccount,
+  createAccountIdentityService,
+  createTeacherAccountsRouter,
+} = require('./teacher-accounts');
 
-test('only admin-provisioned teacher identities allow missing student ID and email', () => {
+test('only admin-provisioned teacher and enterprise identities allow missing student ID and email', () => {
   const body = {
     username: 'professor_one',
     fullName: '测试教师',
@@ -16,6 +20,14 @@ test('only admin-provisioned teacher identities allow missing student ID and ema
   assert.equal(teacher.email, null);
   assert.equal(teacher.grade, null);
   assert.equal(teacher.major, null);
+  const enterprise = normalizeAdminAccount({
+    ...body,
+    username: 'enterprise_one',
+    role: 'enterprise',
+  });
+  assert.equal(enterprise.studentId, null);
+  assert.equal(enterprise.email, null);
+  assert.equal(enterprise.grade, null);
   for (const role of ['student', 'ta', 'admin']) {
     assert.throws(() => normalizeAdminAccount({ ...body, role }), { code: 'invalid_student_id' });
   }
@@ -34,10 +46,45 @@ test('only admin-provisioned teacher identities allow missing student ID and ema
   assert.throws(() => normalizeAdminAccount({ ...body, username: 'teacher@example.test' }), {
     code: 'invalid_username',
   });
+  for (const username of ['中文教师', '中文企业', 'ab']) {
+    assert.throws(() => normalizeAdminAccount({ ...body, username }), {
+      code: 'invalid_username',
+    });
+  }
   assert.equal(
     normalizeAdminAccount({ ...body, email: ' Teacher@Example.test ' }).email,
     'teacher@example.test',
   );
+});
+
+test('password recovery looks up legacy Chinese and short usernames without allowing invalid identifiers', async () => {
+  const queries = [];
+  const service = createAccountIdentityService({
+    pool: {
+      async execute(sql, args) {
+        queries.push({ sql, args });
+        return [[]];
+      },
+    },
+    sendCode: async () => assert.fail('A nonexistent account must not receive a code'),
+  });
+  for (const identifier of ['中文用户', '李老师_2026', '𠀀老师', 'ab', 'teacher_one']) {
+    const body = { identifier, email: 'old@example.test', password: 'recovered-password' };
+    await service.sendResetCode(body);
+    await assert.rejects(service.resetPassword(body), { code: 'code_invalid' });
+    assert.deepEqual(queries.at(-1).args, [identifier, 'old@example.test']);
+    assert.match(
+      queries.at(-1).sql,
+      /username = \? AND email = \? AND email_verified_at IS NOT NULL/,
+    );
+  }
+  const before = queries.length;
+  for (const identifier of ['a', '中文🙂', 'bad name', 'abc\nxyz', 'x'.repeat(65), 'Ａbc']) {
+    const body = { identifier, email: 'old@example.test', password: 'recovered-password' };
+    await assert.rejects(service.sendResetCode(body), { code: 'invalid_username' });
+    await assert.rejects(service.resetPassword(body), { code: 'invalid_username' });
+  }
+  assert.equal(queries.length, before);
 });
 
 test('identity HTTP endpoints authenticate and administrator actions cannot be forged in the body', async (t) => {

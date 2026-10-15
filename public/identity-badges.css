@@ -1,0 +1,35 @@
+.identity-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.identity-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid rgba(79, 126, 135, 0.25);
+  border-radius: 6px;
+  background: rgba(82, 143, 147, 0.09);
+  color: inherit;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.identity-badge-teacher {
+  background: rgba(178, 129, 43, 0.13);
+  border-color: rgba(178, 129, 43, 0.3);
+}
+
+[data-profile-identities] {
+  margin-block: 8px;
+}
+
+[data-profile-identities] .identity-badges {
+  margin-inline-start: 0;
+}

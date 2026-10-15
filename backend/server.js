@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
+const { createLearningAchievementProvider } = require('./achievement-source');
 const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
 const { createLanguageLabRouter } = require('./language-lab');
@@ -80,7 +81,9 @@ const {
 } = require('./profile-extras');
 
 const siteSearch = createSiteSearch(pool);
-const economyShop = createEconomyShop(createMysqlEconomyStore(pool));
+const economyShop = createEconomyShop(createMysqlEconomyStore(pool), {
+  decorateIdentities: (rows) => certificationService.decorate(rows),
+});
 const profileExtras = createProfileExtras(createMysqlEconomyStore(pool));
 const {
   AvatarUploadError,
@@ -158,6 +161,15 @@ const {
   createAccountIdentityService,
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
+const {
+  normalizeCertification,
+  approveEnterpriseCertification,
+  syncEnterpriseCertification,
+  readApprovedCertifications,
+  ensureUserCertificationTables,
+  createUserCertificationService,
+  createUserCertificationRouter,
+} = require('./user-certifications');
 const { sign, verify } = require('./token');
 const {
   USERNAME_MESSAGE,
@@ -169,6 +181,7 @@ const {
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const {
   createLearningWorkspaceRouter,
+  createMysqlLearningStore,
   ensureLearningWorkspaceTables,
 } = require('./learning-workspace');
 const {
@@ -179,8 +192,14 @@ const {
 const {
   loadCompanionContext,
   companionHint,
+  companionPreference,
   createMysqlCompanionNodeLoader,
 } = require('./learning-companion');
+const { createCompanionSourcesRouter } = require('./learning-companion-sources');
+const {
+  createLearningResearchRouter,
+  ensureLearningResearchTables,
+} = require('./learning-research');
 const {
   createLearningAnalyticsRouter,
   createMysqlAnalyticsStore,
@@ -318,7 +337,7 @@ const MAX_AGENT_USER = {
   email: 'max@free-bbs.local',
   avatarPath: '/assets/max_the_agent_avatar.webp',
 };
-const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
+const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin', 'enterprise']);
 const maxImageGenerationGate = createImageGenerationGate();
 const maxDiscussionProgress = new Map();
 const systemSettingsStore = createSystemSettingsStore({
@@ -406,6 +425,7 @@ const moderationAiTest = createModerationAiTest({
       : config.discussionModerationAiModel,
   }),
 });
+const certificationService = createUserCertificationService({ pool, notifications });
 const backgroundTasks = createBackgroundTaskService({
   pool,
   getUser: getPrivacyAcceptedUser,
@@ -1782,6 +1802,9 @@ function toDiscussionPostSummary(row, viewerId = 0) {
           avatarPath: row.avatar_path || '',
           cosmetics: !isDeleted ? row.cosmetics || {} : {},
           goldenName: !isDeleted ? row.goldenName || null : null,
+          role: !isDeleted ? row.author_role || '' : '',
+          certifications: !isDeleted ? row.certifications || [] : [],
+          identityBadges: !isDeleted ? row.identityBadges || [] : [],
         },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
@@ -1809,16 +1832,21 @@ function toDiscussionComment(row) {
     updatedAt: row.updated_at,
     author: row.is_deleted
       ? { ...anonymousAuthor(), username: '已删除', displayName: '已删除' }
-      : {
-          id: row.user_id,
-          uid: row.uid || '',
-          username: row.username,
-          fullName: '',
-          displayName: row.username || '匿名用户',
-          avatarPath: row.avatar_path || '',
-          goldenName: row.goldenName || null,
-          cosmetics: row.cosmetics || {},
-        },
+      : row.is_anonymous
+        ? anonymousAuthor()
+        : {
+            id: row.user_id,
+            uid: row.uid || '',
+            username: row.username,
+            fullName: '',
+            displayName: row.username || '匿名用户',
+            avatarPath: row.avatar_path || '',
+            goldenName: row.goldenName || null,
+            cosmetics: row.cosmetics || {},
+            role: row.author_role || '',
+            certifications: row.certifications || [],
+            identityBadges: row.identityBadges || [],
+          },
   };
 }
 
@@ -1979,7 +2007,8 @@ function buildKnowledgeRagPrompt(question, context) {
     `知识点：${context.knowledgePointTitle || '当前知识点'}`,
     `摘要：${context.knowledgePointSummary || '暂无摘要'}`,
     `当前页面正文：\n${context.knowledgePointMarkdown || '暂无正文'}`,
-    promptHintFromPreference(context.learningStartPreference, context.resources),
+    `当前已发布知识起源${context.knowledgePointOriginTruncated ? '（已节选）' : ''}：\n${context.knowledgePointOriginMarkdown || '暂无起源说明'}`,
+    promptHintFromPreference(companionPreference(context), context.resources),
     companionHint(context),
     '',
     `学生问题：${question}`,
@@ -3011,6 +3040,10 @@ app.use(
 );
 app.use(
   '/api',
+  createUserCertificationRouter({ service: certificationService, requireAuth, requireAdmin }),
+);
+app.use(
+  '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
 );
 app.use(
@@ -3033,6 +3066,22 @@ app.use(
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
 app.use('/api/learning', createLearningWorkspaceRouter({ pool, requireAuth }));
+const companionLearningStore = createMysqlLearningStore(pool);
+const companionAssessmentStore = createMysqlAssessmentStore(pool);
+const companionNodeLoader = createMysqlCompanionNodeLoader(pool);
+app.use(
+  '/api/learning-companion',
+  createCompanionSourcesRouter({
+    requireAuth,
+    store: companionAssessmentStore,
+    learningStore: companionLearningStore,
+    loadNode: companionNodeLoader,
+  }),
+);
+app.use(
+  '/api/learning/research',
+  createLearningResearchRouter({ pool, requireAuth, requireAdmin }),
+);
 const learningAnalyticsStore = createMysqlAnalyticsStore(pool);
 const learningStarService = createLearningStarService({
   store: createMysqlLearningStarStore(pool),
@@ -3168,6 +3217,11 @@ async function lockAndValidateUserDeletion(connection, actorId, targetId) {
 function sendAdminUserUpdateError(response, error, fallbackMessage) {
   if (error instanceof AdminUserUpdateError) {
     response.status(error.status).json({ message: error.message });
+    return;
+  }
+
+  if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) {
+    response.status(error.status).json({ message: error.message, code: error.code });
     return;
   }
 
@@ -3386,10 +3440,11 @@ app.post('/api/ai/knowledge/chat', async (request, response) => {
 
   try {
     const trustedContext = await loadCompanionContext({
-      store: createMysqlAssessmentStore(pool),
+      store: companionAssessmentStore,
+      learningStore: companionLearningStore,
       user,
       rawContext: payload.context,
-      loadNode: createMysqlCompanionNodeLoader(pool),
+      loadNode: companionNodeLoader,
     });
     const agentPayload = buildKnowledgeRagChatPayload(
       user,
@@ -4581,8 +4636,8 @@ app.get('/api/discussion/users/search', async (request, response) => {
     if (!user) return;
     const query = String(request.query.q || '').trim();
     const limit = normalizeLimit(request.query.limit, 8, 12);
-    if (query.length > 64 || /[^A-Za-z0-9_]/.test(query)) {
-      response.status(400).json({ message: '请输入用户名中的字母、数字或下划线' });
+    if (Array.from(query).length > 64 || /[^\p{Script=Han}A-Za-z0-9_]/u.test(query)) {
+      response.status(400).json({ message: '请输入用户名中的汉字、字母、数字或下划线' });
       return;
     }
     const [rows] = await pool.execute(
@@ -6038,6 +6093,8 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
           viewer: await getOptionalAuthUser(request),
         }),
         goldenName: decoratedIdentity.goldenName,
+        certifications: decoratedIdentity.certifications || [],
+        identityBadges: decoratedIdentity.identityBadges || [],
         collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
         ...(await profileExtras.publicProfile(user.id)),
       },
@@ -6209,6 +6266,7 @@ async function addUserResponsibilities(users, executor = pool) {
      WHERE m.user_id IN (${placeholders})`,
     userIds,
   );
+  const certificationsByUser = await readApprovedCertifications(executor, userIds);
   const [courseRows] = await executor.execute(
     `SELECT m.user_id, c.slug
      FROM course_material_managers m
@@ -6230,6 +6288,7 @@ async function addUserResponsibilities(users, executor = pool) {
   });
   return users.map((row) => ({
     ...toUserProfile(row),
+    certifications: certificationsByUser.get(Number(row.id)) || [],
     boardModeratorSlugs: boardSlugsByUser.get(Number(row.id)) || [],
     courseManagerSlugs: courseSlugsByUser.get(Number(row.id)) || [],
   }));
@@ -6437,6 +6496,13 @@ app.post('/api/admin/users', async (request, response) => {
 
     const { username, fullName, studentId, email, password, role, grade, major } =
       normalizeAdminAccount(request.body);
+    const companyName =
+      role === 'enterprise'
+        ? normalizeCertification({
+            type: 'company',
+            companyName: request.body.companyName || fullName,
+          }).companyName
+        : null;
     const isAdmin = Boolean(request.body.isAdmin || role === 'admin');
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
@@ -6459,7 +6525,7 @@ app.post('/api/admin/users', async (request, response) => {
           studentId,
           email,
           passwordHash,
-          email && role !== 'teacher' ? new Date() : null,
+          email && !['teacher', 'enterprise'].includes(role) ? new Date() : null,
           role,
           isAdmin ? 1 : 0,
           initialElectric,
@@ -6469,6 +6535,13 @@ app.post('/api/admin/users', async (request, response) => {
           major,
         ],
       );
+      if (role === 'enterprise') {
+        await approveEnterpriseCertification(connection, {
+          userId: created.insertId,
+          adminId: adminUser.id,
+          companyName,
+        });
+      }
       if (initialElectric || initialMagnetic) {
         await annotateWalletLedger(connection, created.insertId, '0', {
           sourceKey: `admin-create:${crypto.randomUUID()}`,
@@ -6480,9 +6553,13 @@ app.post('/api/admin/users', async (request, response) => {
     });
 
     const user = await getUserById(result.insertId);
+    const certificationsByUser = await readApprovedCertifications(pool, [result.insertId]);
 
     response.status(201).json({
-      user: toUserProfile(user),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(Number(result.insertId)) || [],
+      },
     });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
@@ -6544,6 +6621,13 @@ app.patch('/api/admin/users/:id', async (request, response) => {
       role,
       isAdmin,
     );
+    await syncEnterpriseCertification(connection, {
+      userId: targetId,
+      adminId: adminUser.id,
+      previousRole: previousUser.role,
+      nextRole: role,
+      companyName: request.body.companyName,
+    });
     const nextElectric = Number.isFinite(electrons) ? electrons : 0;
     const nextMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
     const previousElectric = Number(previousUser.electrons || 0);
@@ -6587,9 +6671,13 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     await connection.commit();
 
     const user = await getUserById(targetId);
+    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
 
     response.json({
-      user: toUserProfile(user),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(targetId) || [],
+      },
     });
   } catch (error) {
     if (connection) {
@@ -6627,7 +6715,20 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
+    const previousUser = await lockAndValidateRoleChange(
+      connection,
+      adminUser.id,
+      targetId,
+      role,
+      isAdmin,
+    );
+    await syncEnterpriseCertification(connection, {
+      userId: targetId,
+      adminId: adminUser.id,
+      previousRole: previousUser.role,
+      nextRole: role,
+      companyName: request.body.companyName,
+    });
     await connection.execute(
       `UPDATE users
        SET role = ?, is_admin = ?
@@ -6636,8 +6737,13 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
     );
     await connection.commit();
 
+    const user = await getUserById(targetId);
+    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
     response.json({
-      user: toUserProfile(await getUserById(targetId)),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(targetId) || [],
+      },
     });
   } catch (error) {
     if (connection) {
@@ -6757,6 +6863,7 @@ async function startAgentSettingsInternalApi() {
 async function start() {
   await ensureUsersUidColumn();
   await ensureTeacherAccountTables(pool);
+  await ensureUserCertificationTables(pool);
   await ensureUsernameChangeTables(pool);
   await ensureAppSettingsTable();
   await ensureSystemSecretSettingsTable(pool);
@@ -6795,6 +6902,7 @@ async function start() {
   await ensureLearningWorkspaceTables(pool);
   await ensureLearningAssessmentTables(pool);
   await ensureLearningAnalyticsTables(pool);
+  await ensureLearningResearchTables(pool);
   await ensureLearningStarTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
@@ -6808,6 +6916,7 @@ async function start() {
       toUserProfile,
     }),
     userDirectory: createDevelopmentUserDirectory(pool),
+    learningAchievementProvider: createLearningAchievementProvider(pool),
     database: createDevelopmentDatabaseConfig(config.db),
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
     collectionsUploadDirectory: path.join(config.uploadDir, 'development', 'collections'),

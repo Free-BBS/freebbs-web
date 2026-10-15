@@ -209,8 +209,14 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
         send(response, result.status, { error: { code: result.code, message: result.message } });
         return;
       }
+      const leadPreview =
+        result.user.previewing === true &&
+        result.user.developmentAccess === 'lead' &&
+        result.user.viewer?.canManageDevelopment === true &&
+        result.user.viewer.canPreviewDevelopment === true;
       if (
-        (admin && (result.user.previewing || !isDevelopmentBusinessAdmin(result.user))) ||
+        (admin &&
+          (!isDevelopmentBusinessAdmin(result.user) || (result.user.previewing && !leadPreview))) ||
         (result.user.previewing && !['GET', 'HEAD'].includes(request.method))
       )
         throw new HttpError(403, 'forbidden', '此身份无操作权限');

@@ -96,26 +96,28 @@ test('course scope is independent of knowledge point and document version', () =
   for (const value of [null, '__proto__', 'a/b', 'SIGNALS', 'x'.repeat(121)])
     assert.equal(courseKey(value), null);
 });
-test('a course visit requires confirmation, remembers the last choice, and reasks on a new course visit', async () => {
+test('an unset preference stays optional and a new course visit restores the saved preference directly', async () => {
   const { make } = fixture();
-  const first = make({ forceConfirm: true });
+  const first = make();
   await first.setContext('signals');
+  assert.equal(first.snapshot().valid, true);
+  assert.equal(first.snapshot().editing, false);
   assert.equal(first.snapshot().confirmed, false);
   assert.equal(first.confirm({ goal: 'concepts' }), false);
   assert.equal(first.promptHint(), '');
   assert.equal(first.confirm({ level: 'basic', goal: 'practice' }), true);
   await first.setContext({ course: { slug: 'signals' }, node: { id: 'SS-02-01' } });
   assert.equal(first.snapshot().confirmed, true);
-  const nextVisit = make({ forceConfirm: true });
+  const nextVisit = make();
   await nextVisit.setContext('signals');
-  assert.equal(nextVisit.snapshot().confirmed, false);
+  assert.equal(nextVisit.snapshot().confirmed, true);
+  assert.equal(nextVisit.snapshot().editing, false);
   assert.deepEqual(nextVisit.snapshot().preference, { level: 'basic', goal: 'practice' });
-  assert.equal(nextVisit.currentPreference(), null);
-  assert.equal(nextVisit.confirm(nextVisit.snapshot().preference), true);
+  assert.deepEqual(nextVisit.currentPreference(), { level: 'basic', goal: 'practice' });
 });
-test('deep links reuse only this tab, course, user and current-token confirmation', async () => {
+test('saved preferences survive a new tab and a verified token rotation while staying account and course scoped', async () => {
   const { make, storage, sessionStorage, change } = fixture();
-  const course = make({ forceConfirm: true });
+  const course = make();
   await course.setContext('signals');
   course.confirm({ level: 'new', goal: 'concepts' });
   const link = make();
@@ -131,11 +133,13 @@ test('deep links reuse only this tab, course, user and current-token confirmatio
   change({ ...alice, token: 'rotated-token' });
   const refreshed = make();
   await refreshed.setContext('signals');
-  assert.equal(refreshed.snapshot().confirmed, false);
+  assert.equal(refreshed.snapshot().confirmed, true);
   assert.equal(refreshed.snapshot().preference.level, 'new');
   const otherTab = make({ sessionStorage: memoryStorage() });
   await otherTab.setContext('signals');
-  assert.equal(otherTab.snapshot().confirmed, false);
+  assert.equal(otherTab.snapshot().confirmed, true);
+  assert.deepEqual(otherTab.currentPreference(), { level: 'new', goal: 'concepts' });
+  assert.equal(otherTab.snapshot().editing, false);
   assert.doesNotMatch(
     JSON.stringify([...sessionStorage.values]),
     /alice-secret-token|rotated-token|bob-secret-token/,
@@ -240,7 +244,7 @@ test('verified same-token session changes restore stale UI, but cleared or chang
   assert.equal(await controller.sessionChanged(), false);
 });
 
-test('digest failure retains mandatory choice and never accepts or overwrites an old confirmation ticket', async () => {
+test('crypto failure restores a browser preference without trusting or overwriting an old tab ticket', async () => {
   const { make, sessionStorage } = fixture();
   const confirmed = make();
   await confirmed.setContext('signals');
@@ -249,11 +253,69 @@ test('digest failure retains mandatory choice and never accepts or overwrites an
   const unavailable = make({ fingerprint: () => Promise.reject(new Error('crypto unavailable')) });
   await unavailable.setContext('signals');
   assert.equal(unavailable.snapshot().valid, true);
-  assert.equal(unavailable.snapshot().confirmed, false);
-  assert.equal(unavailable.currentPreference(), null);
+  assert.equal(unavailable.snapshot().confirmed, true);
+  assert.equal(unavailable.currentPreference().level, 'basic');
   assert.equal(unavailable.confirm({ level: 'familiar', goal: 'concepts' }), true);
-  assert.equal(unavailable.snapshot().persistenceAvailable, false);
+  assert.equal(unavailable.snapshot().persistenceAvailable, true);
+  assert.equal(unavailable.snapshot().persistenceScope, 'browser');
   assert.equal(JSON.stringify([...sessionStorage.values]), before);
+});
+
+test('adjustment and cancellation retain the effective preference and reject a cancelled editor handler', async () => {
+  const { make, storage } = fixture();
+  const controller = make();
+  await controller.setContext('signals');
+  controller.confirm({ level: 'basic', goal: 'practice' });
+  const before = JSON.stringify([...storage.values]);
+  const hint = controller.promptHint();
+  assert.equal(controller.adjust(), true);
+  const editorGeneration = controller.snapshot().generation;
+  assert.equal(controller.snapshot().editing, true);
+  assert.equal(controller.snapshot().confirmed, true);
+  assert.deepEqual(controller.currentPreference(), { level: 'basic', goal: 'practice' });
+  assert.equal(controller.promptHint(), hint);
+  assert.equal(controller.cancel(editorGeneration), true);
+  assert.equal(controller.snapshot().editing, false);
+  assert.equal(controller.confirm({ level: 'advanced', goal: 'explore' }, editorGeneration), false);
+  assert.deepEqual(controller.currentPreference(), { level: 'basic', goal: 'practice' });
+  assert.equal(JSON.stringify([...storage.values]), before);
+});
+
+test('changing course closes the editor and does not apply its draft to another course', async () => {
+  const { make } = fixture();
+  const controller = make();
+  await controller.setContext('signals');
+  controller.confirm({ level: 'new', goal: 'concepts' });
+  controller.adjust();
+  const editorGeneration = controller.snapshot().generation;
+  await controller.setContext('calculus');
+  assert.equal(controller.snapshot().editing, false);
+  assert.equal(controller.currentPreference(), null);
+  assert.equal(controller.confirm({ level: 'advanced' }, editorGeneration), false);
+  await controller.setContext('signals');
+  assert.deepEqual(controller.currentPreference(), { level: 'new', goal: 'concepts' });
+});
+
+test('page-only preferences survive course changes in this page without crossing accounts', async () => {
+  const { make, change, storage, sessionStorage } = fixture();
+  const controller = make({ memoryOnly: true, authStorageUnavailable: true });
+  await controller.setContext('signals');
+  controller.confirm({ level: 'new', goal: 'concepts' });
+  await controller.setContext('calculus');
+  assert.equal(controller.currentPreference(), null);
+  controller.confirm({ level: 'basic', goal: 'practice' });
+  await controller.setContext('signals');
+  assert.deepEqual(controller.currentPreference(), { level: 'new', goal: 'concepts' });
+  assert.equal(controller.snapshot().persistenceScope, 'page');
+  change(bob);
+  await controller.sessionChanged();
+  assert.equal(controller.currentPreference(), null);
+  controller.confirm({ level: 'advanced', goal: 'explore' });
+  change(alice);
+  await controller.sessionChanged();
+  assert.deepEqual(controller.currentPreference(), { level: 'new', goal: 'concepts' });
+  assert.equal(storage.values.has(progress.scopedKey(BASE, alice)), false);
+  assert.equal(sessionStorage.values.size, 0);
 });
 
 test('a late old-account digest rejection cannot degrade a newer account confirmation', async () => {
@@ -311,7 +373,7 @@ function browser(pathname = '/course', options = {}) {
   }
   const host = node('section');
   const page = node('main');
-  const storage = memoryStorage();
+  const storage = options.storage || memoryStorage();
   storage.setItem('free_bbs_auth_token', alice.token);
   const calls = [];
   const app = {
@@ -322,7 +384,7 @@ function browser(pathname = '/course', options = {}) {
   };
   const window = {
     freeBbsApp: app,
-    FreeBbsLearningProgress: progress,
+    FreeBbsLearningProgress: options.progress || progress,
     FreeBbsLearningStrategies: require('../public/learning-strategies'),
     CustomEvent: class {
       constructor(type, eventOptions) {
@@ -334,11 +396,12 @@ function browser(pathname = '/course', options = {}) {
       listeners.get(event.type)?.(event);
     },
     localStorage: storage,
-    sessionStorage: memoryStorage(),
+    sessionStorage: options.sessionStorage || memoryStorage(),
     crypto: {
       subtle: {
         async digest(algorithm, bytes) {
           assert.equal(algorithm, 'SHA-256');
+          if (options.digest) return options.digest(bytes);
           return Uint8Array.from(crypto.createHash('sha256').update(bytes).digest()).buffer;
         },
       },
@@ -366,6 +429,12 @@ function browser(pathname = '/course', options = {}) {
   }
   if (options.noCrypto)
     window.crypto = { subtle: { digest: () => Promise.reject(new Error('crypto unavailable')) } };
+  if (options.noSessionStorage)
+    Object.defineProperty(window, 'sessionStorage', {
+      get() {
+        throw new Error('SecurityError');
+      },
+    });
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/learning-start.js'), 'utf8'), {
     window,
     URLSearchParams,
@@ -391,10 +460,210 @@ function browser(pathname = '/course', options = {}) {
       }),
   };
 }
-test('course dialog is mandatory, blocks Escape, confirms once and never sends an AI question', async () => {
+function openEditor(view) {
+  view.find((item) => item.className === 'learning-start-adjust').listeners.get('click')();
+  return view.find((item) => item.tag === 'dialog');
+}
+
+function watchWorkspaceGoal(view) {
+  const source = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.js'), 'utf8');
+  const from = source.indexOf("  window.addEventListener('learning:start-change'");
+  const to = source.indexOf("  page.addEventListener('knowledge:annotation-save'", from);
+  assert.ok(from >= 0 && to > from);
+  const state = {
+    stale: false,
+    uid: view.app.userState.uid,
+    token: view.app.userState.token,
+    planGoal: 'explore',
+  };
+  let changes = 0;
+  vm.runInNewContext(source.slice(from, to), {
+    state,
+    app: view.app,
+    window: view.window,
+    refreshPlan() {
+      changes += 1;
+    },
+  });
+  return { state, changes: () => changes };
+}
+
+test('late superseded outer context completion preserves current unsaved dialog and workspace goal', async () => {
+  const storage = memoryStorage();
+  progress.write(storage, BASE, alice, {
+    signals: { schemaVersion: SCHEMA_VERSION, level: 'basic', goal: 'practice' },
+  });
+  let release;
+  let calls = 0;
+  const view = browser('/knowledge', {
+    storage,
+    digest: (bytes) => {
+      const value = Uint8Array.from(crypto.createHash('sha256').update(bytes).digest()).buffer;
+      calls += 1;
+      if (calls === 1)
+        return new Promise((resolve) => {
+          release = () => resolve(value);
+        });
+      return Promise.resolve(value);
+    },
+  });
+  await view.window.FreeBbsLearningStart.setContext('signals');
+  await view.flush();
+  const workspace = watchWorkspaceGoal(view);
+  const dialog = openEditor(view);
+  const level = view.find((item) => item.name === 'level');
+  const goal = view.find((item) => item.name === 'goal');
+  level.value = 'familiar';
+  goal.value = 'concepts';
+  release();
+  await view.flush();
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    dialog,
+  );
+  assert.equal(
+    view.find((item) => item.name === 'level'),
+    level,
+  );
+  assert.equal(level.value, 'familiar');
+  assert.equal(goal.value, 'concepts');
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().goal, 'practice');
+  assert.equal(workspace.state.planGoal, 'explore');
+  assert.equal(workspace.changes(), 0);
+});
+
+test('same-session notifications and repeated same-course points never recreate the current editor or clear its goal', async () => {
+  const view = browser('/knowledge');
+  await view.flush();
+  openEditor(view);
+  view.find((item) => item.name === 'level').value = 'basic';
+  view.find((item) => item.name === 'goal').value = 'practice';
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
+  const workspace = watchWorkspaceGoal(view);
+  const dialog = openEditor(view);
+  const level = view.find((item) => item.name === 'level');
+  const goal = view.find((item) => item.name === 'goal');
+  level.value = 'familiar';
+  goal.value = 'concepts';
+  await view.listeners.get('freebbs:session-change')();
+  await view.window.FreeBbsLearningStart.setContext({
+    course: { slug: 'signals' },
+    node: { id: 'SS-02-01' },
+  });
+  await view.flush();
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    dialog,
+  );
+  assert.equal(level.value, 'familiar');
+  assert.equal(goal.value, 'concepts');
+  assert.equal(workspace.state.planGoal, 'explore');
+  assert.equal(workspace.changes(), 0);
+});
+
+test('a no-op course notification between digest completion and outer render cannot strand the loading UI', async () => {
+  const storage = memoryStorage();
+  progress.write(storage, BASE, alice, {
+    signals: { schemaVersion: SCHEMA_VERSION, level: 'basic', goal: 'practice' },
+  });
+  let notified = false;
+  const view = browser('/knowledge', {
+    storage,
+    progress: {
+      ...progress,
+      read(...args) {
+        const saved = progress.read(...args);
+        if (args[1] === BASE && !notified) {
+          notified = true;
+          view.window.FreeBbsLearningStart.setContext('signals');
+        }
+        return saved;
+      },
+    },
+  });
+  await view.flush();
+  assert.equal(notified, true);
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().goal, 'practice');
+  assert.ok(view.find((item) => item.textContent === '调整学习起点'));
+  assert.equal(
+    view.find((item) => item.textContent === '正在恢复学习偏好；可继续阅读。'),
+    undefined,
+  );
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+});
+
+test('late old-account outer session completion cannot reset a newer account editor or current task', async () => {
+  let release;
+  let hold = false;
+  const view = browser('/knowledge', {
+    digest: (bytes) => {
+      const value = Uint8Array.from(crypto.createHash('sha256').update(bytes).digest()).buffer;
+      if (hold) {
+        hold = false;
+        return new Promise((resolve) => {
+          release = () => resolve(value);
+        });
+      }
+      return Promise.resolve(value);
+    },
+  });
+  await view.flush();
+  view.app.userState = { ...alice, token: 'rotated-alice-token' };
+  view.storage.setItem('free_bbs_auth_token', view.app.userState.token);
+  hold = true;
+  const old = view.listeners.get('freebbs:session-change')();
+  view.app.userState = { ...bob };
+  view.storage.setItem('free_bbs_auth_token', bob.token);
+  await view.listeners.get('freebbs:session-change')();
+  const workspace = watchWorkspaceGoal(view);
+  const dialog = openEditor(view);
+  const level = view.find((item) => item.name === 'level');
+  const goal = view.find((item) => item.name === 'goal');
+  level.value = 'familiar';
+  goal.value = 'concepts';
+  release();
+  await old;
+  await view.flush();
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    dialog,
+  );
+  assert.equal(level.value, 'familiar');
+  assert.equal(goal.value, 'concepts');
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference(), null);
+  assert.equal(workspace.state.planGoal, 'explore');
+  assert.equal(workspace.changes(), 0);
+  assert.equal(progress.read(view.storage, BASE, bob).signals, undefined);
+});
+test('unselected course and direct knowledge visits stay open without a dialog or an AI question', async () => {
+  for (const pathname of ['/course', '/knowledge']) {
+    const view = browser(pathname);
+    await view.flush();
+    assert.equal(
+      view.find((item) => item.tag === 'dialog'),
+      undefined,
+    );
+    assert.equal(view.window.FreeBbsLearningStart.currentPreference(), null);
+    assert.equal(view.window.FreeBbsLearningStart.promptHint(), '');
+    assert.ok(view.find((item) => item.textContent === '设置学习起点（可选）'));
+    view.page.listeners.get('knowledge:loaded')({
+      detail: { course: { slug: 'signals' }, node: { id: 'SS-02-01' } },
+    });
+    await view.flush();
+    assert.equal(
+      view.find((item) => item.tag === 'dialog'),
+      undefined,
+    );
+    assert.equal(view.calls.length, 0);
+  }
+});
+test('the optional editor closes with Escape, saves only on apply and never sends an AI question', async () => {
   const view = browser();
   await view.flush();
-  const dialog = view.find((item) => item.tag === 'dialog');
+  const dialog = openEditor(view);
   assert.equal(dialog.open, true);
   let prevented = false;
   dialog.listeners.get('cancel')({
@@ -402,16 +671,20 @@ test('course dialog is mandatory, blocks Escape, confirms once and never sends a
       prevented = true;
     },
   });
-  assert.equal(prevented, true);
-  const allText = (item) => [item.textContent, ...item.children.map(allText)].join(' ');
-  assert.doesNotMatch(allText(view.host), /直接开始|跳过|关闭/);
+  assert.equal(prevented, false);
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference(), null);
+  openEditor(view);
   const level = view.find((item) => item.name === 'level');
   const goal = view.find((item) => item.name === 'goal');
-  const apply = view.find((item) => item.textContent === '按这个起点学习');
+  const apply = view.find((item) => item.textContent === '保存偏好');
   assert.equal(level.required, true);
   assert.equal(apply.disabled, true);
   assert.equal(goal.value, '');
-  assert.equal(view.find((item) => item.tag === 'a').href, '/world');
+  assert.ok(view.find((item) => item.textContent === '暂不设置'));
   level.value = 'basic';
   level.listeners.get('change')();
   assert.equal(apply.disabled, false);
@@ -434,10 +707,77 @@ test('course dialog is mandatory, blocks Escape, confirms once and never sends a
   view.find((item) => item.textContent === '调整学习起点').listeners.get('click')();
   assert.equal(view.find((item) => item.tag === 'dialog').open, true);
 });
-test('dialog account changes and storage invalidation cannot reuse stale confirmation handlers', async () => {
+
+test('cancel and Escape discard drafts while Max and recommendations keep the effective preference', async () => {
   const view = browser('/knowledge');
   await view.flush();
-  const oldApply = view.find((item) => item.textContent === '按这个起点学习');
+  openEditor(view);
+  view.find((item) => item.name === 'level').value = 'basic';
+  view.find((item) => item.name === 'goal').value = 'practice';
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
+  const before = JSON.stringify([...view.storage.values]);
+  const hint = view.window.FreeBbsLearningStart.promptHint();
+  const events = [];
+  view.window.addEventListener('learning:start-change', (event) => events.push(event.detail));
+  for (const method of ['cancel', 'escape']) {
+    const dialog = openEditor(view);
+    const level = view.find((item) => item.name === 'level');
+    level.value = 'advanced';
+    level.listeners.get('change')();
+    const oldApply = view.find((item) => item.textContent === '保存偏好');
+    assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'basic');
+    assert.equal(view.window.FreeBbsLearningStart.promptHint(), hint);
+    if (method === 'cancel')
+      view.find((item) => item.textContent === '取消').listeners.get('click')();
+    else
+      dialog.listeners.get('cancel')({
+        preventDefault() {
+          assert.fail('Escape must be allowed');
+        },
+      });
+    oldApply.listeners.get('click')();
+    assert.equal(
+      view.find((item) => item.tag === 'dialog'),
+      undefined,
+    );
+    assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'basic');
+    assert.equal(JSON.stringify([...view.storage.values]), before);
+    assert.equal(events.length, 0);
+  }
+  openEditor(view);
+  view.find((item) => item.name === 'level').value = 'familiar';
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'familiar');
+  assert.equal(events.length, 1);
+});
+
+test('a new tab restores the saved browser preference without a prompt even without crypto or session storage', async () => {
+  const first = browser();
+  await first.flush();
+  openEditor(first);
+  first.find((item) => item.name === 'level').value = 'new';
+  first.find((item) => item.name === 'goal').value = 'concepts';
+  first.find((item) => item.textContent === '保存偏好').listeners.get('click')();
+  const next = browser('/knowledge', {
+    storage: first.storage,
+    noCrypto: true,
+    noSessionStorage: true,
+  });
+  await next.flush();
+  assert.equal(
+    next.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+  assert.equal(next.window.FreeBbsLearningStart.currentPreference().level, 'new');
+  assert.equal(next.window.FreeBbsLearningStart.currentPreference().goal, 'concepts');
+  assert.ok(next.find((item) => item.textContent === '偏好已保存在本机浏览器。'));
+  assert.equal(next.calls.length, 0);
+});
+test('editor account changes and storage invalidation reject stale handlers without reopening a gate', async () => {
+  const view = browser('/knowledge');
+  await view.flush();
+  openEditor(view);
+  const oldApply = view.find((item) => item.textContent === '保存偏好');
   const oldLevel = view.find((item) => item.name === 'level');
   oldLevel.value = 'advanced';
   view.app.userState = { ...bob };
@@ -447,42 +787,73 @@ test('dialog account changes and storage invalidation cannot reuse stale confirm
   await pending;
   await view.flush();
   assert.equal(view.window.FreeBbsLearningStart.currentPreference(), null);
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+  openEditor(view);
   assert.equal(view.find((item) => item.name === 'level').value, '');
   view.listeners.get('storage')({ key: 'free_bbs_auth_token' });
   assert.equal(view.host.hidden, false);
-  assert.equal(view.find((item) => item.tag === 'dialog').open, true);
-  assert.ok(view.find((item) => item.textContent === '登录状态已变化，请刷新后继续。'));
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+  assert.ok(
+    view.find((item) => item.textContent === '登录状态已变化，学习偏好暂不可用；可继续阅读。'),
+  );
   assert.equal(view.window.FreeBbsLearningStart.promptHint(), '');
   assert.equal(view.calls.length, 0);
 });
 
-test('throwing storage getters and rejected crypto still require a choice without leaking or crashing', async () => {
-  for (const options of [{ noStorage: true }, { noStorageMethods: true }, { noCrypto: true }]) {
+test('unavailable storage or crypto permits reading and reports the actual preference saving scope', async () => {
+  for (const options of [
+    { noStorage: true },
+    { noStorageMethods: true },
+    { noCrypto: true },
+    { noSessionStorage: true },
+  ]) {
     const view = browser('/knowledge', options);
     await view.flush();
-    assert.equal(view.find((item) => item.tag === 'dialog').open, true);
+    assert.equal(
+      view.find((item) => item.tag === 'dialog'),
+      undefined,
+    );
     assert.equal(view.window.FreeBbsLearningStart.currentPreference(), null);
+    openEditor(view);
     const level = view.find((item) => item.name === 'level');
     level.value = 'new';
-    const apply = view.find((item) => item.textContent === '按这个起点学习');
+    const apply = view.find((item) => item.textContent === '保存偏好');
     apply.listeners.get('click')();
     assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'new');
     assert.equal(
       view.find((item) => item.tag === 'dialog'),
       undefined,
     );
-    assert.ok(view.find((item) => item.textContent === '本次选择仅在当前页面生效。'));
+    assert.ok(
+      view.find(
+        (item) =>
+          item.textContent ===
+          (options.noStorage || options.noStorageMethods
+            ? '偏好仅在当前页面生效，未持久保存。'
+            : '偏好已保存在本机浏览器。'),
+      ),
+    );
     assert.equal(view.calls.length, 0);
   }
 });
 
-test('the default course entry also requires the signals starting point', async () => {
+test('the default course entry opens signals without requiring a preference', async () => {
   const view = browser('/course', { search: '' });
   await view.flush();
-  assert.equal(view.find((item) => item.tag === 'dialog').open, true);
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+  openEditor(view);
   const level = view.find((item) => item.name === 'level');
   level.value = 'basic';
-  view.find((item) => item.textContent === '按这个起点学习').listeners.get('click')();
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
   assert.equal(progress.read(view.storage, BASE, alice).signals.level, 'basic');
 });
 
@@ -512,7 +883,7 @@ test('legacy advanced intent cannot become complete mastery or bypass a new conf
   assert.equal(another.currentPreference().level, 'advanced');
 });
 
-test('old ordinary levels may preselect but every old ticket must be reconfirmed', async () => {
+test('old ordinary levels restore as optional preferences with an unspecified legacy goal', async () => {
   const { make, storage, sessionStorage } = fixture();
   progress.write(storage, BASE, alice, { signals: { level: 'familiar', goal: 'review' } });
   progress.write(sessionStorage, TICKETS, alice, {
@@ -521,12 +892,14 @@ test('old ordinary levels may preselect but every old ticket must be reconfirmed
   const controller = make();
   await controller.setContext('signals');
   assert.deepEqual(controller.snapshot().preference, { level: 'familiar', goal: '' });
-  assert.equal(controller.snapshot().confirmed, false);
+  assert.equal(controller.snapshot().confirmed, true);
+  assert.equal(controller.snapshot().editing, false);
 });
 
 test('the default goal stays unselected and does not overwrite a deliberate goal change', async () => {
   const view = browser();
   await view.flush();
+  openEditor(view);
   const level = view.find((item) => item.name === 'level');
   const goal = view.find((item) => item.name === 'goal');
   assert.deepEqual(
@@ -545,7 +918,7 @@ test('the default goal stays unselected and does not overwrite a deliberate goal
   level.value = 'basic';
   level.listeners.get('change')();
   assert.equal(goal.value, 'explore');
-  view.find((item) => item.textContent === '按这个起点学习').listeners.get('click')();
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
   assert.equal(view.window.FreeBbsLearningStart.currentPreference().goal, 'explore');
   assert.equal(view.calls.length, 0);
 });
@@ -567,31 +940,109 @@ test('Max uses the same controlled twelve strategies, never free-form preference
     }
 });
 
-test('confirmed choices are recorded only with a real node and keep an unspecified goal unknown', async () => {
+test('only explicit apply with a real node records a choice and keeps an unspecified goal unknown', async () => {
   const view = browser();
   const choices = [];
   view.window.FreeBbsLearningAnalytics = { recordLearningChoice: (value) => choices.push(value) };
   await view.flush();
+  openEditor(view);
   const level = view.find((item) => item.name === 'level');
   level.value = 'basic';
   level.listeners.get('change')();
-  view.find((item) => item.textContent === '按这个起点学习').listeners.get('click')();
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
   assert.equal(choices.length, 0);
   view.page.listeners.get('knowledge:loaded')({
     detail: { course: { slug: 'signals' }, node: { id: 'SS-01-01' } },
   });
   await view.flush();
+  assert.equal(choices.length, 0, 'A course-page save is not deferred onto a later node visit');
+  openEditor(view);
+  const apply = view.find((item) => item.textContent === '保存偏好');
+  apply.listeners.get('click')();
+  apply.listeners.get('click')();
   assert.equal(choices.length, 1);
   assert.equal(choices[0].goal, null);
   assert.equal(choices[0].level, 'basic');
   assert.equal(choices[0].action, 'learning_start_set');
   assert.equal(choices[0].pathType, undefined);
   assert.equal(choices[0].documentVersion, undefined);
+  assert.equal(choices[0].nodeId, 'SS-01-01');
   view.page.listeners.get('knowledge:loaded')({
     detail: { course: { slug: 'signals' }, node: { id: 'SS-02-01' } },
   });
   await view.flush();
   assert.equal(choices.length, 1);
+  openEditor(view);
+  view.find((item) => item.textContent === '保存偏好').listeners.get('click')();
+  assert.equal(choices.length, 2, 'A later deliberate save is a real choice, even if values match');
+  assert.equal(choices[1].nodeId, 'SS-02-01');
   assert.equal(view.calls.length, 0);
   assert.doesNotMatch(JSON.stringify(choices), /token|prompt|笔记/);
+});
+
+test('saved-preference restoration, repeated contexts and session changes never record a new choice', async () => {
+  const storage = memoryStorage();
+  progress.write(storage, BASE, alice, {
+    signals: { schemaVersion: SCHEMA_VERSION, level: 'basic', goal: 'practice' },
+  });
+  progress.write(storage, BASE, bob, {
+    signals: { schemaVersion: SCHEMA_VERSION, level: 'new', goal: 'concepts' },
+  });
+  const view = browser('/knowledge', { storage });
+  const choices = [];
+  view.window.FreeBbsLearningAnalytics = { recordLearningChoice: (value) => choices.push(value) };
+  await view.flush();
+  for (const id of ['SS-01-01', 'SS-01-01', 'SS-02-01']) {
+    view.page.listeners.get('knowledge:loaded')({
+      detail: { course: { slug: 'signals' }, node: { id } },
+    });
+    await view.flush();
+  }
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'basic');
+  await view.listeners.get('freebbs:session-change')();
+  view.app.userState = { ...bob };
+  storage.setItem('free_bbs_auth_token', bob.token);
+  await view.listeners.get('freebbs:session-change')();
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'new');
+  view.app.userState = { ...alice };
+  storage.setItem('free_bbs_auth_token', alice.token);
+  await view.listeners.get('freebbs:session-change')();
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'basic');
+  view.listeners.get('storage')({ key: 'free_bbs_auth_token' });
+  await view.listeners.get('freebbs:session-change')();
+  assert.equal(view.window.FreeBbsLearningStart.currentPreference().level, 'basic');
+  assert.equal(choices.length, 0);
+  assert.equal(
+    view.find((item) => item.tag === 'dialog'),
+    undefined,
+  );
+});
+
+test('cancelled and stale editor submissions never record learning-start choices', async () => {
+  const view = browser('/knowledge');
+  const choices = [];
+  view.window.FreeBbsLearningAnalytics = { recordLearningChoice: (value) => choices.push(value) };
+  await view.flush();
+  view.page.listeners.get('knowledge:loaded')({
+    detail: { course: { slug: 'signals' }, node: { id: 'SS-01-01' } },
+  });
+  await view.flush();
+  const dialog = openEditor(view);
+  view.find((item) => item.name === 'level').value = 'basic';
+  const cancelledApply = view.find((item) => item.textContent === '保存偏好');
+  dialog.listeners.get('cancel')({
+    preventDefault() {
+      assert.fail('Escape must be allowed');
+    },
+  });
+  cancelledApply.listeners.get('click')();
+  openEditor(view);
+  view.find((item) => item.name === 'level').value = 'advanced';
+  const staleApply = view.find((item) => item.textContent === '保存偏好');
+  view.app.userState = { ...bob };
+  view.storage.setItem('free_bbs_auth_token', bob.token);
+  const pending = view.listeners.get('freebbs:session-change')();
+  staleApply.listeners.get('click')();
+  await pending;
+  assert.equal(choices.length, 0);
 });

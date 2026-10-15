@@ -1,4 +1,4 @@
-/* The history shell is UI-only; course-authored content will be added separately. */
+/* Keep the authored origin visible while reading or annotating the same material. */
 (() => {
   function createController({ page, document: doc, storage, course, point, owner = () => '' }) {
     const box = doc.getElementById('knowledge-history');
@@ -49,12 +49,12 @@
     });
     page.addEventListener('knowledge:tool-select', (event) => {
       selectedTool = event.detail?.tool;
-      box.hidden = selectedTool !== 'content';
+      box.hidden = !['content', 'notes'].includes(selectedTool);
     });
     page.addEventListener('knowledge:view-change', (event) => {
       // The overview/reading controls can also return to content, without a tool click.
       if (event.detail?.activateContent) selectedTool = 'content';
-      box.hidden = event.detail?.view !== 'reading' || selectedTool !== 'content';
+      box.hidden = event.detail?.view !== 'reading' || !['content', 'notes'].includes(selectedTool);
     });
     restore();
     return { restore };

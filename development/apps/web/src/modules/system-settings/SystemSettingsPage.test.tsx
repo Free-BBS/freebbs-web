@@ -8,9 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, type ApiClient } from '../../core/api/client.js';
 import { SystemSettingsPage } from './SystemSettingsPage.js';
 
-const { reload } = vi.hoisted(() => ({ reload: vi.fn() }));
+const { reload, mockAuth } = vi.hoisted(() => ({ reload: vi.fn(), mockAuth: vi.fn() }));
 vi.mock('../../core/auth/AuthProvider.js', () => ({
-  useOptionalAuth: () => ({ user: { uid: 'target' }, reload }),
+  useOptionalAuth: mockAuth,
 }));
 
 const person = {
@@ -62,6 +62,55 @@ async function tab(name: string) {
 }
 
 describe('SystemSettingsPage', () => {
+  beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'target' }, reload }));
+  it('shows all settings tabs while previewing without allowing changes or batch delivery', async () => {
+    mockAuth.mockReturnValue({ user: { uid: 'target', previewing: true }, reload });
+    const request = setup();
+    await screen.findByRole('tab', { name: '用户身份' });
+    expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).toBeDisabled();
+    await tab('组织配置');
+    expect(screen.getByLabelText('文艺中心名称')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '保存组织配置' })).toBeDisabled();
+    await tab('通知');
+    expect(screen.getByRole('textbox', { name: '通知标题' })).toBeDisabled();
+    await tab('奖励');
+    expect(screen.getByRole('textbox', { name: '奖励标题' })).toBeDisabled();
+    expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+      true,
+    );
+  });
+  it('allows browsing a second user and expanding their identity and team details during preview', async () => {
+    mockAuth.mockReturnValue({ user: { uid: 'target', previewing: true }, reload });
+    setup((path) =>
+      path === '/system-settings'
+        ? {
+            ...bootstrap,
+            users: [
+              person,
+              {
+                ...person,
+                uid: 'second',
+                username: 'Second',
+                displayName: '第二位同学',
+                roles: ['department.sports_member'],
+                captainTeamIds: ['basketball'],
+              },
+            ],
+          }
+        : undefined,
+    );
+    const directory = await screen.findByRole('complementary', { name: '用户列表' });
+    await userEvent.click(within(directory).getByRole('button', { name: /Second/ }));
+    expect(screen.getByRole('heading', { name: '第二位同学' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /电子系学生会/ }));
+    const member = screen.getByRole('button', { name: '体育中心：部员' });
+    expect(member).toHaveAttribute('aria-pressed', 'true');
+    expect(member).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /代表队队长/ }));
+    expect(screen.getByRole('checkbox', { name: '男篮代表队' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '男篮代表队' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '保存身份设置' })).toBeDisabled();
+  });
   it('applies saved organization names to identity groups and captions without changing concise positions', async () => {
     const metadata = {
       revision: 1,

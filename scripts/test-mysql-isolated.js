@@ -64,7 +64,9 @@ const TEST_FILES = [
   'backend/workbench-schedule-planner.mysql.test.js',
   'backend/course-schedule.mysql.test.js',
   'backend/teacher-accounts.mysql.test.js',
+  'backend/user-certifications.mysql.test.js',
   'backend/schedule-series.mysql.test.js',
+  'backend/learning-research.mysql.test.js',
 ];
 
 function testEnvironment(socketPath, original = process.env) {
@@ -135,13 +137,19 @@ const REQUIRED_MYSQL_TESTS = [
   'isolated MySQL: planner preview',
   'isolated MySQL: course migration, settings, resync and connector generation',
   'isolated MySQL verifies teacher accounts, identity ownership, retries and concurrent binding over HTTP',
+  'isolated MySQL: verified identities, notices, privacy, concurrent review and enterprise provisioning',
   'isolated MySQL: series ownership, rules, exceptions, concurrency, rollback and imported resync',
+  'isolated MySQL: learning research migration, owner isolation and concurrent idempotent writes',
 ];
 
 function selectMysqlTests(args = []) {
   const workbenchOnly = args.includes('--workbench-only');
   const moderationOnly = args.includes('--moderation-only');
-  assert.ok(!(workbenchOnly && moderationOnly), 'choose only one isolated MySQL test subset');
+  const researchOnly = args.includes('--research-only');
+  assert.ok(
+    [workbenchOnly, moderationOnly, researchOnly].filter(Boolean).length <= 1,
+    'choose only one isolated MySQL test subset',
+  );
   if (moderationOnly)
     return {
       testFiles: [
@@ -171,6 +179,11 @@ function selectMysqlTests(args = []) {
         /(?:workbench|course-schedule|schedule-series)/.test(file),
       ),
       requiredTests: null,
+    };
+  if (researchOnly)
+    return {
+      testFiles: TEST_FILES.filter((file) => /learning-research/.test(file)),
+      requiredTests: REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name)),
     };
   return { testFiles: [...TEST_FILES], requiredTests: [...REQUIRED_MYSQL_TESTS] };
 }

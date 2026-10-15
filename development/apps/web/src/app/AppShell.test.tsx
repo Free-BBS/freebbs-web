@@ -66,6 +66,27 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
+  it('keeps identity preview out of the global shell even for a qualified lead', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        client: { request: vi.fn().mockResolvedValue([]) },
+        user: {
+          ...user,
+          roles: ['platform.super_admin'],
+          developmentAccess: 'lead',
+          viewer: {
+            uid: user.uid,
+            displayName: user.displayName,
+            canManageDevelopment: true,
+            canPreviewDevelopment: true,
+          },
+        },
+      }),
+    );
+    renderShell('/community');
+    expect(screen.queryByRole('combobox', { name: '预览发展端身份' })).not.toBeInTheDocument();
+    expect(screen.queryByText('只读身份预览')).not.toBeInTheDocument();
+  });
   it('does not infer reserved access from a role when trusted viewer qualification denies it', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({
@@ -123,7 +144,7 @@ describe('AppShell', () => {
     },
   );
 
-  it('hides privileged navigation during identity preview', () => {
+  it('shows target administrator settings during qualified lead preview while hiding the lead module', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({
         setPreviewUser: vi.fn(),
@@ -132,12 +153,13 @@ describe('AppShell', () => {
           roles: ['platform.admin', 'platform.super_admin'],
           businessAdmin: true,
           previewing: true,
-          viewer: { canManageDevelopment: true },
+          viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+          developmentAccess: 'lead',
         },
       }),
     );
     renderShell('/community');
-    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '系统设置' })).toHaveLength(2);
     expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
   });
 

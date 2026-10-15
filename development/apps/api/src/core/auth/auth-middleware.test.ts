@@ -12,8 +12,8 @@ import { MainSiteAuthClient } from './main-site-auth-client.js';
 import type { AuthClient } from './auth-client.js';
 
 describe('authentication middleware', () => {
-  it('uses the development-owned allowlist and permits only explicit administrators to preview a real user', async () => {
-    const store = createMemoryStore();
+  it('initializes a real lead before preview and refuses business administrator members', async () => {
+    const store = createMemoryStore({ seed: false });
     await store.developmentAccess.create({
       subjectUid: 'u_lead',
       studentId: '2023010567',
@@ -45,7 +45,17 @@ describe('authentication middleware', () => {
     const context = (token: string) => {
       const identity = identities.get(token);
       return identity
-        ? { ...identity, avatarUrl: null, baseRole: 'student' as const, roles: [], tags: [] }
+        ? {
+            ...identity,
+            avatarUrl: null,
+            baseRole: 'student' as const,
+            roles:
+              token === 'member'
+                ? ['platform.super_admin' as const, 'platform.admin' as const]
+                : [],
+            businessAdmin: token === 'member',
+            tags: [],
+          }
         : null;
     };
     const directory = {
@@ -64,9 +74,26 @@ describe('authentication middleware', () => {
 
     await expect(
       authenticate({ authorization: 'Bearer lead', 'x-development-preview-uid': 'u_member' }),
-    ).resolves.toMatchObject({ status: 403, code: 'preview_identity_denied' });
+    ).resolves.toMatchObject({
+      status: 200,
+      user: {
+        uid: 'u_member',
+        roles: [],
+        businessAdmin: false,
+        previewing: true,
+        viewer: { uid: 'u_lead', canManageDevelopment: true, canPreviewDevelopment: true },
+      },
+    });
+    await expect(authenticate({ authorization: 'Bearer lead' })).resolves.toMatchObject({
+      status: 200,
+      user: {
+        roles: ['platform.super_admin'],
+        businessAdmin: false,
+        viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+      },
+    });
     await store.roleAssignments.create({
-      subjectUid: 'u_lead',
+      subjectUid: 'u_member',
       roleKey: 'platform.admin',
       expiresAt: null,
       status: 'active',
@@ -74,14 +101,12 @@ describe('authentication middleware', () => {
       scope: { type: 'public', id: '*' },
     });
 
-    await expect(
-      authenticate({ authorization: 'Bearer lead', 'x-development-preview-uid': 'u_member' }),
-    ).resolves.toMatchObject({
+    await expect(authenticate({ authorization: 'Bearer member' })).resolves.toMatchObject({
       status: 200,
       user: {
         uid: 'u_member',
-        previewing: true,
-        viewer: { uid: 'u_lead', canManageDevelopment: true },
+        businessAdmin: true,
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
       },
     });
     await expect(
@@ -137,6 +162,13 @@ describe('authentication middleware', () => {
       },
       mode: 'main',
       store,
+      userDirectory: {
+        list: async () => [],
+        get: async (uid) =>
+          uid === 'u_target'
+            ? { uid, username: 'target', displayName: 'Target', studentId: null, avatarUrl: null }
+            : null,
+      },
     });
 
     await expect(authenticate({ authorization: 'Bearer admin' })).resolves.toMatchObject({
@@ -145,7 +177,19 @@ describe('authentication middleware', () => {
         uid: 'u_main_admin',
         roles: ['platform.super_admin'],
         developmentAccess: 'lead',
-        viewer: { canManageDevelopment: true },
+        viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+      },
+    });
+    await expect(
+      authenticate({ authorization: 'Bearer admin', 'x-development-preview-uid': 'u_target' }),
+    ).resolves.toMatchObject({
+      status: 200,
+      user: {
+        uid: 'u_target',
+        roles: [],
+        businessAdmin: false,
+        previewing: true,
+        viewer: { uid: 'u_main_admin', canManageDevelopment: true, canPreviewDevelopment: true },
       },
     });
     expect(await store.developmentAccess.list()).toEqual([]);

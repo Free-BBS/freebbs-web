@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const express = require('express');
 const http = require('node:http');
+const { listenAllowedLoopback } = require('../scripts/fixtures/allowed-loopback');
 const {
   createMemoryAssessmentStore,
   createLearningAssessmentRouter,
@@ -341,6 +342,90 @@ test('self-learning rows belong to the student and do not mutate manual learning
   assert.equal(f.contexts[0].manual_state, '未学习');
 });
 
+test('single-node reads and reconciliation load only its evidence in a thousand-node course', async () => {
+  const content = markdown();
+  const extra = Array.from({ length: 999 }, (_, index) => ({
+    course_id: 10,
+    slug: 'signals',
+    node_id: `SS-02-${index + 1}`,
+    title: `知识点 ${index + 1}`,
+    basic_info_markdown: `知识点层级：${index % 10 === 0 ? '拓展' : '一般'}`,
+    document_markdown: content,
+  }));
+  extra.push({
+    course_id: 10,
+    slug: 'signals',
+    node_id: 'SS-02-00',
+    title: '章概览',
+    basic_info_markdown: '知识点层级：核心',
+    document_markdown: content,
+  });
+  const f = fixture({ extra });
+  await submit(f, 'a', 'A');
+  await submit(f, 'b', 2);
+  await f.store.grant(student, { id: 10 }, 'SS-02-2', 'self_learning', {});
+  const calls = [];
+  const attempts = f.store.attempts;
+  f.store.attempts = async (...args) => {
+    calls.push(args[2].node_id);
+    return attempts.apply(f.store, args);
+  };
+  const earned = await f.service.reconcile(student, 'signals', 'SS-01-01');
+  assert.deepEqual(calls, ['SS-01-01']);
+  assert.equal(earned.awarded, true);
+  assert.equal(ownStar(earned).earned, true);
+  assert.equal(earned.course.eligibleNodeCount, 900);
+  assert.equal(earned.course.litNodeCount, 2);
+  const full = await f.service.course(student, 'signals');
+  assert.deepEqual(earned.course, full.course);
+
+  for (const node of extra)
+    Object.defineProperty(node, 'document_markdown', {
+      get() {
+        throw new Error('A single-node request must not inspect other course documents');
+      },
+    });
+  f.contexts[0].document_markdown = markdown({ version: '2' });
+  calls.length = 0;
+  const changed = await f.service.node(student, 'signals', 'SS-01-01');
+  assert.deepEqual(calls, ['SS-01-01']);
+  assert.deepEqual(changed.course, full.course);
+  assert.equal(ownStar(changed).earned, true);
+  assert.equal(ownStar(changed).historicalVersion, true);
+  assert.equal(changed.node.selftest.eligible, false);
+  assert.equal(changed.node.selftest.passedQuestionCount, 0);
+  calls.length = 0;
+  const reconciled = await f.service.reconcile(student, 'signals', 'SS-01-01');
+  assert.deepEqual(calls, ['SS-01-01']);
+  assert.equal(reconciled.awarded, false);
+  assert.deepEqual(reconciled.course, full.course);
+  assert.equal(ownStar(reconciled).historicalVersion, true);
+  await assert.rejects(f.service.node(student, 'signals', 'SS-02-00'), /知识点不存在或为章节/);
+});
+
+test('MySQL single-node context returns only the target document while preserving course scope metadata', async () => {
+  const calls = [];
+  const pool = {
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      return /FROM courses/.test(sql) ? [[{ id: 10, slug: 'signals' }]] : [[]];
+    },
+  };
+  const store = createMysqlLearningStarStore(pool, true);
+  await store.course('signals', null, 'SS-01-01');
+  const scoped = calls.at(-1);
+  assert.match(scoped.sql, /CASE WHEN n\.node_id = \? THEN n\.document_markdown END/);
+  assert.match(scoped.sql, /s\.basic_info_markdown/);
+  assert.match(scoped.sql, /WHERE n\.course_id = \?/);
+  assert.match(scoped.sql, /FOR UPDATE$/);
+  assert.deepEqual(scoped.params, ['SS-01-01', 10]);
+  await store.course('signals');
+  const full = calls.at(-1);
+  assert.doesNotMatch(full.sql, /CASE WHEN/);
+  assert.match(full.sql, /n\.document_markdown AS document_markdown/);
+  assert.deepEqual(full.params, [10]);
+});
+
 test('authenticated API is self-only, no-store, rejects client grades, and readonly GET never grants', async (t) => {
   const f = fixture();
   await submit(f, 'a', 'A');
@@ -357,9 +442,7 @@ test('authenticated API is self-only, no-store, rejects client grades, and reado
   };
   app.use('/stars', createLearningStarsRouter({ store: f.store, requireAuth }));
   const server = http.createServer(app);
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -409,9 +492,7 @@ test('real assessment submission and manual-review router hooks reconcile truste
     }),
   );
   const server = http.createServer(app);
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {

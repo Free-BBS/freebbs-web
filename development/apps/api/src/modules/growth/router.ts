@@ -4,6 +4,7 @@ import {
   type GrowthSummary,
   type CollaborationSpace,
   type GrowthActivity,
+  type MapEvidence,
 } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import { resolve } from 'node:path';
@@ -112,6 +113,25 @@ export function createGrowthRouter({
         status: 'verified',
         source: 'map',
       }));
+    const synced = new Map<string, GrowthActivity>();
+    for (const item of await featureStorage<MapEvidence>(directory, 'map-evidence').list()) {
+      if (
+        item.uid !== identity.user.uid ||
+        item.type !== 'activity' ||
+        !Number.isFinite(Date.parse(item.occurredAt)) ||
+        Date.parse(item.occurredAt) > now().getTime()
+      )
+        continue;
+      const id = item.activityId ?? `map:${item.periodId}:${item.landmarkId}`;
+      synced.set(id, {
+        id,
+        title: item.title,
+        endsAt: item.occurredAt,
+        domain: item.domain,
+        status: 'verified',
+        source: 'map',
+      });
+    }
     const native: GrowthActivity[] = [];
     const responses = (await store.collectionResponses.list({ query: identity.user.uid })).filter(
       (entry) => entry.respondentUid === identity.user.uid && entry.status === 'submitted',
@@ -134,7 +154,14 @@ export function createGrowthRouter({
         source: 'registration',
       });
     }
-    const activities: GrowthActivity[] = [...completed, ...native, ...attendance, ...map];
+    const activities: GrowthActivity[] = [
+      ...new Map(
+        [...completed, ...native, ...attendance, ...map, ...synced.values()].map((item) => [
+          item.id,
+          item,
+        ]),
+      ).values(),
+    ];
     activities.sort((left, right) => (right.endsAt ?? '').localeCompare(left.endsAt ?? ''));
 
     const byDomain = [
@@ -155,9 +182,16 @@ export function createGrowthRouter({
 
     const summary: GrowthSummary = {
       total: activities.length,
-      basis: attendance.length + map.length > 0 ? 'mixed_participation' : 'completed_registration',
-      ...(attendance.length + map.length > 0
-        ? { verifiedTotal: attendance.length + map.length }
+      basis:
+        attendance.length + map.length + synced.size > 0
+          ? 'mixed_participation'
+          : 'completed_registration',
+      ...(attendance.length + map.length + synced.size > 0
+        ? {
+            verifiedTotal: activities.filter(
+              (item) => item.source === 'map' || item.source === 'verified_attendance',
+            ).length,
+          }
         : {}),
       byDomain,
       achievements,

@@ -3,6 +3,7 @@ import request from 'supertest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
 import { createConnectorsRouter } from './router.js';
 import { HttpError } from '../../core/errors/http-error.js';
@@ -10,7 +11,9 @@ const paths: string[] = [];
 afterEach(async () => {
   await Promise.all(paths.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
-async function fixture() {
+async function fixture(
+  environment: NodeJS.ProcessEnv = { DEVELOPMENT_MAP_INGEST_TOKEN: 'test-only' },
+) {
   const directory = await mkdtemp(join(tmpdir(), 'connectors-'));
   paths.push(directory);
   const app = express();
@@ -19,7 +22,7 @@ async function fixture() {
     '/connectors',
     createConnectorsRouter({
       uploadDirectory: directory,
-      environment: { DEVELOPMENT_MAP_INGEST_TOKEN: 'test-only' },
+      environment,
       authenticate: async (headers) => ({
         status: 200,
         user: {
@@ -74,7 +77,7 @@ it('isolates connector settings and reports failed delivery instead of false suc
     .send({ revision: 3 })
     .expect(409);
 });
-it('requires a separate Map token and prevents reassignment of imported identity', async () => {
+it('retires arbitrary UID imports while still rejecting a missing service token', async () => {
   const { app } = await fixture();
   const data = {
     items: [
@@ -96,10 +99,42 @@ it('requires a separate Map token and prevents reassignment of imported identity
     .post('/connectors/map/experiences')
     .set('Authorization', 'Bearer test-only')
     .send(data)
-    .expect(200);
+    .expect(410);
   await request(app)
     .post('/connectors/map/experiences')
     .set('Authorization', 'Bearer test-only')
     .send({ ...data, items: [{ ...data.items[0], uid: 'other' }] })
-    .expect(409);
+    .expect(410);
+});
+it('reports digest configuration and authenticates the retired import endpoint with the original token only', async () => {
+  const digest = createHash('sha256').update('test-only').digest('hex');
+  const { app } = await fixture({ DEVELOPMENT_MAP_TOKEN_SHA256: digest });
+  const status = await request(app).get('/connectors/status').set('x-user', 'admin').expect(200);
+  expect(status.body.data.find((item: { id: string }) => item.id === 'map').configured).toBe(true);
+  await request(app)
+    .post('/connectors/map/experiences')
+    .set('Authorization', 'Bearer test-only')
+    .send({})
+    .expect(410);
+  for (const value of [digest, 'wrong-token'])
+    await request(app)
+      .post('/connectors/map/experiences')
+      .set('Authorization', 'Bearer ' + value)
+      .send({})
+      .expect(401);
+  for (const environment of [{}, { DEVELOPMENT_MAP_TOKEN_SHA256: 'invalid' }]) {
+    const missing = await fixture(environment);
+    const status = await request(missing.app)
+      .get('/connectors/status')
+      .set('x-user', 'admin')
+      .expect(200);
+    expect(status.body.data.find((item: { id: string }) => item.id === 'map').configured).toBe(
+      false,
+    );
+    await request(missing.app)
+      .post('/connectors/map/experiences')
+      .set('Authorization', 'Bearer test-only')
+      .send({})
+      .expect(503);
+  }
 });

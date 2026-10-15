@@ -1661,7 +1661,7 @@
         welcome();
         if (!progress.seenAt) await save({});
         // The full tour includes this release, so new users receive one invitation, not two.
-        if (version === VERSION && automatic && releases.LATEST_RELEASE) {
+        if (version === VERSION && (automatic || !progress.seenAt) && releases.LATEST_RELEASE) {
           const latest = progressClient(releases.LATEST_RELEASE.id);
           if (!latest.isLoaded()) await latest.load();
           if (!latest.snapshot().seenAt) await latest.save({});

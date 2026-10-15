@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const staticServer = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
@@ -79,7 +80,7 @@ test('course map pages load their dedicated controllers', () => {
   const markdownEditor = fs.readFileSync(path.join(root, 'public', 'markdown-editor.html'), 'utf8');
 
   assert.match(reader, /data-course-map-page/);
-  assert.match(reader, /<script src="\/course-map\.js\?v=20261001-focus-2"><\/script>/);
+  assert.match(reader, /<script src="\/course-map\.js\?v=[A-Za-z0-9-]+"><\/script>/);
   assert.doesNotMatch(reader, /course-map-reader-hud/);
   assert.doesNotMatch(reader, /course-map-reader-title/);
   assert.doesNotMatch(reader, /course-map-reader-meta/);
@@ -129,7 +130,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /manualExpandedChapters: new Set\(\)/);
   assert.match(controller, /activeChapterId: ''/);
   assert.match(controller, /function renderDirectoryView\(viewModel\)/);
-  assert.match(controller, /initialChapters\[0\]\?\.nodes\[0\]\?\.id/);
+  assert.match(controller, /const primaryNode = learningNode \|\| activeChapter\.nodes\[0\]/);
   assert.match(controller, /focusedEdges = state\.focusedNodeId/);
   assert.match(controller, /previewNodesByChapter = new Map\(\)/);
   assert.match(controller, /sameChapterNeighborNodes/);
@@ -204,6 +205,179 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.doesNotMatch(styles, /\.course-map-topic-detail/);
 });
 
+// Actual production functions, with only their API/storage/render boundary stubbed.
+// This is a memory contract, not a browser or database test.
+async function initializeReaderFixture({ current = {}, progress = {}, focus = '', nodes } = {}) {
+  const source = fs.readFileSync(path.join(root, 'public/course-map.js'), 'utf8');
+  const section = (start, end) => {
+    const first = source.indexOf(start);
+    const last = source.indexOf(end, first);
+    assert.ok(first >= 0 && last > first, `Production function boundaries: ${start}`);
+    return source.slice(first, last);
+  };
+  const inputNodes = nodes || [
+    { id: 'SS-01-00', title: '真正的第一章' },
+    { id: 'SS-01-01', title: '第一点' },
+    { id: 'SS-02-00', title: '真正的第二章' },
+    { id: 'SS-02-01', title: '第二章第一点' },
+    { id: 'SS-02-02', title: '第二章第二点' },
+  ];
+  const currentBefore = JSON.stringify(current);
+  const progressBefore = JSON.stringify(progress);
+  const renderCalls = [];
+  const statuses = [];
+  const state = {
+    course: null,
+    nodes: [],
+    edges: [],
+    progress: {},
+    learningNodeId: '',
+    focusedNodeId: '',
+    activeChapterId: '',
+    readerLayout: 'directory',
+    manualExpandedChapters: new Set(),
+    manuallyCollapsedChapters: new Set(),
+  };
+  const context = {
+    state,
+    courseSlug: 'signals',
+    params: new URLSearchParams({ focus }),
+    PROGRESS_STORAGE_KEY: 'progress',
+    CURRENT_LEARNING_STORAGE_KEY: 'current',
+    mapPage: {},
+    editorPage: null,
+    URLSearchParams,
+    window: { FreeBbsLearningContent: require('../public/learning-content') },
+    app: {
+      sessionReady: Promise.resolve(),
+      callApi: async (endpoint, options) => {
+        assert.equal(endpoint, '/courses/signals/map');
+        assert.equal(options.method, 'GET');
+        return { course: { slug: 'signals', name: '信号与系统' }, nodes: inputNodes, edges: [] };
+      },
+    },
+    readLocalJson: (key) => (key === 'current' ? current : progress),
+    renderReaderHeader() {},
+    bindReaderViewport() {},
+    setSaveState() {},
+    setStatus: (message, error) => statuses.push({ message, error }),
+    renderChapterIndex: () => '',
+    renderDirectoryNodeTags: () => '',
+    renderReaderNode: () => '',
+    renderMap: () => {
+      renderCalls.push('render');
+      state.structureController = {
+        selectChapter: (id) => renderCalls.push(['selectChapter', id]),
+      };
+    },
+  };
+  vm.runInNewContext(
+    [
+      section('  function escapeHtml(', '  function setStatus('),
+      section('  function nodeById(', '  function knowledgeHref('),
+      section('  function getLearningNodeId(', '  function getNodeTags('),
+      section('  function chapterIdForNodeId(', '  function renderReaderNode('),
+      section('  function renderDirectoryView(', '  function renderFocusedChapter('),
+      section('  async function initialize()', '\n  initialize();'),
+      'globalThis.readerFixture = { initialize, directory: () => renderDirectoryView(readerViewModel()) };',
+    ].join('\n'),
+    context,
+  );
+  await context.readerFixture.initialize();
+  assert.equal(
+    statuses.some((item) => item.error),
+    false,
+    JSON.stringify(statuses),
+  );
+  assert.equal(
+    JSON.stringify(current),
+    currentBefore,
+    'Initialization must not fabricate stored current history',
+  );
+  assert.equal(
+    JSON.stringify(progress),
+    progressBefore,
+    'Initialization must not mutate progress evidence',
+  );
+  return { state, renderCalls, html: context.readerFixture.directory() };
+}
+
+test('production reader initialize keeps a fresh first-point entry without claiming previous learning', async () => {
+  const h = await initializeReaderFixture();
+  assert.equal(h.state.learningNodeId, '');
+  assert.equal(h.state.activeChapterId, 'SS-01');
+  assert.match(h.html, /从这里开始/);
+  assert.match(h.html, /data-reader-node-id="SS-01-01"/);
+  assert.doesNotMatch(h.html, /继续学习|上次学习位置/);
+});
+
+test('production reader initialize retains only an existing current or actual review record as resume', async () => {
+  for (const input of [
+    { current: { signals: 'SS-02-01' } },
+    {
+      progress: {
+        signals: {
+          'SS-01-01': { status: 'review', updatedAt: '2026-10-08' },
+          'SS-02-01': { status: 'review', updatedAt: '2026-10-10' },
+        },
+      },
+    },
+  ]) {
+    const h = await initializeReaderFixture(input);
+    assert.equal(h.state.learningNodeId, 'SS-02-01');
+    assert.equal(h.state.activeChapterId, 'SS-02');
+    assert.match(h.html, /继续学习/);
+    assert.match(h.html, /已为你定位到上次学习位置/);
+    assert.match(h.html, /data-reader-node-id="SS-02-01"/);
+  }
+  for (const current of [{ another: 'SS-02-01' }, { signals: 'SS-99-01' }]) {
+    const h = await initializeReaderFixture({ current });
+    assert.equal(h.state.learningNodeId, '');
+    assert.doesNotMatch(h.html, /上次学习位置/);
+  }
+});
+
+test('production reader zero-level focus selects its real chapter only after render without point focus or expansion', async () => {
+  const h = await initializeReaderFixture({ focus: 'SS-02-00' });
+  assert.equal(h.state.activeChapterId, 'SS-02');
+  assert.equal(h.state.focusedNodeId, '');
+  assert.equal(h.state.readerLayout, 'structure');
+  assert.equal(h.state.manualExpandedChapters.size, 0);
+  assert.deepEqual(h.renderCalls, ['render', ['selectChapter', 'SS-02']]);
+  assert.match(h.html, /id="course-map-directory-title">真正的第二章/);
+});
+
+test('production directory uses published point chapter names when zero-level overviews are absent or unnamed', async () => {
+  const h = await initializeReaderFixture({
+    nodes: [
+      { id: 'SS-01-00', title: '第1章' },
+      { id: 'SS-01-01', title: '信号', chapterTitle: '信号的基本性质' },
+      { id: 'SS-02-01', title: '卷积', chapterTitle: '连续系统时域分析' },
+    ],
+  });
+  assert.match(h.html, /id="course-map-directory-title">信号的基本性质/);
+  assert.doesNotMatch(h.html, />第1章</);
+  const missing = await initializeReaderFixture({
+    nodes: [{ id: 'SS-01-01', title: '不能据此虚构整章名字', chapterTitle: '第1章' }],
+  });
+  assert.match(missing.html, /id="course-map-directory-title">SS-01/);
+  assert.doesNotMatch(missing.html, /id="course-map-directory-title">信号与系统基础/);
+});
+
+test('production reader normal-point focus and unknown focus retain their bounded previous contracts', async () => {
+  const focused = await initializeReaderFixture({ focus: 'SS-02-01' });
+  assert.equal(focused.state.focusedNodeId, 'SS-02-01');
+  assert.equal(focused.state.activeChapterId, 'SS-02');
+  assert.equal(focused.state.readerLayout, 'structure');
+  assert.deepEqual(focused.renderCalls, ['render']);
+  for (const focus of ['SS-99-01', 'SS-99-00', '../SS-02-00', '']) {
+    const h = await initializeReaderFixture({ focus });
+    assert.equal(h.state.focusedNodeId, '');
+    assert.equal(h.state.activeChapterId, 'SS-01');
+    assert.deepEqual(h.renderCalls, ['render']);
+  }
+});
+
 test('knowledge page uses database-backed knowledge controller', () => {
   const knowledge = fs.readFileSync(path.join(root, 'public', 'knowledge.html'), 'utf8');
   const controller = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
@@ -242,11 +416,14 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /tagKey === 'consolidated'/);
   assert.match(controller, /tagKey === 'learned'/);
   assert.match(controller, /function saveCurrentLearningNode\(currentNodeId\)/);
-  assert.match(controller, /saveCurrentLearningNode\(node\.id\)/);
+  assert.match(
+    controller,
+    /if \(nextView === 'reading' && state\.node\) saveCurrentLearningNode\(state\.node\.id\)/,
+  );
   assert.match(controller, /renderMarkdownContent/);
   assert.match(controller, /sections\.knowledgeMarkdown/);
   assert.match(controller, /function setKnowledgeView\(view/);
-  assert.match(controller, /view: params.get\('view'\) === 'reading' \? 'reading' : 'overview'/);
+  assert.match(controller, /view: params.get\('view'\) === 'overview' \? 'overview' : 'reading'/);
   assert.match(controller, /setKnowledgeView\(state\.view\)/);
   assert.match(controller, /setKnowledgeView\('reading'/);
   assert.match(controller, /function buildKnowledgeChatRequest/);

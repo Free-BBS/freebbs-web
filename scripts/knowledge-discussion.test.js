@@ -345,7 +345,12 @@ test('knowledge origins has authored prose and a fallback outside editable Markd
   assert.match(html, /为了解决什么问题，出现了这个知识？/);
   assert.match(html, /id="knowledge-history-prose"/);
   assert.match(html, /id="knowledge-history-empty"/);
-  assert.match(html, /本知识点尚未提供起源说明。/);
+  assert.match(html, /正在载入知识起源…/);
+  assert.doesNotMatch(html, /本知识点尚未提供起源说明。/);
+  assert.match(source, /historyEmpty\.textContent = '本知识点尚未提供起源说明。'/);
+  assert.match(source, /historyEmpty\.toggleAttribute\('hidden', Boolean\(origin\)\)/);
+  assert.match(html, /id="knowledge-history-prose"><\/div>/);
+  assert.match(html, /id="knowledge-history-empty"\s+role="status"/);
   assert.ok(html.indexOf('id="knowledge-history"') > html.indexOf('id="knowledge-reading"'));
   assert.ok(html.indexOf('id="knowledge-history"') < html.indexOf('id="knowledge-body"'));
   const css = fs.readFileSync(path.join(publicDir, 'course.css'), 'utf8');

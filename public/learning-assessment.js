@@ -69,6 +69,18 @@
     });
     return current;
   }
+  function mergeCurrentAttempts(existing, incoming = []) {
+    // Keep one candidate per question/channel, including incompatible versions.
+    // Filtering versions here would revive an older result after a document rollback.
+    const records = new Map();
+    [...existing, ...incoming].forEach((attempt) =>
+      records.set(JSON.stringify([attempt.questionId, attempt.official, attempt.id]), attempt),
+    );
+    const entries = [...records.values()];
+    return [true, false].flatMap((official) => [
+      ...latestAttempts(entries.filter((attempt) => attempt.official === official)).values(),
+    ]);
+  }
   function isMistake(attempt) {
     return (
       attempt.status === 'graded' &&
@@ -78,8 +90,23 @@
           attempt.score < (attempt.passScore ?? attempt.maxScore)))
     );
   }
-  function resultLabel(attempt, documentVersion, latestAttempt = null) {
-    if (attempt.status === 'pending_review') return '待课程组复核';
+  const recordedVersion = (value) => typeof value === 'string' && Boolean(value.trim());
+  const recordedScore = (value) => Number.isFinite(value) && value >= 0;
+  function resultLabel(attempt, documentVersion, latestAttempt = null, questionVersion = null) {
+    if (attempt.status === 'pending_review') {
+      if (
+        (recordedVersion(attempt.documentVersion) &&
+          recordedVersion(documentVersion) &&
+          attempt.documentVersion !== documentVersion) ||
+        (recordedVersion(attempt.questionVersion) &&
+          recordedVersion(questionVersion) &&
+          attempt.questionVersion !== questionVersion)
+      )
+        return '历史版本待复核，结果不计本版';
+      if (!recordedVersion(attempt.documentVersion) || !recordedVersion(attempt.questionVersion))
+        return '待课程组复核 · 提交时版本未完整记录';
+      return '待课程组复核';
+    }
     if (!attempt.official || attempt.verdict === 'practice_only')
       return `练习反馈 ${attempt.score} / ${attempt.maxScore} · 不计入正式测评`;
     if (attempt.documentVersion !== documentVersion)
@@ -143,6 +170,8 @@
       questions: [],
       practiceQuestions: [],
       attempts: [],
+      currentAttempts: [],
+      currentAttemptsComplete: false,
       documentVersion: '',
       questionVersion: null,
       canReview: false,
@@ -154,7 +183,18 @@
       uid: '',
       token: '',
       drafts: new Map(),
+      draftViews: new Map(),
+      submittedDrafts: new Set(),
+      sessionKnown: false,
       reviewAttempts: [],
+      reviewDrafts: new Map(),
+      reviewCards: new Map(),
+      reviewCursor: null,
+      reviewLoading: false,
+      reviewLoaded: false,
+      reviewMessage: '',
+      reviewEpoch: 0,
+      reviewedIds: new Set(),
       cursor: null,
       historyLoading: false,
       practiceFilter: { difficulty: '', assessmentRole: '' },
@@ -171,6 +211,82 @@
       `/learning-assessments/${encodeURIComponent(state.course.slug)}/${encodeURIComponent(state.node.id)}`;
     const current = (generation, token) =>
       generation === state.generation && token === (app.userState?.token || '') && !state.stale;
+    const reviewScope = () =>
+      JSON.stringify([
+        state.course?.slug,
+        state.node?.id,
+        state.documentVersion,
+        state.questionVersion,
+        app.userState?.uid || '',
+      ]);
+    const reviewKeyFor = (attempt) =>
+      `${attempt.id}:${attempt.revision || attempt.updatedAt || attempt.createdAt || ''}`;
+    function resetReviewQueue(keepDrafts = false) {
+      state.reviewEpoch += 1;
+      state.reviewAttempts = [];
+      state.reviewCursor = null;
+      state.reviewLoading = false;
+      state.reviewLoaded = false;
+      state.reviewMessage = '';
+      state.reviewedIds.clear();
+      for (const entry of state.reviewCards.values()) entry.disable();
+      state.reviewCards.clear();
+      if (!keepDrafts) state.reviewDrafts.clear();
+    }
+    function revokeReviewAccess(error) {
+      if (![401, 403].includes(Number(error?.status))) return false;
+      resetReviewQueue();
+      state.canReview = false;
+      status.textContent =
+        Number(error.status) === 401
+          ? '登录状态已失效，待复核内容与未提交复核输入已清除，请重新登录。'
+          : '课程复核权限已变化，待复核内容与未提交复核输入已清除。';
+      renderResults();
+      return true;
+    }
+    let draftStore = null;
+    try {
+      draftStore = browser.FreeBbsLearningAnswerDrafts?.createDraftStore({
+        storage: browser.sessionStorage,
+        crypto: browser.crypto,
+      });
+    } catch {
+      /* Restricted storage or crypto leaves the existing in-memory drafts usable. */
+    }
+    const draftContext = (question, mode) => ({
+      courseSlug: state.course?.slug,
+      nodeId: state.node?.id,
+      documentVersion: state.documentVersion,
+      questionVersion: question.questionVersion,
+      questionId: question.id,
+      mode,
+    });
+    const draftKeyFor = (question, mode) => JSON.stringify(draftContext(question, mode));
+    const persistDraft = (question, mode, value) => {
+      if (state.loaded) draftStore?.save(draftContext(question, mode), value);
+    };
+    async function restoreSavedDrafts(generation, token) {
+      if (!state.loaded || !loggedIn() || !draftStore) return;
+      const bound = await draftStore.bind(state.uid, token);
+      if (!bound || !current(generation, token) || !state.loaded) return;
+      for (const question of [...state.questions, ...state.practiceQuestions])
+        for (const mode of question.official ? ['selftest', 'practice'] : ['practice']) {
+          const key = draftKeyFor(question, mode);
+          if (state.drafts.has(key)) {
+            persistDraft(question, mode, state.drafts.get(key));
+            continue;
+          }
+          if (state.submittedDrafts.has(key)) {
+            draftStore.remove(draftContext(question, mode));
+            continue;
+          }
+          const saved = draftStore.read(draftContext(question, mode));
+          if (!saved) continue;
+          const value = { ...saved, restored: true };
+          state.drafts.set(key, value);
+          state.draftViews.get(key)?.(value);
+        }
+    }
     const markdown = (node, content) => {
       if (app.renderMarkdownContent) {
         node.innerHTML = app.renderMarkdownContent(String(content || ''));
@@ -178,7 +294,10 @@
       } else node.textContent = String(content || '');
     };
     const snapshot = () => ({
+      view: state.view,
       attempts: state.attempts.map((attempt) => ({ ...attempt })),
+      currentAttempts: state.currentAttempts.map((attempt) => ({ ...attempt })),
+      currentAttemptsComplete: state.currentAttemptsComplete,
       questions: state.questions.map((question) => ({
         ...question,
       })),
@@ -197,25 +316,33 @@
         );
       });
     };
-    function renderAttempt(attempt) {
-      const card = element('article', '', 'learning-record learning-quiz-result');
+    function renderAttempt(attempt, forReview = false) {
+      const card = element('details', '', 'learning-record learning-quiz-result');
+      card.open = forReview;
       card.dataset.attemptId = attempt.id;
       const latestAttempt = latestAttempts(
-        state.attempts.filter((entry) => entry.official === attempt.official),
+        state.currentAttempts.filter((entry) => entry.official === attempt.official),
       ).get(attempt.questionId);
       const currentAttempt = currentQuestionAttempts(
-        state.attempts,
+        state.currentAttempts,
         [...state.questions, ...state.practiceQuestions],
         state.documentVersion,
       ).get(attempt.questionId);
+      const questionVersion =
+        [...state.questions, ...state.practiceQuestions].find(
+          (question) =>
+            question.id === attempt.questionId && question.official === attempt.official,
+        )?.questionVersion || (attempt.official ? state.questionVersion : null);
       card.append(
         element(
-          'h4',
-          `${attempt.questionId} · ${resultLabel(attempt, state.documentVersion, latestAttempt)}`,
+          'summary',
+          `${attempt.questionId} · ${resultLabel(attempt, state.documentVersion, latestAttempt, questionVersion)}`,
         ),
       );
       const answer = Array.isArray(attempt.answer) ? attempt.answer.join('、') : attempt.answer;
-      card.append(element('p', `我的作答：${answer}`, 'learning-caption'));
+      card.append(
+        element('p', `${forReview ? '学生作答' : '我的作答'}：${answer}`, 'learning-caption'),
+      );
       card.append(element('p', attempt.feedback || '', 'learning-form-status'));
       if (attempt.gradingBasis)
         card.append(element('p', `判定依据：${attempt.gradingBasis}`, 'learning-caption'));
@@ -232,7 +359,7 @@
       card.append(
         element(
           'small',
-          `题目版本 ${attempt.questionVersion || '未配置'}${dateText ? ` · ${dateText}` : ''}`,
+          `提交时题目版本 ${recordedVersion(attempt.questionVersion) ? attempt.questionVersion : '未记录'}${dateText ? ` · ${dateText}` : ''}`,
           'learning-caption',
         ),
       );
@@ -248,22 +375,24 @@
       return card;
     }
     function renderResults() {
-      results.replaceChildren();
+      const nextChildren = [];
+      const nextReviewKeys = new Set();
       if (!loggedIn()) {
-        results.append(
+        state.reviewCards.clear();
+        results.replaceChildren(
           element('p', '登录后可保存自测作答、查看自己的错题并订正。', 'learning-caption'),
         );
         return;
       }
       if (!state.attempts.length)
-        results.append(
+        nextChildren.push(
           element(
             'p',
             state.loaded ? '还没有作答记录，按自己的节奏选一道题开始。' : '作答记录尚未加载。',
             'learning-caption',
           ),
         );
-      state.attempts.forEach((attempt) => results.append(renderAttempt(attempt)));
+      state.attempts.forEach((attempt) => nextChildren.push(renderAttempt(attempt)));
       if (state.cursor) {
         const more = element(
           'button',
@@ -273,60 +402,213 @@
         more.type = 'button';
         more.disabled = state.historyLoading;
         more.addEventListener('click', loadMoreAttempts);
-        results.append(more);
+        nextChildren.push(more);
       }
       if (state.canReview) {
-        const reviewButton = element('button', '课程负责人：查看待复核作答', 'button button-ghost');
+        const reviewButton = element(
+          'button',
+          state.reviewLoading && !state.reviewLoaded
+            ? '正在加载待复核作答…'
+            : state.reviewLoaded
+              ? '课程负责人：刷新待复核队列'
+              : '课程负责人：查看待复核作答',
+          'button button-ghost',
+        );
         reviewButton.type = 'button';
-        reviewButton.addEventListener('click', loadReview);
-        results.append(reviewButton);
+        reviewButton.disabled = state.reviewLoading;
+        reviewButton.addEventListener('click', () => loadReview());
+        nextChildren.push(reviewButton);
+        if (state.reviewLoaded)
+          nextChildren.push(
+            element(
+              'p',
+              `已加载待复核 ${state.reviewAttempts.length} 份。${state.reviewCursor ? (state.reviewMessage ? '更多作答尚未完成加载，可重试。' : '还有更多待复核作答。') : '本次队列已加载完毕，可刷新查看新作答。'}`,
+              'learning-caption learning-quiz-review-count',
+            ),
+          );
+        if (state.reviewMessage) {
+          const queueMessage = element('p', state.reviewMessage, 'learning-form-status');
+          queueMessage.setAttribute('role', 'status');
+          nextChildren.push(queueMessage);
+        }
         state.reviewAttempts.forEach((attempt) => {
-          const card = renderAttempt(attempt);
+          const reviewKey = reviewKeyFor(attempt);
+          const scope = reviewScope();
+          const reviewGeneration = state.generation;
+          const reviewToken = app.userState?.token || '';
+          const reviewEpoch = state.reviewEpoch;
+          nextReviewKeys.add(reviewKey);
+          const cached = state.reviewCards.get(reviewKey);
+          if (
+            cached &&
+            cached.generation === reviewGeneration &&
+            cached.token === reviewToken &&
+            cached.epoch === reviewEpoch &&
+            cached.scope === scope
+          ) {
+            // Keep the original live controls, caret and native IME composition.
+            // Restoring only their strings after detaching is not editing continuity.
+            nextChildren.push(cached.card);
+            return;
+          }
+          cached?.disable();
+          const card = renderAttempt(attempt, true);
           card.append(element('p', `复核账号 ${attempt.userId}`, 'learning-caption'));
+          card.append(
+            element(
+              'p',
+              `提交时评分：满分 ${recordedScore(attempt.maxScore) ? attempt.maxScore : '未记录'} · 通过阈值 ${recordedScore(attempt.passScore) ? attempt.passScore : '未记录'}`,
+              'learning-caption learning-quiz-review-scoring',
+            ),
+          );
+          const recordedQuestion = attempt.questionSnapshot;
+          if (attempt.snapshotAvailability === 'available' && recordedQuestion?.prompt) {
+            card.append(
+              element(
+                'h4',
+                `作答时题目 · 版本 ${recordedVersion(recordedQuestion.questionVersion) ? recordedQuestion.questionVersion : '未记录'}`,
+              ),
+            );
+            const recordedPrompt = element(
+              'div',
+              '',
+              'discussion-markdown-body learning-quiz-review-prompt',
+            );
+            markdown(recordedPrompt, recordedQuestion.prompt);
+            card.append(recordedPrompt);
+            if (Array.isArray(recordedQuestion.options)) {
+              const options = element('ul', '', 'learning-quiz-review-options');
+              for (const option of recordedQuestion.options) {
+                const item = element('li', '', 'discussion-markdown-body');
+                markdown(item, `${option.id}. ${option.text}`);
+                options.append(item);
+              }
+              card.append(options);
+            }
+            if (recordedQuestion.learningObjective)
+              card.append(element('p', recordedQuestion.learningObjective, 'learning-caption'));
+            if (recordedQuestion.source)
+              card.append(element('p', `题目来源：${recordedQuestion.source}`, 'learning-caption'));
+          } else
+            card.append(
+              element('p', '原作答题干快照缺失，请核对课程组存档后复核。', 'learning-form-status'),
+            );
+          const previousDraft = state.reviewDrafts.get(reviewKey);
+          const currentReview = () =>
+            current(reviewGeneration, reviewToken) &&
+            reviewEpoch === state.reviewEpoch &&
+            scope === reviewScope() &&
+            state.canReview &&
+            loggedIn() &&
+            state.reviewAttempts.some((record) => reviewKeyFor(record) === reviewKey);
           const form = element('form', '', 'learning-quiz-review-form');
-          const scoreLabel = element('label', `复核分数（0–${attempt.maxScore}）`);
+          const scoreLabel = element(
+            'label',
+            recordedScore(attempt.maxScore)
+              ? `复核分数（0–${attempt.maxScore}）`
+              : '复核分数（提交时满分未记录，请核对存档）',
+          );
           const score = element('input');
           score.type = 'number';
           score.min = '0';
-          score.max = String(attempt.maxScore);
+          if (recordedScore(attempt.maxScore)) score.max = String(attempt.maxScore);
           score.step = 'any';
           score.required = true;
+          score.value = previousDraft?.score ?? '';
           scoreLabel.append(score);
           const feedbackLabel = element('label', '复核说明与评分依据');
           const feedback = element('textarea');
           feedback.required = true;
           feedback.maxLength = 4000;
           feedback.rows = 3;
+          feedback.value = previousDraft?.feedback ?? '';
           feedbackLabel.append(feedback);
           const button = element('button', '确认人工复核', 'button button-primary');
           button.type = 'submit';
           const message = element('p', '', 'learning-form-status');
           message.setAttribute('role', 'status');
           form.append(scoreLabel, feedbackLabel, button, message);
+          const preserveReviewDraft = () => {
+            if (currentReview())
+              state.reviewDrafts.set(reviewKey, { score: score.value, feedback: feedback.value });
+          };
+          form.addEventListener('input', preserveReviewDraft);
           form.addEventListener('submit', async (event) => {
             event.preventDefault();
-            if (!form.reportValidity()) return;
-            const { generation } = state;
-            const token = app.userState?.token || '';
+            if (!currentReview() || button.disabled || !form.reportValidity()) return;
+            preserveReviewDraft();
+            const submittedReview = { score: Number(score.value), feedback: feedback.value };
+            score.disabled = true;
+            feedback.disabled = true;
             button.disabled = true;
+            message.textContent = '正在提交本次复核，评分与说明暂时锁定；其他作答仍可继续编辑。';
             try {
               await app.callApi(`${endpoint()}/attempts/${encodeURIComponent(attempt.id)}/review`, {
                 method: 'PATCH',
-                body: JSON.stringify({ score: Number(score.value), feedback: feedback.value }),
+                body: JSON.stringify(submittedReview),
               });
-              if (!current(generation, token)) return;
+              if (!currentReview()) return;
+              state.reviewedIds.add(String(attempt.id));
               state.reviewAttempts = state.reviewAttempts.filter((item) => item.id !== attempt.id);
+              state.reviewDrafts.delete(reviewKey);
+              state.reviewCards.delete(reviewKey);
               await refresh();
             } catch (error) {
-              if (current(generation, token))
+              if (currentReview() && !revokeReviewAccess(error))
                 message.textContent = error.message || '复核保存失败，当前输入保留。';
             } finally {
-              if (current(generation, token)) button.disabled = false;
+              if (currentReview()) {
+                score.disabled = false;
+                feedback.disabled = false;
+                button.disabled = false;
+              }
             }
           });
           card.append(form);
-          results.append(card);
+          state.reviewCards.set(reviewKey, {
+            card,
+            generation: reviewGeneration,
+            token: reviewToken,
+            epoch: reviewEpoch,
+            scope,
+            disable: () => {
+              score.disabled = true;
+              feedback.disabled = true;
+              button.disabled = true;
+            },
+          });
+          nextChildren.push(card);
         });
+        if (state.reviewCursor) {
+          const moreReview = element(
+            'button',
+            state.reviewLoading
+              ? '正在加载更多待复核作答…'
+              : state.reviewMessage
+                ? '重试加载更多待复核作答'
+                : '加载更多待复核作答',
+            'button button-ghost learning-quiz-review-more',
+          );
+          moreReview.type = 'button';
+          moreReview.disabled = state.reviewLoading;
+          moreReview.addEventListener('click', () => loadReview(true));
+          nextChildren.push(moreReview);
+        }
+      }
+      for (const key of state.reviewCards.keys())
+        if (!nextReviewKeys.has(key)) {
+          state.reviewCards.get(key).disable();
+          state.reviewCards.delete(key);
+        }
+      // Remove obsolete history/status/A nodes, then insert new siblings around
+      // retained review cards. Unchanged pending rows keep their relative order,
+      // so insertBefore never removes and reinserts B's live editing subtree.
+      const retained = new Set(nextChildren);
+      for (const child of [...results.children]) if (!retained.has(child)) child.remove();
+      let reference = results.firstElementChild;
+      for (const child of nextChildren) {
+        if (child === reference) reference = reference.nextElementSibling;
+        else results.insertBefore(child, reference);
       }
     }
     function questionForm(question, previous = null) {
@@ -338,8 +620,10 @@
           `${question.id} · ${typeLabels[question.type] || '练习'} · ${roleLabels[questionRole(question)]}${question.reviewed || question.official ? ' · 已审核' : ''}`,
         ),
       );
+      const metadata = element('details', '', 'learning-quiz-info');
+      metadata.append(element('summary', '题目目标、来源与评分规则'));
       if (question.difficulty)
-        card.append(
+        metadata.append(
           element(
             'small',
             `${difficultyLabels[question.difficulty] || '未分层'} · 教师估计`,
@@ -347,11 +631,11 @@
           ),
         );
       if (question.learningObjective)
-        card.append(element('p', question.learningObjective, 'learning-caption'));
+        metadata.append(element('p', question.learningObjective, 'learning-caption'));
       const prompt = element('div', '', 'discussion-markdown-body learning-quiz-prompt');
       markdown(prompt, question.prompt);
       card.append(prompt);
-      card.append(
+      metadata.append(
         element(
           'p',
           `来源：${question.source || '尚未配置'} · 版本：${question.questionVersion || '未配置'}`,
@@ -359,9 +643,10 @@
         ),
       );
       const mode = state.view === 'practice' || !question.official ? 'practice' : 'selftest';
-      const draftKey = `${mode}:${question.id}`;
+      const formContext = draftContext(question, mode);
+      const draftKey = draftKeyFor(question, mode);
       const draft = state.drafts.get(draftKey);
-      const savedAnswer = draft?.answer ?? previous?.answer;
+      const savedAnswer = draft?.answer;
       const form = element('form', '', 'learning-quiz-form');
       const controls = [];
       if (question.options) {
@@ -369,9 +654,7 @@
         group.append(
           element(
             'legend',
-            question.type === 'multiple_choice'
-              ? '请选择全部符合题意的选项（完整匹配，无部分分）'
-              : '请选择一个选项',
+            question.type === 'multiple_choice' ? '请选择全部符合题意的选项' : '请选择一个选项',
           ),
         );
         question.options.forEach((option) => {
@@ -412,7 +695,7 @@
         controls.push(input);
       }
       if (question.type === 'numeric')
-        form.append(
+        metadata.append(
           element(
             'p',
             `允许误差：绝对容差 ${question.scoring.absoluteTolerance}、相对容差 ${question.scoring.relativeTolerance}，取较大值。`,
@@ -420,7 +703,7 @@
           ),
         );
       if (question.type === 'short_answer')
-        form.append(
+        metadata.append(
           element(
             'p',
             question.questionVersion === 'legacy-practice'
@@ -430,13 +713,16 @@
           ),
         );
       else
-        form.append(
+        metadata.append(
           element(
             'p',
             `满分 ${question.scoring.maxScore}，${mode === 'selftest' ? '正式通过标准' : '练习参考标准'} ${question.scoring.passScore} 分。${mode === 'practice' ? '当前为练习模式，不计入正式测评。' : ''}`,
             'learning-caption',
           ),
         );
+      if (question.type === 'multiple_choice')
+        metadata.append(element('p', '漏选或多选得 0 分，不设部分分。', 'learning-caption'));
+      card.append(metadata);
       const submit = element(
         'button',
         previous ? '提交订正作答' : '提交作答',
@@ -456,13 +742,84 @@
             ? controls.filter((control) => control.checked).map((control) => control.value)
             : controls.find((control) => control.checked)?.value || ''
           : controls[0].value;
+      const help = element(
+        'button',
+        '请 Max 看看我的思路',
+        'button button-ghost learning-quiz-ask-max',
+      );
+      help.type = 'button';
+      help.disabled = !loggedIn();
+      const helpGeneration = state.generation;
+      const helpToken = app.userState?.token || '';
+      const currentForm = () => {
+        if (!current(helpGeneration, helpToken)) return false;
+        if (!state.loaded) return true;
+        const activeQuestion = [...state.questions, ...state.practiceQuestions].find(
+          (entry) => entry.id === question.id && entry.official === question.official,
+        );
+        return Boolean(activeQuestion && draftKeyFor(activeQuestion, mode) === draftKey);
+      };
+      const focusTask = () => {
+        if (!currentForm()) return;
+        page.dispatchEvent(
+          new browser.CustomEvent('knowledge:task-focus', {
+            detail: { tool: 'feedback', quizView: state.view, questionId: question.id },
+          }),
+        );
+      };
+      form.addEventListener('focusin', focusTask);
+      help.addEventListener('click', () => {
+        if (!loggedIn() || !currentForm()) return;
+        const answer = getAnswer();
+        const response = question.options
+          ? question.options
+              .filter((option) =>
+                Array.isArray(answer) ? answer.includes(option.id) : answer === option.id,
+              )
+              .map((option) => `${option.id}. ${option.text}`)
+              .join('\n')
+          : String(answer || '').trim();
+        const helpPrompt = response
+          ? `我在做题 ${question.id}。\n我的思路或作答：\n${response.slice(0, 3000)}${response.length > 3000 ? '\n（作答节选，可在发送前修改）' : ''}\n请帮我检查思路和条件，给一个下一步提示，先不要直接给完整答案。`
+          : `我在做题 ${question.id}，还没开始作答。请给我一个起步提示，帮助我找出需要的条件，先不要直接给完整答案。`;
+        focusTask();
+        page.dispatchEvent(
+          new browser.CustomEvent('knowledge:open-interaction', {
+            detail: { tab: 'max', prompt: helpPrompt },
+          }),
+        );
+        message.textContent = '已放到 Max 输入框，可编辑后发送。';
+      });
+      form.append(help);
+      const applyRestoredDraft = (value) => {
+        controls.forEach((control) => {
+          if (question.options)
+            control.checked = Array.isArray(value.answer)
+              ? value.answer.includes(control.value)
+              : value.answer === control.value;
+          else control.value = typeof value.answer === 'string' ? value.answer : '';
+        });
+        message.textContent = value.requestKey
+          ? '已恢复未提交作答，可核对后重试。'
+          : '已恢复未提交作答，可继续编辑。';
+      };
+      state.draftViews.set(draftKey, applyRestoredDraft);
+      if (draft?.restored) applyRestoredDraft(draft);
       form.addEventListener('input', () => {
-        state.drafts.set(draftKey, { answer: getAnswer(), requestKey: null });
+        if (!currentForm()) return;
+        const value = { answer: getAnswer(), requestKey: null };
+        state.drafts.set(draftKey, value);
+        persistDraft(question, mode, value);
+        if (message.textContent.startsWith('已恢复未提交作答')) message.textContent = '';
       });
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!loggedIn()) {
           message.textContent = '请登录后提交作答。';
+          return;
+        }
+        if (!currentForm()) {
+          message.textContent = '题目或学习会话已更新，请使用当前题目作答。';
           return;
         }
         if (!form.reportValidity()) return;
@@ -473,9 +830,16 @@
         }
         const { generation } = state;
         const token = app.userState?.token || '';
-        const intent = state.drafts.get(draftKey) || { answer };
-        if (!intent.requestKey) intent.requestKey = browser.crypto.randomUUID();
+        const saved = state.drafts.get(draftKey);
+        const intent =
+          saved && JSON.stringify(saved.answer) === JSON.stringify(answer) ? saved : { answer };
+        if (!intent.requestKey) {
+          intent.requestKey = browser.crypto.randomUUID();
+          intent.supersedesAttemptId = previous?.id || null;
+        }
         state.drafts.set(draftKey, intent);
+        const submissionContext = formContext;
+        persistDraft(question, mode, intent);
         submit.disabled = true;
         controls.forEach((control) => {
           control.disabled = true;
@@ -486,11 +850,15 @@
             method: 'POST',
             body: JSON.stringify({
               questionId: question.id,
-              answer,
+              answer: intent.answer,
               mode,
               requestKey: intent.requestKey,
-              ...(state.documentVersion ? { expectedDocumentVersion: state.documentVersion } : {}),
-              ...(previous ? { supersedesAttemptId: previous.id } : {}),
+              ...(formContext.documentVersion
+                ? { expectedDocumentVersion: formContext.documentVersion }
+                : {}),
+              ...(intent.supersedesAttemptId
+                ? { supersedesAttemptId: intent.supersedesAttemptId }
+                : {}),
             }),
           });
           if (!current(generation, token)) return;
@@ -498,8 +866,13 @@
             payload.attempt,
             ...state.attempts.filter((attempt) => attempt.id !== payload.attempt.id),
           ];
+          state.currentAttempts = mergeCurrentAttempts(state.currentAttempts, [payload.attempt]);
           state.documentVersion = payload.documentVersion || state.documentVersion;
-          state.drafts.delete(draftKey);
+          if (state.drafts.get(draftKey) === intent) {
+            state.drafts.delete(draftKey);
+            state.submittedDrafts.add(draftKey);
+            draftStore?.remove(submissionContext);
+          } else draftStore?.save(submissionContext, state.drafts.get(draftKey));
           controls.forEach((control) => {
             if (question.options) control.checked = false;
             else control.value = '';
@@ -533,9 +906,10 @@
         tab.classList.toggle('is-active', selected);
       });
       list.replaceChildren();
+      state.draftViews.clear();
       renderPracticeFilters();
       const all = [...state.questions, ...state.practiceQuestions];
-      const latest = currentQuestionAttempts(state.attempts, all, state.documentVersion);
+      const latest = currentQuestionAttempts(state.currentAttempts, all, state.documentVersion);
       const questions = selectQuestions(all, state.view, state.practiceFilter, latest);
       if (!questions.length) {
         const empty =
@@ -544,7 +918,9 @@
               ? '暂无正式自测题，可先做练习。'
               : '登录后可查看课程组发布的正式自测题；本文练习可直接阅读。'
             : state.view === 'mistakes'
-              ? `当前已加载记录中暂时没有已判定的错题；待复核作答不会归入错题。${state.cursor ? '还可加载更早的作答记录。' : ''}`
+              ? state.currentAttemptsComplete
+                ? '当前题库暂时没有已判定的错题；待复核和旧版本作答不会归入当前错题。'
+                : `当前已加载记录中暂时没有已判定的错题；待复核作答不会归入错题。${state.cursor ? '还可加载更早的作答记录。' : ''}`
               : state.practiceFilter.difficulty || state.practiceFilter.assessmentRole
                 ? '这一组暂没有题目，可选择全部难度或返回练习。'
                 : '暂无练习题，可先回看正文。';
@@ -630,21 +1006,71 @@
         };
       renderQuestions();
     }
-    async function loadReview() {
-      if (!state.canReview || !loggedIn()) return;
+    async function loadReview(append = false) {
+      if (!state.canReview || !loggedIn() || state.reviewLoading || (append && !state.reviewCursor))
+        return;
       const { generation } = state;
       const token = app.userState?.token || '';
+      const epoch = state.reviewEpoch;
+      const scope = reviewScope();
+      const cursor = append ? state.reviewCursor : null;
+      const currentQueue = () =>
+        current(generation, token) && epoch === state.reviewEpoch && scope === reviewScope();
+      state.reviewLoading = true;
+      state.reviewMessage = '';
+      renderResults();
       try {
-        const payload = await app.callApi(`${endpoint()}/attempts?review=pending`, {
-          method: 'GET',
-        });
-        if (!current(generation, token)) return;
-        state.reviewAttempts = payload.attempts || [];
-        renderResults();
-        if (!state.reviewAttempts.length) status.textContent = '当前知识点没有待复核作答。';
+        const payload = await app.callApi(
+          `${endpoint()}/attempts?review=pending${cursor ? `&before=${encodeURIComponent(cursor)}` : ''}`,
+          { method: 'GET' },
+        );
+        if (!currentQueue()) return;
+        if (
+          !Array.isArray(payload?.attempts) ||
+          payload.attempts.some(
+            (attempt) =>
+              !attempt ||
+              typeof attempt !== 'object' ||
+              Array.isArray(attempt) ||
+              !['string', 'number'].includes(typeof attempt.id) ||
+              !String(attempt.id).trim() ||
+              (typeof attempt.id === 'number' && !Number.isFinite(attempt.id)) ||
+              typeof attempt.questionId !== 'string' ||
+              !attempt.questionId.trim() ||
+              !['string', 'number'].includes(typeof attempt.userId) ||
+              !String(attempt.userId).trim() ||
+              (typeof attempt.userId === 'number' && !Number.isFinite(attempt.userId)) ||
+              attempt.status !== 'pending_review' ||
+              !Number.isFinite(attempt.maxScore) ||
+              attempt.maxScore < 0,
+          )
+        )
+          throw new Error('待复核响应格式不完整，未替换已加载队列');
+        const nextCursor = payload.nextCursor ?? null;
+        if (nextCursor !== null && (typeof nextCursor !== 'string' || !nextCursor.trim()))
+          throw new Error('待复核分页游标格式无效');
+        if (append && nextCursor === cursor) throw new Error('待复核分页未前进，未替换已加载队列');
+        if (payload.documentVersion && payload.documentVersion !== state.documentVersion) {
+          state.reviewMessage = '课程内容版本已更新，请刷新题目后重新加载待复核队列。';
+          return;
+        }
+        const records = new Map(
+          (append ? state.reviewAttempts : []).map((attempt) => [String(attempt.id), attempt]),
+        );
+        for (const attempt of payload.attempts || [])
+          if (!state.reviewedIds.has(String(attempt.id))) records.set(String(attempt.id), attempt);
+        state.reviewAttempts = [...records.values()];
+        state.reviewCursor = nextCursor;
+        state.reviewLoaded = true;
+        if (!state.reviewAttempts.length) state.reviewMessage = '当前知识点没有待复核作答。';
       } catch (error) {
-        if (current(generation, token))
-          status.textContent = error.message || '待复核作答加载失败。';
+        if (currentQueue() && !revokeReviewAccess(error))
+          state.reviewMessage = `${error.message || '待复核作答加载失败'}；已加载作答和复核输入保留，可重试。`;
+      } finally {
+        if (currentQueue()) {
+          state.reviewLoading = false;
+          renderResults();
+        }
       }
     }
     async function loadMoreAttempts() {
@@ -663,6 +1089,13 @@
         state.attempts.push(
           ...(payload.attempts || []).filter((attempt) => !known.has(attempt.id)),
         );
+        // Compatibility for an older server without the latest-state field.
+        // An authoritative current summary never depends on historical paging.
+        if (!state.currentAttemptsComplete)
+          state.currentAttempts = mergeCurrentAttempts(
+            state.currentAttempts,
+            payload.attempts || [],
+          );
         state.cursor = payload.nextCursor || null;
         renderQuestions();
         announce();
@@ -697,11 +1130,25 @@
           app.callApi(`${endpoint()}/attempts`, { method: 'GET' }),
         ]);
         if (!current(generation, token)) return;
+        const nextVersion = questions.documentVersion || attempts.documentVersion || '';
+        if (
+          state.loaded &&
+          (state.documentVersion !== nextVersion ||
+            state.questionVersion !== questions.questionVersion ||
+            state.canReview !== Boolean(questions.canReview))
+        )
+          resetReviewQueue(state.canReview && Boolean(questions.canReview));
         state.questions = questions.questions || [];
         state.practiceQuestions = questions.practiceQuestions || [];
         state.attempts = attempts.attempts || [];
+        // An empty authoritative summary is meaningful; only absent legacy fields
+        // fall back to the bounded history that the learner explicitly loaded.
+        state.currentAttemptsComplete = Array.isArray(attempts.currentAttempts);
+        state.currentAttempts = mergeCurrentAttempts(
+          state.currentAttemptsComplete ? attempts.currentAttempts : state.attempts,
+        );
         state.cursor = attempts.nextCursor || null;
-        state.documentVersion = questions.documentVersion || attempts.documentVersion || '';
+        state.documentVersion = nextVersion;
         state.questionVersion = questions.questionVersion;
         state.canReview = Boolean(questions.canReview);
         state.loaded = true;
@@ -709,9 +1156,11 @@
         renderQuestions();
         renderResults();
         announce();
+        restoreSavedDrafts(generation, token);
       } catch (error) {
         if (!current(generation, token)) return;
-        status.textContent = `${error.message || '题目加载失败'}；本文练习仍可查看，请稍后重试。`;
+        if (!revokeReviewAccess(error))
+          status.textContent = `${error.message || '题目加载失败'}；本文练习仍可查看，请稍后重试。`;
         renderQuestions();
         renderResults();
       } finally {
@@ -719,18 +1168,29 @@
       }
     }
     function resetSession(stale = false) {
+      if (
+        stale ||
+        (state.sessionKnown &&
+          (state.uid !== (app.userState?.uid || '') ||
+            state.token !== (app.userState?.token || '')))
+      )
+        draftStore?.clear();
+      state.sessionKnown = true;
       state.generation += 1;
       state.stale = stale;
       state.uid = app.userState?.uid || '';
       state.token = app.userState?.token || '';
       state.attempts = [];
-      state.reviewAttempts = [];
+      state.currentAttempts = [];
+      state.currentAttemptsComplete = false;
+      resetReviewQueue();
       state.questions = [];
       state.canReview = false;
       state.loaded = false;
       state.cursor = null;
       state.historyLoading = false;
       state.drafts.clear();
+      state.submittedDrafts.clear();
       state.practiceFilter = { difficulty: '', assessmentRole: '' };
       state.practiceQuestions = legacyPractice(
         state.node?.markdown || state.node?.sections?.knowledgeMarkdown || '',
@@ -774,6 +1234,17 @@
     browser.addEventListener('pageshow', (event) => {
       if (event.persisted) resetSession(true);
     });
+    browser.addEventListener('beforeunload', (event) => {
+      if (
+        state.stale ||
+        ![...state.drafts.values()].some((draft) =>
+          Array.isArray(draft.answer) ? draft.answer.length : String(draft.answer || '').trim(),
+        )
+      )
+        return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
     return { refresh, selectView, getSnapshot: snapshot };
   }
   if (typeof module !== 'undefined' && module.exports) {
@@ -786,6 +1257,7 @@
       selectQuestions,
       latestAttempts,
       currentQuestionAttempts,
+      mergeCurrentAttempts,
       isMistake,
       resultLabel,
       legacyPractice,
@@ -804,6 +1276,8 @@
     getSnapshot: () =>
       controller?.getSnapshot() || {
         attempts: [],
+        currentAttempts: [],
+        currentAttemptsComplete: false,
         questions: [],
         practiceQuestions: [],
         documentVersion: '',

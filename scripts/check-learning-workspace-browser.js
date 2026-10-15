@@ -6,6 +6,7 @@ const path = require('node:path');
 // eslint-disable-next-line import/no-dynamic-require
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
 const { createLearningPreview, users } = require('./preview-learning-workspace');
+const { listenAllowedLoopback } = require('./fixtures/allowed-loopback');
 const { createCourseRelationsMap } = require('./fixtures/course-relations-map');
 
 // Font loading and unrelated global polling are not learning-record completion barriers.
@@ -45,23 +46,13 @@ async function waitForLearningApiIdle(page, trigger) {
   }
 }
 
-// Existing scenes now enter through the real mandatory course starting-point control.
-async function confirmLearningStartAutomatically(page) {
+// Optional starting preferences never block the existing learning scenes.
+async function prepareLearningPage(page) {
   await page.evaluateOnNewDocument(() => {
     document.addEventListener('DOMContentLoaded', () => {
       // Disable only smooth document scrolling; keep real input hit-testing and page behavior.
       document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
     });
-    const confirm = () => {
-      const dialog = document.querySelector('.learning-start-dialog[open]');
-      if (!dialog) return;
-      const level = dialog.querySelector('[data-learning-start-choice="level"]');
-      if (!level) return;
-      level.value = 'familiar';
-      level.dispatchEvent(new Event('change', { bubbles: true }));
-      dialog.querySelector('.learning-start-apply')?.click();
-    };
-    new MutationObserver(confirm).observe(document, { childList: true, subtree: true });
   });
 }
 
@@ -83,111 +74,259 @@ async function clickUnobscured(page, selector) {
   await page.click(selector);
 }
 
-async function checkCourseRelations(browser, output) {
+async function openAuxiliaryGraph(page) {
+  const summary = '.course-structure-graph-area > summary';
+  if (!(await page.$eval('.course-structure-graph-area', (item) => item.open))) {
+    await clickUnobscured(page, summary);
+    await page.waitForFunction(() => document.querySelector('.course-structure-graph-area').open);
+  }
+  await page.waitForFunction(() => {
+    const viewer = document.querySelector('.course-structure-viewer');
+    return viewer.clientWidth > 0 && viewer.clientHeight > 0;
+  });
+}
+
+async function checkCourseRelations(browser, output, portSelections) {
   // Forty-five points per chapter exercises the forty-item page limit and its second page.
   const fixture = createCourseRelationsMap({ pointsPerChapter: 45 });
   const preview = createLearningPreview({ mapNodes: fixture.nodes, mapEdges: fixture.edges });
-  await new Promise((resolve) => {
-    preview.server.listen(0, '127.0.0.1', resolve);
-  });
-  const base = `http://127.0.0.1:${preview.server.address().port}`;
-  const page = await browser.newPage();
-  await confirmLearningStartAutomatically(page);
-  const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    const url = new URL(request.url());
-    if (['data:', 'blob:'].includes(url.protocol) || url.origin === base) return request.continue();
-    return request.respond({ status: 403, body: 'External services disabled' });
-  });
-  const points = '.course-structure-picker [data-course-point-id]';
-  const chapterPicker = 'select.course-structure-picker-chapter';
-  const pointSearch = 'input.course-structure-picker-search';
-  const graphIds = () =>
-    page.$$eval('.course-structure-node.is-knowledge', (elements) =>
-      elements.map((element) => element.getAttribute('aria-label').split(' ')[0]).sort(),
-    );
-  const assertGraph = async (expected, message) => {
-    assert.deepEqual(await graphIds(), [...expected].sort(), message);
-  };
-  const pick = async (id) => {
-    const selector = `.course-structure-picker [data-course-point-id="${id}"]`;
-    await page.waitForSelector(selector);
-    await page.click(selector);
-    await page.waitForFunction(
-      (value) =>
-        document.getElementById('course-map-canvas').courseStructureController?.getState()
-          .focusedNodeId === value,
-      {},
-      id,
-    );
-  };
-  const assertNoOverflow = async (width) => {
-    assert.ok(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
-      `course picker and graph have no horizontal page overflow at ${width}px`,
-    );
-  };
-  const assertReadableGraph = async (width) => {
-    const labels = await page.$$eval(
-      '.course-structure-node.is-knowledge .course-structure-node-title',
-      (elements) => {
-        const viewer = document.querySelector('.course-structure-viewer').getBoundingClientRect();
-        return elements.map((element) => {
-          const matrix = element.getScreenCTM();
-          const rect = element.getBoundingClientRect();
-          return {
-            text: element.textContent,
-            fontPixels:
-              parseFloat(getComputedStyle(element).fontSize) * Math.hypot(matrix.a, matrix.b),
-            inside:
-              rect.left >= viewer.left - 1 &&
-              rect.right <= viewer.right + 1 &&
-              rect.top >= viewer.top - 1 &&
-              rect.bottom <= viewer.bottom + 1,
-          };
-        });
-      },
-    );
-    assert.equal(labels.length, 3);
-    for (const label of labels) {
-      assert.ok(
-        label.fontPixels >= 8,
-        `${width}px graph label stays readable: ${JSON.stringify(label)}`,
-      );
-      assert.equal(
-        label.inside,
-        true,
-        `${width}px graph label fits inside the viewer: ${label.text}`,
-      );
-    }
-  };
-  const waitForRelationLayout = async (compact) => {
-    await page.waitForFunction(
-      (stacked) => {
-        const current = document
-          .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-01-01 "]')
-          ?.getBoundingClientRect();
-        const sameChapter = document
-          .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-01-02 "]')
-          ?.getBoundingClientRect();
-        const crossChapter = document
-          .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-02-01 "]')
-          ?.getBoundingClientRect();
-        if (!current || !sameChapter || !crossChapter) return false;
-        return stacked
-          ? crossChapter.top > Math.max(current.bottom, sameChapter.bottom)
-          : crossChapter.left > Math.max(current.right, sameChapter.right);
-      },
-      {},
-      compact,
-    );
-  };
   try {
+    portSelections.courseRelations = await listenAllowedLoopback(preview.server);
+  } catch (error) {
+    if (error.portSelection) portSelections.courseRelations = error.portSelection;
+    throw error;
+  }
+  const base = `http://127.0.0.1:${preview.server.address().port}`;
+  let page;
+  try {
+    page = await browser.newPage();
+    await prepareLearningPage(page);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (['data:', 'blob:'].includes(url.protocol) || url.origin === base)
+        return request.continue();
+      return request.respond({ status: 403, body: 'External services disabled' });
+    });
+    const points = '.course-structure-picker [data-course-point-id]';
+    const chapterPicker = 'select.course-structure-picker-chapter';
+    const pointSearch = 'input.course-structure-picker-search';
+    const graphIds = () =>
+      page.$$eval('.course-structure-node.is-knowledge', (elements) =>
+        elements.map((element) => element.getAttribute('aria-label').split(' ')[0]).sort(),
+      );
+    const assertGraph = async (expected, message) => {
+      assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), true);
+      assert.deepEqual(await graphIds(), [...expected].sort(), message);
+    };
+    const pick = async (id) => {
+      const selector = `.course-structure-picker [data-course-point-id="${id}"]`;
+      await page.waitForSelector(selector);
+      await clickUnobscured(page, selector);
+      await page.waitForFunction(
+        (value) =>
+          document.getElementById('course-map-canvas').courseStructureController?.getState()
+            .focusedNodeId === value,
+        {},
+        id,
+      );
+    };
+    const assertNoOverflow = async (width) => {
+      assert.ok(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        `course picker and graph have no horizontal page overflow at ${width}px`,
+      );
+    };
+    const assertReadableGraph = async (width) => {
+      assert.equal(
+        await page.$('.course-structure-node.is-knowledge .course-structure-node-detail'),
+        null,
+        'Auxiliary knowledge cards do not show summaries that can overlap neighboring cards',
+      );
+      const labels = await page.$$eval(
+        '.course-structure-node.is-knowledge .course-structure-node-title',
+        (elements) => {
+          const viewer = document.querySelector('.course-structure-viewer').getBoundingClientRect();
+          return elements.map((element) => {
+            const matrix = element.getScreenCTM();
+            const rect = element.getBoundingClientRect();
+            return {
+              text: element.textContent,
+              fontPixels:
+                parseFloat(getComputedStyle(element).fontSize) * Math.hypot(matrix.a, matrix.b),
+              inside:
+                rect.left >= viewer.left - 1 &&
+                rect.right <= viewer.right + 1 &&
+                rect.top >= viewer.top - 1 &&
+                rect.bottom <= viewer.bottom + 1,
+            };
+          });
+        },
+      );
+      assert.equal(labels.length, 3);
+      for (const label of labels) {
+        assert.ok(
+          label.fontPixels >= 16,
+          `${width}px initial graph label is at least 16px, without fitting every neighbor: ${JSON.stringify(label)}`,
+        );
+      }
+      const selectedInside = await page.$eval(
+        '.course-structure-node.is-selected .course-structure-node-title',
+        (element) => {
+          const viewer = document.querySelector('.course-structure-viewer').getBoundingClientRect();
+          const rect = element.getBoundingClientRect();
+          return (
+            rect.left >= viewer.left - 1 &&
+            rect.right <= viewer.right + 1 &&
+            rect.top >= viewer.top - 1 &&
+            rect.bottom <= viewer.bottom + 1
+          );
+        },
+      );
+      assert.equal(selectedInside, true, `${width}px current point title is initially visible`);
+    };
+    const assertTextRelationsReachable = async (focus, expected) => {
+      assert.deepEqual(
+        await page.$$eval('.course-structure-relations [data-course-related-id]', (items) =>
+          items.map((item) => item.dataset.courseRelatedId).sort(),
+        ),
+        [...expected].sort(),
+        'Every published direct neighbor has a readable text entry, without a two-hop entry',
+      );
+      assert.match(
+        await page.$eval('.course-structure-details', (item) => item.textContent),
+        new RegExp(`所属章节：本地演示板块${focus.startsWith('SS-01-') ? '一' : '二'} · ${focus}`),
+      );
+      for (const id of expected) {
+        const selector = `.course-structure-relations [data-course-related-id="${id}"]`;
+        await page.$eval(selector, (item) =>
+          item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+        );
+        await page.waitForFunction(
+          (value) => {
+            const item = document.querySelector(value);
+            const rect = item.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return hit === item || item.contains(hit);
+          },
+          {},
+          selector,
+        );
+        const text = await page.$eval(selector, (item) => ({
+          title: item.textContent,
+          pixels: parseFloat(getComputedStyle(item).fontSize),
+          owner: item.parentElement.textContent,
+        }));
+        assert.equal(text.title, fixture.nodes.find((node) => node.id === id).title);
+        assert.ok(text.pixels >= 16);
+        assert.match(
+          text.owner,
+          new RegExp(`所属章节：本地演示板块${id.startsWith('SS-01-') ? '一' : '二'}`),
+        );
+      }
+    };
+    const panToGraphNode = async (id) => {
+      await page.$eval('.course-structure-viewer', (item) =>
+        item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+      );
+      await page.focus('.course-structure-viewer');
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const direction = await page.evaluate((value) => {
+          const viewer = document.querySelector('.course-structure-viewer').getBoundingClientRect();
+          const node = document
+            .querySelector(`.course-structure-node.is-knowledge[aria-label^="${value} "]`)
+            .querySelector('rect')
+            .getBoundingClientRect();
+          if (node.left < viewer.left + 8) return 'ArrowLeft';
+          if (node.right > viewer.right - 8) return 'ArrowRight';
+          if (node.top < viewer.top + 8) return 'ArrowUp';
+          if (node.bottom > viewer.bottom - 8) return 'ArrowDown';
+          return '';
+        }, id);
+        if (!direction) return;
+        await page.keyboard.press(direction);
+      }
+      assert.fail(`Published graph neighbor ${id} cannot be reached by keyboard panning`);
+    };
+    const dragGraph = async () => {
+      await page.$eval('.course-structure-viewer', (item) =>
+        item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+      );
+      const point = await page.$eval('.course-structure-viewer', (item) => {
+        const rect = item.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.bottom - 35 };
+      });
+      assert.equal(
+        await page.evaluate(
+          ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.course-structure-node')),
+          point,
+        ),
+        false,
+        'Pointer drag starts on visible graph background, not on a node',
+      );
+      const stateBefore = await page.evaluate(() =>
+        document.getElementById('course-map-canvas').courseStructureController.getState(),
+      );
+      const cameraBefore = await page.$eval('.course-structure-viewer svg > g', (item) =>
+        item.getAttribute('transform'),
+      );
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.down();
+      await page.mouse.move(point.x + 45, point.y - 30, { steps: 6 });
+      await page.mouse.up();
+      assert.notEqual(
+        await page.$eval('.course-structure-viewer svg > g', (item) =>
+          item.getAttribute('transform'),
+        ),
+        cameraBefore,
+        'Actual pointer drag pans the graph',
+      );
+      assert.deepEqual(
+        await page.evaluate(() =>
+          document.getElementById('course-map-canvas').courseStructureController.getState(),
+        ),
+        stateBefore,
+        'Graph background drag never triggers the old course-map focus exit',
+      );
+      await page.focus('.course-structure-viewer');
+      await page.keyboard.press('Home');
+    };
+    const waitForRelationLayout = async (compact) => {
+      await page.waitForFunction(
+        (stacked) => {
+          const current = document
+            .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-01-01 "]')
+            ?.querySelector('rect')
+            ?.getBoundingClientRect();
+          const sameChapter = document
+            .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-01-02 "]')
+            ?.querySelector('rect')
+            ?.getBoundingClientRect();
+          const crossChapter = document
+            .querySelector('.course-structure-node.is-knowledge[aria-label^="SS-02-01 "]')
+            ?.querySelector('rect')
+            ?.getBoundingClientRect();
+          if (!current || !sameChapter || !crossChapter) return false;
+          return stacked
+            ? crossChapter.top > Math.max(current.bottom, sameChapter.bottom)
+            : crossChapter.left > Math.max(current.right, sameChapter.right);
+        },
+        {},
+        compact,
+      );
+    };
     for (const width of [1440, 390, 320]) {
       await page.setViewport({ width, height: 900 });
       await page.goto(`${base}/course?course=signals`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('.course-structure-chapters');
+      assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+      assert.equal(await page.$('.learning-start-dialog[open]'), null);
+      await openAuxiliaryGraph(page);
       await page.waitForSelector('.course-structure-node.is-chapter');
       await assertGraph([], 'initial course graph contains only chapter nodes');
       assert.equal(
@@ -228,6 +367,15 @@ async function checkCourseRelations(browser, output) {
       await page.keyboard.press('KeyA');
       await page.keyboard.up('Control');
       await page.keyboard.press('Backspace');
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('.course-structure-picker [data-course-point-id]').length ===
+          40,
+      );
+      // Return restores the page the learner actually chose, not one inferred from graph focus.
+      await clickUnobscured(page, '.course-structure-picker-next');
+      await page.waitForSelector(`${points}[data-course-point-id="SS-01-45"]`);
+      assert.equal(await page.$$eval(points, (elements) => elements.length), 5);
       await page.type('.course-structure-toolbar input[type="search"]', 'SS-02-01');
       await page.waitForSelector('.course-structure-search-results button');
       // Keep the target clear of the sticky page header after the course summary grows.
@@ -279,6 +427,22 @@ async function checkCourseRelations(browser, output) {
       assert.equal(await page.$eval(chapterPicker, (element) => element.value), 'SS-01');
       await waitForRelationLayout(width < 520);
       await assertReadableGraph(width);
+      await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+      assert.equal(await page.$$eval('.course-structure-region', (items) => items.length), 0);
+      const cameraTransform = () =>
+        page.$eval('.course-structure-viewer svg > g', (item) => item.getAttribute('transform'));
+      const beforeCamera = await cameraTransform();
+      await page.focus(pointSearch);
+      await page.keyboard.press('ArrowDown');
+      assert.equal(await cameraTransform(), beforeCamera, 'Picker keys never pan the graph');
+      await page.focus('.course-structure-viewer');
+      await page.keyboard.press('ArrowRight');
+      assert.notEqual(await cameraTransform(), beforeCamera, 'Focused graph can be panned');
+      const beforeZoom = await cameraTransform();
+      await page.keyboard.press('+');
+      assert.notEqual(await cameraTransform(), beforeZoom, 'Graph zoom controls work');
+      await page.keyboard.press('Home');
+      await assertReadableGraph(width);
       await assertNoOverflow(width);
       await page.screenshot({
         path: path.join(output, `course-relations-${width}.png`),
@@ -302,6 +466,7 @@ async function checkCourseRelations(browser, output) {
         await assertReadableGraph(1440);
       }
 
+      await panToGraphNode('SS-02-01');
       await page.click('.course-structure-node.is-knowledge[aria-label^="SS-02-01 "]');
       await assertGraph(
         ['SS-01-01', 'SS-02-01', 'SS-02-02'],
@@ -309,6 +474,13 @@ async function checkCourseRelations(browser, output) {
       );
       assert.equal(await page.$eval(chapterPicker, (element) => element.value), 'SS-02');
       assert.equal(await page.$$eval(points, (elements) => elements.length), 40);
+      await assertTextRelationsReachable('SS-02-01', ['SS-01-01', 'SS-02-02']);
+      await clickUnobscured(page, '.course-structure-back');
+      await clickUnobscured(page, '[data-course-related-id="SS-02-01"]');
+      await assertGraph(
+        ['SS-01-01', 'SS-02-01', 'SS-02-02'],
+        'the text relationship entry reaches the same exact cross-chapter focus',
+      );
       await page.click('.course-structure-details .course-structure-primary');
       await page.waitForFunction(() =>
         document
@@ -352,6 +524,9 @@ async function checkCourseRelations(browser, output) {
     assert.equal(await relations.evaluate((element) => element.textContent), '查看知识关系');
     await relations.click();
     await page.waitForSelector('.course-structure-picker');
+    assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+    await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+    await openAuxiliaryGraph(page);
     await assertGraph(
       ['SS-01-01', 'SS-01-02', 'SS-02-01'],
       'directory overview relation action enters the same single-point structure graph',
@@ -361,6 +536,107 @@ async function checkCourseRelations(browser, output) {
       '目录视图',
     );
     assert.equal(await page.$('.course-map-focus-workspace'), null);
+
+    await page.goto(`${base}/course?course=signals&as=student&focus=SS-01-01`, {
+      waitUntil: 'networkidle0',
+    });
+    await page.waitForFunction(
+      () =>
+        document.getElementById('course-map-canvas').courseStructureController?.getState()
+          .focusedNodeId === 'SS-01-01',
+    );
+    assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+    await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+    await page.$eval('[data-course-relation-filter="ordered"]', (item) =>
+      item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+    );
+    await page.focus('[data-course-relation-filter="ordered"]');
+    await page.keyboard.press('Enter');
+    assert.equal(
+      await page.evaluate(() => document.activeElement.dataset.courseRelationFilter),
+      'ordered',
+      'Filtering returns real keyboard focus to the replacement same-key button',
+    );
+    await page.keyboard.press('Tab');
+    assert.equal(
+      await page.evaluate(() => document.activeElement.dataset.courseRelationFilter),
+      'related',
+      'The next Tab continues to the next local filter, not the preceding return control',
+    );
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('Tab');
+    await page.keyboard.up('Shift');
+    assert.equal(
+      await page.evaluate(() => document.activeElement.dataset.courseRelationFilter),
+      'ordered',
+    );
+    await page.focus('[data-course-relation-filter="all"]');
+    await page.keyboard.press('Enter');
+    await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+    await clickUnobscured(page, '.learning-start-adjust');
+    await page.waitForSelector('.learning-start-dialog[open]');
+    await page.select('[data-learning-start-choice="level"]', 'familiar');
+    await page.click('.learning-start-dialog .learning-start-apply');
+    await page.waitForFunction(
+      () => window.FreeBbsLearningStart.currentPreference()?.level === 'familiar',
+    );
+    const effectivePreference = await page.evaluate(() =>
+      window.FreeBbsLearningStart.currentPreference(),
+    );
+    const focusBeforeCancel = await page.evaluate(() =>
+      document.getElementById('course-map-canvas').courseStructureController.getState(),
+    );
+    await clickUnobscured(page, '.learning-start-adjust');
+    await page.waitForSelector('.learning-start-dialog[open]');
+    await page.select('[data-learning-start-choice="level"]', 'advanced');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.learning-start-dialog[open]'));
+    assert.deepEqual(
+      await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()),
+      effectivePreference,
+      'Escape discards the preference draft without changing the applied preference',
+    );
+    assert.deepEqual(
+      await page.evaluate(() =>
+        document.getElementById('course-map-canvas').courseStructureController.getState(),
+      ),
+      focusBeforeCancel,
+      'Preference dialog Escape preserves deep-linked point and chapter selection',
+    );
+    await page.type('.course-structure-toolbar input[type="search"]', 'SS-02-01');
+    await page.waitForSelector('.course-structure-search-results button');
+    await clickUnobscured(page, '.course-structure-search-results button');
+    await assertTextRelationsReachable('SS-02-01', ['SS-01-01', 'SS-02-02']);
+    assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+    await clickUnobscured(page, '.course-structure-back');
+    await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+    assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+    await openAuxiliaryGraph(page);
+    await assertGraph(['SS-01-01', 'SS-01-02', 'SS-02-01'], 'deep focus opens its auxiliary graph');
+    await assertReadableGraph(1440);
+    await dragGraph();
+    await assertGraph(['SS-01-01', 'SS-01-02', 'SS-02-01'], 'pointer pan retains the deep focus');
+    await pick('SS-01-02');
+    await assertGraph(
+      ['SS-01-01', 'SS-01-02', 'SS-02-03'],
+      'deep-linked picker selection recomputes only the new point direct relationships',
+    );
+    await clickUnobscured(page, '.course-structure-back');
+    await assertTextRelationsReachable('SS-01-01', ['SS-01-02', 'SS-02-01']);
+    await page.$eval('.course-structure-viewer', (item) =>
+      item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+    );
+    await page.focus('.course-structure-viewer');
+    await page.keyboard.press('+');
+    assert.equal(
+      await page.$('.course-structure-node.is-knowledge .course-structure-node-detail'),
+      null,
+    );
+    await page.screenshot({
+      path: path.join(output, 'course-relations-deep-link-zoom.png'),
+      fullPage: true,
+    });
+
     const missingDetail = await page.evaluate(async () => {
       const response = await fetch('/api/courses/signals/map/nodes/SS-99-99');
       return { status: response.status, body: await response.json() };
@@ -379,47 +655,221 @@ async function checkCourseRelations(browser, output) {
       'chapter changes return to the macro graph',
       'directory overview relations enter the structure graph',
       'course graph and picker responsive 1440/390/320',
-      'compact graph recomputes on resize and keeps fitted point labels readable',
+      'text relationships are readable and reachable without interpreting the optional graph',
+      'auxiliary graph opens explicitly and its initial focus labels stay at least 16px',
+      'keyboard graph pan/zoom reaches neighbors without intercepting picker input',
+      'compact graph recomputes on resize without forcing all labels into the frame',
       'history back restores the point picker chapter, page and selection',
+      'deep-linked focus keeps readable relationships, collapsed search, real picker and pointer drag usable',
+      'preference dialog Escape retains applied preferences and the deep-linked course context',
+      'zoomed knowledge cards omit overflow summaries without shrinking core labels',
+      'filter replacement preserves native Enter, Tab and Shift-Tab continuity',
     ];
   } catch (error) {
-    await page.screenshot({
-      path: path.join(output, 'course-relations-failure.png'),
-      fullPage: true,
-    });
-    console.error(
-      'Local relations QA state:',
-      await page.evaluate(() => ({
-        state: document.getElementById('course-map-canvas')?.courseStructureController?.getState(),
-        picker: document.querySelector('.course-structure-picker')?.textContent.slice(0, 300),
-        details: document.querySelector('.course-structure-details')?.textContent.slice(0, 300),
-        knowledgeIds: [...document.querySelectorAll('.course-structure-node.is-knowledge')].map(
-          (element) => element.getAttribute('aria-label'),
-        ),
-      })),
-    );
+    if (page) {
+      await page.screenshot({
+        path: path.join(output, 'course-relations-failure.png'),
+        fullPage: true,
+      });
+      console.error(
+        'Local relations QA state:',
+        await page.evaluate(() => ({
+          state: document
+            .getElementById('course-map-canvas')
+            ?.courseStructureController?.getState(),
+          picker: document.querySelector('.course-structure-picker')?.textContent.slice(0, 300),
+          details: document.querySelector('.course-structure-details')?.textContent.slice(0, 300),
+          knowledgeIds: [...document.querySelectorAll('.course-structure-node.is-knowledge')].map(
+            (element) => element.getAttribute('aria-label'),
+          ),
+        })),
+      );
+    }
     throw error;
   } finally {
-    await page.close();
-    preview.server.closeAllConnections();
-    await new Promise((resolve) => {
-      preview.server.close(resolve);
+    try {
+      await page?.close();
+    } finally {
+      preview.server.closeAllConnections();
+      await new Promise((resolve) => {
+        preview.server.close(resolve);
+      });
+    }
+  }
+}
+
+async function checkCourseLabelBoundaries(browser, output, portSelections) {
+  const fixture = createCourseRelationsMap({ pointsPerChapter: 2 });
+  const firstId = `SS-01-${'A'.repeat(54)}-END`;
+  const secondId = `SS-01-${'A'.repeat(54)}-ALT`;
+  const ids = { 'SS-01-01': firstId, 'SS-01-02': secondId };
+  const titles = {
+    [firstId]: 'WWWWWWWW 合法长知识点标题的完整含义保留在文字区域',
+    [secondId]: '最大字符宽度情况下的很长实际知识点名称',
+  };
+  const nodes = fixture.nodes.map((node) => ({
+    ...node,
+    id: ids[node.id] || node.id,
+    title: titles[ids[node.id]] || node.title,
+  }));
+  const edges = fixture.edges.map((edge) => ({
+    ...edge,
+    source: ids[edge.source] || edge.source,
+    target: ids[edge.target] || edge.target,
+  }));
+  const preview = createLearningPreview({ mapNodes: nodes, mapEdges: edges });
+  try {
+    portSelections.courseLabelBoundaries = await listenAllowedLoopback(preview.server);
+  } catch (error) {
+    if (error.portSelection) portSelections.courseLabelBoundaries = error.portSelection;
+    throw error;
+  }
+  const base = `http://127.0.0.1:${preview.server.address().port}`;
+  let page;
+  try {
+    page = await browser.newPage();
+    await prepareLearningPage(page);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (['data:', 'blob:'].includes(url.protocol) || url.origin === base)
+        return request.continue();
+      return request.respond({ status: 403, body: 'External services disabled' });
     });
+    for (const width of [390, 320]) {
+      for (const typeScale of ['standard', 'comfortable', 'large']) {
+        await page.setViewport({ width, height: 850 });
+        await page.goto(`${base}/course?course=signals&as=student&focus=${firstId}`, {
+          waitUntil: 'networkidle0',
+        });
+        await page.waitForSelector('.course-structure-relations');
+        await page.evaluate(
+          (scale) =>
+            window.freeBbsTypography.applyPreferences({
+              fontPreset: 'transistor-lab',
+              typeScale: scale,
+            }),
+          typeScale,
+        );
+        assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+        assert.ok(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+          `Full legal 64-character current/related IDs wrap at ${width}px/${typeScale}`,
+        );
+        assert.ok(
+          (
+            await page.$eval('.course-structure-details > small', (item) => item.textContent)
+          ).includes(firstId),
+        );
+        assert.ok(
+          (await page.$eval('.course-structure-relations', (item) => item.textContent)).includes(
+            secondId,
+          ),
+        );
+        await page.$eval('.course-structure-current', (item) =>
+          item.scrollIntoView({ block: 'start', behavior: 'instant' }),
+        );
+        if (typeScale === 'large')
+          await page.screenshot({ path: path.join(output, `course-long-id-text-${width}.png`) });
+        await openAuxiliaryGraph(page);
+        await page.waitForFunction(() => {
+          const label = document.querySelector(
+            '.course-structure-node.is-selected .course-structure-node-title',
+          );
+          const matrix = label?.getScreenCTM();
+          return (
+            label?.getBoundingClientRect().width > 0 && matrix && Math.hypot(matrix.a, matrix.b) > 0
+          );
+        });
+        // Query and measure in one browser task: resize redraws can detach handles between $$eval calls.
+        const labels = await page.evaluate(() =>
+          [...document.querySelectorAll('.course-structure-node.is-knowledge')].map((item) => {
+            const card = item.querySelector('rect').getBoundingClientRect();
+            const id = item.querySelector('.course-structure-node-id');
+            const title = item.querySelector('.course-structure-node-title');
+            const matrix = title.getScreenCTM();
+            return {
+              accessible: item.getAttribute('aria-label'),
+              nativeTitle: item.querySelector('title').textContent,
+              idText: id.textContent,
+              idAdvance: id.getComputedTextLength(),
+              idWidth: id.getBoundingClientRect().width,
+              idPixels: parseFloat(getComputedStyle(id).fontSize),
+              idRight: id.getBoundingClientRect().right,
+              titleRight: title.getBoundingClientRect().right,
+              cardRight: card.right,
+              titlePixels:
+                parseFloat(getComputedStyle(title).fontSize) * Math.hypot(matrix.a, matrix.b),
+            };
+          }),
+        );
+        for (const label of labels) {
+          assert.ok(label.idRight <= label.cardRight - 5, JSON.stringify(label));
+          assert.ok(label.titleRight <= label.cardRight - 5, JSON.stringify(label));
+          assert.ok(label.titlePixels >= 16, JSON.stringify(label));
+        }
+        for (const id of [firstId, secondId]) {
+          const label = labels.find((item) => item.accessible.startsWith(`${id} `));
+          assert.ok(label);
+          assert.ok(label.nativeTitle.includes(id));
+          assert.match(label.idText, /^SS.*….*(?:END|ALT)/);
+        }
+        assert.equal(
+          labels.find((item) => item.accessible.startsWith('SS-02-01 ')).idText,
+          'SS-02-01',
+        );
+        await page.$eval('.course-structure-viewer', (item) =>
+          item.scrollIntoView({ block: 'center', behavior: 'instant' }),
+        );
+        if (typeScale === 'large')
+          await page.screenshot({ path: path.join(output, `course-long-id-graph-${width}.png`) });
+        await clickUnobscured(page, `[data-course-related-id="${secondId}"]`);
+        assert.equal(
+          await page.evaluate(
+            () =>
+              document.getElementById('course-map-canvas').courseStructureController.getState()
+                .focusedNodeId,
+          ),
+          secondId,
+          'Abbreviated SVG display never changes the actual relation navigation ID',
+        );
+      }
+    }
+    assert.deepEqual(errors, []);
+    return [
+      'legal 64-character current and related IDs wrap on mobile at every supported type scale',
+      'SVG ID abbreviation retains distinguishable head/tail and complete access/navigation IDs',
+      'wide long titles fit the existing SVG excerpt at a readable initial font size',
+    ];
+  } catch (error) {
+    await page?.screenshot({ path: path.join(output, 'course-label-boundaries-failure.png') });
+    throw error;
+  } finally {
+    try {
+      await page?.close();
+    } finally {
+      preview.server.closeAllConnections();
+      await new Promise((resolve) => {
+        preview.server.close(resolve);
+      });
+    }
   }
 }
 
 async function main() {
   const preview = createLearningPreview();
-  await new Promise((resolve) => {
-    preview.server.listen(0, '127.0.0.1', resolve);
-  });
-  const base = `http://127.0.0.1:${preview.server.address().port}`;
+  let base = '';
+  const portSelections = {};
   const output =
     process.env.LEARNING_QA_OUTPUT ||
     fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-learning-restored-'));
   fs.mkdirSync(output, { recursive: true });
   let browser;
   try {
+    portSelections.main = await listenAllowedLoopback(preview.server);
+    base = `http://127.0.0.1:${preview.server.address().port}`;
     browser = await puppeteer.launch({
       headless: true,
       timeout: Number(process.env.LEARNING_CHROME_TIMEOUT_MS || 10000),
@@ -428,7 +878,7 @@ async function main() {
         : {}),
     });
     const page = await browser.newPage();
-    await confirmLearningStartAutomatically(page);
+    await prepareLearningPage(page);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setRequestInterception(true);
@@ -464,6 +914,10 @@ async function main() {
     };
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(`${base}/course?course=signals`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.course-structure-chapters');
+    assert.equal(await page.$eval('.course-structure-graph-area', (item) => item.open), false);
+    assert.equal(await page.$('.learning-start-dialog[open]'), null);
+    await openAuxiliaryGraph(page);
     await page.waitForSelector('.course-structure-node.is-chapter');
     assert.equal(
       await page.$$eval('.course-structure-node.is-knowledge', (elements) => elements.length),
@@ -935,6 +1389,7 @@ async function main() {
       (buttons) =>
         buttons.map((button) => ({
           color: button.dataset.annotationColor,
+          palette: button.dataset.annotationPalette,
           background: getComputedStyle(button).backgroundColor,
         })),
     );
@@ -943,7 +1398,17 @@ async function main() {
       .then((toolbar) =>
         toolbar.screenshot({ path: path.join(output, 'learning-annotation-toolbar.png') }),
       );
-    assert.equal(annotationPalette.length, 4);
+    assert.equal(annotationPalette.length, 8);
+    for (const palette of ['highlight', 'underline']) {
+      const colors = annotationPalette.filter((button) => button.palette === palette);
+      assert.equal(colors.length, 4, `${palette} has its own four-color palette`);
+      assert.deepEqual(colors.map((button) => button.color).sort(), [
+        'blue',
+        'green',
+        'purple',
+        'yellow',
+      ]);
+    }
     assert.equal(
       new Set(annotationPalette.map((button) => button.background)).size,
       4,
@@ -960,7 +1425,7 @@ async function main() {
       }),
       `annotation palette buttons must remain visibly colored: ${JSON.stringify(annotationPalette)}`,
     );
-    await page.click('[data-annotation-action="highlight"][data-annotation-color="yellow"]');
+    await page.click('[data-annotation-action="highlight"]');
     await page.waitForFunction(
       () =>
         document.querySelectorAll('#learning-annotation-list .learning-annotation-record').length >
@@ -1076,19 +1541,11 @@ async function main() {
       ownSummary.selftest.pendingReview >= 1,
       'subjective pending records stay separate from scored results',
     );
+    assert.equal(await page.$('#personal-learning-data input[type="checkbox"]'), null);
     assert.equal(
-      await page.$eval(
-        '#personal-learning-data input[type="checkbox"]',
-        (element) => element.checked,
-      ),
-      false,
-      'process recording starts disabled',
-    );
-    await page.click('#personal-learning-data input[type="checkbox"]');
-    await page.waitForFunction(() =>
-      document
-        .querySelector('#personal-learning-data [data-learning-data-status]')
-        .textContent.includes('已开启'),
+      ownSummary.preferences.enabled,
+      true,
+      'minimal process recording is enabled by default',
     );
     await page.screenshot({
       path: path.join(output, 'learning-personal-data.png'),
@@ -1158,7 +1615,7 @@ async function main() {
     await page.waitForSelector('#admin-learning-data .learning-data-metric');
     assert.match(
       await page.$eval('#admin-learning-data', (element) => element.textContent),
-      /不作能力评价/,
+      /管理员不读取私人批注、聊天或答案正文/,
     );
     assert.doesNotMatch(
       await page.$eval('#admin-learning-data', (element) => element.textContent),
@@ -1171,17 +1628,17 @@ async function main() {
     await page.waitForSelector('#personal-learning-data .learning-data-controls button');
     page.once('dialog', (dialog) => dialog.accept());
     await page.$$eval('#personal-learning-data .learning-data-controls button', (buttons) =>
-      buttons.find((button) => button.textContent.includes('删除')).click(),
+      buttons.find((button) => button.textContent.includes('清空')).click(),
     );
     await page.waitForFunction(() =>
       document
         .querySelector('#personal-learning-data [data-learning-data-status]')
-        .textContent.includes('过程记录已删除'),
+        .textContent.includes('历史过程记录已清空'),
     );
     const afterDeletion = await page.evaluate(async () =>
       window.freeBbsApp.callApi('/learning-analytics/summary?window=all'),
     );
-    assert.equal(afterDeletion.preferences.enabled, false);
+    assert.equal(afterDeletion.preferences.enabled, true);
     assert.equal(afterDeletion.process.visits, 0);
     assert.equal(
       afterDeletion.selftest.officialAttempts,
@@ -1189,12 +1646,14 @@ async function main() {
       'deleting optional process records preserves the authoritative self-test attempts',
     );
     assert.deepEqual(errors, []);
-    const courseRelationsTests = await checkCourseRelations(browser, output);
+    const courseRelationsTests = await checkCourseRelations(browser, output, portSelections);
+    const courseLabelTests = await checkCourseLabelBoundaries(browser, output, portSelections);
     console.log(
       JSON.stringify(
         {
           success: true,
           output,
+          portSelections,
           pageErrors: errors,
           tests: [
             'real chapter title and overview',
@@ -1217,6 +1676,7 @@ async function main() {
             'responsive 1440/768/390/320',
             'dark theme',
             ...courseRelationsTests,
+            ...courseLabelTests,
           ],
         },
         null,
@@ -1224,6 +1684,10 @@ async function main() {
       ),
     );
   } catch (error) {
+    if (error.portSelection && !portSelections.main) portSelections.main = error.portSelection;
+    console.error(
+      JSON.stringify({ output, portSelections, portSelection: error.portSelection || null }),
+    );
     if (browser) {
       const pages = await browser.pages();
       const failurePage = pages.find((item) => item.url().startsWith(base));
@@ -1256,6 +1720,10 @@ async function main() {
       await new Promise((resolve) => {
         preview.server.close(resolve);
       });
+      fs.writeFileSync(
+        path.join(output, 'learning-port-selection-report.json'),
+        JSON.stringify({ portSelections }, null, 2),
+      );
     }
   }
 }

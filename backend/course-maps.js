@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const sharp = require('sharp');
 const { readFields } = require('../public/knowledge-overview');
+const { originMarkdown } = require('../public/learning-content');
 const { stripAssessmentBlocks } = require('./learning-assessment');
 const { COURSE_SEEDS, SIGNAL_EDGE_SEEDS, SIGNAL_NODE_SEEDS } = require('./course-map-data');
 
@@ -339,9 +340,19 @@ function toMapNode(row, includeMarkdown = false, includeAssessmentSource = false
             .createHash('sha256')
             .update(String(row.document_markdown || ''))
             .digest('hex'),
+          originDocumentVersion: getOriginDocumentVersion(row),
         }
       : {}),
   };
+}
+
+function getOriginDocumentVersion(row) {
+  // Hash exactly the published origin rendered by the student reader, never
+  // private assessment blocks or unrelated supplementary sections.
+  return crypto
+    .createHash('sha256')
+    .update(originMarkdown(resolveKnowledgeSections(row, false)))
+    .digest('hex');
 }
 
 function getKnowledgeNodeRevision(row) {
@@ -1059,6 +1070,7 @@ module.exports = {
   canManageCourse,
   createCourseMapsRouter,
   ensureCourseMapTables,
+  getOriginDocumentVersion,
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,

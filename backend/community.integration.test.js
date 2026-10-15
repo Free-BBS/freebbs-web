@@ -291,7 +291,7 @@ test(
       return book.xlsx.writeBuffer();
     }
     const admin = await login('admin');
-    const legacy = await createUser('旧用户名', '2026000101');
+    const legacy = await createUser('旧 用户名', '2026000101');
     const outsider = await createUser('outside_user', '2026000102');
 
     await t.test(
@@ -983,7 +983,7 @@ test(
           let exitCode = 0;
           try {
             output = await runProgram(
-              process.env.PYTHON || 'python3',
+              process.env.FREEBBS_TEST_PYTHON_BIN || process.env.PYTHON || 'python3',
               [
                 '-B',
                 path.join(root, 'skills/freebbs-course-upload/scripts/freebbs_course_upload.py'),

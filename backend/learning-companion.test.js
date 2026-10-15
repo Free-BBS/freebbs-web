@@ -8,6 +8,7 @@ const {
   normalizeTask,
   summarizeEvidence,
   companionHint,
+  companionPreference,
   createMysqlCompanionNodeLoader,
 } = require('./learning-companion');
 const { parse } = require('../docs/course-authoring/tools/整理知识点.cjs');
@@ -136,6 +137,28 @@ test('self-report and practice never enter the formal current-version evidence s
   assert.equal(summary.passed, 0);
   assert.equal(summary.pending, 1);
   assert.equal(summary.officialTotal, assessment.questions.length);
+});
+
+test('a bounded same-page task goal guides Max without changing the saved course preference or inventing familiarity', () => {
+  const context = {
+    learningStartPreference: { level: 'familiar', goal: 'concepts' },
+    learningTask: normalizeTask({ tool: 'content', view: 'origin', goal: 'explore' }),
+  };
+  const original = JSON.stringify(context);
+  assert.deepEqual(companionPreference(context), { level: 'familiar', goal: 'explore' });
+  assert.equal(JSON.stringify(context), original);
+  assert.match(companionHint(context), /本页临时目标：探索研究/);
+  assert.match(companionHint(context), /不覆盖课程默认偏好/);
+  assert.equal(companionPreference({ learningTask: context.learningTask }), null);
+  for (const invalid of ['FORGED_GOAL', '__proto__', [], null]) {
+    const task = normalizeTask({ tool: 'content', goal: invalid });
+    assert.equal(Object.hasOwn(task, 'goal'), false);
+    assert.deepEqual(
+      companionPreference({ ...context, learningTask: task }),
+      context.learningStartPreference,
+    );
+  }
+  assert.doesNotMatch(JSON.stringify(context.learningTask), /score|passed|earned|privateNotes/);
 });
 
 test('Max consumes real parsed question versions and authenticated persisted pass, fail and pending evidence', async () => {

@@ -6,6 +6,7 @@ const path = require('node:path');
 // eslint-disable-next-line import/no-dynamic-require
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
 const { createLearningPreview, users } = require('./preview-learning-workspace');
+const { listenAllowedLoopback } = require('./fixtures/allowed-loopback');
 
 const POINT = 'SS-02-01';
 const LEVELS = ['new', 'familiar', 'basic', 'advanced'];
@@ -60,6 +61,8 @@ async function pointerText(page, selector, text) {
 }
 
 async function confirmStart(page, level = 'familiar', goal = 'concepts') {
+  await page.waitForSelector('.learning-start-adjust', { visible: true });
+  if (!(await page.$(START))) await pointerClick(page, '.learning-start-adjust');
   await page.waitForSelector(START, { visible: true });
   await page.select(`${START} [data-learning-start-choice="level"]`, level);
   await page.select(`${START} [data-learning-start-choice="goal"]`, goal);
@@ -158,10 +161,7 @@ async function selectOriginalTextWithPointer(page) {
 
 async function main() {
   const preview = createLearningPreview();
-  await new Promise((resolve) => {
-    preview.server.listen(0, '127.0.0.1', resolve);
-  });
-  const base = `http://127.0.0.1:${preview.server.address().port}`;
+  let base = '';
   const output =
     process.env.LEARNING_QA_OUTPUT ||
     fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-learning-chain-'));
@@ -220,6 +220,9 @@ async function main() {
     );
   };
   try {
+    report.portSelection = await listenAllowedLoopback(preview.server);
+    base = `http://127.0.0.1:${preview.server.address().port}`;
+    report.base = base;
     browser = await puppeteer.launch({
       headless: true,
       timeout: Number(process.env.LEARNING_CHROME_TIMEOUT_MS || 10000),
@@ -235,10 +238,14 @@ async function main() {
         const page = await createPage();
         const previousRequests = preview.requests.length;
         await visit(page, 'tool=continue');
-        await page.waitForSelector(START, { visible: true });
+        await page.waitForSelector('.learning-start-adjust', { visible: true });
+        assert.equal(await page.$(START), null, 'Course preferences never open a mandatory dialog');
         if (level === 'new' && goal === 'concepts') {
+          await readyQuestions(page);
+          await pointerClick(page, '.learning-start-adjust');
           await page.keyboard.press('Escape');
-          assert.ok(await page.$(START), 'Escape does not bypass mandatory course confirmation');
+          await page.waitForFunction(() => !document.querySelector('.learning-start-dialog[open]'));
+          assert.equal(await page.$(START), null, 'Escape closes the optional editor');
           assert.equal(
             await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()),
             null,
@@ -267,7 +274,7 @@ async function main() {
         );
         assert.ok(
           await page.$$eval(
-            '#learning-plan-summary .learning-plan-alternatives button',
+            '#learning-plan-summary .learning-plan-alternatives > button',
             (items) => items.length <= 2,
           ),
         );
@@ -312,25 +319,126 @@ async function main() {
       }
     }
 
-    scene = 'course-confirmation-and-in-course-navigation';
+    scene = 'course-preference-and-in-course-navigation';
     if (enabled(scene)) {
       const page = await createPage();
       await page.goto(`${base}/course?course=signals&as=student`, {
         waitUntil: 'domcontentloaded',
       });
+      await page.waitForSelector('.learning-start-adjust', { visible: true });
+      assert.equal(await page.$(START), null, 'Course entry does not require a self-report');
       await confirmStart(page, 'basic', 'practice');
       await visit(page);
       await readyQuestions(page);
       assert.equal(
         await page.$(START),
         null,
-        'Confirmed same-account course entry is reused within the same tab',
+        'Saved same-account course preference is reused without asking again',
       );
+      await pointerClick(page, '.learning-start-adjust');
+      await page.select(`${START} [data-learning-start-choice="level"]`, 'advanced');
+      assert.deepEqual(
+        await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()),
+        { level: 'basic', goal: 'practice' },
+        'An unsubmitted edit does not replace the effective preference',
+      );
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('.learning-start-dialog[open]'));
       await page.goto(`${base}/course?course=signals&as=student`, {
         waitUntil: 'domcontentloaded',
       });
-      await confirmStart(page, 'basic', 'practice');
-      pass(scene, { eachCourseEntryRequiresConfirmation: true, nodeSwitchDoesNotRepeat: true });
+      await page.waitForFunction(
+        () => window.FreeBbsLearningStart.currentPreference()?.level === 'basic',
+      );
+      assert.equal(
+        await page.$(START),
+        null,
+        'Repeated course entry restores the preference directly',
+      );
+      assert.deepEqual(await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()), {
+        level: 'basic',
+        goal: 'practice',
+      });
+      const nextTab = await createPage();
+      await visit(nextTab);
+      await readyQuestions(nextTab);
+      await nextTab.waitForFunction(
+        () => window.FreeBbsLearningStart.currentPreference()?.level === 'basic',
+      );
+      assert.equal(
+        await nextTab.$(START),
+        null,
+        'A new tab restores the saved preference without reasking',
+      );
+      assert.deepEqual(
+        await nextTab.evaluate(() => window.FreeBbsLearningStart.currentPreference()),
+        { level: 'basic', goal: 'practice' },
+      );
+      pass(scene, {
+        explicitSave: true,
+        repeatedEntryDoesNotAsk: true,
+        newTabRestores: true,
+        cancelKeepsPreference: true,
+      });
+      await nextTab.close();
+      await page.close();
+    }
+
+    scene = 'same-page-temporary-goal-guides-Max-without-changing-course-default';
+    if (enabled(scene)) {
+      const page = await createPage();
+      await visit(page, 'tool=continue');
+      await confirmStart(page, 'new', 'concepts');
+      await readyQuestions(page);
+      await closeMax(page);
+      await selectTool(page, 'continue');
+      const requestCount = preview.requests.length;
+      await pointerText(page, '.learning-plan-alternatives button', '探索研究');
+      await page.waitForFunction(
+        () => window.FreeBbsLearningWorkspace?.currentGoal?.() === 'explore',
+      );
+      assert.deepEqual(
+        await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()),
+        { level: 'new', goal: 'concepts' },
+        'A temporary task does not rewrite the saved course default',
+      );
+      assert.equal(
+        preview.requests.length,
+        requestCount,
+        'Switching goals never automatically asks Max',
+      );
+      await openMax(page);
+      await page.type('#knowledge-chat-input', '请结合本次探索方向，给我一个思考提示。');
+      const response = page.waitForResponse(
+        (item) =>
+          new URL(item.url()).pathname === '/api/ai/knowledge/chat' &&
+          item.request().method() === 'POST',
+      );
+      await pointerClick(page, '#knowledge-chat-form button[type="submit"]');
+      assert.equal((await response).status(), 200);
+      const sent = preview.requests[requestCount];
+      assert.equal(sent.context.learningTask.goal, 'explore');
+      assert.equal(sent.trustedCompanionContext.learningTask.goal, 'explore');
+      assert.deepEqual(sent.trustedCompanionContext.learningStartPreference, {
+        level: 'new',
+        goal: 'concepts',
+      });
+      assert.match(sent.trustedCompanionHint, /本页临时目标：探索研究/);
+      assert.match(sent.trustedStrategyHint, /所选目标是“探索研究”/);
+      assert.equal(preview.starsStore.rows.length, 0);
+      await save(page, 'temporary-goal-Max-context');
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await readyQuestions(page);
+      assert.equal(await page.evaluate(() => window.FreeBbsLearningWorkspace.currentGoal()), '');
+      assert.deepEqual(await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()), {
+        level: 'new',
+        goal: 'concepts',
+      });
+      pass(scene, {
+        explicitAiSimulation: true,
+        courseDefaultUnchanged: true,
+        temporaryGoalClearsOnReload: true,
+      });
       await page.close();
     }
 
@@ -405,8 +513,23 @@ async function main() {
       );
       await selectTool(page, 'continue');
       await page.waitForFunction(() =>
-        document.querySelector('.learning-plan-primary')?.textContent.includes('待复核'),
+        [...document.querySelectorAll('.learning-plan-alternatives button')].some((button) =>
+          button.textContent.includes('查看待复核作答'),
+        ),
       );
+      assert.ok(
+        await page.$eval('.learning-plan-primary', (item) =>
+          item.textContent.includes('少提示完成已有题目'),
+        ),
+        'The explicitly chosen practice goal remains primary while pending evidence stays actionable',
+      );
+      await pointerText(page, '.learning-plan-alternatives button', '查看待复核作答');
+      assert.equal(
+        await page.evaluate(() => window.FreeBbsLearningAssessment.getSnapshot().view),
+        'quick',
+        'The pending shortcut opens formal evidence without changing the practice goal',
+      );
+      await selectTool(page, 'continue');
       await pointerText(page, '.learning-plan-alternatives button', '探索研究');
       assert.equal(
         preview.assessmentStore.rows.find((item) => item.question_id === `${POINT}-Q05`).status,
@@ -469,10 +592,7 @@ async function main() {
         'Private annotations do not create a second course body',
       );
       await selectOriginalTextWithPointer(page);
-      await pointerClick(
-        page,
-        '[data-annotation-action="highlight"][data-annotation-color="yellow"]',
-      );
+      await pointerClick(page, '[data-annotation-action="highlight"]');
       await page.waitForSelector('#knowledge-body [data-private-annotation]');
       const annotations = await page.$$eval(
         '#knowledge-body [data-private-annotation]',
@@ -533,7 +653,7 @@ async function main() {
           level: 'familiar',
           goal: 'concepts',
         },
-        'Returning to the previously confirmed student reuses only that account’s course ticket',
+        'Returning to the student restores only that account’s saved browser preference',
       );
       await page.waitForSelector('#knowledge-body [data-private-annotation]');
       pass(scene, {
@@ -649,6 +769,7 @@ async function main() {
       `${JSON.stringify({ status: report.status, scenes: report.sceneCount, output, actualAiRequestCount: report.actualAiRequestCount })}\n`,
     );
   } catch (error) {
+    if (error.portSelection) report.portSelection = error.portSelection;
     report.status = 'failed';
     report.failure = { scene, message: error.message };
     if (activePage && !activePage.isClosed()) {
