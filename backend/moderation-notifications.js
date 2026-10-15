@@ -1,3 +1,41 @@
+const FOCUSED_REVIEW_NOTICE = Object.freeze({
+  title: '讨论内容须负责人重点复核',
+  body: '该内容需要专门人工审核，负责人通过前不发布。请到审核工作台查看具体提示。',
+});
+const LEGACY_FOCUS_TITLES = [
+  '【政治内容】须负责人重点复核',
+  '【心理关怀】须负责人重点复核',
+  '【政治内容／心理关怀】须负责人重点复核',
+];
+const AUTOMATIC_REVIEW_EVENT =
+  /^moderation-auto:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}:(review|blocked)$/;
+
+// Old notifications can outlive the evidence, including already-purged jobs. Hide their
+// copied topic labels immediately on read, even if the cleanup worker has not run yet.
+function moderationNotificationPreview(row) {
+  if (
+    row.kind === 'moderation' &&
+    AUTOMATIC_REVIEW_EVENT.test(row.event_key || '') &&
+    LEGACY_FOCUS_TITLES.includes(row.title)
+  )
+    return FOCUSED_REVIEW_NOTICE;
+  return { title: row.title, body: row.body };
+}
+
+async function purgeLegacyModerationNotificationTopics(db) {
+  // Only replace the preview: keep its audience, link, timestamp and read/unread state.
+  await db.execute(
+    `UPDATE community_notifications SET title = ?, body = ?
+     WHERE kind = 'moderation' AND event_key REGEXP ? AND title IN (?, ?, ?)`,
+    [
+      FOCUSED_REVIEW_NOTICE.title,
+      FOCUSED_REVIEW_NOTICE.body,
+      AUTOMATIC_REVIEW_EVENT.source,
+      ...LEGACY_FOCUS_TITLES,
+    ],
+  );
+}
+
 // Keep notification previews independent of the submitted text, risk labels and reasons.
 // A person who is both author and reviewer receives separate notices for each role.
 async function sendModerationNotice(db, notifications, data) {
@@ -68,4 +106,10 @@ async function notifyAuthor(db, notifications, { id, authorId, status, published
   });
 }
 
-module.exports = { sendModerationNotice, notifyAuthor };
+module.exports = {
+  sendModerationNotice,
+  notifyAuthor,
+  FOCUSED_REVIEW_NOTICE,
+  moderationNotificationPreview,
+  purgeLegacyModerationNotificationTopics,
+};

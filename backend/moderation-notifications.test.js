@@ -1,6 +1,39 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { notifyAuthor, sendModerationNotice } = require('./moderation-notifications');
+const {
+  notifyAuthor,
+  sendModerationNotice,
+  FOCUSED_REVIEW_NOTICE,
+  moderationNotificationPreview,
+} = require('./moderation-notifications');
+
+test('legacy topic previews are generic only for the exact automatic review event', () => {
+  const row = {
+    kind: 'moderation',
+    event_key: 'moderation-auto:01234567-89ab-cdef-0123-456789abcdef:review',
+    title: '【政治内容／心理关怀】须负责人重点复核',
+    body: '该内容触发政治内容／心理关怀人工审核要求。',
+  };
+  for (const state of ['review', 'blocked']) {
+    const item = { ...row, event_key: row.event_key.replace(':review', `:${state}`) };
+    const before = structuredClone(item);
+    assert.deepEqual(moderationNotificationPreview(item), FOCUSED_REVIEW_NOTICE);
+    assert.deepEqual(item, before);
+  }
+  for (const change of [
+    { kind: 'announcement' },
+    { event_key: row.event_key.replace('moderation-auto:', 'moderation-author:') },
+    { event_key: row.event_key.replace(':review', ':published') },
+    { event_key: `${row.event_key}:extra` },
+    { event_key: `prefix:${row.event_key}` },
+    { event_key: 'moderation-auto:invalid:review' },
+    { event_key: null },
+    { title: '讨论内容需要负责人复核', body: '请打开审核工作台查看处理状态。' },
+  ]) {
+    const item = { ...row, ...change };
+    assert.deepEqual(moderationNotificationPreview(item), { title: item.title, body: item.body });
+  }
+});
 
 test('publication only updates the author waiting notice without resetting read state or sending email', async () => {
   for (const existing of [true, false]) {

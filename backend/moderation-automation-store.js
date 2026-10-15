@@ -7,7 +7,12 @@ const { POLICY_VERSION } = require('./moderation-policy');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { validateAssessment } = require('./moderation-ai-client');
 const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
-const { sendModerationNotice, notifyAuthor } = require('./moderation-notifications');
+const {
+  sendModerationNotice,
+  notifyAuthor,
+  FOCUSED_REVIEW_NOTICE,
+  purgeLegacyModerationNotificationTopics,
+} = require('./moderation-notifications');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const schemas = new WeakMap();
@@ -190,12 +195,7 @@ function createModerationAutomationStore({
     );
     const recipients = reviewers.map((item) => Number(item.user_id));
     const imagePublished = state === 'published' && result?.imagesReviewed && result.imageCount > 0;
-    const focus = [
-      result?.reviewFocus?.political ? '政治内容' : null,
-      result?.reviewFocus?.psychological ? '心理关怀' : null,
-    ]
-      .filter(Boolean)
-      .join('／');
+    const focus = result?.reviewFocus?.political || result?.reviewFocus?.psychological;
     const data = {
       submissionId: row.id,
       status: state,
@@ -203,7 +203,7 @@ function createModerationAutomationStore({
       title: imagePublished
         ? '含图内容已自动发布，请负责人单独复核图片'
         : focus && state !== 'published' && state !== 'withdrawn'
-          ? `【${focus}】须负责人重点复核`
+          ? FOCUSED_REVIEW_NOTICE.title
           : state === 'published'
             ? '讨论内容已自动发布，请负责人复核'
             : state === 'withdrawn'
@@ -212,7 +212,7 @@ function createModerationAutomationStore({
       body: imagePublished
         ? '请逐张检查图片，确认后标记已复核；发现问题可撤回整份内容。'
         : focus && state !== 'published' && state !== 'withdrawn'
-          ? `该内容触发${focus}人工审核要求，负责人通过前不发布。关键词或模型提示不等于违规或诊断，请查看专门提示。`
+          ? FOCUSED_REVIEW_NOTICE.body
           : state === 'published'
             ? '请在审核工作台查看结果；负责人可在发现问题后撤回。'
             : '请打开审核工作台查看处理状态。',
@@ -870,6 +870,7 @@ function createModerationAutomationStore({
     return candidates.length;
   }
   async function purge() {
+    await purgeLegacyModerationNotificationTopics(pool);
     const [candidates] = await pool.execute(
       'SELECT id, submission_id FROM moderation_auto_jobs WHERE purged_at IS NULL AND expires_at <= NOW(3) ORDER BY expires_at LIMIT 100',
     );

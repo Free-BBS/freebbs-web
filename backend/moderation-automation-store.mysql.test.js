@@ -1176,11 +1176,8 @@ test(
             'SELECT title FROM community_notifications WHERE event_key = ?',
             [`moderation-auto:${entry.claimed.id}:review`],
           );
-          assert.ok(
-            notices.every((item) =>
-              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
-            ),
-          );
+          assert.ok(notices.every((item) => item.title.includes('重点复核')));
+          assert.doesNotMatch(JSON.stringify(notices), /政治内容|心理关怀/);
         }
       },
     );
@@ -1202,11 +1199,8 @@ test(
             'SELECT title FROM community_notifications WHERE event_key = ?',
             [`moderation-auto:${entry.claimed.id}:review`],
           );
-          assert.ok(
-            notices.every((item) =>
-              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
-            ),
-          );
+          assert.ok(notices.every((item) => item.title.includes('重点复核')));
+          assert.doesNotMatch(JSON.stringify(notices), /政治内容|心理关怀/);
         }
       },
     );
@@ -1243,8 +1237,8 @@ test(
             [`moderation-auto:${entry.claimed.id}:review`],
           );
           assert.equal(notices.length, 3);
-          assert.ok(notices.every((item) => item.title.includes('政治内容')));
-          assert.doesNotMatch(JSON.stringify(notices), /习近平|借阅/);
+          assert.ok(notices.every((item) => item.title.includes('重点复核')));
+          assert.doesNotMatch(JSON.stringify(notices), /政治内容|心理关怀|习近平|借阅/);
           const [authorNotices] = await pool.execute(
             'SELECT title, body FROM community_notifications WHERE recipient_id = 2 AND event_key = ?',
             [`moderation-author:${entry.submission.id}:pending`],
@@ -1291,7 +1285,7 @@ test(
       },
     );
     await t.test(
-      'a local-only dual-focus result keeps both prominent notices without claiming a model decision',
+      'a local-only dual-focus result keeps both workbench topics and a generic prominent notice',
       async () => {
         const body = input();
         body.payload.content = '课程同时涉及政治制度与心理健康，请问如何寻找参考教材？';
@@ -1317,12 +1311,8 @@ test(
           [`moderation-auto:${entry.claimed.id}:review`],
         );
         assert.equal(notices.length, 3);
-        assert.ok(
-          notices.every(
-            (item) => item.title.includes('政治内容') && item.title.includes('心理关怀'),
-          ),
-        );
-        assert.doesNotMatch(JSON.stringify(notices), /参考教材|课程同时/);
+        assert.ok(notices.every((item) => item.title.includes('重点复核')));
+        assert.doesNotMatch(JSON.stringify(notices), /政治内容|心理关怀|参考教材|课程同时/);
         assert.equal((await row(entry.submission.id)).published_id, null);
       },
     );
@@ -1394,12 +1384,8 @@ test(
             'SELECT title,body FROM community_notifications WHERE link LIKE ?',
             [`%${entry.submission.id}%`],
           );
-          assert.ok(
-            notices.some((item) =>
-              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
-            ),
-          );
-          assert.doesNotMatch(JSON.stringify(notices), /最高权力|提不起兴趣/);
+          assert.ok(notices.some((item) => item.title.includes('重点复核')));
+          assert.doesNotMatch(JSON.stringify(notices), /政治内容|心理关怀|最高权力|提不起兴趣/);
         }
       },
     );
@@ -1420,6 +1406,100 @@ test(
           assert.notEqual(outcome.state, 'published');
           assert.equal(outcome.result.manualReview.validation, 'failed');
           assert.equal((await row(entry.submission.id)).published_id, null);
+        }
+      },
+    );
+    await t.test(
+      'legacy topic notices are scrubbed for live, expired and already-purged evidence without changing access or ordinary notices',
+      async () => {
+        const entries = [];
+        for (const [label, content, lifetime] of [
+          ['政治内容', '课程讨论政治制度。', 'live'],
+          ['心理关怀', '想了解心理咨询服务。', 'expired'],
+          ['政治内容／心理关怀', '课程讨论政治制度与心理健康。', 'purged'],
+        ]) {
+          const body = input();
+          body.payload.content = content;
+          const entry = await ready(body);
+          assert.equal((await store.finish(entry.claimed, allow(entry))).state, 'review');
+          const eventKey = `moderation-auto:${entry.claimed.id}:review`;
+          await pool.execute(
+            "UPDATE community_notifications SET title = ?, body = ?, read_at = '2026-10-01 12:00:00' WHERE event_key = ?",
+            [`【${label}】须负责人重点复核`, `该内容触发${label}人工审核要求。`, eventKey],
+          );
+          const [before] = await pool.execute(
+            'SELECT * FROM community_notifications WHERE event_key = ? ORDER BY recipient_id',
+            [eventKey],
+          );
+          assert.deepEqual(
+            before.map((item) => Number(item.recipient_id)),
+            [1, 3, 4],
+          );
+          if (lifetime !== 'live') {
+            await pool.execute(
+              'UPDATE moderation_auto_jobs SET expires_at = DATE_SUB(NOW(3), INTERVAL 1 SECOND) WHERE id = ?',
+              [entry.claimed.id],
+            );
+            if (lifetime === 'purged')
+              await pool.execute(
+                'UPDATE moderation_auto_jobs SET purged_at = NOW(3), result_json = NULL, input_meta_json = NULL WHERE id = ?',
+                [entry.claimed.id],
+              );
+          }
+          entries.push({ entry, eventKey, before, lifetime });
+        }
+        const controls = [
+          ['announcement', `moderation-auto:${entries[0].entry.claimed.id}:review`],
+          ['moderation', `moderation-auto:${entries[0].entry.claimed.id}:published`],
+          ['moderation', `moderation-auto:${entries[0].entry.claimed.id}:review:extra`],
+          ['moderation', 'moderation-auto:invalid:review'],
+          ['moderation', `moderation-author:${crypto.randomUUID()}:pending`],
+        ];
+        for (const [kind, eventKey] of controls)
+          await pool.execute(
+            'INSERT INTO community_notifications (recipient_id, kind, title, body, link, event_key) VALUES (2, ?, ?, ?, ?, ?)',
+            [kind, '【政治内容】须负责人重点复核', '普通通知对照', '/discussion', eventKey],
+          );
+        const [unrelatedBefore] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE recipient_id = 2 ORDER BY id',
+        );
+        enabled = false;
+        try {
+          await store.purge();
+          for (const { entry, eventKey, before, lifetime } of entries) {
+            const [after] = await pool.execute(
+              'SELECT * FROM community_notifications WHERE event_key = ? AND kind = ? ORDER BY recipient_id',
+              [eventKey, 'moderation'],
+            );
+            assert.deepEqual(
+              after,
+              before.map((item) => ({
+                ...item,
+                title: '讨论内容须负责人重点复核',
+                body: '该内容需要专门人工审核，负责人通过前不发布。请到审核工作台查看具体提示。',
+              })),
+            );
+            assert.doesNotMatch(JSON.stringify(after), /政治内容|心理关怀/);
+            const details = await store.get({ id: entry.submission.id, reviewerId: 1 });
+            if (lifetime === 'live') assert.equal(details.result.reviewFocus.political, true);
+            else assert.equal(details.result, null);
+            await assert.rejects(
+              store.get({ id: entry.submission.id, reviewerId: 2 }),
+              (error) => error.status === 403,
+            );
+          }
+          const [unrelatedAfter] = await pool.execute(
+            'SELECT * FROM community_notifications WHERE recipient_id = 2 ORDER BY id',
+          );
+          assert.deepEqual(unrelatedAfter, unrelatedBefore);
+          const [once] = await pool.query('SELECT * FROM community_notifications ORDER BY id');
+          await store.purge();
+          assert.deepEqual(
+            (await pool.query('SELECT * FROM community_notifications ORDER BY id'))[0],
+            once,
+          );
+        } finally {
+          enabled = true;
         }
       },
     );
