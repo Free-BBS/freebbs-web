@@ -30,9 +30,10 @@ FreeBBS 发展端是挂载在主站 `/development/` 路径下的独立业务子�
 
 ## 五分钟本地预览
 
-要求 Node.js `>=20.19.0`。在仓库根目录执行：
+要求 Node.js `>=20.19.0`。从主站仓库根目录进入发展端 npm 工作区，再执行以下命令；如果已经在 `development/`，省略第一行。
 
 ```powershell
+cd development
 npm ci
 npm run dev
 ```
@@ -45,7 +46,7 @@ npm run dev
 
 本地默认使用可重置的 `memory + demo` 数据。完整的演示身份、MySQL 联调和 Windows 常见问题见[本地开发与完整预览](./docs/local-development.md)。
 
-提交前运行：
+提交前在同一个发展端工作区运行：
 
 ```powershell
 npm run check
