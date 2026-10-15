@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import {
   SOCIAL_ORGANIZATIONS,
-  organizationForRole,
+  departmentsForRoles,
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
   type ScopeRef,
   type UserContext,
 } from '@freebbs-development/contracts';
@@ -61,10 +63,9 @@ const matches = (pattern: string, value: string) =>
   pattern === value ||
   (pattern.endsWith('.*') && value.startsWith(pattern.slice(0, -1)));
 const sameScope = (left: ScopeRef | undefined, right: ScopeRef) =>
-  left === undefined || (left.type === right.type && left.id === right.id);
+  left === undefined || (left.type === right.type && (left.id === '*' || left.id === right.id));
 function permitted(user: PageUser | null, action: string, scope: ScopeRef): boolean {
-  if (user === null) return false;
-  if (isBusinessAdmin(user)) return true;
+  if (user === null || user.previewing) return false;
   const policies = (user.policies ?? []).filter(
     (policy) =>
       policy.action !== '*' &&
@@ -74,7 +75,7 @@ function permitted(user: PageUser | null, action: string, scope: ScopeRef): bool
   );
   return (
     !policies.some((policy) => policy.effect === 'deny') &&
-    policies.some((policy) => policy.effect === 'allow')
+    (isBusinessAdmin(user) || policies.some((policy) => policy.effect === 'allow'))
   );
 }
 
@@ -84,15 +85,20 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
   const user = (
     suppliedUser === undefined ? (auth?.user ?? null) : suppliedUser
   ) as PageUser | null;
-  const managesAcrossOrganizations =
-    isBusinessAdmin(user) ||
-    user?.roles.some((role) => organizationForRole(role)?.level === 'lead') === true;
+  const managesAcrossOrganizations = isGlobalOrganizationBusinessSupervisor(user);
   const organizations = useMemo(
     () =>
       managesAcrossOrganizations
         ? SOCIAL_ORGANIZATIONS
-        : SOCIAL_ORGANIZATIONS.filter((organization) =>
-            user?.tags.some((tag) => tag.key === organization.tagKey),
+        : SOCIAL_ORGANIZATIONS.filter(
+            (organization) =>
+              user?.tags.some((tag) => tag.key === organization.tagKey) ||
+              organizationMembershipsForRoles(user?.roles ?? []).some(
+                ({ organizationId }) => organizationId === organization.id,
+              ) ||
+              departmentsForRoles(user?.roles ?? []).some(
+                ({ organizationId }) => organizationId === organization.id,
+              ),
           ),
     [managesAcrossOrganizations, user],
   );

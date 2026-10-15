@@ -44,7 +44,8 @@ describe('AdminPage shell', () => {
     mockRequest.mockImplementation((path: string) => {
       if (path === '/admin/business-admin-bootstrap')
         return Promise.resolve({ canInitialize: false, globalAdminCount: 1 });
-      if (path === '/admin/development-users') return Promise.resolve([directoryUser]);
+      if (path === '/admin/development-users?page=1&pageSize=20')
+        return Promise.resolve({ items: [directoryUser], page: 1, pageSize: 20, total: 1 });
       if (path === '/sports/teams') return Promise.resolve([]);
       if (path.startsWith('/admin/audit-logs'))
         return Promise.resolve({ items: [], page: 1, pageSize: 20, total: 0 });
@@ -57,6 +58,7 @@ describe('AdminPage shell', () => {
 
     expect(screen.getByRole('heading', { name: '管理员模块' })).toBeInTheDocument();
     expect(await screen.findAllByText(/2023010567/)).not.toHaveLength(0);
+    expect(mockRequest).toHaveBeenCalledWith('/admin/development-users?page=1&pageSize=20');
     expect(screen.queryByRole('tab', { name: 'Tag 定义' })).not.toBeInTheDocument();
     expect(screen.queryByText('运行状态')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '操作记录' })).toBeInTheDocument();
@@ -80,7 +82,8 @@ describe('AdminPage shell', () => {
   it('initializes the first platform administrator only after selecting a user and confirming', async () => {
     let initialized = false;
     mockRequest.mockImplementation((path: string, options?: { method?: string }) => {
-      if (path === '/admin/development-users') return Promise.resolve([directoryUser]);
+      if (path === '/admin/development-users?page=1&pageSize=20')
+        return Promise.resolve({ items: [directoryUser], page: 1, pageSize: 20, total: 1 });
       if (path === '/admin/business-admin-bootstrap') {
         if (options?.method === 'POST') {
           initialized = true;
@@ -112,7 +115,8 @@ describe('AdminPage shell', () => {
 
   it('keeps the selected first administrator and reason when initialization fails', async () => {
     mockRequest.mockImplementation((path: string, options?: { method?: string }) => {
-      if (path === '/admin/development-users') return Promise.resolve([directoryUser]);
+      if (path === '/admin/development-users?page=1&pageSize=20')
+        return Promise.resolve({ items: [directoryUser], page: 1, pageSize: 20, total: 1 });
       if (path === '/admin/business-admin-bootstrap') {
         return options?.method === 'POST'
           ? Promise.reject(new Error('任命冲突，请刷新'))

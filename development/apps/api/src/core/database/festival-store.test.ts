@@ -23,12 +23,19 @@ const input: NewRecord<FestivalSubmissionRecord> = {
 };
 
 describe('festival reviewer contract', () => {
-  it('allows exactly the arts reviewers, Youth League lead and platform administrator', () => {
+  it('allows arts reviewers, counselors, union supervisors and platform administrators', () => {
     const allowed = new Set([
       'department.arts_member',
       'department.arts_director',
       'domain.arts_lead',
       'affiliation.tuanwei_lead',
+      'counselor.youth_league_secretary',
+      'counselor.youth_league',
+      'counselor.practice',
+      'counselor.innovation',
+      'counselor.student_development',
+      'student_union.executive_president',
+      'student_union.presidium',
       'platform.admin',
     ]);
     expect(contracts.canReviewFestival).toBeTypeOf('function');

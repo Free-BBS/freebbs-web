@@ -232,7 +232,7 @@ const searchFields: Record<CollectionName, string[]> = {
   liaisonTeamMembers: ['problemId', 'teamId', 'memberUid'],
   liaisonPosts: ['problemId', 'teamId', 'authorUid', 'body'],
   liaisonOutcomes: ['problemId', 'teamId', 'title', 'description', 'linkUrl'],
-  financeRecords: ['title', 'kind'],
+  financeRecords: ['title', 'kind', 'activityId', 'organizationId'],
 };
 
 function collectionDefaults(collection: CollectionName): Record<string, unknown> {
@@ -1488,6 +1488,42 @@ class MemoryRepository<T extends StoredRecord> implements RecordRepository<T> {
     return this.filteredRecords(filters);
   }
 
+  async summarize(filters: ListFilters): Promise<import('./types.js').FinanceSummary[]> {
+    if (this.collection !== 'financeRecords')
+      throw new Error('Finance aggregation requires finance records');
+    const result = new Map<string | null, import('./types.js').FinanceSummary>();
+    for (const record of this.filteredRecords(filters) as unknown as FinanceRecord[]) {
+      const organizationId = record.organizationId ?? null;
+      let summary = result.get(organizationId);
+      if (!summary) {
+        summary = {
+          organizationId,
+          approvedBudget: 0,
+          spent: 0,
+          pending: 0,
+          remaining: 0,
+          usagePercent: 0,
+        };
+        result.set(organizationId, summary);
+      }
+      const approved =
+        record.status === 'approved' ||
+        (record.status === 'archived' && record.reviewDecision === 'approved');
+      if (approved && record.kind === 'budget') summary.approvedBudget += record.amountCents;
+      if (approved && record.kind === 'settlement') summary.spent += record.amountCents;
+      if (record.status === 'submitted' && record.kind === 'settlement')
+        summary.pending += record.amountCents;
+    }
+    return [...result.values()].map((summary) => ({
+      ...summary,
+      remaining: summary.approvedBudget - summary.spent,
+      usagePercent:
+        summary.approvedBudget === 0
+          ? 0
+          : Math.min(100, Math.round((summary.spent / summary.approvedBudget) * 100)),
+    }));
+  }
+
   async countActiveByProblemIds(problemIds: readonly string[]): Promise<Record<string, number>> {
     if (this.collection !== 'liaisonTeams') {
       throw new Error('Team aggregation requires the liaison team repository');
@@ -1511,11 +1547,40 @@ class MemoryRepository<T extends StoredRecord> implements RecordRepository<T> {
       .filter((record) => {
         const fields = record as unknown as Record<string, unknown>;
         return (
-          ['category', 'season', 'organizationId', 'standingActivity'].every(
+          [
+            'subjectUid',
+            'roleKey',
+            'tagKey',
+            'key',
+            'uid',
+            'accessLevel',
+            'category',
+            'season',
+            'organizationId',
+            'standingActivity',
+          ].every(
             (key) =>
               filters[key as keyof ListFilters] === undefined ||
               fields[key] === filters[key as keyof ListFilters],
           ) &&
+          (filters.organizationIds === undefined ||
+            filters.organizationIds.includes(
+              fields.organizationId == null ? null : String(fields.organizationId),
+            )) &&
+          (filters.subjectUids === undefined ||
+            filters.subjectUids.includes(String(fields.subjectUid))) &&
+          (filters.uids === undefined || filters.uids.includes(String(fields.uid))) &&
+          (filters.ids === undefined || filters.ids.includes(record.id)) &&
+          (filters.identity === undefined ||
+            fields.subjectUid === filters.identity.uid ||
+            Boolean(
+              filters.identity.studentId && fields.studentId === filters.identity.studentId,
+            ) ||
+            Boolean(
+              filters.identity.username &&
+              String(fields.username ?? '').toLocaleLowerCase() ===
+                filters.identity.username.toLocaleLowerCase(),
+            )) &&
           (filters.tag === undefined ||
             (Array.isArray(fields.tags) && fields.tags.includes(filters.tag)))
         );
@@ -1523,6 +1588,13 @@ class MemoryRepository<T extends StoredRecord> implements RecordRepository<T> {
       .filter((record) => {
         if (!query) return true;
         const searchable = record as unknown as Record<string, unknown>;
+        if (
+          this.collection === 'financeRecords' &&
+          (filters.queryOrganizationIds?.includes(String(searchable.organizationId)) ||
+            (filters.queryLegacyOrganization && searchable.organizationId == null) ||
+            `${record.scope.type} ${record.scope.id}`.toLocaleLowerCase().includes(query))
+        )
+          return true;
         // Search each decoded tag, never JSON syntax or separators between tags.
         if (
           (this.collection === 'knowledge' || this.collection === 'liaisonProblems') &&
@@ -2090,7 +2162,7 @@ function buildStore(holder: StateHolder, inTransaction = false): DevelopmentStor
     liaisonTeamMembers: repository('liaisonTeamMembers'),
     liaisonPosts: repository('liaisonPosts'),
     liaisonOutcomes: repository('liaisonOutcomes'),
-    financeRecords: repository('financeRecords'),
+    financeRecords: repository('financeRecords') as import('./types.js').FinanceRecordRepository,
   };
   return store;
 }

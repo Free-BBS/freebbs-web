@@ -1,6 +1,10 @@
 import { validateTagScope } from '@freebbs-development/contracts';
 import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
-import { ALL_PERMISSION_RULES, BASE_STUDENT_PERMISSIONS } from './permission-catalog.js';
+import {
+  ALL_PERMISSION_RULES,
+  BASE_STUDENT_PERMISSIONS,
+  ORGANIZATION_BUSINESS_DEFAULTS,
+} from './permission-catalog.js';
 import type { DevelopmentStore, PermissionRecord } from '../database/types.js';
 import type { AuthorizationContext, AuthorizationPolicy, PermissionRule } from './policy.js';
 
@@ -44,6 +48,30 @@ function catalogDefinition(rule: PermissionRule): boolean {
 function actionModule(action: string): string | null {
   const separator = action.indexOf('.');
   return separator > 0 ? action.slice(0, separator) : null;
+}
+
+function matches(pattern: string, value: string): boolean {
+  return (
+    pattern === '*' ||
+    pattern === value ||
+    (pattern.endsWith('.*') && value.startsWith(pattern.slice(0, -1)))
+  );
+}
+
+function overlaps(left: PermissionRule, right: PermissionRule): boolean {
+  return (
+    (matches(left.action, right.action) || matches(right.action, left.action)) &&
+    (matches(left.resource, right.resource) || matches(right.resource, left.resource))
+  );
+}
+
+function scopesOverlap(left: ScopeRef, right: ScopeRef | undefined): boolean {
+  return (
+    right === undefined ||
+    isGlobal(left) ||
+    isGlobal(right) ||
+    (left.type === right.type && (left.id === '*' || right.id === '*' || left.id === right.id))
+  );
 }
 
 function permissionCandidates(
@@ -100,7 +128,33 @@ export async function loadAuthorizationContext(
       .filter(({ enabled, status }) => enabled && status === 'enabled')
       .map(({ moduleId }) => moduleId),
   );
-  const activePermissions = permissions.filter(
+  // Missing definitions introduced by this policy remain usable before a lead login.
+  // Existing inactive definitions, including wildcard definitions, always govern.
+  const compatibilityDefinitions: PermissionRecord[] = [];
+  for (const rule of Object.values(ORGANIZATION_BUSINESS_DEFAULTS).flat()) {
+    if (
+      [...permissions, ...compatibilityDefinitions].some(
+        (permission) =>
+          identity(permission.action, permission.resource) === identity(rule.action, rule.resource),
+      )
+    )
+      continue;
+    if (
+      permissions.some((permission) => permission.status !== 'active' && overlaps(permission, rule))
+    )
+      continue;
+    compatibilityDefinitions.push({
+      id: `compatibility:${rule.action}:${rule.resource}`,
+      action: rule.action as PermissionRecord['action'],
+      resource: rule.resource,
+      status: 'active',
+      ownerUid: 'organization-policy',
+      scope: publicScope,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    });
+  }
+  const activePermissions = [...permissions, ...compatibilityDefinitions].filter(
     (permission) =>
       permission.status === 'active' &&
       catalogDefinition(permission) &&
@@ -110,6 +164,16 @@ export async function loadAuthorizationContext(
     activePermissions.map(({ action, resource }) => identity(action, resource)),
   );
   const policies: AuthorizationPolicy[] = [];
+  for (const permission of permissions) {
+    if (permission.status === 'active' || !catalogDefinition(permission)) continue;
+    if (permission.action === '*' || permission.action.endsWith('.*')) continue;
+    policies.push({
+      id: `inactive-definition:${permission.id}`,
+      action: permission.action,
+      resource: permission.resource,
+      effect: 'deny',
+    });
+  }
 
   for (const baseline of BASE_STUDENT_PERMISSIONS) {
     if (!permissionKeys.has(identity(baseline.action, baseline.resource))) continue;
@@ -132,7 +196,22 @@ export async function loadAuthorizationContext(
       activeRoles.has(assignment.roleKey) &&
       isCurrent(assignment.expiresAt, now),
   );
-  context.roles = [...new Set(currentRoleAssignments.map(({ roleKey }) => roleKey))];
+  context.roles = [
+    ...new Set(
+      currentRoleAssignments
+        .filter(
+          (assignment) =>
+            ![
+              'counselor.youth_league_secretary',
+              'counselor.youth_league',
+              'student_union.executive_president',
+              'student_union.presidium',
+              'science_association.chair',
+            ].includes(assignment.roleKey) || isGlobal(assignment.scope),
+        )
+        .map(({ roleKey }) => roleKey),
+    ),
+  ];
   const businessAdmin = currentRoleAssignments.some(
     (assignment) => assignment.roleKey === 'platform.admin' && isGlobal(assignment.scope),
   );
@@ -140,27 +219,35 @@ export async function loadAuthorizationContext(
     (binding) => binding.status === 'active' && catalogDefinition(binding),
   );
   for (const assignment of currentRoleAssignments) {
-    // New counselor finance defaults work on existing stores. Any governed
-    // finance row (including inactive rows) suppresses this runtime default.
-    if (
-      ['counselor.youth_league_secretary', 'counselor.youth_league'].includes(assignment.roleKey) &&
-      !roleBindings.some(
-        (binding) =>
-          binding.roleKey === assignment.roleKey && binding.action.startsWith('finance.'),
+    for (const rule of ORGANIZATION_BUSINESS_DEFAULTS[assignment.roleKey] ?? []) {
+      if (
+        permissions.some(
+          (permission) => permission.status !== 'active' && overlaps(permission, rule),
+        )
       )
-    ) {
-      for (const permission of activePermissions.filter(
-        (permission) => permission.action === 'finance.*' && permission.resource === '*',
-      )) {
-        policies.push({
-          id: `counselor-finance:${assignment.id}:${permission.id}`,
-          action: permission.action,
-          resource: permission.resource,
-          effect: 'allow',
-          expiresAt: assignment.expiresAt,
-          ...(isGlobal(assignment.scope) ? {} : { scope: assignment.scope }),
-        });
-      }
+        continue;
+      if (
+        roleBindings.some(
+          (binding) =>
+            binding.roleKey === assignment.roleKey &&
+            (['events.department_home.update', 'events.workspace.update'].includes(rule.action) ||
+              scopesOverlap(binding.scope, rule.scope)) &&
+            (binding.status !== 'active'
+              ? overlaps(binding, rule)
+              : matches(binding.action, rule.action) && matches(binding.resource, rule.resource)),
+        )
+      )
+        continue;
+      const scope = combineScopes(assignment.scope, rule.scope ?? publicScope);
+      if (scope === null || !permissionKeys.has(identity(rule.action, rule.resource))) continue;
+      policies.push({
+        id: `organization-supervisor:${assignment.id}:${rule.action}:${rule.resource}:${scope?.type ?? 'public'}:${scope?.id ?? '*'}`,
+        action: rule.action,
+        resource: rule.resource,
+        effect: 'allow',
+        expiresAt: assignment.expiresAt,
+        ...(scope === undefined ? {} : { scope }),
+      });
     }
     // Existing databases can retain legacy lead wildcard rows. The reserved lead
     // role never supplies business permissions, even before catalog reconciliation.

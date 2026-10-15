@@ -46,6 +46,23 @@ const space: CollaborationSpace = {
 beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'student', roles: [] } }));
 
 describe('editing target refresh', () => {
+  it('retains the original edit version during unrelated refreshes', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(false);
+    const original = { ...space, kind: 'materials' as const, entries: [{ ...entry, revision: 2 }] };
+    const page = render(<EntryEditor space={original} busy={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('编辑现有记录'), { target: { value: entry.id } });
+    fireEvent.change(screen.getByLabelText('内容与说明'), { target: { value: 'My draft' } });
+    page.rerender(
+      <EntryEditor
+        space={{ ...original, revision: 9, entries: [{ ...entry, revision: 4 }] }}
+        busy={false}
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ entryRevision: 2, text: 'My draft' });
+  });
   it.each([false, true])(
     'creates a new row with the preserved draft after the selected row is deleted (other rows: %s)',
     async (hasOtherRows) => {

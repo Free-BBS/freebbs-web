@@ -76,7 +76,12 @@ export function InspectorPanel({
     );
   };
   return (
-    <aside className="builder-inspector" aria-label="属性编辑器">
+    <aside
+      id="builder-inspector"
+      tabIndex={-1}
+      className="builder-inspector"
+      aria-label="属性编辑器"
+    >
       <header>
         <span>03</span>
         <div>

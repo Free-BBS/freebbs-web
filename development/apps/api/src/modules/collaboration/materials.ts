@@ -9,7 +9,12 @@ import { z } from 'zod';
 import type { CollaborationSpace, UserContext } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { canReviewEntry, manages, type CollaborationOptions } from './router.js';
+import {
+  canReviewEntry,
+  currentCollaborationActor,
+  manages,
+  type CollaborationOptions,
+} from './router.js';
 
 export function safeArchiveName(value: string): string {
   const normalized = value.normalize('NFC').trim();
@@ -45,7 +50,7 @@ export function createMaterialsRouter(options: CollaborationOptions) {
       (!options.uploadDirectory || !isAbsolute(options.uploadDirectory))
     )
       throw new HttpError(503, 'storage_not_configured', '材料存储尚未配置');
-    return identity.user;
+    return { ...identity.user };
   }
   function revision(value: unknown) {
     const result = z.coerce.number().int().min(1).safeParse(value);
@@ -58,8 +63,9 @@ export function createMaterialsRouter(options: CollaborationOptions) {
     const entry = entryId ? space.entries.find((value) => value.id === entryId) : undefined;
     if (entryId && !entry) throw new HttpError(404, 'not_found', '未找到记录');
     if (
-      !manages(space, user) &&
-      (!entry || (entry.uid !== user.uid && !canReviewEntry(space, entry, user)))
+      !(await manages(space, user, options.store)) &&
+      (!entry ||
+        (entry.uid !== user.uid && !(await canReviewEntry(space, entry, user, options.store))))
     )
       throw new HttpError(403, 'forbidden', '无法访问这份材料');
     return { space, entry };
@@ -84,7 +90,6 @@ export function createMaterialsRouter(options: CollaborationOptions) {
         ),
       ),
     async (request, response) => {
-      const user = response.locals.user as UserContext;
       const currentRevision = revision(request.body.revision);
       const files = request.files as Express.Multer.File[];
       if (!files?.length) throw new HttpError(400, 'missing_files', '请选择文件');
@@ -97,9 +102,13 @@ export function createMaterialsRouter(options: CollaborationOptions) {
       const written: string[] = [];
       try {
         const result = await storage.change(String(request.params.id), async (space) => {
+          const user = await currentCollaborationActor(
+            response.locals.user as UserContext,
+            options.store,
+          );
           if (!space) throw new HttpError(404, 'not_found', '未找到空间');
           const entry = space.entries.find((value) => value.id === request.params.entryId);
-          if (!entry || (entry.uid !== user.uid && !manages(space, user)))
+          if (!entry || (entry.uid !== user.uid && !(await manages(space, user, options.store))))
             throw new HttpError(403, 'forbidden', '不能上传到此记录');
           if (space.revision !== currentRevision)
             throw new HttpError(409, 'revision_conflict', '记录已更新，请刷新后上传');
@@ -120,7 +129,9 @@ export function createMaterialsRouter(options: CollaborationOptions) {
           }
           const at = new Date().toISOString();
           entry.updatedAt = at;
+          entry.revision = (entry.revision ?? 1) + 1;
           space.updatedAt = at;
+          space.definitionRevision ??= space.revision;
           space.revision++;
           space.history.push({ uid: user.uid, at, action: 'files_uploaded', entryId: entry.id });
           space.history = space.history.slice(-500);

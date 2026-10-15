@@ -52,6 +52,20 @@ function identity(roles: RoleKey[], businessAdmin = false) {
 }
 
 describe('collaboration business administrator boundary', () => {
+  it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+    'offers all departments to global supervisor %s',
+    (role) => {
+      identity([role]);
+      render(
+        <MemoryRouter>
+          <SpaceEditor existing={space} busy={false} onSave={vi.fn()} onCancel={vi.fn()} />
+        </MemoryRouter>,
+      );
+      expect(within(screen.getByLabelText('所属部门')).getAllByRole('option')).toHaveLength(
+        DEPARTMENT_DIRECTORY.length + 1,
+      );
+    },
+  );
   it('offers platform administrators every department in the space editor', () => {
     identity(['platform.admin'], true);
     render(

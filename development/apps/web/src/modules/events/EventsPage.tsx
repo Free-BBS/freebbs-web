@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Link } from 'react-router-dom';
 
 import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
-import { departmentsForRoles, organizationForRole } from '@freebbs-development/contracts';
+import {
+  departmentsForRoles,
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
+  SOCIAL_ORGANIZATIONS,
+} from '@freebbs-development/contracts';
 import festivalStageCover from '../../assets/events/student-festival-stage.webp';
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
@@ -111,27 +116,90 @@ function matches(pattern: string, value: string): boolean {
   );
 }
 function sameScope(left: ScopeRef | undefined, right: ScopeRef): boolean {
-  return left === undefined || (left.type === right.type && left.id === right.id);
+  return (
+    left === undefined || (left.type === right.type && (left.id === '*' || left.id === right.id))
+  );
 }
 function permitted(
   user: PageUser | null,
   action: string,
   resource: 'activity' | 'activity_registration',
   scope: ScopeRef,
+  organizationId?: string | null,
 ): boolean {
-  if (user === null) return false;
+  if (user === null || user.previewing) return false;
   const policies = (user.policies ?? []).filter(
     (policy) =>
       matches(policy.action, action) &&
       matches(policy.resource, resource) &&
-      sameScope(policy.scope, scope),
+      (sameScope(policy.scope, scope) ||
+        (organizationId != null &&
+          sameScope(policy.scope, { type: 'social_organization', id: organizationId }))),
   );
   if (policies.some((policy) => policy.effect === 'deny')) return false;
   return policies.some((policy) => policy.effect === 'allow');
 }
 
 export function canCreateActivity(user: PageUser | null): boolean {
-  return permitted(user, 'events.create', 'activity', publicScope);
+  const organizations = activityOrganizations(user);
+  return organizations.length
+    ? organizations.some((id) => permitted(user, 'events.create', 'activity', publicScope, id))
+    : permitted(user, 'events.create', 'activity', publicScope);
+}
+
+function activityOrganizations(user: PageUser | null): string[] {
+  if (!user) return [];
+  if (isGlobalOrganizationBusinessSupervisor(user)) return SOCIAL_ORGANIZATIONS.map(({ id }) => id);
+  const memberships = organizationMembershipsForRoles(user.roles);
+  const departments = departmentsForRoles(user.roles);
+  return SOCIAL_ORGANIZATIONS.filter(
+    (organization) =>
+      memberships.some(({ organizationId }) => organizationId === organization.id) ||
+      departments.some(({ organizationId }) => organizationId === organization.id) ||
+      user.tags.some(({ key }) => key === organization.tagKey),
+  ).map(({ id }) => id);
+}
+
+function managementPermissions(user: PageUser | null, activity: ActivityRecord) {
+  const memberships = organizationMembershipsForRoles(user?.roles ?? []);
+  const unrestrictedOrganization =
+    activity.organizationId == null || isGlobalOrganizationBusinessSupervisor(user);
+  const canUpdateOrganization =
+    unrestrictedOrganization ||
+    memberships.some(
+      (membership) =>
+        membership.organizationId === activity.organizationId &&
+        (membership.level === 'director' || membership.level === 'lead'),
+    );
+  const belongsToOrganization =
+    unrestrictedOrganization ||
+    memberships.some((membership) => membership?.organizationId === activity.organizationId);
+  const canUpdate =
+    canUpdateOrganization &&
+    permitted(user, 'events.update', 'activity', activity.scope, activity.organizationId);
+  const canCreateOwn =
+    belongsToOrganization &&
+    activity.ownerUid === user?.uid &&
+    permitted(user, 'events.create', 'activity', activity.scope, activity.organizationId);
+  return {
+    canUpdate,
+    canCreateOwn,
+    canOpenOrganizationWorkspace:
+      activity.organizationId != null &&
+      (unrestrictedOrganization ||
+        memberships.some((membership) => membership.organizationId === activity.organizationId)),
+    canApprove:
+      canUpdateOrganization &&
+      permitted(user, 'events.approve', 'activity', activity.scope, activity.organizationId),
+    canSupport: permitted(
+      user,
+      'events.technical_support',
+      'activity',
+      activity.scope,
+      activity.organizationId,
+    ),
+    canEdit: canUpdate || (canCreateOwn && ['draft', 'rejected'].includes(activity.status)),
+  };
 }
 
 export function EventsPage({
@@ -173,20 +241,9 @@ export function EventsPage({
   const [createOrganizationId, setCreateOrganizationId] = useState('');
   const [createStanding, setCreateStanding] = useState(false);
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
-  const organizationOptions = [
-    ...new Set([
-      ...(user?.tags ?? [])
-        .map(({ key }) => (key.startsWith('social_org.') ? key.slice('social_org.'.length) : null))
-        .filter((value): value is string => value !== null),
-      ...(user?.roles ?? []).flatMap((role) => {
-        const organization = organizationForRole(role);
-        return organization ? [organization.organizationId] : [];
-      }),
-      ...departmentsForRoles(user?.roles ?? []).flatMap((department) =>
-        department.organizationId ? [department.organizationId] : [],
-      ),
-    ]),
-  ];
+  const organizationOptions = activityOrganizations(user).filter((id) =>
+    permitted(user, 'events.create', 'activity', publicScope, id),
+  );
   const canCreate = canCreateActivity(user);
   useEffect(() => {
     if ((initialCreate || createRequest > 0) && canCreate) setCreateDrawerOpen(true);
@@ -275,8 +332,14 @@ export function EventsPage({
           id: activity.id,
           title,
           description,
-          startsAt: localDateTimeInputToUtcInstant(editStartsAt),
-          endsAt: localDateTimeInputToUtcInstant(editEndsAt),
+          ...(['draft', 'rejected'].includes(activity.status) &&
+          editStartsAt !== utcInstantToLocalDateTimeInput(activity.startsAt)
+            ? { startsAt: localDateTimeInputToUtcInstant(editStartsAt) }
+            : {}),
+          ...(['draft', 'rejected'].includes(activity.status) &&
+          editEndsAt !== utcInstantToLocalDateTimeInput(activity.endsAt ?? null)
+            ? { endsAt: localDateTimeInputToUtcInstant(editEndsAt) }
+            : {}),
           location: editLocation.trim(),
           registrationDeadline: localDateTimeInputToUtcInstant(editRegistrationDeadline),
           capacity: editCapacity === '' ? null : Number(editCapacity),
@@ -289,6 +352,8 @@ export function EventsPage({
 
   async function createActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canCreate || (createOrganizationId && !organizationOptions.includes(createOrganizationId)))
+      return;
     const title = createTitle.trim();
     const description = createDescription.trim();
     if (!title || !description) {
@@ -384,14 +449,21 @@ export function EventsPage({
   }
 
   const manageableActivities =
-    activities?.filter(
-      (activity) =>
-        !managementOnly ||
-        activity.ownerUid === user?.uid ||
-        (activity.organizationId && organizationOptions.includes(activity.organizationId)) ||
-        permitted(user, 'events.update', 'activity', activity.scope) ||
-        permitted(user, 'events.approve', 'activity', activity.scope),
-    ) ?? null;
+    activities?.filter((activity) => {
+      if (!managementOnly) return true;
+      const { canUpdate, canCreateOwn, canApprove, canSupport, canOpenOrganizationWorkspace } =
+        managementPermissions(user, activity);
+      return (
+        canUpdate ||
+        canCreateOwn ||
+        canOpenOrganizationWorkspace ||
+        canApprove ||
+        (canSupport && activity.technicalSupportStatus === 'requested')
+      );
+    }) ?? null;
+  const editingActivity = activities?.find(({ id }) => id === editingId);
+  const editingDraftDates =
+    editingActivity && ['draft', 'rejected'].includes(editingActivity.status);
 
   return (
     <section
@@ -462,18 +534,9 @@ export function EventsPage({
       {manageableActivities !== null && manageableActivities.length > 0 ? (
         <div className="workbench-grid">
           {manageableActivities.map((activity) => {
-            const canUpdate = permitted(user, 'events.update', 'activity', activity.scope);
-            const canCreateOwn =
-              activity.ownerUid === user?.uid &&
-              permitted(user, 'events.create', 'activity', activity.scope);
+            const { canUpdate, canCreateOwn, canApprove, canSupport, canEdit } =
+              managementPermissions(user, activity);
             const canManageCreatorEdge = canUpdate || canCreateOwn;
-            const canApprove = permitted(user, 'events.approve', 'activity', activity.scope);
-            const canSupport = permitted(
-              user,
-              'events.technical_support',
-              'activity',
-              activity.scope,
-            );
             const registrationScope = { type: 'activity', id: activity.id } as const;
             const canRegister = permitted(
               user,
@@ -614,8 +677,7 @@ export function EventsPage({
                   >
                     <summary>管理活动</summary>
                     <div className="event-management-body">
-                      {canManageCreatorEdge &&
-                      (activity.status === 'draft' || activity.status === 'rejected') ? (
+                      {canEdit ? (
                         <button
                           type="button"
                           aria-label={`编辑${activity.title}`}
@@ -781,24 +843,30 @@ export function EventsPage({
                 onChange={(event) => setEditDescription(event.target.value)}
               />
             </label>
-            <label>
-              开始时间（可选）
-              <input
-                type="datetime-local"
-                step="0.001"
-                value={editStartsAt}
-                onChange={(event) => setEditStartsAt(event.target.value)}
-              />
-            </label>
-            <label>
-              结束时间（可选）
-              <input
-                type="datetime-local"
-                step="0.001"
-                value={editEndsAt}
-                onChange={(event) => setEditEndsAt(event.target.value)}
-              />
-            </label>
+            {editingDraftDates ? (
+              <>
+                <label>
+                  开始时间（可选）
+                  <input
+                    type="datetime-local"
+                    step="0.001"
+                    value={editStartsAt}
+                    onChange={(event) => setEditStartsAt(event.target.value)}
+                  />
+                </label>
+                <label>
+                  结束时间（可选）
+                  <input
+                    type="datetime-local"
+                    step="0.001"
+                    value={editEndsAt}
+                    onChange={(event) => setEditEndsAt(event.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <p>活动时间请在活动页面的安排中调整。</p>
+            )}
             <label>
               报名截止（可选）
               <input

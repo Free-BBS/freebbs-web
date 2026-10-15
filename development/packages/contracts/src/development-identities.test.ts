@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_IDENTITY_SECTIONS,
   identityLabels,
   validateIdentitySelection,
+  toggleIdentitySelection,
 } from './development-identities.js';
 
 describe('development identity catalog', () => {
@@ -19,13 +20,18 @@ describe('development identity catalog', () => {
     ]);
   });
 
-  it('rejects two positions from one unit and accepts positions from separate units', () => {
+  it('rejects two positions from one organization and accepts positions from separate organizations', () => {
     expect(validateIdentitySelection(['domain.arts_lead', 'department.arts_member'])).toMatchObject(
       { ok: false, groupId: 'student_union.arts_center' },
     );
-    expect(validateIdentitySelection(['domain.arts_lead', 'department.sports_member'])).toEqual({
-      ok: true,
-    });
+    expect(
+      validateIdentitySelection(['domain.arts_lead', 'department.sports_member']),
+    ).toMatchObject({ ok: false, groupId: 'student_union' });
+    expect(validateIdentitySelection(['domain.arts_lead', 'youth_league.practice.member'])).toEqual(
+      {
+        ok: true,
+      },
+    );
   });
 
   it('keeps platform administrator separate from the development lead role', () => {
@@ -52,5 +58,34 @@ describe('development identity catalog', () => {
     expect(section('tms')?.groups.flatMap(({ options }) => options)).toHaveLength(3);
     expect(section('science_association')?.groups).toHaveLength(7);
     expect(section('media_center')?.groups).toHaveLength(4);
+  });
+  it('replaces hidden legacy positions and keeps finance appointments and other organizations', () => {
+    expect(
+      toggleIdentitySelection(
+        [
+          'affiliation.sast_member',
+          'science_association.office.member',
+          'youth_league.practice.member',
+          'media_center.finance',
+          'platform.admin',
+        ],
+        'science_association.chair',
+      ),
+    ).toEqual([
+      'youth_league.practice.member',
+      'media_center.finance',
+      'platform.admin',
+      'science_association.chair',
+    ]);
+    expect(toggleIdentitySelection(['domain.arts_lead'], 'student_union.finance')).toEqual([
+      'domain.arts_lead',
+      'student_union.finance',
+    ]);
+    expect(
+      toggleIdentitySelection(
+        ['domain.arts_lead', 'student_union.finance'],
+        'student_union.finance',
+      ),
+    ).toEqual(['domain.arts_lead']);
   });
 });

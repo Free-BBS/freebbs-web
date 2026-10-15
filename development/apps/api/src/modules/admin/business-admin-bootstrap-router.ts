@@ -63,10 +63,14 @@ export function createBusinessAdminBootstrapRouter(
     if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
     await store.transaction(async (tx) => {
       // The canonical role exists before any assignment and serializes first appointments.
-      const roles = await tx.roles.listForUpdate();
-      const assignments = await tx.roleAssignments.listForUpdate();
-      const access = await tx.developmentAccess.listForUpdate();
-      const subjects = await tx.subjects.listForUpdate();
+      await tx.roles.listForUpdate({ key: 'platform.admin' });
+      await tx.roles.listForUpdate({ key: 'platform.super_admin' });
+      const roles = await tx.roles.list();
+      const assignments = await tx.roleAssignments.listForUpdate({ roleKey: 'platform.admin' });
+      const access = await tx.developmentAccess.list();
+      const subjects = await tx.subjects.listForUpdate({
+        uids: [...new Set([actor.uid, target.uid, ...assignments.map((row) => row.subjectUid)])],
+      });
       const identities = await businessAdminIdentities(assignments, directory);
       if (!subjects.some((subject) => subject.uid === actor.uid && subject.status === 'active'))
         throw new HttpError(403, 'forbidden', 'Original development lead access is required');

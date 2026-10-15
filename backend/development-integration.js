@@ -76,21 +76,47 @@ function createDevelopmentUserDirectory(pool) {
     };
   }
 
+  function selection(options = {}) {
+    const normalized = String(options.query || '').trim().slice(0, 80);
+    const like = `%${normalized.replace(/[!%_]/g, '!$&')}%`;
+    const parameters = [normalized, like, like, like, like];
+    let where = `uid IS NOT NULL AND uid <> ''
+      AND (? = '' OR username LIKE ? ESCAPE '!' OR full_name LIKE ? ESCAPE '!'
+        OR student_id LIKE ? ESCAPE '!' OR uid LIKE ? ESCAPE '!')`;
+    if (options.uids) {
+      where += options.uids.length ? ` AND uid IN (${options.uids.map(() => '?').join(',')})` : ' AND 1 = 0';
+      parameters.push(...options.uids);
+    }
+    for (const [key, negate] of [['include', false], ['exclude', true]]) {
+      const filter = options[key];
+      if (!filter) continue;
+      const clauses = [];
+      for (const [field, column] of [['uids', 'uid'], ['studentIds', 'student_id'], ['usernames', 'LOWER(username)']]) {
+        if (!filter[field]?.length) continue;
+        clauses.push(`COALESCE(${column} IN (${filter[field].map(() => '?').join(',')}), FALSE)`);
+        parameters.push(...filter[field]);
+      }
+      where += ` AND ${negate ? 'NOT ' : ''}(${clauses.join(' OR ') || '1 = 0'})`;
+    }
+    return { where, parameters };
+  }
   return {
     async list(query = '') {
-      const normalized = String(query).trim().slice(0, 80);
-      const like = `%${normalized.replace(/[!%_]/g, '!$&')}%`;
+      const { where, parameters } = selection({ query });
       const [rows] = await pool.execute(
-        `SELECT uid, username, full_name, student_id, avatar_path
-         FROM users
-         WHERE uid IS NOT NULL AND uid <> ''
-           AND (? = '' OR username LIKE ? ESCAPE '!' OR full_name LIKE ? ESCAPE '!'
-             OR student_id LIKE ? ESCAPE '!' OR uid LIKE ? ESCAPE '!')
-         ORDER BY username ASC, id ASC
-         LIMIT 2000`,
-        [normalized, like, like, like, like],
-      );
+        `SELECT uid, username, full_name, student_id, avatar_path FROM users
+         WHERE ${where} ORDER BY username ASC, id ASC`, parameters);
       return rows.map(map);
+    },
+    async page(options = {}) {
+      const page = Number.isSafeInteger(options.page) && options.page > 0 ? options.page : 1;
+      const pageSize = Number.isSafeInteger(options.pageSize) && options.pageSize > 0 ? Math.min(options.pageSize, 100) : 20;
+      const { where, parameters } = selection(options);
+      const [counts] = await pool.execute(`SELECT COUNT(*) AS total FROM users WHERE ${where}`, parameters);
+      const [rows] = await pool.execute(
+        `SELECT uid, username, full_name, student_id, avatar_path FROM users WHERE ${where}
+         ORDER BY username ASC, id ASC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, parameters);
+      return { items: rows.map(map), total: Number(counts[0]?.total || 0), page, pageSize };
     },
     async get(uid) {
       const [rows] = await pool.execute(

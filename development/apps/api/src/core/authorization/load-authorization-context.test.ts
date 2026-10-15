@@ -61,8 +61,11 @@ describe('database-backed authorization context', () => {
     const store = await governanceStore();
     await assignRole(store, 'department.arts_director');
     const binding = (await store.rolePermissions.list()).find(
-      ({ roleKey, action }) =>
-        roleKey === 'department.arts_director' && action === 'knowledge.publish',
+      ({ roleKey, action, scope }) =>
+        roleKey === 'department.arts_director' &&
+        action === 'knowledge.publish' &&
+        scope.type === 'public' &&
+        scope.id === '*',
     );
     if (binding === undefined) throw new Error('expected knowledge publish binding');
 

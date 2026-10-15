@@ -1,3 +1,15 @@
+import type {
+  BatchAllowDevelopmentUsersResponse,
+  DevelopmentDirectoryFilters,
+  Page,
+} from '@freebbs-development/contracts';
+import './development-users.css';
+import {
+  directoryUrl,
+  directoryResult,
+  DirectoryFilters,
+  DirectoryPagination,
+} from '../../system-settings/DirectoryControls.js';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ApiClient } from '../../../core/api/client.js';
@@ -39,11 +51,33 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
   const [source, setSource] = useState<AccessUser | null>(null);
   const [draft, setDraft] = useState<AccessUser | null>(null);
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<DevelopmentDirectoryFilters>({});
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<Map<string, string>>(new Map());
+  const [batchReview, setBatchReview] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const dirty = draft?.accessLevel !== source?.accessLevel;
+  const busy = loading || saving || batchSaving;
+  const currentPageSelected =
+    users.length > 0 && users.every((user) => selectedUsers.has(user.uid));
+  function toggleUsers(targets: AccessUser[], checked: boolean) {
+    const next = new Map(selectedUsers);
+    for (const user of targets) {
+      if (checked) next.set(user.uid, user.username);
+      else next.delete(user.uid);
+    }
+    if (next.size > 100) {
+      setError('每次最多选择 100 位用户，请先提交或减少选择。');
+      return;
+    }
+    setSelectedUsers(next);
+    setBatchReview(false);
+  }
   function select(user: AccessUser | null) {
     setSource(user);
     setDraft(user ? { ...user } : null);
@@ -54,9 +88,13 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
     let active = true;
     setLoading(true);
     client
-      .request<AccessUser[]>('/admin/development-users')
-      .then((next) => {
+      .request<AccessUser[] | Page<AccessUser>>(directoryUrl('/admin/development-users', '', {}, 1))
+      .then((result) => {
         if (!active) return;
+        const paged = directoryResult(result);
+        const next = paged.items;
+        setPage(paged.page);
+        setTotal(paged.total);
         setUsers(next);
         select(next[0] ?? null);
       })
@@ -70,7 +108,8 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
       active = false;
     };
   }, [client]);
-  async function search() {
+  async function search(requestedPage = 1) {
+    if (busy) return;
     if (dirty) {
       setMessage('当前访问设置有未保存修改，请先保存或放弃。');
       return;
@@ -78,9 +117,14 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
     setLoading(true);
     setError('');
     try {
-      const next = await client.request<AccessUser[]>(
-        `/admin/development-users${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ''}`,
+      const result = directoryResult(
+        await client.request<AccessUser[] | Page<AccessUser>>(
+          directoryUrl('/admin/development-users', query, filters, requestedPage),
+        ),
       );
+      const next = result.items;
+      setPage(result.page);
+      setTotal(result.total);
       setUsers(next);
       select(next.find((user) => user.uid === draft?.uid) ?? next[0] ?? null);
     } catch (caught) {
@@ -90,7 +134,7 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
     }
   }
   async function save() {
-    if (!draft || saving) return;
+    if (!draft || busy) return;
     setSaving(true);
     setError('');
     setMessage('');
@@ -112,6 +156,37 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
       setError(caught instanceof Error ? caught.message : '访问设置保存失败');
     } finally {
       setSaving(false);
+    }
+  }
+  async function allowSelected() {
+    if (busy || dirty || !batchReview || selectedUsers.size === 0) return;
+    setBatchSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await client.request<BatchAllowDevelopmentUsersResponse>(
+        '/admin/development-users/batch-allow',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uids: [...selectedUsers.keys()] }),
+        },
+      );
+      const levels = new Map(result.items.map((item) => [item.uid, item.accessLevel]));
+      const update = (user: AccessUser) =>
+        levels.has(user.uid) ? { ...user, accessLevel: levels.get(user.uid)! } : user;
+      setUsers((current) => current.map(update));
+      setSource((current) => (current ? update(current) : null));
+      setDraft((current) => (current ? update(current) : null));
+      setSelectedUsers(new Map());
+      setBatchReview(false);
+      setMessage(
+        `已开放 ${result.items.length} 位用户，${result.changedCount} 位新增准入，${result.unchangedCount} 位保留原访问权限。`,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '批量开放失败，请重试');
+    } finally {
+      setBatchSaving(false);
     }
   }
   return (
@@ -137,9 +212,10 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
               placeholder="搜索用户名、学号或 UID"
             />
           </label>
-          <button type="submit" disabled={loading || saving}>
+          <button type="submit" disabled={busy}>
             搜索
           </button>
+          <DirectoryFilters value={filters} onChange={setFilters} />
         </form>
       </div>
       {message ? (
@@ -154,37 +230,118 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
       ) : null}
       {loading ? <p role="status">正在读取主站用户名单…</p> : null}
       <FirstBusinessAdminSection client={client} users={users} onInitialized={setMessage} />
+      <DirectoryPagination
+        page={page}
+        total={total}
+        loading={busy}
+        onPage={(next) => void search(next)}
+      />
+      <section className="development-batch-controls" aria-label="批量开放发展端访问">
+        <label className="development-batch-select-page">
+          <input
+            type="checkbox"
+            aria-label="选择当前页用户"
+            checked={currentPageSelected}
+            disabled={busy || !users.length}
+            onChange={(event) => toggleUsers(users, event.target.checked)}
+          />
+          选择当前页用户
+        </label>
+        <span>已选择 {selectedUsers.size} 位用户（最多 100 位）</span>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy || !selectedUsers.size}
+          onClick={() => {
+            setSelectedUsers(new Map());
+            setBatchReview(false);
+          }}
+        >
+          清空选择
+        </button>
+        <button
+          type="button"
+          disabled={busy || dirty || !selectedUsers.size}
+          onClick={() => {
+            setBatchReview(true);
+            setError('');
+          }}
+        >
+          批量开放所选用户
+        </button>
+        <p>
+          跨页与搜索会保留勾选；仅开放已选择用户，保留已有负责人权限。
+          {dirty ? '请先保存或放弃当前访问设置修改。' : ''}
+        </p>
+      </section>
+      {batchReview ? (
+        <section className="development-batch-review" aria-label="确认批量开放">
+          <p>
+            将允许以下 {selectedUsers.size}{' '}
+            位用户访问发展端，已有访问权限保持不变，不授予业务管理员身份：
+          </p>
+          <ul>
+            {[...selectedUsers].map(([uid, username]) => (
+              <li key={uid}>
+                {username}（{uid}）
+              </li>
+            ))}
+          </ul>
+          <div>
+            <button type="button" disabled={busy || dirty} onClick={() => void allowSelected()}>
+              {batchSaving ? '正在批量开放…' : `确认开放 ${selectedUsers.size} 位用户`}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => setBatchReview(false)}
+            >
+              取消批量开放
+            </button>
+          </div>
+        </section>
+      ) : null}
       <div className="development-directory-layout">
         <aside className="development-user-directory" aria-label="用户列表">
           {!users.length && !loading ? <p>没有找到符合条件的用户。</p> : null}
           {users.map((user) => (
-            <button
-              type="button"
-              key={user.uid}
-              className="development-user-row"
-              data-active={user.uid === draft?.uid}
-              disabled={loading || saving}
-              onClick={() =>
-                dirty ? setMessage('当前访问设置有未保存修改，请先保存或放弃。') : select(user)
-              }
-            >
-              <span className="development-user-avatar" aria-hidden="true">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="" />
-                ) : (
-                  (user.displayName || user.username).slice(0, 1)
-                )}
-              </span>
-              <span className="development-user-row-copy">
-                <strong>{user.username}</strong>
-                <small>
-                  {user.displayName} · {user.studentId ?? '无学号'}
-                </small>
-              </span>
-              <span className="development-access-badge" data-level={user.accessLevel ?? 'none'}>
-                {accessLabels[user.accessLevel ?? 'none']}
-              </span>
-            </button>
+            <div className="development-batch-user" key={user.uid}>
+              <input
+                type="checkbox"
+                aria-label={`选择 ${user.username}`}
+                checked={selectedUsers.has(user.uid)}
+                disabled={busy}
+                onChange={(event) => toggleUsers([user], event.target.checked)}
+              />
+              <button
+                type="button"
+                aria-label={`编辑 ${user.username} 的访问设置`}
+                className="development-user-row"
+                data-active={user.uid === draft?.uid}
+                disabled={busy}
+                onClick={() =>
+                  dirty ? setMessage('当前访问设置有未保存修改，请先保存或放弃。') : select(user)
+                }
+              >
+                <span className="development-user-avatar" aria-hidden="true">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" />
+                  ) : (
+                    (user.displayName || user.username).slice(0, 1)
+                  )}
+                </span>
+                <span className="development-user-row-copy">
+                  <strong>{user.username}</strong>
+                  <small>
+                    {user.displayName} · {user.studentId ?? '无学号'}
+                  </small>
+                </span>
+                <span className="development-access-badge" data-level={user.accessLevel ?? 'none'}>
+                  {accessLabels[user.accessLevel ?? 'none']}
+                </span>
+              </button>
+            </div>
           ))}
         </aside>
         {draft ? (
@@ -206,7 +363,7 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
               auth.user.viewer?.canPreviewDevelopment === true ? (
                 <IdentityPreviewButton
                   uid={draft.uid}
-                  disabled={dirty || saving || loading || source?.accessLevel == null}
+                  disabled={dirty || busy || source?.accessLevel == null}
                 />
               ) : null}
             </header>
@@ -226,10 +383,11 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
                   <button
                     key={label}
                     type="button"
-                    disabled={loading || saving}
+                    disabled={busy}
                     aria-pressed={draft.accessLevel === value}
                     onClick={() => {
                       setDraft({ ...draft, accessLevel: value });
+                      setBatchReview(false);
                       setError('');
                       setMessage('');
                     }}
@@ -245,16 +403,12 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!dirty || saving || loading}
+                  disabled={!dirty || busy}
                   onClick={() => select(source)}
                 >
                   放弃修改
                 </button>
-                <button
-                  type="button"
-                  disabled={!dirty || saving || loading}
-                  onClick={() => void save()}
-                >
+                <button type="button" disabled={!dirty || busy} onClick={() => void save()}>
                   {saving ? '保存中…' : '保存访问设置'}
                 </button>
               </div>

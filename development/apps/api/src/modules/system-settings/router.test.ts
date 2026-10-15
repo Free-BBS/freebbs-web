@@ -75,6 +75,102 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 describe('development system settings boundaries', () => {
+  it('locks identity rows only for the edited user and global administration guards', async () => {
+    const { app, store } = await fixture();
+    const roleLocks = vi.fn(),
+      tagLocks = vi.fn(),
+      teamLocks = vi.fn();
+    const transaction = store.transaction.bind(store);
+    vi.spyOn(store, 'transaction').mockImplementation((operation) =>
+      transaction(async (tx) => {
+        for (const [repo, capture] of [
+          [tx.roleAssignments, roleLocks],
+          [tx.tagAssignments, tagLocks],
+          [tx.sportsTeams, teamLocks],
+        ] as const) {
+          const list = repo.listForUpdate.bind(repo);
+          vi.spyOn(repo, 'listForUpdate').mockImplementation(async (filters) => {
+            capture(filters);
+            return list(filters) as never;
+          });
+        }
+        return operation(tx);
+      }),
+    );
+    const before = await request(app)
+      .get(`${base}/system-settings/users?query=target`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    await request(app)
+      .put(`${base}/system-settings/users/target`)
+      .set('Authorization', 'Bearer admin')
+      .send({
+        revision: before.body.data[0].revision,
+        roles: ['department.arts_member'],
+        captainTeamIds: [],
+      })
+      .expect(200);
+    expect(
+      roleLocks.mock.calls.every(
+        ([filters]) => filters?.subjectUid === 'target' || filters?.roleKey === 'platform.admin',
+      ),
+    ).toBe(true);
+    expect(tagLocks).toHaveBeenCalledWith({ subjectUid: 'target' });
+    expect(teamLocks).toHaveBeenCalledWith({ ids: [] });
+  });
+
+  it('merges feature and database audit pages without reading every database audit', async () => {
+    const { app, store } = await fixture();
+    for (let i = 0; i < 220; i++)
+      await store.auditLogs.create({
+        actorUid: 'admin',
+        action: 'fixture.action',
+        resourceType: 'fixture',
+        resourceId: String(i),
+        details: {},
+        status: 'active',
+        ownerUid: 'admin',
+        scope,
+      });
+    const listing = vi.spyOn(store.auditLogs, 'list');
+    const result = await request(app)
+      .get(`${base}/system-settings/audit-logs?page=3&pageSize=2&action=fixture.action`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    expect(result.body.data).toMatchObject({ total: 220, page: 3, pageSize: 2 });
+    expect(result.body.data.items).toHaveLength(2);
+    expect(listing).not.toHaveBeenCalled();
+  });
+
+  it('pages and counts filtered user identities before slicing', async () => {
+    const { app, store } = await fixture();
+    await store.roleAssignments.create({
+      subjectUid: 'target',
+      roleKey: 'department.arts_member',
+      expiresAt: null,
+      status: 'active',
+      ownerUid: 'admin',
+      scope,
+    });
+    const response = await request(app)
+      .get(
+        `${base}/system-settings/users?page=1&pageSize=1&organizationId=arts_center&admission=admitted`,
+      )
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    expect(response.body.data).toMatchObject({
+      page: 1,
+      pageSize: 1,
+      total: 1,
+      items: [expect.objectContaining({ uid: 'target' })],
+    });
+    const second = await request(app)
+      .get(`${base}/system-settings/users?page=2&pageSize=1&roleKey=platform.admin`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    expect(second.body.data).toMatchObject({ total: 1, items: [] });
+  });
+
   it('allows administrator-only settings and refuses member, lead, and reserved administration', async () => {
     const { app } = await fixture();
     for (const uid of ['member', 'lead'])
@@ -782,7 +878,7 @@ describe('development system settings boundaries', () => {
       .patch(`${base}/sports/teams`)
       .set('Authorization', 'Bearer lead')
       .send({ id: 'team-basketball', name: '负责人维护' })
-      .expect(200);
+      .expect(403);
     await request(app)
       .patch(`${base}/sports/teams`)
       .set('Authorization', 'Bearer member')
@@ -804,7 +900,7 @@ describe('development system settings boundaries', () => {
       .set('Authorization', 'Bearer admin')
       .expect(200);
     expect(workspace.body.data.canManage).toBe(true);
-    expect((await store.sportsTeams.get('team-basketball'))?.name).toBe('负责人维护');
+    expect((await store.sportsTeams.get('team-basketball'))?.name).not.toBe('负责人维护');
   });
   it('ignores persisted lead business denies as well as grants when the same user explicitly holds business administration', async () => {
     const { app, store } = await fixture();

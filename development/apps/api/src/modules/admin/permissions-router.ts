@@ -182,13 +182,20 @@ async function patchRoleStatus(
   allowedUids: readonly string[] = [],
 ): Promise<RoleRecord> {
   return store.transaction(async (transactionStore) => {
-    const definitions = await transactionStore.roles.listForUpdate();
+    await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
+    await transactionStore.roles.listForUpdate({ key: superAdminRoleKey });
+    await transactionStore.roles.listForUpdate({ key: roleKey });
+    const definitions = await transactionStore.roles.list();
     const role = definitions.find(({ key }) => key === roleKey);
     if (role === undefined) throw new HttpError(404, 'role_not_found', 'Role not found');
     if (roleKey === 'platform.admin' && status === 'inactive') {
-      const assignments = await transactionStore.roleAssignments.listForUpdate();
-      const access = await transactionStore.developmentAccess.listForUpdate();
-      const subjects = await transactionStore.subjects.listForUpdate();
+      const assignments = await transactionStore.roleAssignments.listForUpdate({
+        roleKey: 'platform.admin',
+      });
+      const access = await transactionStore.developmentAccess.list();
+      const subjects = await transactionStore.subjects.listForUpdate({
+        uids: [...new Set(assignments.map((row) => row.subjectUid))],
+      });
       const identities = await businessAdminIdentities(assignments, directory);
       if (
         effectiveGlobalBusinessAdmins(
@@ -233,7 +240,7 @@ async function replaceRolePermissions(
   actorUid: string,
 ): Promise<RolePermissionRecord[]> {
   return store.transaction(async (transactionStore) => {
-    const role = (await transactionStore.roles.listForUpdate({ query: roleKey })).find(
+    const role = (await transactionStore.roles.listForUpdate({ key: roleKey })).find(
       ({ key }) => key === roleKey,
     );
     if (role === undefined) throw new HttpError(404, 'role_not_found', 'Role not found');

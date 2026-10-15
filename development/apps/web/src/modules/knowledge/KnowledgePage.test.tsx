@@ -35,6 +35,60 @@ const draft = {
 };
 
 describe('KnowledgePage', () => {
+  it.each([
+    { role: 'domain.arts_lead' as const, ids: ['arts_center'] },
+    {
+      role: 'student_union.presidium' as const,
+      ids: ['arts_center', 'liaison_center', 'sports_center', 'rights_development_center'],
+    },
+    {
+      role: 'counselor.youth_league' as const,
+      ids: [
+        'arts_center',
+        'liaison_center',
+        'sports_center',
+        'rights_development_center',
+        'tuanwei',
+        'sast',
+        'tms',
+        'media_center',
+      ],
+    },
+  ])(
+    'limits $role organization choices to its canonical business coverage',
+    async ({ role, ids }) => {
+      const request = vi.fn().mockResolvedValue([]);
+      render(
+        <KnowledgePage
+          client={{ request } as unknown as ApiClient}
+          user={
+            {
+              ...admin,
+              businessAdmin: false,
+              roles: [role],
+              policies: [
+                {
+                  id: 'create',
+                  action: 'knowledge.create',
+                  resource: 'knowledge_entry',
+                  effect: 'allow',
+                },
+              ],
+            } as UserContext
+          }
+        />,
+      );
+      await userEvent.click(await screen.findByRole('button', { name: '社工组织' }));
+      await userEvent.click(await screen.findByRole('button', { name: '新建经验' }));
+      if (ids.length === 1) expect(screen.queryByLabelText('所属社工组织')).not.toBeInTheDocument();
+      else
+        expect(
+          within(screen.getByLabelText('所属社工组织'))
+            .getAllByRole('option')
+            .map((option) => option.getAttribute('value')),
+        ).toEqual(ids);
+    },
+  );
   it('combines type and body search, and orders matching entries by update date', async () => {
     const request = vi.fn().mockResolvedValue([
       { ...draft, id: 'older', title: '较早复盘', updatedAt: '2026-01-01' },

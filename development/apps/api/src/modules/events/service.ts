@@ -4,6 +4,7 @@ import type { SocialOrganizationId } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { authorize } from '../../core/authorization/authorize.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type {
   ActivityRecord,
@@ -18,6 +19,8 @@ import { activityWithWorkspaceSchedule } from './workspace-schedule.js';
 import { readActivityWorkspace } from './workspace-storage.js';
 import { resolve } from 'node:path';
 import {
+  canActOnOrganizationActivity,
+  canProvideActivityTechnicalSupport,
   canCreateForOrganization,
   canUpdateOrganization,
   isSuperAdmin,
@@ -63,16 +66,17 @@ type TransitionResult<T> =
   | { kind: 'updated'; record: T }
   | { kind: 'rejected'; from: string; to: string; scope: ScopeRef };
 
-function can(actor: AuthorizationContext, action: string, scope: ScopeRef): boolean {
-  return authorize(actor, { action, resource: 'activity', scope }).allowed;
-}
+const can = canActOnOrganizationActivity;
 function canRegistration(actor: AuthorizationContext, action: string, scope: ScopeRef): boolean {
   return authorize(actor, { action, resource: 'activity_registration', scope }).allowed;
 }
 function canManage(actor: AuthorizationContext, record: ActivityRecord): boolean {
   return (
-    (can(actor, 'events.update', record.scope) && canUpdateOrganization(actor, record)) ||
-    (record.ownerUid === actor.uid && can(actor, 'events.create', record.scope))
+    (can(actor, 'events.update', record.scope, record.organizationId) &&
+      canUpdateOrganization(actor, record)) ||
+    (record.ownerUid === actor.uid &&
+      canCreateForOrganization(actor, record.organizationId) &&
+      can(actor, 'events.create', record.scope, record.organizationId))
   );
 }
 function activityNotFound(): HttpError {
@@ -98,9 +102,11 @@ export class EventsService {
           (record) =>
             canReadPublishedActivity(actor, record) ||
             canManage(actor, record) ||
-            (record.status === 'pending' && can(actor, 'events.approve', record.scope)) ||
+            (record.status === 'pending' &&
+              canUpdateOrganization(actor, record) &&
+              can(actor, 'events.approve', record.scope, record.organizationId)) ||
             (record.technicalSupportStatus === 'requested' &&
-              can(actor, 'events.technical_support', record.scope)),
+              canProvideActivityTechnicalSupport(actor, record)),
         )
         .map((record) => activityWithWorkspaceSchedule(record, this.uploadDirectory)),
     );
@@ -119,10 +125,24 @@ export class EventsService {
         'Organization is required for multi-organization users',
       );
     }
-    if (!canCreateForOrganization(actor, organizationId)) {
+    if (
+      !canCreateForOrganization(actor, organizationId) ||
+      !can(actor, 'events.create', input.scope, organizationId)
+    ) {
       throw new HttpError(403, 'forbidden', 'Organization membership is required');
     }
     return this.store.transaction(async (store) => {
+      const freshActor = await loadAuthorizationContext(store, actor, this.now());
+      if (
+        !canCreateForOrganization(freshActor, organizationId) ||
+        !can(freshActor, 'events.create', input.scope, organizationId)
+      ) {
+        throw new HttpError(
+          403,
+          'forbidden',
+          'Organization membership and activity permission are required',
+        );
+      }
       const created = await store.activities.create({
         ...input,
         organizationId,
@@ -150,18 +170,19 @@ export class EventsService {
     return this.store.transaction(async (store) => {
       const current = await store.activities.getForUpdate(id);
       if (current === null) throw activityNotFound();
+      actor = await loadAuthorizationContext(store, actor, this.now());
       const targetScope = patch.scope ?? current.scope;
       const target = { ...current, ...patch };
       const managerMove =
-        can(actor, 'events.update', current.scope) &&
-        can(actor, 'events.update', targetScope) &&
+        can(actor, 'events.update', current.scope, current.organizationId) &&
+        can(actor, 'events.update', targetScope, target.organizationId) &&
         canUpdateOrganization(actor, current) &&
         canUpdateOrganization(actor, target);
       const creatorMove =
         (current.status === 'draft' || current.status === 'rejected') &&
         current.ownerUid === actor.uid &&
-        can(actor, 'events.create', current.scope) &&
-        can(actor, 'events.create', targetScope) &&
+        can(actor, 'events.create', current.scope, current.organizationId) &&
+        can(actor, 'events.create', targetScope, target.organizationId) &&
         canCreateForOrganization(actor, current.organizationId) &&
         canCreateForOrganization(actor, target.organizationId);
       if (!managerMove && !creatorMove) throw activityNotFound();
@@ -199,16 +220,19 @@ export class EventsService {
     const result = await this.store.transaction<TransitionResult<ActivityRecord>>(async (store) => {
       const current = await store.activities.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
+      actor = await loadAuthorizationContext(store, actor, this.now());
       const storedFrom = current.status as ActivityStatus;
       const approvalEdge = storedFrom === 'pending' && (to === 'approved' || to === 'rejected');
       const creatorEdge =
         (storedFrom === 'draft' && to === 'pending') ||
         (storedFrom === 'rejected' && to === 'draft');
       const permitted = approvalEdge
-        ? can(actor, 'events.approve', current.scope) && canUpdateOrganization(actor, current)
+        ? can(actor, 'events.approve', current.scope, current.organizationId) &&
+          canUpdateOrganization(actor, current)
         : creatorEdge
           ? canManage(actor, current)
-          : can(actor, 'events.update', current.scope) && canUpdateOrganization(actor, current);
+          : can(actor, 'events.update', current.scope, current.organizationId) &&
+            canUpdateOrganization(actor, current);
       if (!permitted) return { kind: 'missing' };
       const from = (await activityWithWorkspaceSchedule(current, this.uploadDirectory))
         .status as ActivityStatus;
@@ -255,10 +279,12 @@ export class EventsService {
     const result = await this.store.transaction<TransitionResult<ActivityRecord>>(async (store) => {
       const current = await store.activities.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
+      actor = await loadAuthorizationContext(store, actor, this.now());
       const permitted =
         to === 'requested'
-          ? can(actor, 'events.update', current.scope) && canUpdateOrganization(actor, current)
-          : can(actor, 'events.technical_support', current.scope);
+          ? can(actor, 'events.update', current.scope, current.organizationId) &&
+            canUpdateOrganization(actor, current)
+          : canProvideActivityTechnicalSupport(actor, current);
       if (!permitted) return { kind: 'missing' };
       const from = current.technicalSupportStatus as TechnicalSupportStatus;
       if (
@@ -332,6 +358,7 @@ export class EventsService {
           'Activity is not accepting registration',
         );
       }
+      if (!canReadPublishedActivity(actor, activity)) throw activityNotFound();
       if (
         [activity.registrationDeadline, activity.endsAt].some(
           (boundary) => boundary != null && Date.parse(boundary) <= this.now().getTime(),

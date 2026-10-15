@@ -1,4 +1,4 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import { isGlobalOrganizationBusinessSupervisor } from '@freebbs-development/contracts';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router, type Response } from 'express';
@@ -15,8 +15,9 @@ import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-mid
 import { HttpError } from '../../core/errors/http-error.js';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { canCreateCollection } from '../collections/access.js';
-import { authorize } from '../../core/authorization/authorize.js';
+import { canonicalSportsTeam, loadSportsCardAuthorizer } from '../sports/card-authorization.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import { allocatePreferences, assertBookingAvailable, validateTableRow } from './domain.js';
 
 export interface CollaborationOptions {
@@ -87,6 +88,8 @@ const entryInput = z
   .object({
     revision: z.number().int().min(1),
     entryId: z.string().uuid().optional(),
+    definitionRevision: z.number().int().min(1).optional(),
+    entryRevision: z.number().int().min(1).optional(),
     values: z.record(z.union([z.string().max(4000), z.number().finite(), z.boolean()])).default({}),
     choices: z.array(key).max(100).default([]),
     resource: z.string().trim().max(100).default(''),
@@ -101,61 +104,111 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
     throw new HttpError(400, 'invalid_request', result.error.issues[0]?.message ?? '输入内容无效');
   return result.data as z.output<S>;
 }
-export function manages(space: CollaborationSpace, actor: UserContext) {
+const sportsAuthorizers = new WeakMap<
+  UserContext,
+  {
+    store: DevelopmentStore;
+    authorizer: ReturnType<typeof loadSportsCardAuthorizer>;
+  }
+>();
+async function teamManager(
+  store: DevelopmentStore | undefined,
+  actor: UserContext,
+  teamId?: string,
+  cacheRead = false,
+) {
+  if (!store) return false;
+  if (teamId && !canonicalSportsTeam(await store.sportsTeams.get(teamId), teamId)) return false;
+  // Write guards must reload grants after upload parsing or a storage-lock wait.
+  if (!cacheRead)
+    return (await loadSportsCardAuthorizer(store, actor))(teamId, 'sports.showcase.update');
+  let cached = sportsAuthorizers.get(actor);
+  if (!cached || cached.store !== store) {
+    cached = { store, authorizer: loadSportsCardAuthorizer(store, actor) };
+    sportsAuthorizers.set(actor, cached);
+  }
+  return (await cached.authorizer)(teamId, 'sports.showcase.update');
+}
+export async function currentCollaborationActor(
+  actor: UserContext,
+  store?: DevelopmentStore,
+): Promise<UserContext> {
+  return store ? loadAuthorizationContext(store, actor, new Date()) : actor;
+}
+export async function manages(
+  space: CollaborationSpace,
+  actor: UserContext,
+  store?: DevelopmentStore,
+  cacheRead = false,
+) {
+  // Organizational ownership follows current membership, including for the original creator.
+  if (space.teamId && !(await teamManager(store, actor, space.teamId, cacheRead))) return false;
+  if (space.teamId && !space.departmentId) return true;
+  const current = store && !cacheRead ? await currentCollaborationActor(actor, store) : actor;
+  if (space.departmentId) return canEditDepartment(current, space.departmentId);
   return (
-    actor.uid === space.ownerUid ||
-    isDevelopmentBusinessAdmin(actor) ||
-    Boolean(space.departmentId && canEditDepartment(actor, space.departmentId)) ||
-    Boolean(
-      space.teamId &&
-      authorize(actor, {
-        action: 'sports.showcase.update',
-        resource: 'sports_showcase',
-        scope: { type: 'sports_team', id: space.teamId },
-      }).allowed,
-    )
+    isGlobalOrganizationBusinessSupervisor(current) ||
+    (current.uid === space.ownerUid && canCreateCollection(current))
   );
 }
-export function canReviewEntry(
+export async function canReviewEntry(
   space: CollaborationSpace,
   entry: CollaborationEntry,
   actor: UserContext,
+  store?: DevelopmentStore,
 ) {
   return (
     entry.reviewStatus === 'pending' &&
     (space.kind === 'attendance'
-      ? manages(space, actor)
+      ? await manages(space, actor, store)
       : space.kind === 'review' &&
-        Boolean(
-          space.stages[entry.stage]?.roleKeys.some((role) =>
-            actor.roles.some((candidate) => candidate === role),
-          ),
-        ))
+        (isGlobalOrganizationBusinessSupervisor(actor) ||
+          Boolean(
+            space.stages[entry.stage]?.roleKeys.some((role) =>
+              actor.roles.some((candidate) => candidate === role),
+            ),
+          )))
   );
 }
-function visible(space: CollaborationSpace, actor: UserContext) {
+async function visible(space: CollaborationSpace, actor: UserContext, store?: DevelopmentStore) {
   return (
-    manages(space, actor) ||
+    (await manages(space, actor, store, true)) ||
     (space.status !== 'draft' &&
-      space.entries.some((entry) => canReviewEntry(space, entry, actor))) ||
-    (space.status !== 'draft' &&
-      (space.audience === 'all' ||
+      ((space.kind === 'review' &&
+        (
+          await Promise.all(
+            space.entries.map((entry) => canReviewEntry(space, entry, actor, store)),
+          )
+        ).some(Boolean)) ||
+        space.audience === 'all' ||
         Boolean(space.departmentId && canEditDepartment(actor, space.departmentId))))
   );
 }
-function view(space: CollaborationSpace, actor: UserContext): CollaborationSpace {
-  const canManage = manages(space, actor);
+async function view(
+  space: CollaborationSpace,
+  actor: UserContext,
+  store?: DevelopmentStore,
+): Promise<CollaborationSpace> {
+  const canManage = await manages(space, actor, store, true);
   const shared = space.kind === 'shared_table' && space.audience === 'department';
+  const entries = await Promise.all(
+    space.entries.map(async (entry) => ({
+      ...entry,
+      revision: entry.revision ?? 1,
+      canReview:
+        space.kind === 'attendance'
+          ? entry.reviewStatus === 'pending' && canManage
+          : await canReviewEntry(space, entry, actor, store),
+    })),
+  );
   return {
     ...space,
+    definitionRevision: space.definitionRevision ?? space.revision,
     canManage,
     expectedReporterUids: canManage ? space.expectedReporterUids : undefined,
-    entries: (canManage || shared
-      ? space.entries
-      : space.entries.filter(
-          (entry) => entry.uid === actor.uid || canReviewEntry(space, entry, actor),
-        )
-    ).map((entry) => ({ ...entry, canReview: canReviewEntry(space, entry, actor) })),
+    entries: entries.filter(
+      (entry) => canManage || shared || entry.uid === actor.uid || entry.canReview,
+    ),
     history: canManage ? space.history.slice(-100) : [],
     bookingOccupancy:
       space.kind === 'booking'
@@ -187,7 +240,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       (!options.uploadDirectory || !isAbsolute(options.uploadDirectory))
     )
       throw new HttpError(503, 'storage_not_configured', '协作资料存储尚未配置');
-    response.locals.actor = identity.user;
+    response.locals.actor = { ...identity.user };
     next();
   });
   const actor = (response: Response) => response.locals.actor as UserContext;
@@ -195,11 +248,12 @@ export function createCollaborationRouter(options: CollaborationOptions) {
     response.status(status).json({ data, requestId: response.locals.requestId });
   async function load(id: string, user: UserContext) {
     const space = await storage.get(id);
-    if (!space || !visible(space, user)) throw new HttpError(404, 'not_found', '未找到该协作空间');
+    if (!space || !(await visible(space, user, options.store)))
+      throw new HttpError(404, 'not_found', '未找到该协作空间');
     return space;
   }
-  function guard(space: CollaborationSpace, user: UserContext, revision: number) {
-    if (!manages(space, user))
+  async function guard(space: CollaborationSpace, user: UserContext, revision: number) {
+    if (!(await manages(space, user, options.store)))
       throw new HttpError(403, 'forbidden', '只有创建者和本部门成员可以管理');
     if (space.revision !== revision)
       throw new HttpError(409, 'revision_conflict', '页面已更新，请重新加载后再保存');
@@ -238,40 +292,41 @@ export function createCollaborationRouter(options: CollaborationOptions) {
   }
   router.get('/', async (_request, response) => {
     const user = actor(response);
-    const items = (await storage.list())
-      .filter((space) => visible(space, user))
+    const spaces = await storage.list();
+    const visibility = await Promise.all(
+      spaces.map((space) => visible(space, user, options.store)),
+    );
+    const items = spaces
+      .filter((_space, index) => visibility[index])
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     send(response, {
       canCreate:
         canCreateCollection(user) ||
-        user.tags.some(
-          (tag) =>
-            tag.key === 'sports.team_captain' &&
-            tag.scope?.type === 'sports_team' &&
-            (!tag.expiresAt || Date.parse(tag.expiresAt) > Date.now()),
-        ),
-      items: items.map((space) => ({
-        ...view(space, user),
-        entries: [],
-        history: [],
-        bookingOccupancy: undefined,
-      })),
+        (await teamManager(options.store, user)) ||
+        (
+          await Promise.all(
+            user.tags
+              .filter(
+                (tag) => tag.key === 'sports.team_captain' && tag.scope?.type === 'sports_team',
+              )
+              .map((tag) => teamManager(options.store, user, tag.scope!.id)),
+          )
+        ).some(Boolean),
+      items: await Promise.all(
+        items.map(async (space) => ({
+          ...(await view(space, user, options.store)),
+          entries: [],
+          history: [],
+          bookingOccupancy: undefined,
+        })),
+      ),
     });
   });
   router.post('/', async (request, response) => {
-    const user = actor(response);
+    const user = await currentCollaborationActor(actor(response), options.store);
     const input = parse(definition, request.body);
     if (input.teamId) {
-      const team = await options.store?.sportsTeams.get(input.teamId);
-      if (
-        !team ||
-        input.kind !== 'attendance' ||
-        !authorize(user, {
-          action: 'sports.showcase.update',
-          resource: 'sports_showcase',
-          scope: team.scope,
-        }).allowed
-      )
+      if (input.kind !== 'attendance' || !(await teamManager(options.store, user, input.teamId)))
         throw new HttpError(
           403,
           'team_forbidden',
@@ -288,19 +343,27 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       id,
       ownerUid: user.uid,
       revision: 1,
+      definitionRevision: 1,
       createdAt: at,
       updatedAt: at,
       entries: [],
       history: [{ uid: user.uid, at, action: 'created' }],
     };
     await storage.change(id, () => ({ record: space, result: null }));
-    send(response, view(space, user), 201);
+    send(response, await view(space, user, options.store), 201);
   });
   router.get('/:id', async (request, response) =>
-    send(response, view(await load(String(request.params.id), actor(response)), actor(response))),
+    send(
+      response,
+      await view(
+        await load(String(request.params.id), actor(response)),
+        actor(response),
+        options.store,
+      ),
+    ),
   );
   router.patch('/:id', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(
       definition
         .partial()
@@ -308,14 +371,15 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         .strict(),
       request.body,
     );
-    const result = await storage.change(String(request.params.id), (current) => {
+    const result = await storage.change(String(request.params.id), async (current) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
       if (!current) throw new HttpError(404, 'not_found', '未找到该协作空间');
-      guard(current, user, input.revision);
+      await guard(current, user, input.revision);
       if (
         input.columns &&
         JSON.stringify(input.columns) !== JSON.stringify(current.columns) &&
         current.ownerUid !== user.uid &&
-        !isDevelopmentBusinessAdmin(user)
+        !isGlobalOrganizationBusinessSupervisor(user)
       )
         throw new HttpError(403, 'column_configuration_forbidden', '只有创建者可以配置字段权限');
       if (input.teamId !== undefined && input.teamId !== (current.teamId ?? null))
@@ -324,6 +388,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         ...current,
         ...input,
         revision: current.revision + 1,
+        definitionRevision: current.revision + 1,
         updatedAt: new Date().toISOString(),
       };
       const check = definition.parse(
@@ -349,43 +414,53 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         );
       next.history.push({ uid: user.uid, at: next.updatedAt, action: 'updated' });
       next.history = next.history.slice(-500);
-      return { record: next, result: view(next, user) };
+      return { record: next, result: await view(next, user, options.store) };
     });
     send(response, result);
   });
   router.post('/:id/entries', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(entryInput, request.body);
-    const target = await load(String(request.params.id), user);
-    if (target.teamId && !manages(target, user)) {
-      const member = (
-        await options.store?.sportsTeamMembers.list({
-          scopeType: 'sports_team',
-          scopeId: target.teamId,
-        })
-      )?.some(
-        (row) =>
-          row.teamId === target.teamId && row.memberUid === user.uid && row.status === 'active',
-      );
-      if (!member)
-        throw new HttpError(403, 'team_member_required', '只有本代表队队员可以提交训练记录');
-    }
-    const result = await storage.change(String(request.params.id), (space) => {
-      if (!space || !visible(space, user))
+    const result = await storage.change(String(request.params.id), async (space) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
+      if (!space || !(await visible(space, user, options.store)))
         throw new HttpError(404, 'not_found', '未找到该协作空间');
+      if (space.teamId && !(await manages(space, user, options.store))) {
+        const member = (
+          await options.store?.sportsTeamMembers.list({
+            scopeType: 'sports_team',
+            scopeId: space.teamId,
+          })
+        )?.some(
+          (row) =>
+            row.teamId === space.teamId && row.memberUid === user.uid && row.status === 'active',
+        );
+        if (!member)
+          throw new HttpError(403, 'team_member_required', '只有本代表队队员可以提交训练记录');
+      }
       if (space.status !== 'published')
         throw new HttpError(409, 'space_closed', '该空间尚未开放或已结束');
-      if (space.revision !== input.revision)
-        throw new HttpError(409, 'revision_conflict', '页面已更新，请重新加载');
-      if (space.entries.length >= 10000)
-        throw new HttpError(409, 'capacity_limit', '记录数量已达上限');
       let previous = input.entryId
         ? space.entries.find((entry) => entry.id === input.entryId)
         : ['availability', 'practice'].includes(space.kind)
           ? space.entries.find((entry) => entry.uid === user.uid)
           : undefined;
       if (input.entryId && !previous) throw new HttpError(404, 'entry_not_found', '未找到记录');
-      if (previous && previous.uid !== user.uid && !manages(space, user))
+      const definitionRevision = space.definitionRevision ?? space.revision;
+      const definitionMatches =
+        input.definitionRevision === undefined
+          ? input.revision >= definitionRevision && input.revision <= space.revision
+          : input.definitionRevision === definitionRevision;
+      const entryMatches =
+        !previous ||
+        (input.entryRevision === undefined
+          ? input.revision === space.revision
+          : input.entryRevision === (previous.revision ?? 1));
+      if (!definitionMatches || !entryMatches)
+        throw new HttpError(409, 'revision_conflict', '记录或填写要求已更新，请刷新后确认再提交');
+      if (!previous && space.entries.length >= 10000)
+        throw new HttpError(409, 'capacity_limit', '记录数量已达上限');
+      if (previous && previous.uid !== user.uid && !(await manages(space, user, options.store)))
         throw new HttpError(403, 'forbidden', '不能修改其他同学的记录');
       if (previous && space.kind === 'attendance' && previous.reviewStatus === 'approved')
         throw new HttpError(409, 'verified_record', '已确认的训练记录不能修改');
@@ -396,8 +471,11 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         throw new HttpError(400, 'invalid_slot', '选择了不存在的选项');
       if (['availability', 'practice'].includes(space.kind) && !uniqueChoices.length)
         throw new HttpError(400, 'missing_choice', '请选择可用时间或报名志愿');
-      if (space.kind === 'shared_table') {
-        if (space.ownerUid !== user.uid && !isDevelopmentBusinessAdmin(user))
+      if (['shared_table', 'materials'].includes(space.kind)) {
+        if (
+          !isGlobalOrganizationBusinessSupervisor(user) &&
+          !(space.ownerUid === user.uid && (await manages(space, user, options.store)))
+        )
           for (const column of space.columns)
             if (
               column.editRoleKeys?.length &&
@@ -410,8 +488,6 @@ export function createCollaborationRouter(options: CollaborationOptions) {
               throw new HttpError(403, 'column_forbidden', `不能修改${column.label}`);
         validateTableRow(space.columns, input.values);
       }
-      if (space.kind === 'materials' && space.columns.length)
-        validateTableRow(space.columns, input.values);
       if (space.kind === 'practice' && previous?.assignedSlot)
         throw new HttpError(409, 'assignment_locked', '已安排后请联系组织调整');
       if (space.kind === 'booking')
@@ -424,6 +500,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       const at = new Date().toISOString();
       const entry: CollaborationEntry = {
         id: previous?.id ?? randomUUID(),
+        revision: previous ? (previous.revision ?? 1) + 1 : 1,
         uid: previous?.uid ?? user.uid,
         displayName: previous?.displayName ?? user.displayName,
         createdAt: previous?.createdAt ?? at,
@@ -444,6 +521,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (previous) space.entries[space.entries.indexOf(previous)] = entry;
       else space.entries.push(entry);
       space.updatedAt = at;
+      space.definitionRevision ??= space.revision;
       space.revision++;
       space.history.push({
         uid: user.uid,
@@ -452,24 +530,26 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         entryId: entry.id,
       });
       space.history = space.history.slice(-500);
-      return { record: space, result: view(space, user) };
+      return { record: space, result: await view(space, user, options.store) };
     });
     send(response, result);
   });
   router.delete('/:id/entries/:entryId', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(z.object({ revision: z.number().int().min(1) }).strict(), request.body);
-    const result = await storage.change(String(request.params.id), (space) => {
-      if (!space || !visible(space, user)) throw new HttpError(404, 'not_found', '未找到空间');
+    const result = await storage.change(String(request.params.id), async (space) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
+      if (!space || !(await visible(space, user, options.store)))
+        throw new HttpError(404, 'not_found', '未找到空间');
       if (space.revision !== input.revision)
         throw new HttpError(409, 'revision_conflict', '请重新加载后再操作');
       const entry = space.entries.find((value) => value.id === request.params.entryId);
-      if (!entry || (entry.uid !== user.uid && !manages(space, user)))
+      if (!entry || (entry.uid !== user.uid && !(await manages(space, user, options.store))))
         throw new HttpError(403, 'forbidden', '不能删除此记录');
       if (
         space.kind === 'shared_table' &&
         space.ownerUid !== user.uid &&
-        !isDevelopmentBusinessAdmin(user) &&
+        !isGlobalOrganizationBusinessSupervisor(user) &&
         space.columns.some(
           (column) =>
             column.editRoleKeys?.length &&
@@ -480,6 +560,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       if (['review', 'attendance'].includes(space.kind) && entry.reviewStatus === 'approved')
         throw new HttpError(409, 'verified_record', '已确认的记录不能删除');
       space.entries = space.entries.filter((value) => value.id !== entry.id);
+      space.definitionRevision ??= space.revision;
       space.revision++;
       space.updatedAt = new Date().toISOString();
       space.history.push({
@@ -489,16 +570,17 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         entryId: entry.id,
       });
       space.history = space.history.slice(-500);
-      return { record: space, result: view(space, user) };
+      return { record: space, result: await view(space, user, options.store) };
     });
     send(response, result);
   });
   router.post('/:id/assign', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(z.object({ revision: z.number().int().min(1) }).strict(), request.body);
-    const result = await storage.change(String(request.params.id), (space) => {
+    const result = await storage.change(String(request.params.id), async (space) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
       if (!space) throw new HttpError(404, 'not_found', '未找到空间');
-      guard(space, user, input.revision);
+      await guard(space, user, input.revision);
       if (space.kind !== 'practice')
         throw new HttpError(400, 'invalid_kind', '该功能仅适用于志愿双选');
       if (space.entries.some((entry) => entry.assignmentStatus === 'accepted'))
@@ -507,17 +589,20 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       space.entries.forEach((entry) => {
         entry.assignedSlot = assigned[entry.uid] ?? null;
         entry.assignmentStatus = 'pending';
+        entry.revision = (entry.revision ?? 1) + 1;
+        entry.updatedAt = new Date().toISOString();
       });
+      space.definitionRevision ??= space.revision;
       space.revision++;
       space.updatedAt = new Date().toISOString();
       space.history.push({ uid: user.uid, at: space.updatedAt, action: 'preferences_assigned' });
       space.history = space.history.slice(-500);
-      return { record: space, result: view(space, user) };
+      return { record: space, result: await view(space, user, options.store) };
     });
     send(response, result);
   });
   router.post('/:id/entries/:entryId/assignment', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(
       z
         .object({
@@ -528,7 +613,8 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         .strict(),
       request.body,
     );
-    const result = await storage.change(String(request.params.id), (space) => {
+    const result = await storage.change(String(request.params.id), async (space) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
       if (!space || space.kind !== 'practice')
         throw new HttpError(404, 'not_found', '未找到双选空间');
       if (space.revision !== input.revision)
@@ -536,7 +622,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       const entry = space.entries.find((value) => value.id === request.params.entryId);
       if (!entry) throw new HttpError(404, 'not_found', '未找到报名');
       if (input.slotId !== undefined) {
-        guard(space, user, input.revision);
+        await guard(space, user, input.revision);
         const slot = space.slots.find((value) => value.id === input.slotId);
         if (input.slotId && !slot) throw new HttpError(400, 'invalid_slot', '支队不存在');
         if (
@@ -557,21 +643,23 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         entry.assignmentStatus = input.decision;
         if (input.decision === 'declined') entry.assignedSlot = null;
       } else throw new HttpError(400, 'missing_assignment', '请选择安排或确认结果');
+      space.definitionRevision ??= space.revision;
       space.revision++;
       space.updatedAt = new Date().toISOString();
       entry.updatedAt = space.updatedAt;
+      entry.revision = (entry.revision ?? 1) + 1;
       space.history.push({
         uid: user.uid,
         at: space.updatedAt,
         action: 'assignment_updated',
         entryId: entry.id,
       });
-      return { record: space, result: view(space, user) };
+      return { record: space, result: await view(space, user, options.store) };
     });
     send(response, result);
   });
   router.post('/:id/entries/:entryId/review', async (request, response) => {
-    const user = actor(response);
+    const requestActor = actor(response);
     const input = parse(
       z
         .object({
@@ -582,13 +670,14 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         .strict(),
       request.body,
     );
-    const result = await storage.change(String(request.params.id), (space) => {
+    const result = await storage.change(String(request.params.id), async (space) => {
+      const user = await currentCollaborationActor(requestActor, options.store);
       if (!space) throw new HttpError(404, 'not_found', '未找到空间');
       const entry = space.entries.find((value) => value.id === request.params.entryId);
       if (!entry) throw new HttpError(404, 'not_found', '未找到记录');
       if (!['review', 'attendance'].includes(space.kind))
         throw new HttpError(400, 'invalid_kind', '该空间不支持审核');
-      const allowed = canReviewEntry(space, entry, user);
+      const allowed = await canReviewEntry(space, entry, user, options.store);
       if (!allowed) throw new HttpError(403, 'forbidden', '当前身份不能审核这一步');
       if (space.revision !== input.revision)
         throw new HttpError(409, 'revision_conflict', '请刷新后重新审核');
@@ -609,6 +698,8 @@ export function createCollaborationRouter(options: CollaborationOptions) {
           entry.reviewStatus = 'approved';
       }
       entry.updatedAt = at;
+      entry.revision = (entry.revision ?? 1) + 1;
+      space.definitionRevision ??= space.revision;
       space.revision++;
       space.updatedAt = at;
       space.history.push({
@@ -618,7 +709,7 @@ export function createCollaborationRouter(options: CollaborationOptions) {
         entryId: entry.id,
       });
       space.history = space.history.slice(-500);
-      return { record: space, result: view(space, user) };
+      return { record: space, result: await view(space, user, options.store) };
     });
     send(response, result);
   });

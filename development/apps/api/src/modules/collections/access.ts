@@ -1,5 +1,11 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
-import { organizationForRole } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
+  departmentsForRoles,
+  departmentById,
+  type CollectionSchema,
+} from '@freebbs-development/contracts';
+import type { CollectionFormRecord, DevelopmentStore } from '../../core/database/types.js';
 
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 
@@ -12,21 +18,83 @@ const SOCIAL_ROLE_PREFIXES = [
 ] as const;
 
 export function canCreateCollection(actor: AuthorizationContext): boolean {
-  if (isDevelopmentBusinessAdmin(actor)) return true;
+  if (isGlobalOrganizationBusinessSupervisor(actor)) return true;
   return actor.roles.some(
     (role) =>
-      organizationForRole(role) !== null ||
+      organizationMembershipsForRoles([role]).length > 0 ||
       SOCIAL_ROLE_PREFIXES.some((prefix) => role.startsWith(prefix)),
   );
 }
 
-export function canManageCollection(actor: AuthorizationContext, ownerUid: string): boolean {
-  return isDevelopmentBusinessAdmin(actor) || actor.uid === ownerUid;
+export function canManageCollection(
+  actor: AuthorizationContext,
+  form: Pick<CollectionFormRecord, 'ownerUid' | 'organizationId'>,
+  schema?: Pick<CollectionSchema, 'publisherDepartmentId'>,
+): boolean {
+  if (isGlobalOrganizationBusinessSupervisor(actor)) return true;
+  const supervised = actor.roles.some(
+    (role) =>
+      role.startsWith('counselor.') ||
+      [
+        'student_union.executive_president',
+        'student_union.presidium',
+        'science_association.chair',
+      ].includes(role),
+  );
+  if (actor.uid !== form.ownerUid && !supervised) return false;
+  if (actor.uid !== form.ownerUid && form.organizationId == null && !schema?.publisherDepartmentId)
+    return false;
+  const departments = departmentsForRoles(actor.roles);
+  const publisher = schema?.publisherDepartmentId
+    ? departmentById(schema.publisherDepartmentId)
+    : undefined;
+  if (
+    actor.uid !== form.ownerUid &&
+    !publisher &&
+    !organizationMembershipsForRoles(actor.roles).some(
+      ({ organizationId, level }) => organizationId === form.organizationId && level === 'lead',
+    ) &&
+    !(actor.roles.includes('counselor.innovation') && form.organizationId === 'sast')
+  )
+    return false;
+  if (schema?.publisherDepartmentId && !publisher) return false;
+  if (publisher && form.organizationId != null && publisher.organizationId !== form.organizationId)
+    return false;
+  if (
+    schema?.publisherDepartmentId &&
+    !departments.some(({ id }) => id === schema.publisherDepartmentId)
+  )
+    return false;
+  return (
+    form.organizationId == null ||
+    departments.some(({ organizationId }) => organizationId === form.organizationId) ||
+    organizationMembershipsForRoles(actor.roles).some(
+      ({ organizationId }) => organizationId === form.organizationId,
+    )
+  );
+}
+
+export async function canManageStoredCollection(
+  store: DevelopmentStore,
+  actor: AuthorizationContext,
+  form: CollectionFormRecord,
+): Promise<boolean> {
+  const versionIds = [...new Set([form.currentDraftVersionId, form.publishedVersionId])].filter(
+    (id): id is string => id !== null,
+  );
+  const versions = await Promise.all(versionIds.map((id) => store.collectionVersions.get(id)));
+  if (versionIds.length === 0) return canManageCollection(actor, form);
+  return versions.every(
+    (version) =>
+      version !== null &&
+      version.formId === form.id &&
+      canManageCollection(actor, form, version.schema),
+  );
 }
 
 export function canManageCollectionModuleLibrary(actor: AuthorizationContext): boolean {
   return (
-    isDevelopmentBusinessAdmin(actor) ||
+    isGlobalOrganizationBusinessSupervisor(actor) ||
     actor.roles.some(
       (role) =>
         role.startsWith('counselor.') ||

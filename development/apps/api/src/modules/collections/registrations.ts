@@ -1,10 +1,13 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  SOCIAL_ORGANIZATION_IDS,
+  organizationMembershipsForRoles,
+} from '@freebbs-development/contracts';
 import {
   departmentById,
   departmentsForRoles,
   legacyDepartmentId,
   organizationById,
-  organizationForRole,
   type CollectionSchema,
   type DepartmentActivitySummary,
   type SocialOrganizationId,
@@ -25,11 +28,10 @@ import { activityWithWorkspaceSchedule } from '../events/workspace-schedule.js';
 import { readActivityWorkspace } from '../events/workspace-storage.js';
 
 export function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
+  if (isGlobalOrganizationBusinessSupervisor(actor)) return [...SOCIAL_ORGANIZATION_IDS];
   return [
     ...new Set([
-      ...actor.roles
-        .map((role) => organizationForRole(role)?.organizationId)
-        .filter((id): id is SocialOrganizationId => id !== undefined),
+      ...organizationMembershipsForRoles(actor.roles).map(({ organizationId }) => organizationId),
       ...departmentsForRoles(actor.roles)
         .map(({ organizationId }) => organizationId)
         .filter((id): id is SocialOrganizationId => id !== null),
@@ -51,7 +53,8 @@ export function resolvePublisher(
   if (
     selected &&
     (!department ||
-      (!isDevelopmentBusinessAdmin(actor) && !departments.some(({ id }) => id === selected)))
+      (!isGlobalOrganizationBusinessSupervisor(actor) &&
+        !departments.some(({ id }) => id === selected)))
   )
     throw new HttpError(403, 'forbidden', '不能以未加入的部门发布活动');
   if (department) {
@@ -66,9 +69,19 @@ export function resolvePublisher(
       organizationId: department.organizationId,
     };
   }
+  if (
+    !selected &&
+    !isGlobalOrganizationBusinessSupervisor(actor) &&
+    departments.length > 1 &&
+    actor.roles.some(
+      (role) => role === 'counselor.practice' || role === 'counselor.student_development',
+    )
+  ) {
+    throw new HttpError(400, 'department_required', '请选择本次表单的发布部门');
+  }
   // Old payloads and actors without a gallery department remain valid.
   const organizations = actorOrganizations(actor);
-  if (isDevelopmentBusinessAdmin(actor))
+  if (isGlobalOrganizationBusinessSupervisor(actor))
     return { schema, organizationId: requestedOrganization ?? null };
   if (requestedOrganization != null) {
     if (!organizations.includes(requestedOrganization))
@@ -135,7 +148,7 @@ export function canViewCollection(
   form: CollectionFormRecord,
   schema: CollectionSchema,
 ): boolean {
-  return canManageCollection(actor, form.ownerUid) || audienceAllows(actor, schema);
+  return canManageCollection(actor, form, schema) || audienceAllows(actor, schema);
 }
 export function canReadPublishedActivity(
   actor: AuthorizationContext,
@@ -150,7 +163,7 @@ export function canReadPublishedActivity(
   if (
     (activity.scope.type === 'public' && activity.scope.id === '*') ||
     actor.uid === activity.ownerUid ||
-    isDevelopmentBusinessAdmin(actor)
+    isGlobalOrganizationBusinessSupervisor(actor)
   )
     return true;
   // Baseline student events.read is unscoped. A private catalog entry needs an
@@ -180,7 +193,7 @@ export async function registrationFromForm(
   if (!version?.publishedAt || !canViewCollection(actor, form, version.schema)) return null;
   const featureState = await readCollectionFeature(featureDirectory, form.id);
   if (
-    !canManageCollection(actor, form.ownerUid) &&
+    !canManageCollection(actor, form, version.schema) &&
     version.schema.recipientMode &&
     version.schema.recipientMode !== 'open'
   ) {
@@ -198,6 +211,7 @@ export async function registrationFromForm(
   const department = publisherDepartmentId ? departmentById(publisherDepartmentId) : undefined;
   const organizationId = department ? department.organizationId : form.organizationId;
   const active = responses.filter((item) => item.formId === form.id && item.status === 'submitted');
+  const attemptLimit = version.schema.formRules.find(({ kind }) => kind === 'attempt_limit')?.value;
   const { schedule } = await readActivityWorkspace(featureDirectory, 'native_collection', form.id);
   return {
     id: form.id,
@@ -217,6 +231,8 @@ export async function registrationFromForm(
     capacity: effectiveCapacity(form, version.schema),
     registrationCount: active.length + featureState.responses.length,
     registered: active.some((item) => item.respondentUid === actor.uid),
+    attemptsUsed: active.filter((item) => item.respondentUid === actor.uid).length,
+    attemptLimit: typeof attemptLimit === 'number' ? attemptLimit : 1,
     status: nativeStatus(form, version.schema),
     schema: version.schema,
   };

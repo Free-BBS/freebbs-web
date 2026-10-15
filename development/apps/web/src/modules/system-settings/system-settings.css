@@ -66,6 +66,14 @@
   gap: 10px;
 }
 
+.system-settings-page .identity-save-bar {
+  position: static;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .main-preview-controls {
   display: flex;
   min-width: 0;

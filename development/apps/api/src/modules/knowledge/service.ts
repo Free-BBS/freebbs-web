@@ -1,13 +1,17 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
+  departmentsForRoles,
+} from '@freebbs-development/contracts';
 import {
   SOCIAL_ORGANIZATION_IDS,
-  organizationForRole,
   type ScopeRef,
   type SocialOrganizationId,
 } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { authorize } from '../../core/authorization/authorize.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type {
   DevelopmentStore,
@@ -70,8 +74,23 @@ function repositoryFilters(filters: KnowledgeEntryFilters): ListFilters {
   };
 }
 
-function permitted(actor: AuthorizationContext, action: string, scope: ScopeRef): boolean {
-  return authorize(actor, { action, resource: 'knowledge_entry', scope }).allowed;
+function permitted(
+  actor: AuthorizationContext,
+  action: string,
+  scope: ScopeRef,
+  organizationId?: SocialOrganizationId | null,
+): boolean {
+  const scopes = [
+    scope,
+    ...(organizationId ? [{ type: 'social_organization', id: organizationId }] : []),
+  ];
+  const decisions = scopes.map((scope) =>
+    authorize(actor, { action, resource: 'knowledge_entry', scope }),
+  );
+  return (
+    !decisions.some(({ reason }) => reason === 'explicit-deny' || reason === 'invalid-scope') &&
+    decisions.some(({ allowed }) => allowed)
+  );
 }
 
 function knowledgeStatus(value: string): KnowledgeEntryStatus | null {
@@ -89,21 +108,25 @@ function entryAudience(entry: KnowledgeEntryRecord): 'general' | 'social_org' {
 }
 
 function managesAcrossOrganizations(actor: AuthorizationContext): boolean {
-  return (
-    isDevelopmentBusinessAdmin(actor) ||
-    actor.roles.some((role) => organizationForRole(role)?.level === 'lead')
-  );
+  return isGlobalOrganizationBusinessSupervisor(actor);
 }
 
 function belongsToOrganization(
   actor: AuthorizationContext,
   organizationId: SocialOrganizationId,
 ): boolean {
-  return actor.tags.some(
-    (tag) =>
-      tag.key === `social_org.${organizationId}` &&
-      (tag.scope === undefined ||
-        (tag.scope.type === 'social_organization' && tag.scope.id === organizationId)),
+  return (
+    organizationMembershipsForRoles(actor.roles).some(
+      (row) => row.organizationId === organizationId,
+    ) ||
+    departmentsForRoles(actor.roles).some((row) => row.organizationId === organizationId) ||
+    actor.tags.some(
+      (tag) =>
+        tag.key === `social_org.${organizationId}` &&
+        (tag.expiresAt == null || Date.parse(tag.expiresAt) > Date.now()) &&
+        (tag.scope === undefined ||
+          (tag.scope.type === 'social_organization' && tag.scope.id === organizationId)),
+    )
   );
 }
 
@@ -121,7 +144,12 @@ function socialOrganizationForEntry(entry: KnowledgeEntryRecord): SocialOrganiza
 function requireSocialEntryAccess(actor: AuthorizationContext, entry: KnowledgeEntryRecord): void {
   if (entryAudience(entry) !== 'social_org') return;
   const organizationId = socialOrganizationForEntry(entry);
-  if (organizationId === null || !canAccessOrganization(actor, organizationId)) {
+  if (
+    organizationId === null ||
+    entry.scope.type !== 'social_organization' ||
+    entry.scope.id !== organizationId ||
+    !canAccessOrganization(actor, organizationId)
+  ) {
     throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
   }
 }
@@ -181,7 +209,15 @@ export class KnowledgeService {
       if (entryAudience(entry) !== 'social_org') return true;
       const organizationId = socialOrganizationForEntry(entry);
       return (
-        actor !== null && organizationId !== null && canAccessOrganization(actor, organizationId)
+        actor !== null &&
+        organizationId !== null &&
+        entry.scope.type === 'social_organization' &&
+        entry.scope.id === organizationId &&
+        canAccessOrganization(actor, organizationId) &&
+        permitted(actor, 'knowledge.read', entry.scope, organizationId) &&
+        (entry.status === 'published' ||
+          permitted(actor, 'knowledge.create', entry.scope, organizationId) ||
+          permitted(actor, 'knowledge.publish', entry.scope, organizationId))
       );
     });
   }
@@ -198,10 +234,21 @@ export class KnowledgeService {
     ) {
       throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
     }
-    if (!permitted(actor, 'knowledge.create', normalized.scope)) {
+    if (!permitted(actor, 'knowledge.create', normalized.scope, normalized.organizationId)) {
       throw new HttpError(403, 'forbidden', 'Knowledge permission is required');
     }
     return this.store.transaction(async (transactionStore) => {
+      const freshActor = await loadAuthorizationContext(transactionStore, actor, new Date());
+      if (
+        normalized.audience === 'social_org' &&
+        normalized.organizationId !== null &&
+        !canAccessOrganization(freshActor, normalized.organizationId)
+      ) {
+        throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
+      }
+      if (!permitted(freshActor, 'knowledge.create', normalized.scope, normalized.organizationId)) {
+        throw new HttpError(403, 'forbidden', 'Knowledge permission is required');
+      }
       const created = await transactionStore.knowledge.create({
         ...normalized,
         ownerUid: actor.uid,
@@ -227,13 +274,26 @@ export class KnowledgeService {
     return this.store.transaction(async (transactionStore) => {
       const current = await transactionStore.knowledge.getForUpdate(id);
       if (current === null) return null;
+      actor = await loadAuthorizationContext(transactionStore, actor, new Date());
       requireSocialEntryAccess(actor, current);
+      if (!permitted(actor, 'knowledge.create', current.scope, current.organizationId)) {
+        throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
+      }
       const targetScope = patch.scope ?? current.scope;
       const targetAudience = patch.audience ?? entryAudience(current);
       const targetOrganizationId =
         patch.organizationId === undefined
           ? (current.organizationId ?? null)
           : patch.organizationId;
+      // Validate the completed target, not just independently supplied fields.
+      normalizedCreateInput({
+        ...current,
+        ...patch,
+        status: knowledgeStatus(current.status) ?? 'draft',
+        audience: targetAudience,
+        organizationId: targetOrganizationId ?? null,
+        scope: targetScope,
+      });
       if (
         targetAudience === 'social_org' &&
         (!isSocialOrganizationId(targetOrganizationId) ||
@@ -242,15 +302,15 @@ export class KnowledgeService {
         throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
       }
       if (
-        !permitted(actor, 'knowledge.create', current.scope) ||
-        !permitted(actor, 'knowledge.create', targetScope)
+        !permitted(actor, 'knowledge.create', current.scope, current.organizationId) ||
+        !permitted(actor, 'knowledge.create', targetScope, targetOrganizationId)
       ) {
         throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
       }
       if (
         current.status === 'published' &&
-        (!permitted(actor, 'knowledge.publish', current.scope) ||
-          !permitted(actor, 'knowledge.publish', targetScope))
+        (!permitted(actor, 'knowledge.publish', current.scope, current.organizationId) ||
+          !permitted(actor, 'knowledge.publish', targetScope, targetOrganizationId))
       ) {
         throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
       }
@@ -279,8 +339,9 @@ export class KnowledgeService {
     const result = await this.store.transaction<TransitionResult>(async (transactionStore) => {
       const current = await transactionStore.knowledge.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
+      actor = await loadAuthorizationContext(transactionStore, actor, new Date());
       requireSocialEntryAccess(actor, current);
-      if (!permitted(actor, 'knowledge.publish', current.scope)) {
+      if (!permitted(actor, 'knowledge.publish', current.scope, current.organizationId)) {
         throw new HttpError(404, 'knowledge_entry_not_found', 'Entry not found');
       }
       const from = knowledgeStatus(current.status);

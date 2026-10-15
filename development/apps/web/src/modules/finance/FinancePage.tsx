@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   SOCIAL_ORGANIZATIONS,
-  organizationForRole,
+  organizationMembershipsForRoles,
+  isGlobalOrganizationBusinessSupervisor,
   isDevelopmentBusinessAdmin,
   type ScopeRef,
+  type SystemSettingsOrganizations,
+  type Page,
   type UserContext,
 } from '@freebbs-development/contracts';
 
@@ -82,52 +85,48 @@ const statusTones: Record<FinanceStatus, StatusBadgeStatus> = {
 
 function leadOrganizationIds(user: FinanceUser | null): string[] {
   if (user === null) return [];
-  if (isDevelopmentBusinessAdmin(user)) {
-    return SOCIAL_ORGANIZATIONS.map(({ id }) => id);
-  }
-  if (
-    isFinanceCounselor(user) ||
-    user.roles.includes('platform.admin') ||
-    user.roles.some((role) => organizationForRole(role)?.level === 'lead')
-  ) {
-    return SOCIAL_ORGANIZATIONS.filter(
-      ({ id }) =>
-        permitted(user, 'finance.record.read', { type: 'social_organization', id }) &&
-        (permitted(user, 'finance.record.create', { type: 'social_organization', id }) ||
-          permitted(user, 'finance.record.update', { type: 'social_organization', id })),
-    ).map(({ id }) => id);
-  }
-  return [];
+  return SOCIAL_ORGANIZATIONS.filter(
+    ({ id }) =>
+      permitted(user, 'finance.record.read', { type: 'social_organization', id }) &&
+      (permitted(user, 'finance.record.create', { type: 'social_organization', id }) ||
+        permitted(user, 'finance.record.update', { type: 'social_organization', id })),
+  ).map(({ id }) => id);
 }
 
 function memberOrganizationIds(user: FinanceUser | null): string[] {
   if (user === null) return [];
-  return [
-    ...new Set(
-      user.roles.flatMap((role) => {
-        const membership = organizationForRole(role);
-        return membership ? [membership.organizationId] : [];
-      }),
-    ),
-  ];
+  return organizationMembershipsForRoles(user.roles).map(({ organizationId }) => organizationId);
 }
 
-function isFinanceCounselor(user: FinanceUser): boolean {
-  return (
-    user.roles.includes('counselor.youth_league_secretary') ||
-    user.roles.includes('counselor.youth_league')
+function eligibleOrganization(user: FinanceUser, action: string, scope: ScopeRef): boolean {
+  if (isGlobalOrganizationBusinessSupervisor(user)) return true;
+  if (user.roles.includes('platform.admin')) return true;
+  if (scope.type !== 'social_organization') return false;
+  if (scope.id === 'sast' && user.roles.includes('counselor.innovation')) return true;
+  const membership = organizationMembershipsForRoles(user.roles).find(
+    ({ organizationId }) => organizationId === scope.id,
+  );
+  if (!membership) return false;
+  if (action === 'finance.record.read' || membership.level === 'lead') return true;
+  return user.roles.some(
+    (role) =>
+      (role === 'student_union.finance' &&
+        ['arts_center', 'liaison_center', 'sports_center', 'rights_development_center'].includes(
+          scope.id,
+        )) ||
+      (role === 'youth_league.finance' && scope.id === 'tuanwei') ||
+      (role === 'media_center.finance' && scope.id === 'media_center'),
   );
 }
 
 function canReviewFinance(user: FinanceUser | null, scope?: ScopeRef): boolean {
-  if (user === null) return false;
-  if (isDevelopmentBusinessAdmin(user)) return true;
+  if (user === null || user.previewing === true) return false;
   return scope
     ? permitted(user, 'finance.record.review', scope)
     : hasAnyGrant(user, 'finance.record.review');
 }
 
-function organizationName(organizationId: string | null | undefined): string {
+function defaultOrganizationName(organizationId: string | null | undefined): string {
   if (organizationId == null) return '\u672a\u5f52\u5c5e\uff08\u5386\u53f2\u8bb0\u5f55\uff09';
   return SOCIAL_ORGANIZATIONS.find(({ id }) => id === organizationId)?.name ?? organizationId;
 }
@@ -150,12 +149,11 @@ function matches(pattern: string, value: string): boolean {
 }
 
 function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): boolean {
-  if (user === null) return false;
-  if (isDevelopmentBusinessAdmin(user)) return true;
+  if (user === null || user.previewing === true) return false;
+  if (!eligibleOrganization(user, action, scope)) return false;
   const now = Date.now();
   const policies = (user.policies ?? []).filter(
     (policy) =>
-      policy.action !== '*' &&
       matches(policy.action, action) &&
       matches(policy.resource, 'finance_record') &&
       (policy.scope === undefined ||
@@ -164,21 +162,13 @@ function permitted(user: FinanceUser | null, action: string, scope: ScopeRef): b
   );
   return (
     !policies.some((policy) => policy.effect === 'deny') &&
-    policies.some((policy) => policy.effect === 'allow')
+    (isDevelopmentBusinessAdmin(user) || policies.some((policy) => policy.effect === 'allow'))
   );
 }
 
 function hasAnyGrant(user: FinanceUser | null, action: string): boolean {
-  if (user === null) return false;
-  if (isDevelopmentBusinessAdmin(user)) return true;
-  const now = Date.now();
-  return (user.policies ?? []).some(
-    (policy) =>
-      policy.action !== '*' &&
-      matches(policy.action, action) &&
-      matches(policy.resource, 'finance_record') &&
-      policy.effect === 'allow' &&
-      (policy.expiresAt == null || Date.parse(policy.expiresAt) > now),
+  return [null, ...SOCIAL_ORGANIZATIONS.map(({ id }) => id)].some((id) =>
+    permitted(user, action, financeAuthorizationScope(id)),
   );
 }
 
@@ -261,6 +251,18 @@ function summarizeOrganization(records: FinanceRecord[], organizationId: string)
   };
 }
 
+interface FinanceSummary {
+  organizationId: string | null;
+  approvedBudget: number;
+  spent: number;
+  pending: number;
+  remaining: number;
+  usagePercent: number;
+}
+interface FinanceRecordsPage extends Page<FinanceRecord> {
+  summaries: FinanceSummary[];
+}
+
 export interface FinancePageProps {
   client?: Pick<ApiClient, 'request'>;
   user?: FinanceUser | null;
@@ -271,9 +273,29 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
   const auth = useOptionalAuth();
   const user =
     suppliedUser === undefined ? ((auth?.user as FinanceUser | null) ?? null) : suppliedUser;
-  const organizationIds = useMemo(() => leadOrganizationIds(user), [user]);
+  const organizationIds = leadOrganizationIds(user);
   const defaultOrganizationId = organizationIds[0] ?? '';
 
+  const [organizationMetadata, setOrganizationMetadata] =
+    useState<SystemSettingsOrganizations | null>(null);
+  const organizationName = useCallback(
+    (id: string | null | undefined) =>
+      organizationMetadata?.organizations?.find((row) => row.id === id)?.name ??
+      defaultOrganizationName(id),
+    [organizationMetadata],
+  );
+  useEffect(() => {
+    let active = true;
+    client
+      .request<SystemSettingsOrganizations>('/notifications/organizations')
+      .then((metadata) => {
+        if (active) setOrganizationMetadata(metadata);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [client]);
   const [records, setRecords] = useState<FinanceRecord[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [createDraft, setCreateDraft] = useState<FinanceDraft>(emptyDraft);
@@ -285,6 +307,10 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
   const [policyRevision, setPolicyRevision] = useState(0);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FinanceStatus | ''>('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [summaries, setSummaries] = useState<FinanceSummary[] | null>(null);
+  const generation = useRef(0);
 
   useEffect(() => {
     const now = Date.now();
@@ -315,17 +341,44 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
     });
   }
 
+  const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN');
+  const matchingOrganizationIds = normalizedQuery
+    ? SOCIAL_ORGANIZATIONS.filter((org) =>
+        organizationName(org.id).toLocaleLowerCase('zh-CN').includes(normalizedQuery),
+      )
+        .map((org) => org.id)
+        .join(',')
+    : '';
+  const matchingLegacyOrganization = Boolean(
+    normalizedQuery && organizationName(null).toLocaleLowerCase('zh-CN').includes(normalizedQuery),
+  );
   const loadRecords = useCallback(
     async (preserveConfirmed = false) => {
       setError(null);
+      const current = ++generation.current;
       try {
-        setRecords(await client.request<FinanceRecord[]>('/finance/records'));
+        const parameters = new URLSearchParams({ page: String(page), pageSize: '20' });
+        if (query.trim()) {
+          parameters.set('query', query.trim());
+          if (matchingOrganizationIds)
+            parameters.set('organizationMatches', matchingOrganizationIds);
+          if (matchingLegacyOrganization) parameters.set('legacyMatch', 'true');
+        }
+        if (statusFilter) parameters.set('status', statusFilter);
+        const result = await client.request<FinanceRecordsPage | FinanceRecord[]>(
+          `/finance/records?${parameters}`,
+        );
+        if (current !== generation.current) return;
+        setRecords(Array.isArray(result) ? result : result.items);
+        setTotal(Array.isArray(result) ? result.length : result.total);
+        setSummaries(Array.isArray(result) ? null : result.summaries);
       } catch (caught) {
+        if (current !== generation.current) return;
         if (!preserveConfirmed) setRecords(null);
         setError(caught);
       }
     },
-    [client],
+    [client, page, query, statusFilter, matchingOrganizationIds, matchingLegacyOrganization],
   );
 
   useEffect(() => {
@@ -433,9 +486,7 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
           kind: editDraft.kind,
           amountCents: validated.amountCents,
           activityId: editDraft.activityId.trim() || null,
-          ...(editDraft.organizationId.trim()
-            ? { organizationId: editDraft.organizationId.trim() }
-            : {}),
+          organizationId: editDraft.organizationId.trim() || null,
           scope: validated.scope,
         }),
       }),
@@ -531,9 +582,19 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
             <select
               aria-label={`${prefix}组织`}
               value={draft.organizationId}
-              onChange={(event) => setDraft({ ...draft, organizationId: event.target.value })}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  organizationId: event.target.value,
+                  ...(!event.target.value && draft.scopeType === 'social_organization'
+                    ? { scopeType: 'public', scopeId: '*' }
+                    : {}),
+                })
+              }
             >
-              <option value="">历史未归属</option>
+              {isGlobalOrganizationBusinessSupervisor(user) ? (
+                <option value="">历史未归属</option>
+              ) : null}
               {organizationIds.map((organizationId) => (
                 <option key={organizationId} value={organizationId}>
                   {organizationName(organizationId)}
@@ -603,11 +664,12 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
             record.scope.id,
           ].some((value) => value.toLocaleLowerCase('zh-CN').includes(normalizedQuery))),
     );
-  }, [query, records, statusFilter]);
+  }, [query, records, statusFilter, organizationName]);
   const budgetSummaries = useMemo(() => {
+    if (summaries !== null) return summaries;
     const available = records ?? [];
     const memberships = memberOrganizationIds(user);
-    const globalViewer = isDevelopmentBusinessAdmin(user) || canReviewFinance(user);
+    const globalViewer = isGlobalOrganizationBusinessSupervisor(user);
     const recordOrganizations = [
       ...new Set(
         available.flatMap((record) => (record.organizationId ? [record.organizationId] : [])),
@@ -621,7 +683,7 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
     return organizationIdsForOverview.map((organizationId) =>
       summarizeOrganization(available, organizationId),
     );
-  }, [records, user]);
+  }, [records, user, summaries]);
 
   if (error !== null && statusOf(error) === 403) {
     return (
@@ -709,14 +771,20 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
             type="search"
             value={query}
             placeholder="标题、组织、活动或范围"
-            onChange={(event) => setQuery(event.currentTarget.value)}
+            onChange={(event) => {
+              setQuery(event.currentTarget.value);
+              setPage(1);
+            }}
           />
         </label>
         <label>
           记录状态
           <select
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.currentTarget.value as FinanceStatus | '')}
+            onChange={(event) => {
+              setStatusFilter(event.currentTarget.value as FinanceStatus | '');
+              setPage(1);
+            }}
           >
             <option value="">全部状态</option>
             {Object.entries(statusLabels).map(([value, label]) => (
@@ -734,6 +802,25 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
       <div className="content-grid finance-content">
         <section className="panel finance-record-panel" aria-labelledby="finance-list-title">
           <h3 id="finance-list-title">财务记录</h3>
+          <nav aria-label="Finance pages">
+            <span>
+              {total} records · {page} / {Math.max(1, Math.ceil(total / 20))}
+            </span>
+            <button
+              type="button"
+              disabled={page <= 1 || busyId !== null}
+              onClick={() => setPage(page - 1)}
+            >
+              {'\u4e0a\u4e00\u9875'}
+            </button>
+            <button
+              type="button"
+              disabled={page * 20 >= total || busyId !== null}
+              onClick={() => setPage(page + 1)}
+            >
+              {'\u4e0b\u4e00\u9875'}
+            </button>
+          </nav>
           <ResponsiveRecordList
             ariaLabel="财务记录"
             records={visibleRecords}
@@ -742,7 +829,9 @@ export function FinancePage({ client: suppliedClient, user: suppliedUser }: Fina
             emptyTitle={records?.length === 0 ? '暂无财务记录' : '没有匹配的财务记录'}
             emptyDescription={
               records?.length === 0
-                ? '创建第一条预算或结算草稿后会显示在这里。'
+                ? hasAnyGrant(user, 'finance.record.create')
+                  ? '创建第一条预算或结算草稿后会显示在这里。'
+                  : '该组织暂无预算或结算记录。'
                 : '请调整关键词或状态筛选后再试。'
             }
             getKey={(record) => record.id}

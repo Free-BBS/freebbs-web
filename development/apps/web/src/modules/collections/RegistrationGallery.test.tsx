@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { RegistrationGallery } from './RegistrationGallery.js';
+import type { UnifiedRegistration } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../core/api/client.js';
 function Navigation() {
   const navigate = useNavigate();
@@ -71,7 +72,16 @@ describe('associated registration deep links', () => {
         status: 'closed',
         closesAt: null,
         schema: {
-          fields: [{ id: 'answer', kind: 'short_text', label: '回答', options: [], rules: [] }],
+          fields: [
+            {
+              id: 'answer',
+              kind: 'short_text',
+              label: '回答',
+              helpText: '',
+              options: [],
+              rules: [],
+            },
+          ],
         },
       })),
     );
@@ -96,4 +106,83 @@ describe('associated registration deep links', () => {
     );
     vi.unstubAllGlobals();
   });
+  it('allows remaining native attempts and disables only after the final submission', async () => {
+    const item: UnifiedRegistration & { attemptsUsed: number; attemptLimit: number } = {
+      id: 'repeat',
+      source: 'native_collection',
+      title: '重复提交表单',
+      description: '',
+      organizer: '社工',
+      coverUrl: null,
+      opensAt: null,
+      closesAt: null,
+      location: null,
+      capacity: null,
+      registrationCount: 1,
+      status: 'open',
+      registered: true,
+      attemptsUsed: 1,
+      attemptLimit: 3,
+      schema: {
+        title: '重复提交表单',
+        description: '',
+        fields: [
+          { id: 'answer', kind: 'short_text', label: '回答', helpText: '', options: [], rules: [] },
+        ],
+        formRules: [],
+        outputs: [],
+      },
+    };
+    const request = vi.fn(async () => ({}));
+    render(
+      <MemoryRouter>
+        <RegistrationGallery
+          focusedItem={item}
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    const answer = await screen.findByLabelText('回答');
+    expect(answer).toBeEnabled();
+    expect(screen.getByText('已提交 1 / 3 次')).toBeInTheDocument();
+    fireEvent.change(answer, { target: { value: '第二次回答' } });
+    fireEvent.click(screen.getByRole('button', { name: '再次提交' }));
+    await screen.findByText('已提交 2 / 3 次');
+    expect(screen.getByRole('button', { name: '再次提交' })).toBeEnabled();
+    fireEvent.change(answer, { target: { value: '第三次回答' } });
+    fireEvent.click(screen.getByRole('button', { name: '再次提交' }));
+    await screen.findByText('已提交 3 / 3 次');
+    expect(screen.getByRole('button', { name: '已达提交上限' })).toBeDisabled();
+    expect(answer).toBeDisabled();
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+  it.each(['native_collection', 'development_activity'] as const)(
+    'keeps registered legacy %s entries disabled without attempt metadata',
+    async (source) => {
+      const item: UnifiedRegistration = {
+        id: 'legacy',
+        source,
+        title: '已有报名',
+        description: '',
+        organizer: '社工',
+        coverUrl: null,
+        opensAt: null,
+        closesAt: null,
+        location: null,
+        capacity: null,
+        registrationCount: 1,
+        status: 'open',
+        registered: true,
+      };
+      render(
+        <MemoryRouter>
+          <RegistrationGallery
+            focusedItem={item}
+            client={{ request: vi.fn() as ApiClient['request'] }}
+          />
+        </MemoryRouter>,
+      );
+      expect(await screen.findByRole('button', { name: '已报名' })).toBeDisabled();
+    },
+  );
 });

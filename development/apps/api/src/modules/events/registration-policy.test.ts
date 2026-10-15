@@ -14,6 +14,7 @@ function registrant(uid: string): AuthorizationContext {
     roles: [],
     tags: [],
     policies: [
+      { id: `read-${uid}`, action: 'events.read', resource: 'activity', effect: 'allow' },
       {
         id: `register-${uid}`,
         action: 'events.register',
@@ -49,6 +50,28 @@ async function activity(
 }
 
 describe('event registration policy', () => {
+  it('rejects inaccessible scoped activities while preserving own registration history and cancellation', async () => {
+    const store = createMemoryStore({ seed: false });
+    const record = await activity(store, {
+      scope: { type: 'department', id: 'private-department' },
+    });
+    const actor = registrant('student-a');
+    const service = new EventsService(store);
+    await expect(service.register(actor, record.id)).rejects.toMatchObject({ status: 404 });
+    actor.policies!.push({
+      id: 'scoped-read',
+      action: 'events.read',
+      resource: 'activity',
+      effect: 'allow',
+      scope: record.scope,
+    });
+    await service.register(actor, record.id);
+    actor.policies = actor.policies!.filter(({ id }) => id !== 'scoped-read');
+    expect(await service.getRegistration(actor, record.id)).toMatchObject({ status: 'registered' });
+    await service.cancel(actor, record.id);
+    expect(await service.getRegistration(actor, record.id)).toMatchObject({ status: 'cancelled' });
+    await expect(service.register(actor, record.id)).rejects.toMatchObject({ status: 404 });
+  });
   it('rejects registration at and after the deadline inside the transaction', async () => {
     const store = createMemoryStore({ seed: false });
     const record = await activity(store, { registrationDeadline: '2026-09-14T08:00:00.000Z' });

@@ -15,7 +15,11 @@ afterEach(async () => {
     directories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
 });
-async function fixture(production = false, store?: DevelopmentStore) {
+async function fixture(
+  production = false,
+  store?: DevelopmentStore,
+  roleOverrides: Record<string, UserContext['roles']> = {},
+) {
   const directory = await mkdtemp(join(tmpdir(), 'publishing-'));
   directories.push(directory);
   const app = express();
@@ -33,13 +37,15 @@ async function fixture(production = false, store?: DevelopmentStore) {
           displayName: uid,
           avatarUrl: null,
           baseRole: 'student',
-          roles: uid.startsWith('staff')
-            ? ['department.rights_development_member']
-            : uid === 'otherstaff'
-              ? ['department.arts_member']
-              : uid === 'admin'
-                ? ['platform.admin']
-                : [],
+          roles:
+            roleOverrides[uid] ??
+            (uid.startsWith('staff')
+              ? ['department.rights_development_member']
+              : uid === 'otherstaff'
+                ? ['department.arts_member']
+                : uid === 'admin'
+                  ? ['platform.admin']
+                  : []),
           tags: [],
           businessAdmin: uid === 'admin',
         };
@@ -57,6 +63,36 @@ async function fixture(production = false, store?: DevelopmentStore) {
   return app;
 }
 describe('publishing authorization and interactions', () => {
+  it('revokes department draft visibility and edit affordances when its owner leaves', async () => {
+    const overrides: Record<string, UserContext['roles']> = {};
+    const app = await fixture(false, undefined, overrides);
+    const created = await request(app).post('/publishing').set('x-user', 'staff').send({
+      category: 'article',
+      title: '部门草稿',
+      departmentId: 'student_union.rights_development_center',
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.data.id;
+    overrides.staff = ['department.arts_member'];
+    expect((await request(app).get(`/publishing/${id}`).set('x-user', 'staff')).status).toBe(404);
+    expect((await request(app).get('/publishing').set('x-user', 'staff')).body.data.items).toEqual(
+      [],
+    );
+    expect(
+      (
+        await request(app)
+          .patch(`/publishing/${id}`)
+          .set('x-user', 'staff')
+          .send({ revision: 1, title: '旧成员修改' })
+      ).status,
+    ).toBe(403);
+    const colleague = await request(app).get(`/publishing/${id}`).set('x-user', 'staff2');
+    expect(colleague.status).toBe(200);
+    expect(colleague.body.data.title).toBe('部门草稿');
+    expect(
+      (await request(app).get(`/publishing/${id}`).set('x-user', 'admin')).body.data.canManage,
+    ).toBe(true);
+  });
   it('advertises only enabled publishing categories and hides creation when both are disabled', async () => {
     const store = createMemoryStore();
     const app = await fixture(false, store);

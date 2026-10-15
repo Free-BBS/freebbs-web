@@ -1,12 +1,19 @@
+import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import {
   validateIdentitySelection,
+  organizationForRole,
+  ROLE_KEYS,
+  SOCIAL_ORGANIZATION_IDS,
+  type DevelopmentDirectoryFilters,
   type SystemSettingsUser,
   type SystemSettingsUserInput,
 } from '@freebbs-development/contracts';
 import { synchronizeSubject } from '../../core/auth/auth-middleware.js';
 import {
   directoryUserContext,
+  directoryPage,
+  type DirectoryIdentityFilter,
   type DirectoryUser,
   type UserDirectory,
 } from '../../core/auth/user-directory.js';
@@ -113,6 +120,156 @@ export function identitySnapshot(
     canReceiveNotifications: demo || hasRecipientAccess(user, access, allowedUids),
   };
 }
+export const directoryFiltersSchema = z
+  .object({
+    query: z.string().trim().max(80).optional(),
+    page: z.coerce.number().int().min(1).max(1000000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    roleKey: z.enum(ROLE_KEYS).optional(),
+    organizationId: z.enum(SOCIAL_ORGANIZATION_IDS).optional(),
+    admission: z.enum(['admitted', 'not_admitted', 'member', 'lead']).optional(),
+  })
+  .strict();
+export function parseDirectoryFilters(query: unknown): DevelopmentDirectoryFilters {
+  const parsed = directoryFiltersSchema.safeParse(query);
+  if (!parsed.success) throw new HttpError(400, 'invalid_request', 'Invalid directory filters');
+  return parsed.data;
+}
+export function groupedByUid<T extends { subjectUid: string }>(rows: T[]): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const row of rows) {
+    const owned = result.get(row.subjectUid);
+    if (owned) owned.push(row);
+    else result.set(row.subjectUid, [row]);
+  }
+  return result;
+}
+export function accessLookup(rows: DevelopmentAccessRecord[]) {
+  const maps = {
+    uid: new Map<string, { row: DevelopmentAccessRecord; index: number }>(),
+    studentId: new Map<string, { row: DevelopmentAccessRecord; index: number }>(),
+    username: new Map<string, { row: DevelopmentAccessRecord; index: number }>(),
+  };
+  rows.forEach((row, index) => {
+    if (row.status !== 'active') return;
+    const [map, key] = row.subjectUid
+      ? [maps.uid, row.subjectUid]
+      : row.studentId
+        ? [maps.studentId, row.studentId]
+        : [maps.username, row.username?.toLocaleLowerCase()];
+    if (key && !map.has(key)) map.set(key, { row, index });
+  });
+  return (user: DirectoryUser) =>
+    [
+      maps.uid.get(user.uid),
+      maps.studentId.get(user.studentId ?? ''),
+      maps.username.get(user.username.toLocaleLowerCase()),
+    ]
+      .filter((value) => value !== undefined)
+      .sort((a, b) => a.index - b.index)[0]?.row;
+}
+export async function listDirectoryRows(
+  store: DevelopmentStore,
+  directory: UserDirectory,
+  filters: DevelopmentDirectoryFilters,
+  demo = false,
+  allowedUids: readonly string[] = [],
+) {
+  const [filterRoles, access] = await Promise.all([
+    filters.roleKey || filters.organizationId
+      ? store.roleAssignments.list({
+          status: 'active',
+          ...(filters.roleKey ? { roleKey: filters.roleKey } : {}),
+        })
+      : Promise.resolve([] as RoleAssignmentRecord[]),
+    store.developmentAccess.list(),
+  ]);
+  let uids: string[] | undefined;
+  for (const predicate of [
+    filters.roleKey ? (row: RoleAssignmentRecord) => row.roleKey === filters.roleKey : undefined,
+    filters.organizationId
+      ? (row: RoleAssignmentRecord) =>
+          organizationForRole(row.roleKey)?.organizationId === filters.organizationId
+      : undefined,
+  ]) {
+    if (!predicate) continue;
+    const selected = new Set(
+      filterRoles.filter((row) => current(row) && predicate(row)).map((row) => row.subjectUid),
+    );
+    uids = uids ? uids.filter((uid) => selected.has(uid)) : [...selected];
+  }
+  const identityFilter: DirectoryIdentityFilter = { uids: [], studentIds: [], usernames: [] };
+  const includedUids: string[] = [],
+    studentIds: string[] = [],
+    usernames: string[] = [];
+  for (const grant of access) {
+    if (
+      grant.status !== 'active' ||
+      ((filters.admission === 'lead' || filters.admission === 'member') &&
+        grant.accessLevel !== filters.admission)
+    )
+      continue;
+    if (grant.subjectUid) includedUids.push(grant.subjectUid);
+    else if (grant.studentId) studentIds.push(grant.studentId);
+    else if (grant.username) usernames.push(grant.username.toLocaleLowerCase());
+  }
+  if (filters.admission === 'member') {
+    const grantFor = accessLookup(access);
+    const identities = await Promise.all(allowedUids.map((uid) => directory.get(uid)));
+    includedUids.push(
+      ...identities
+        .filter(
+          (user): user is DirectoryUser => user !== null && grantFor(user)?.accessLevel !== 'lead',
+        )
+        .map((user) => user.uid),
+    );
+  } else if (filters.admission !== 'lead') includedUids.push(...allowedUids);
+  Object.assign(identityFilter, { uids: includedUids, studentIds, usernames });
+  const page = await directoryPage(directory, {
+    query: filters.query,
+    page: filters.page ?? 1,
+    pageSize: filters.pageSize ?? 20,
+    uids,
+    ...(!filters.admission || (demo && ['admitted', 'not_admitted'].includes(filters.admission))
+      ? {}
+      : filters.admission === 'not_admitted'
+        ? { exclude: identityFilter }
+        : { include: identityFilter }),
+    ...(demo && filters.admission === 'not_admitted' ? { uids: [] } : {}),
+  });
+  const pageUids = page.items.map((user) => user.uid);
+  const [roles, tags] = await Promise.all([
+    store.roleAssignments.list({ subjectUids: pageUids }),
+    store.tagAssignments.list({ subjectUids: pageUids, tagKey: 'sports.team_captain' }),
+  ]);
+  const ownedRoles = groupedByUid(roles),
+    ownedTags = groupedByUid(tags),
+    grantFor = accessLookup(access);
+  return {
+    ...page,
+    items: page.items.map((user) => ({
+      user,
+      roles: ownedRoles.get(user.uid) ?? [],
+      tags: ownedTags.get(user.uid) ?? [],
+      grant: grantFor(user),
+    })),
+  };
+}
+export async function settingsUsersPage(
+  store: DevelopmentStore,
+  directory: UserDirectory,
+  filters: DevelopmentDirectoryFilters,
+  demo = false,
+  allowedUids: readonly string[] = [],
+) {
+  const page = await listDirectoryRows(store, directory, filters, demo, allowedUids);
+  return {
+    ...page,
+    items: page.items.map(({ user, roles, tags, grant }) =>
+      identitySnapshot(user, roles, tags, grant ? [grant] : [], demo, allowedUids),
+    ),
+  };
+}
 export async function listSettingsUsers(
   store: DevelopmentStore,
   directory: UserDirectory,
@@ -123,10 +280,23 @@ export async function listSettingsUsers(
   const [users, roles, tags, access] = await Promise.all([
     directory.list(query),
     store.roleAssignments.list(),
-    store.tagAssignments.list(),
+    store.tagAssignments.list({ tagKey: 'sports.team_captain' }),
     store.developmentAccess.list(),
   ]);
-  return users.map((user) => identitySnapshot(user, roles, tags, access, demo, allowedUids));
+  const ownedRoles = groupedByUid(roles),
+    ownedTags = groupedByUid(tags),
+    grantFor = accessLookup(access);
+  return users.map((user) => {
+    const grant = grantFor(user);
+    return identitySnapshot(
+      user,
+      ownedRoles.get(user.uid) ?? [],
+      ownedTags.get(user.uid) ?? [],
+      grant ? [grant] : [],
+      demo,
+      allowedUids,
+    );
+  });
 }
 export async function updateSettingsUser(
   store: DevelopmentStore,
@@ -140,14 +310,29 @@ export async function updateSettingsUser(
   if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
   const validation = validateIdentitySelection(input.roles);
   if (!validation.ok) throw new HttpError(400, 'identity_group_conflict', validation.message);
+  const initialRoles = await store.roleAssignments.list({ subjectUid: uid });
+  const changesAdmin =
+    input.roles.includes('platform.admin') ||
+    initialRoles.some((row) => row.roleKey === 'platform.admin' && current(row));
   return store.transaction(async (tx) => {
-    const definitions = await tx.roles.listForUpdate();
-    const [roles, tags, teams, access, subjects] = await Promise.all([
-      tx.roleAssignments.listForUpdate(),
-      tx.tagAssignments.listForUpdate(),
-      tx.sportsTeams.listForUpdate(),
-      tx.developmentAccess.listForUpdate(),
-      tx.subjects.listForUpdate(),
+    // Stable definition row serializes last-administrator decisions, including access edits.
+    // Lock it before identity rows so every administration writer has the same order.
+    if (changesAdmin) await tx.roles.listForUpdate({ key: 'platform.admin' });
+    const definitions = changesAdmin ? await tx.roles.list() : [];
+    const adminRoles = changesAdmin
+      ? await tx.roleAssignments.listForUpdate({ roleKey: 'platform.admin' })
+      : [];
+    const targetRoles = await tx.roleAssignments.listForUpdate({ subjectUid: uid });
+    const roles = [
+      ...new Map([...adminRoles, ...targetRoles].map((row) => [row.id, row])).values(),
+    ];
+    const [tags, teams, access, subjects] = await Promise.all([
+      tx.tagAssignments.listForUpdate({ subjectUid: uid }),
+      tx.sportsTeams.listForUpdate({ ids: input.captainTeamIds }),
+      tx.developmentAccess.list(),
+      tx.subjects.listForUpdate({
+        uids: [...new Set([uid, ...adminRoles.map((row) => row.subjectUid)])],
+      }),
     ]);
     const previous = identitySnapshot(target, roles, tags, access, false, allowedUids);
     if (previous.revision !== input.revision)
@@ -241,8 +426,8 @@ export async function updateSettingsUser(
     }
     const next = identitySnapshot(
       target,
-      await tx.roleAssignments.list(),
-      await tx.tagAssignments.list(),
+      await tx.roleAssignments.list({ subjectUid: uid }),
+      await tx.tagAssignments.list({ subjectUid: uid }),
       access,
       false,
       allowedUids,

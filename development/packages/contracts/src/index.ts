@@ -3,6 +3,7 @@ export * from './admin.js';
 export * from './modules.js';
 export * from './permissions.js';
 export * from './organizations.js';
+export * from './business-authority.js';
 export * from './sports.js';
 export * from './festival.js';
 export * from './growth.js';

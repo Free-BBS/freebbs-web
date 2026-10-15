@@ -36,7 +36,10 @@ async function activityScopedLeadFixture() {
     expiresAt: null,
     status: 'active',
     ownerUid: 'demo-admin',
-    scope: activityScope,
+    scope: { type: 'social_organization', id: 'rights_development_center' },
+  });
+  await store.activities.update('activity-orientation', {
+    organizationId: 'rights_development_center',
   });
   const actor = await loadAuthorizationContext(store, identity, new Date());
   return { store, identity, assignment, actor };
@@ -66,6 +69,38 @@ function revokeAtActivityLock(store: DevelopmentStore, assignmentId: string): De
 }
 
 describe('finance security regressions', () => {
+  it('records reviewer metadata through alternate transitions and preserves it on archive', async () => {
+    const store = createMemoryStore();
+    const app = createApp({
+      store,
+      authMode: 'demo',
+      authClient: new DemoAuthClient(['demo-admin']),
+    });
+    const created = await request(app)
+      .post('/api/development/v1/finance/records')
+      .set(adminHeaders)
+      .send({
+        title: 'Alternate approval',
+        kind: 'budget',
+        amountCents: 10000,
+        scope: { type: 'public', id: '*' },
+      })
+      .expect(201);
+    for (const to of ['submitted', 'approved', 'archived']) {
+      const result = await request(app)
+        .post(`/api/development/v1/finance/records/${created.body.data.id}/transitions`)
+        .set(adminHeaders)
+        .send({ to })
+        .expect(200);
+      if (to !== 'submitted')
+        expect(result.body.data).toMatchObject({
+          reviewerUid: 'demo-admin',
+          reviewDecision: 'approved',
+          reviewedAt: expect.any(String),
+        });
+    }
+  });
+
   it('rechecks exact create permission after the linked activity lock', async () => {
     const { store, assignment, actor } = await activityScopedLeadFixture();
     const service = new FinanceService(revokeAtActivityLock(store, assignment.id));
@@ -76,6 +111,7 @@ describe('finance security regressions', () => {
         kind: 'budget',
         amountCents: 1000,
         activityId: 'activity-orientation',
+        organizationId: 'rights_development_center',
         status: 'draft',
         scope: activityScope,
       }),
@@ -90,6 +126,7 @@ describe('finance security regressions', () => {
       kind: 'budget',
       amountCents: 2000,
       activityId: 'activity-orientation',
+      organizationId: 'rights_development_center',
       status: 'draft',
       ownerUid: 'another-owner',
       scope: activityScope,
@@ -102,6 +139,33 @@ describe('finance security regressions', () => {
     });
     expect(await store.financeRecords.get(draft.id)).toMatchObject({ amountCents: 2000 });
   });
+
+  it.each(['review', 'transition'] as const)(
+    'rechecks %s permission after locking the linked activity',
+    async (operation) => {
+      const { store, assignment, actor } = await activityScopedLeadFixture();
+      const submitted = await store.financeRecords.create({
+        title: 'Review before revocation',
+        kind: 'budget',
+        amountCents: 100,
+        activityId: 'activity-orientation',
+        organizationId: 'rights_development_center',
+        status: 'submitted',
+        ownerUid: actor.uid,
+        scope: activityScope,
+      });
+      const service = new FinanceService(revokeAtActivityLock(store, assignment.id));
+      await expect(
+        operation === 'review'
+          ? service.review(actor, submitted.id, 'approved')
+          : service.transition(actor, submitted.id, 'approved'),
+      ).rejects.toMatchObject({ status: operation === 'review' ? 403 : 404 });
+      expect(await store.financeRecords.get(submitted.id)).toMatchObject({
+        status: 'submitted',
+        reviewerUid: null,
+      });
+    },
+  );
   it('recompiles scoped permissions after locking transitions and updates', async () => {
     const store = createMemoryStore();
     const scope = { type: 'organization', id: 'revoked-finance-scope' } as const;

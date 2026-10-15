@@ -35,6 +35,51 @@ function createFakes() {
 }
 
 describe('MySQL store transactions', () => {
+  it('aggregates approved finance totals inside the authorized SQL organization filter', async () => {
+    const { pool, typedPool } = createFakes();
+    pool.execute.mockResolvedValueOnce([
+      [{ organization_id: 'arts_center', approved_budget: '2500', spent: '500', pending: '100' }],
+      [],
+    ]);
+    const handle = createMySqlStore({ pool: typedPool });
+    const summaries = await handle.store.financeRecords.summarize({
+      organizationIds: ['arts_center', null],
+    });
+    expect(summaries).toEqual([
+      {
+        organizationId: 'arts_center',
+        approvedBudget: 2500,
+        spent: 500,
+        pending: 100,
+        remaining: 2000,
+        usagePercent: 20,
+      },
+    ]);
+    expect(pool.execute.mock.calls[0]?.[0]).toMatch(/record_kind = 'budget'/);
+    expect(pool.execute.mock.calls[0]?.[0]).toMatch(
+      /organization_id IN.*OR organization_id IS NULL/,
+    );
+    expect(pool.execute.mock.calls[0]?.[1]).toEqual(['arts_center']);
+  });
+
+  it('restricts identity row locks in SQL instead of filtering after locking', async () => {
+    const { connection, typedPool } = createFakes();
+    connection.execute.mockResolvedValue([[], []]);
+    const handle = createMySqlStore({ pool: typedPool });
+    await handle.store.transaction((store) =>
+      store.roleAssignments.listForUpdate({ subjectUid: 'target', roleKey: 'platform.admin' }),
+    );
+    expect(connection.execute.mock.calls[0]?.[0]).toMatch(
+      /WHERE.*subject_uid.*role_key.*FOR UPDATE/,
+    );
+    expect(connection.execute.mock.calls[0]?.[1]).toEqual([
+      'target',
+      'target',
+      'platform.admin',
+      'platform.admin',
+    ]);
+  });
+
   it('uses deterministic current reads for transaction list locks', async () => {
     const { connection, typedPool } = createFakes();
     connection.execute.mockResolvedValueOnce([[], []]);

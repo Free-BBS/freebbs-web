@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
@@ -21,6 +21,11 @@ import {
   type CheckinSummary,
   type MainSiteProfile,
 } from './main-site-api.js';
+import {
+  focusableElements,
+  lockDocumentScroll,
+  trapModalFocus,
+} from '../components/modal-interactions.js';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
 import { MODULE_MANIFESTS, navigationPathname } from './module-manifests.js';
 import { mainSiteTypography } from './main-site-typography.js';
@@ -219,6 +224,7 @@ export function MainSiteHeader({
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setProfile(null);
@@ -245,11 +251,13 @@ export function MainSiteHeader({
 
   useEffect(() => {
     if (!dialogOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDialogOpen(false);
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const unlock = lockDocumentScroll();
+    (focusableElements(dialogRef.current)[0] ?? dialogRef.current)?.focus();
+    return () => {
+      unlock();
+      trigger?.focus();
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
   }, [dialogOpen]);
 
   async function openCheckin() {
@@ -394,6 +402,14 @@ export function MainSiteHeader({
         >
           <div className="fortune-backdrop" onMouseDown={() => setDialogOpen(false)} />
           <section
+            ref={dialogRef}
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setDialogOpen(false);
+              } else trapModalFocus(event, dialogRef.current);
+            }}
             className="fortune-panel"
             role="dialog"
             aria-modal="true"

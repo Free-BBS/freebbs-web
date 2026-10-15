@@ -36,7 +36,7 @@ export async function ensureDevelopmentLeadAssignment(
   grant: DevelopmentAccessRecord,
 ): Promise<void> {
   if (grant.accessLevel !== 'lead') return;
-  const existing = (await store.roleAssignments.list({ query: identity.uid })).find(
+  const existing = (await store.roleAssignments.list({ subjectUid: identity.uid })).find(
     (assignment) =>
       assignment.subjectUid === identity.uid &&
       assignment.roleKey === 'platform.super_admin' &&
@@ -84,7 +84,19 @@ async function applyDevelopmentAccess(
     actorUid: string;
   },
 ): Promise<DevelopmentAccessRecord | null> {
-  const all = await store.developmentAccess.listForUpdate();
+  await store.roles.listForUpdate({ key: 'platform.admin' });
+  await store.roles.listForUpdate({ key: 'platform.super_admin' });
+  const candidates = await store.developmentAccess.list({ identity: input.user });
+  const matching = await store.developmentAccess.listForUpdate({
+    ids: candidates.map((row) => row.id),
+  });
+  // Global lead decisions share the stable role guard; unrelated admission rows stay unlocked.
+  const leads =
+    input.accessLevel !== 'lead' &&
+    matching.some((row) => row.status === 'active' && row.accessLevel === 'lead')
+      ? await store.developmentAccess.listForUpdate({ accessLevel: 'lead', status: 'active' })
+      : [];
+  const all = [...new Map([...matching, ...leads].map((row) => [row.id, row])).values()];
   if (
     all.some(
       (record) =>
@@ -136,7 +148,7 @@ async function applyDevelopmentAccess(
     await store.developmentAccess.update(existing.id, { status: 'archived' });
     const superAdmin = (
       await store.roleAssignments.listForUpdate({
-        query: input.user.uid,
+        subjectUid: input.user.uid,
       })
     ).find(
       (assignment) =>
@@ -184,7 +196,7 @@ async function applyDevelopmentAccess(
       record,
     );
   else {
-    const assignments = await store.roleAssignments.listForUpdate({ query: input.user.uid });
+    const assignments = await store.roleAssignments.listForUpdate({ subjectUid: input.user.uid });
     for (const assignment of assignments.filter(
       (candidate: RoleAssignmentRecord) =>
         candidate.subjectUid === input.user.uid &&

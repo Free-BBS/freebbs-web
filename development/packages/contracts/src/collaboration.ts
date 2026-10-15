@@ -16,6 +16,8 @@ export interface CollaborationSlot {
   capacity: number;
 }
 export interface CollaborationEntry {
+  /** Independent optimistic edit version; legacy entries begin at 1. */
+  revision?: number;
   id: string;
   uid: string;
   displayName: string;
@@ -52,6 +54,8 @@ export interface CollaborationSpace {
   audience: 'all' | 'department';
   status: 'draft' | 'published' | 'closed';
   revision: number;
+  /** Global revision at the last definition change; independent entries do not advance it. */
+  definitionRevision?: number;
   createdAt: string;
   updatedAt: string;
   columns: CollaborationColumn[];

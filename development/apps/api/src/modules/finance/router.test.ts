@@ -45,6 +45,7 @@ describe('finance API', () => {
         kind: 'budget',
         amountCents: 0,
         activityId: 'activity-orientation',
+        organizationId: 'liaison_center',
         scope: { type: 'activity', id: 'activity-orientation' },
       })
       .expect(201);

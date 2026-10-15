@@ -146,6 +146,26 @@ export function FieldControl({
   );
 }
 
+function nativeAttempts(item: UnifiedRegistration) {
+  if (item.source !== 'native_collection') return null;
+  const { attemptsUsed, attemptLimit } = item;
+  if (
+    typeof attemptsUsed !== 'number' ||
+    typeof attemptLimit !== 'number' ||
+    !Number.isInteger(attemptsUsed) ||
+    !Number.isInteger(attemptLimit) ||
+    attemptsUsed < 0 ||
+    attemptLimit < 1
+  )
+    return null;
+  return { used: attemptsUsed, limit: attemptLimit };
+}
+
+function registrationComplete(item: UnifiedRegistration) {
+  const attempts = nativeAttempts(item);
+  return attempts ? attempts.used >= attempts.limit : item.registered;
+}
+
 export function RegistrationGallery({
   client,
   focusedItem,
@@ -205,7 +225,7 @@ export function RegistrationGallery({
   }, [focus]);
 
   async function submit(item: UnifiedRegistration) {
-    if (item.status !== 'open' || item.registered || busy) return;
+    if (item.status !== 'open' || registrationComplete(item) || busy) return;
     setBusy(true);
     setFeedback(null);
     try {
@@ -244,11 +264,17 @@ export function RegistrationGallery({
       setItems((current) =>
         current.map((entry) =>
           entry.id === item.id && entry.source === item.source
-            ? { ...entry, registered: true, registrationCount: (entry.registrationCount ?? 0) + 1 }
+            ? {
+                ...entry,
+                registered: true,
+                registrationCount: (entry.registrationCount ?? 0) + 1,
+                ...(nativeAttempts(entry) ? { attemptsUsed: nativeAttempts(entry)!.used + 1 } : {}),
+              }
             : entry,
         ),
       );
       setFeedback('报名已经收好，可以在“我的报名”中查看。');
+      setAnswers({});
     } catch (error) {
       setFeedback(error instanceof ApiError ? error.message : '提交失败，请稍后重试。');
     } finally {
@@ -307,6 +333,8 @@ export function RegistrationGallery({
         {visibleItems.map((item) => {
           const key = `${item.source}:${item.id}`;
           const open = expanded === key;
+          const attempts = nativeAttempts(item);
+          const complete = registrationComplete(item);
           return (
             <article className={`registration-card${open ? ' is-open' : ''}`} key={key}>
               {!embedded ? (
@@ -364,7 +392,7 @@ export function RegistrationGallery({
                       }}
                     >
                       <fieldset
-                        disabled={item.status !== 'open' || item.registered || busy}
+                        disabled={item.status !== 'open' || complete || busy}
                         style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
                       >
                         {item.schema?.fields.map((field) => (
@@ -412,20 +440,29 @@ export function RegistrationGallery({
                         ))}
                       </fieldset>
                       {!item.schema ? <p>确认报名后，活动负责人会通过站内信息联系你。</p> : null}
+                      {attempts ? (
+                        <p className="collection-attempt-count" role="status">
+                          已提交 {attempts.used} / {attempts.limit} 次
+                        </p>
+                      ) : null}
                       <button
                         className="collections-primary-action"
                         type="submit"
-                        disabled={busy || item.status !== 'open' || item.registered}
+                        disabled={busy || item.status !== 'open' || complete}
                       >
                         {item.status === 'closed'
                           ? '报名已截止'
                           : item.status === 'upcoming'
                             ? '报名尚未开放'
-                            : item.registered
-                              ? '已报名'
+                            : complete
+                              ? attempts
+                                ? '已达提交上限'
+                                : '已报名'
                               : busy
                                 ? '正在提交…'
-                                : '确认报名'}
+                                : attempts && attempts.used > 0
+                                  ? '再次提交'
+                                  : '确认报名'}
                       </button>
                     </form>
                   )}

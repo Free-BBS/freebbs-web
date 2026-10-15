@@ -111,6 +111,8 @@ export interface CollectionResponseSummary {
 }
 
 export interface UnifiedRegistration {
+  attemptsUsed?: number;
+  attemptLimit?: number;
   startsAt?: string | null;
   endsAt?: string | null;
   activityStatus?: string;

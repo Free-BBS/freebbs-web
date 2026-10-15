@@ -34,7 +34,7 @@ import type {
 import { HttpError } from '../../core/errors/http-error.js';
 import {
   canCreateCollection,
-  canManageCollection,
+  canManageStoredCollection,
   canManageCollectionModuleLibrary,
 } from './access.js';
 import { deleteCollectionUpload, readCollectionUpload, storeCollectionUpload } from './uploads.js';
@@ -138,7 +138,7 @@ async function formSummary(
     responseCount:
       responses.filter((item) => item.formId === form.id && item.status === 'submitted').length +
       guestCount,
-    canManage: canManageCollection(actor, form.ownerUid),
+    canManage: await canManageStoredCollection(store, actor, form),
     ...(version ? { schema: version.schema } : {}),
     createdAt: form.createdAt,
     updatedAt: form.updatedAt,
@@ -666,7 +666,8 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       !asset ||
       !form ||
       !['pending', 'attached'].includes(asset.status) ||
-      (asset.uploaderUid !== actor.uid && !canManageCollection(actor, form.ownerUid))
+      (asset.uploaderUid !== actor.uid &&
+        !(await canManageStoredCollection(options.store, actor, form)))
     )
       throw new HttpError(404, 'asset_not_found', '未找到文件');
     const file = await readCollectionUpload(uploadDirectory, asset.storageKey);
@@ -744,7 +745,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
           activities.find((activity) => activity.id === item.activityId)?.title ?? '已归档活动',
         source: 'development_activity',
         submittedAt: item.createdAt,
-        status: 'submitted',
+        status: item.status === 'cancelled' ? 'cancelled' : 'submitted',
       }));
     send(
       response,
@@ -757,7 +758,10 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const actor = await requireActor(options, request, response);
     if (!actor) return;
     const forms = await options.store.collectionForms.list();
-    const manageable = forms.filter((form) => canManageCollection(actor, form.ownerUid));
+    const permissions = await Promise.all(
+      forms.map((form) => canManageStoredCollection(options.store, actor, form)),
+    );
+    const manageable = forms.filter((_form, index) => permissions[index]);
     send(
       response,
       200,
@@ -819,14 +823,18 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       : null;
     if (
       !form ||
-      (!publishedVersion && !canManageCollection(actor, form.ownerUid)) ||
+      (!publishedVersion && !(await canManageStoredCollection(options.store, actor, form))) ||
       (publishedVersion !== null &&
         (!['published', 'closed', 'archived'].includes(form.status) ||
           !canViewCollection(actor, form, publishedVersion.schema)))
     ) {
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     }
-    if (publishedVersion && featureState && !canManageCollection(actor, form.ownerUid))
+    if (
+      publishedVersion &&
+      featureState &&
+      !(await canManageStoredCollection(options.store, actor, form))
+    )
       assertRecipientIdentity(actor, featureState, publishedVersion.schema.recipientMode);
     send(
       response,
@@ -836,7 +844,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         actor,
         form,
         uploadDirectory,
-        canManageCollection(actor, form.ownerUid),
+        await canManageStoredCollection(options.store, actor, form),
       ),
     );
   });
@@ -848,12 +856,23 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const input = parse(formDraftSchema, request.body);
     const result = await options.store.transaction(async (store) => {
       const form = await store.collectionForms.getForUpdate(formId);
-      if (!form || !canManageCollection(actor, form.ownerUid))
+      if (!form || !(await canManageStoredCollection(store, actor, form)))
         throw new HttpError(404, 'collection_not_found', '未找到表单');
+      const sourceVersionId = form.currentDraftVersionId ?? form.publishedVersionId;
+      const sourceVersion = sourceVersionId
+        ? await store.collectionVersions.get(sourceVersionId)
+        : null;
+      const schema = {
+        ...input.schema,
+        ...(input.schema.publisherDepartmentId === undefined &&
+        sourceVersion?.schema.publisherDepartmentId
+          ? { publisherDepartmentId: sourceVersion.schema.publisherDepartmentId }
+          : {}),
+      };
       const publisher =
-        input.organizationId === undefined && input.schema.publisherDepartmentId === undefined
-          ? { schema: input.schema, organizationId: form.organizationId }
-          : resolvePublisher(actor, input.schema, input.organizationId);
+        input.organizationId === undefined && schema.publisherDepartmentId === undefined
+          ? { schema, organizationId: form.organizationId }
+          : resolvePublisher(actor, schema, input.organizationId);
       input.schema = publisher.schema;
       const organizationId = publisher.organizationId;
       let draft = form.currentDraftVersionId
@@ -903,7 +922,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const { formId } = parse(formRouteSchema, request.params);
     const result = await options.store.transaction(async (store) => {
       const form = await store.collectionForms.getForUpdate(formId);
-      if (!form || !canManageCollection(actor, form.ownerUid))
+      if (!form || !(await canManageStoredCollection(store, actor, form)))
         throw new HttpError(404, 'collection_not_found', '未找到表单');
       if (!form.currentDraftVersionId)
         throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
@@ -949,7 +968,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const { formId } = parse(formRouteSchema, { formId: request.params.formId });
     const outputId = String(request.params.outputId ?? '');
     const form = await options.store.collectionForms.get(formId);
-    if (!form || !canManageCollection(actor, form.ownerUid))
+    if (!form || !(await canManageStoredCollection(options.store, actor, form)))
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     const exportQuery = parse(
       z

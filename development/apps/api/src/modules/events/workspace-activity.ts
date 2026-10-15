@@ -1,4 +1,4 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import { isGlobalOrganizationBusinessSupervisor } from '@freebbs-development/contracts';
 import type { RegistrationSource, UnifiedRegistration } from '@freebbs-development/contracts';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
@@ -66,7 +66,7 @@ export async function resolveWorkspaceActivity(
       (survey.closesAt != null && Date.parse(survey.closesAt) <= Date.now());
     // Public learning surveys expose registration windows, not event dates or ownership.
     const canEdit =
-      isDevelopmentBusinessAdmin(actor) &&
+      isGlobalOrganizationBusinessSupervisor(actor) &&
       authorize(actor, {
         action: 'events.update',
         resource: 'activity',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type CollaborationSpace, type CollaborationEntry } from '@freebbs-development/contracts';
 import { useAuth } from '../../core/auth/AuthProvider.js';
 import { isBusinessAdmin } from '../../core/permissions/Can.js';
@@ -7,10 +7,14 @@ export function EntryEditor({
   space,
   busy,
   onSubmit,
+  versionRefresh = 0,
+  versionEntries,
 }: {
   space: CollaborationSpace;
   busy: boolean;
   onSubmit: (value: Record<string, unknown>) => Promise<boolean>;
+  versionRefresh?: number;
+  versionEntries?: CollaborationEntry[];
 }) {
   const { user } = useAuth();
   const businessAdministrator = isBusinessAdmin(user);
@@ -32,6 +36,16 @@ export function EntryEditor({
   const [end, setEnd] = useState('');
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<CollaborationEntry | undefined>(previous);
+  const lastVersionRefresh = useRef(versionRefresh);
+  useEffect(() => {
+    if (lastVersionRefresh.current === versionRefresh) return;
+    lastVersionRefresh.current = versionRefresh;
+    // A successful save or an explicit conflict refresh advances the edit base without replacing input.
+    setEditing(
+      (current) =>
+        current && (versionEntries ?? space.entries).find((entry) => entry.id === current.id),
+    );
+  }, [versionRefresh, versionEntries, space.entries]);
   const editingIsEditable = editableEntries.some((entry) => entry.id === editing?.id);
   const validChoices = ['availability', 'practice'].includes(space.kind)
     ? choices.filter((id) => space.slots.some((slot) => slot.id === id))
@@ -62,6 +76,7 @@ export function EntryEditor({
         setSaved(false);
         void onSubmit({
           entryId: editing?.id,
+          entryRevision: editing ? (editing.revision ?? 1) : undefined,
           values,
           choices: validChoices,
           resource,
@@ -164,7 +179,7 @@ export function EntryEditor({
               {column.kind === 'choice' ? (
                 <select
                   disabled={
-                    space.ownerUid !== user?.uid &&
+                    !(space.ownerUid === user?.uid && space.canManage) &&
                     !businessAdministrator &&
                     Boolean(
                       column.editRoleKeys?.length &&
@@ -185,7 +200,7 @@ export function EntryEditor({
               ) : (
                 <input
                   disabled={
-                    space.ownerUid !== user?.uid &&
+                    !(space.ownerUid === user?.uid && space.canManage) &&
                     !businessAdministrator &&
                     Boolean(
                       column.editRoleKeys?.length &&

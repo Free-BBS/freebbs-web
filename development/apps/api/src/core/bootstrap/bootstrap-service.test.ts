@@ -163,6 +163,7 @@ describe('production governance bootstrap', () => {
       'social_org.tuanwei',
       'social_org.sast',
       'social_org.tms',
+      'social_org.media_center',
       'sports.team_captain',
     ]);
     expect(BUILT_IN_TAG_DEFINITIONS.find(({ key }) => key === 'sports.team_captain')).toEqual(

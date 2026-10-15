@@ -50,7 +50,23 @@ async function fixture() {
       { actorUid: 'demo-admin' },
     );
   }
-  const users = [...memberships.map(({ uid }) => uid), 'demo-student'];
+  await store.subjects.create({
+    uid: 'finance-counselor',
+    displayName: 'Finance counselor',
+    avatarUrl: null,
+    status: 'active',
+    ownerUid: 'demo-admin',
+    scope: { type: 'public', id: '*' },
+  });
+  await store.roleAssignments.create({
+    subjectUid: 'finance-counselor',
+    roleKey: 'counselor.youth_league',
+    status: 'active',
+    expiresAt: null,
+    ownerUid: 'demo-admin',
+    scope: { type: 'public', id: '*' },
+  });
+  const users = [...memberships.map(({ uid }) => uid), 'demo-student', 'finance-counselor'];
   const app = createApp({
     store,
     authMode: 'demo',
@@ -69,7 +85,82 @@ function asUser(app: ReturnType<typeof createApp>, uid: string) {
 }
 
 describe('organization-scoped finance governance', () => {
-  it('shows each organization lead only their records and rejects lower levels', async () => {
+  it('pages authorized records and keeps whole-organization totals independent of the visible page', async () => {
+    const { app, store } = await fixture();
+    for (const row of await store.financeRecords.list()) await store.financeRecords.delete(row.id);
+    for (let i = 0; i < 25; i++)
+      await store.financeRecords.create({
+        title: `Arts ${i}`,
+        kind: 'budget',
+        amountCents: 100,
+        activityId: null,
+        organizationId: 'arts_center',
+        status: i === 0 ? 'archived' : 'approved',
+        reviewDecision: 'approved',
+        reviewerUid: 'tuanwei-lead',
+        reviewedAt: new Date().toISOString(),
+        ownerUid: 'arts-lead',
+        scope: { type: 'social_organization', id: 'arts_center' },
+      });
+    await store.financeRecords.create({
+      title: 'Hidden sports',
+      kind: 'budget',
+      amountCents: 9000,
+      activityId: null,
+      organizationId: 'sports_center',
+      status: 'approved',
+      ownerUid: 'sports-lead',
+      scope: { type: 'public', id: '*' },
+    });
+    await store.financeRecords.create({
+      title: 'Legacy',
+      kind: 'budget',
+      amountCents: 500,
+      activityId: null,
+      organizationId: null,
+      status: 'approved',
+      ownerUid: 'tuanwei-lead',
+      scope: { type: 'public', id: '*' },
+    });
+    await store.rolePermissions.create({
+      roleKey: 'counselor.youth_league',
+      action: 'finance.record.read',
+      resource: 'finance_record',
+      effect: 'deny',
+      status: 'active',
+      ownerUid: 'system',
+      scope: { type: 'social_organization', id: 'sports_center' },
+    });
+    const page = await asUser(app, 'finance-counselor')
+      .get('/api/development/v1/finance/records?page=2&pageSize=20')
+      .expect(200);
+    expect(page.body.data).toMatchObject({ page: 2, pageSize: 20, total: 26 });
+    expect(page.body.data.items).toHaveLength(6);
+    expect(page.body.data.summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organizationId: 'arts_center',
+          approvedBudget: 2500,
+          remaining: 2500,
+        }),
+        expect.objectContaining({ organizationId: null, approvedBudget: 500 }),
+      ]),
+    );
+    expect(
+      page.body.data.summaries.some(
+        (row: { organizationId: string }) => row.organizationId === 'sports_center',
+      ),
+    ).toBe(false);
+    const arts = await asUser(app, 'arts-lead')
+      .get('/api/development/v1/finance/records?page=1&pageSize=20&status=archived')
+      .expect(200);
+    expect(arts.body.data).toMatchObject({
+      total: 1,
+      summaries: [expect.objectContaining({ approvedBudget: 2500 })],
+    });
+  });
+
+  it('shows leads and ordinary directors only their own organization records', async () => {
     const { app, store } = await fixture();
     await store.financeRecords.create({
       title: 'Arts annual budget',
@@ -106,22 +197,21 @@ describe('organization-scoped finance governance', () => {
       .get('/api/development/v1/finance/records')
       .expect(200);
     expect(arts.body.data).toEqual([expect.objectContaining({ organizationId: 'arts_center' })]);
-    await asUser(app, 'arts-director').get('/api/development/v1/finance/records').expect(403);
+    const director = await asUser(app, 'arts-director')
+      .get('/api/development/v1/finance/records')
+      .expect(200);
+    expect(director.body.data).toEqual([
+      expect.objectContaining({ organizationId: 'arts_center' }),
+    ]);
     await asUser(app, 'demo-student').get('/api/development/v1/finance/records').expect(403);
 
     const oversight = await asUser(app, 'tuanwei-lead')
       .get('/api/development/v1/finance/records')
       .expect(200);
-    expect(oversight.body.data.map((record: { title: string }) => record.title)).toEqual(
-      expect.arrayContaining([
-        'Arts annual budget',
-        'Sports annual budget',
-        'Legacy unassigned budget',
-      ]),
-    );
+    expect(oversight.body.data).toEqual([]);
   });
 
-  it('creates only for a lead organization and reserves reviews for Tuanwei oversight', async () => {
+  it('allows leaders to create and review only their own organization', async () => {
     const { app, store } = await fixture();
     const created = await asUser(app, 'arts-lead')
       .post('/api/development/v1/finance/records')
@@ -164,17 +254,17 @@ describe('organization-scoped finance governance', () => {
       status: 'submitted',
     });
     if (submitted === null) throw new Error('Expected submitted finance record');
-    await asUser(app, 'arts-lead')
+    await asUser(app, 'tuanwei-lead')
       .post(`/api/development/v1/finance/records/${submitted.id}/reviews`)
       .send({ decision: 'approved' })
       .expect(403);
-    const reviewed = await asUser(app, 'tuanwei-lead')
+    const reviewed = await asUser(app, 'arts-lead')
       .post(`/api/development/v1/finance/records/${submitted.id}/reviews`)
       .send({ decision: 'approved' })
       .expect(200);
     expect(reviewed.body.data).toMatchObject({
       status: 'approved',
-      reviewerUid: 'tuanwei-lead',
+      reviewerUid: 'arts-lead',
       reviewDecision: 'approved',
       reviewedAt: expect.any(String),
     });

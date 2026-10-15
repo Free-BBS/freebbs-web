@@ -148,7 +148,7 @@ test('development directory exposes a read-only user projection with escaped sea
     '%100!%!_%',
     '%100!%!_%',
   ]);
-  assert.match(captured.sql, /LIMIT 2000/);
+  assert.doesNotMatch(captured.sql, /LIMIT 2000/);
   assert.doesNotMatch(captured.sql, /email|password|is_admin/i);
 });
 
@@ -205,4 +205,22 @@ test('runtime loader forwards the optional development reward provider without i
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+
+test('development directory pages beyond 2000 and counts matching users with identity filters', async () => {
+  const calls = [];
+  const directory = createDevelopmentUserDirectory({ execute: async (sql, parameters) => {
+    calls.push({ sql, parameters });
+    return sql.includes('COUNT(*)') ? [[{ total: 2105 }]] : [[{ uid: 'u_2001', username: 'late', student_id: null }]];
+  }});
+  const page = await directory.page({ query: 'late', page: 101, pageSize: 20,
+    include: { uids: ['u_2001'], studentIds: ['2023'], usernames: ['legacy'] } });
+  assert.equal(page.total, 2105);
+  assert.equal(page.items[0].uid, 'u_2001');
+  assert.equal(page.page, 101);
+  assert.match(calls[1].sql, /LIMIT 20 OFFSET 2000/);
+  assert.match(calls[0].sql, /student_id IN/);
+  assert.match(calls[0].sql, /COALESCE/);
+  assert.ok(calls[0].parameters.includes('u_2001'));
 });

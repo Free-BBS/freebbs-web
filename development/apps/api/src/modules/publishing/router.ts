@@ -1,4 +1,4 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import { isGlobalOrganizationBusinessSupervisor } from '@freebbs-development/contracts';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router, type Response } from 'express';
@@ -59,11 +59,9 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
   return parsed.data;
 }
 export function managesContent(item: PublishingContent, user: UserContext) {
-  return (
-    item.ownerUid === user.uid ||
-    isDevelopmentBusinessAdmin(user) ||
-    Boolean(item.departmentId && canEditDepartment(user, item.departmentId))
-  );
+  if (isGlobalOrganizationBusinessSupervisor(user)) return true;
+  if (item.departmentId) return canEditDepartment(user, item.departmentId);
+  return item.ownerUid === user.uid && canCreateCollection(user);
 }
 export function visibleContent(item: PublishingContent, user: UserContext) {
   return (

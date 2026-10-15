@@ -187,7 +187,7 @@ describe('department homepages and published activities', () => {
     await request(app).get(home).set('Authorization', 'Bearer test').expect(503);
     await request(app).get('/api/development/v1/ready').expect(200);
   });
-  it('uses explicit multi-department membership, keeps the published binding immutable, and leaves media organization null', async () => {
+  it('preserves published bindings and maps media activities to the media organization', async () => {
     const { app, store } = await fixture();
     for (const roleKey of [
       'youth_league.organization.member',
@@ -261,7 +261,7 @@ describe('department homepages and published activities', () => {
         schema: { ...schema, publisherDepartmentId: 'media_center.creative' },
       })
       .expect(201);
-    expect(media.body.data.organizationId).toBeNull();
+    expect(media.body.data.organizationId).toBe('media_center');
   });
   it('authenticates and authorizes before parsing multipart, rejecting unknown departments', async () => {
     const { app, store } = await fixture();
@@ -381,7 +381,7 @@ describe('department homepages and published activities', () => {
       .post(`/api/development/v1/collections/forms/${created.body.data.id}/publish`)
       .set(member)
       .send({})
-      .expect(403);
+      .expect(404);
   });
   it('keeps historical unbound native schemas compatible without attributing a newer draft organization', async () => {
     const { app, store } = await fixture();

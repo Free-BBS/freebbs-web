@@ -191,7 +191,17 @@ export function createKnowledgeRouter(options: KnowledgeRouterOptions): Router {
       authentication.actor !== null &&
       (allowed(authentication.actor, 'knowledge.create', scopeRef) ||
         allowed(authentication.actor, 'knowledge.publish', scopeRef));
-    send(response, 200, await service.list(filters, !canMaintain, authentication.actor));
+    // Organization entries are filtered per record; a scoped grant need not
+    // authorize an unscoped query to read its own organization.
+    send(
+      response,
+      200,
+      await service.list(
+        filters,
+        !canMaintain && filters.audience !== 'social_org',
+        authentication.actor,
+      ),
+    );
   });
 
   router.post('/entries', async (request, response) => {

@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Link } from 'react-router-dom';
 
 import {
-  organizationForRole,
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
   type ScopeRef,
   type UserContext,
 } from '@freebbs-development/contracts';
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { createApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
-import { isBusinessAdmin } from '../../core/permissions/Can.js';
 
 export interface DevelopmentApi {
   request<T>(path: string, init?: RequestInit): Promise<T>;
@@ -112,11 +112,10 @@ function utcInstantToLocalDateTimeInput(value: string): string {
 function canUpdateOrganization(user: PageUser | null, organizationId: string | null): boolean {
   if (organizationId === null) return true;
   return Boolean(
-    isBusinessAdmin(user) ||
-    user?.roles.some((role) => {
-      const membership = organizationForRole(role);
+    isGlobalOrganizationBusinessSupervisor(user) ||
+    organizationMembershipsForRoles(user?.roles ?? []).some((membership) => {
       return (
-        membership?.organizationId === organizationId &&
+        membership.organizationId === organizationId &&
         (membership.level === 'director' || membership.level === 'lead')
       );
     }),
@@ -136,14 +135,23 @@ function permitted(
   action: string,
   resource: string,
   scope: ScopeRef,
+  organizationId?: string | null,
 ): boolean {
-  if (user === null) return false;
+  if (user === null || user.previewing) return false;
+  const scopes = [
+    scope,
+    ...(organizationId ? [{ type: 'social_organization', id: organizationId } as const] : []),
+  ];
   const policies = (user.policies ?? []).filter(
     (policy) =>
       matches(policy.action, action) &&
       matches(policy.resource, resource) &&
       (policy.scope === undefined ||
-        (policy.scope.type === scope.type && policy.scope.id === scope.id)),
+        scopes.some(
+          (candidate) =>
+            policy.scope!.type === candidate.type &&
+            (policy.scope!.id === '*' || policy.scope!.id === candidate.id),
+        )),
   );
   return (
     !policies.some(({ effect }) => effect === 'deny') &&
@@ -418,10 +426,10 @@ export function ActivityDetailPage({
     registrationScope,
   );
   const canMaintain =
-    (permitted(user, 'events.update', 'activity', detail.scope) &&
+    (permitted(user, 'events.update', 'activity', detail.scope, detail.organizationId) &&
       canUpdateOrganization(user, detail.organizationId)) ||
     (detail.ownerUid === user?.uid &&
-      permitted(user, 'events.create', 'activity', detail.scope) &&
+      permitted(user, 'events.create', 'activity', detail.scope, detail.organizationId) &&
       (detail.status === 'draft' || detail.status === 'rejected'));
   const milestones = [...detail.milestones].sort(
     (left, right) =>
