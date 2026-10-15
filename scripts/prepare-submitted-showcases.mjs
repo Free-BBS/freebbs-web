@@ -115,6 +115,15 @@ function prepareHumanitiesPage(source) {
       )
       // The submitted README contains developer instructions, without a source article URL.
       .replace('，原文链接见项目 README。', '。')
+      .replace(
+        /const b = e\.target\.closest\('#btnCustomAdd'\);(\r?\n[ \t]*)if \(b\) addCustomFromInput\(\);/,
+        (_, newline) =>
+          `const b = e.target.closest('#btnCustomAdd, #btnCustomStickAll');${newline}if (!b) return;${newline}if (b.id === 'btnCustomAdd') addCustomFromInput();${newline}else stickAllCustom();`,
+      )
+      .replace(
+        "const dark = !!(curT && curT.dark) || board.tpl === 'carbon';",
+        "const dark = !!(curT && (curT.dark || curT.tone === 'charcoal'));",
+      )
       .replace(/<button\b[^>]*\brole="tab"[^>]*>/g, (tag) => {
         const clean = tag.replace(/\s+tabindex="[^"]*"/g, '');
         const index = /\baria-selected="true"/.test(tag) ? 0 : -1;

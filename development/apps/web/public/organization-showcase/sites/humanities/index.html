@@ -5481,7 +5481,7 @@ kbd {
 
     ctx.setTransform(o.scale, 0, 0, o.scale, 0, 0);
     const curT = currentTpl();
-    const dark = !!(curT && curT.dark) || board.tpl === 'carbon';
+    const dark = !!(curT && (curT.dark || curT.tone === 'charcoal'));
     if (o.title) {
       ctx.fillStyle = dark ? 'rgba(255,255,255,.92)' : 'rgba(34,29,25,.85)';
       ctx.font = '600 20px "Source Han Serif SC","Noto Serif SC","Songti SC",serif';
@@ -6011,8 +6011,10 @@ kbd {
     });
     /* 自定义面板的两个按钮是动态生成的，用委托接 */
     wrap.addEventListener('click', (e) => {
-      const b = e.target.closest('#btnCustomAdd');
-      if (b) addCustomFromInput();
+      const b = e.target.closest('#btnCustomAdd, #btnCustomStickAll');
+      if (!b) return;
+      if (b.id === 'btnCustomAdd') addCustomFromInput();
+      else stickAllCustom();
     });
 
     renderHistory();
