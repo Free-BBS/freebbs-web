@@ -737,6 +737,7 @@ function submissionHarness() {
   form.classList = { add() {}, remove() {} };
   const requests = [];
   let fail = false;
+  let submission = { id: 's1', status: 'pending', version: 1 };
   const context = {
     crypto,
     Map,
@@ -766,7 +767,7 @@ function submissionHarness() {
     callApi: async (url, options) => {
       requests.push({ url, body: JSON.parse(options.body) });
       if (fail) throw new Error('network unavailable');
-      return { message: '已提交审核', moderation: { id: 's1', status: 'pending', version: 1 } };
+      return { message: '已提交审核', moderation: submission };
     },
     rememberDiscussionCommentDraft() {},
     clearDiscussionCommentComposer() {
@@ -809,6 +810,9 @@ function submissionHarness() {
     fail: (value) => {
       fail = value;
     },
+    result: (value) => {
+      submission = value;
+    },
     event: { preventDefault() {}, target: { closest: () => form } },
   };
 }
@@ -831,6 +835,139 @@ test('pending post stays on composer and emits submitted rather than published',
   assert.equal(h.context.window.location.href, '/publish');
   assert.deepEqual(h.events, ['discussion:submitted']);
   assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+});
+
+for (const kind of ['post', 'comment']) {
+  const handler =
+    kind === 'post' ? 'handleDiscussionComposeSubmit' : 'handleDiscussionCommentSubmit';
+  for (const status of ['approved', 'rejected', 'expired']) {
+    test(`${kind} retry displays the existing ${status} result without claiming direct publication`, async () => {
+      const h = submissionHarness();
+      h.fail(true);
+      await h.context[handler](h.event);
+      assert.equal(h.input.value, '@Max hello');
+      h.fail(false);
+      h.result({
+        id: 's1',
+        status,
+        replayed: true,
+        publishedUrl: status === 'approved' ? '/discussion?post=p1#comment-c1' : '',
+      });
+      await h.context[handler](h.event);
+      assert.equal(h.requests[0].body.requestId, h.requests[1].body.requestId);
+      assert.equal(h.context.window.location.href, '/publish');
+      assert.deepEqual(
+        h.events,
+        kind === 'post' && status === 'approved' ? ['discussion:submitted'] : [],
+      );
+      assert.equal(h.context.discussionState.comments.length, 0);
+      assert.equal(h.context.discussionState.activePost.commentCount, 2);
+      assert.equal(h.context.discussionState.posts[0].commentCount, 2);
+      if (status === 'approved') {
+        assert.match(h.message.textContent, /发布成功/);
+        assert.equal(h.message.children.at(-1).href, '/discussion?post=p1#comment-c1');
+      } else {
+        assert.equal(h.input.value, '@Max hello', 'a rejected or expired draft stays editable');
+        assert.equal(h.clears(), 0);
+        assert.match(h.message.textContent, status === 'rejected' ? /未予发布/ : /已到期/);
+        assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+      }
+    });
+  }
+  for (const status of ['pending', 'approved']) {
+    test(`a delayed ${status} ${kind} response preserves edits made while submitting`, async () => {
+      const h = submissionHarness();
+      const wait = deferred();
+      h.context.callApi = () => wait.promise;
+      const submitted = h.context[handler](h.event);
+      await flush();
+      h.input.value = 'new unsent draft';
+      wait.resolve({ moderation: { id: 's1', status, publishedUrl: '/discussion?post=p1' } });
+      await submitted;
+      assert.equal(h.input.value, 'new unsent draft');
+      assert.equal(h.clears(), 0);
+      assert.deepEqual(h.events, [], 'no completion event may erase the new stored draft');
+      assert.equal(
+        h.message.children.at(-1).href,
+        status === 'approved' ? '/discussion?post=p1' : '/moderation?mine=1&id=s1',
+      );
+    });
+  }
+  test(`an unknown moderation status never falls through to direct ${kind} publication`, async () => {
+    const h = submissionHarness();
+    h.result({ id: 's1', status: 'unexpected' });
+    await h.context[handler](h.event);
+    assert.equal(h.input.value, '@Max hello');
+    assert.equal(h.clears(), 0);
+    assert.deepEqual(h.events, []);
+    assert.doesNotMatch(h.message.textContent, /发布成功|已发布/);
+    assert.equal(
+      h.context.moderationSubmissionIntents.size,
+      1,
+      'retain the retry identity until the result is known',
+    );
+  });
+}
+
+test('a delayed post result preserves changes to title, board and visibility controls', async () => {
+  for (const field of ['title', 'board', 'loginRequired', 'anonymous']) {
+    const h = submissionHarness();
+    const loginRequired = { checked: true };
+    const anonymous = { checked: false };
+    h.context.document.getElementById = (id) =>
+      id === 'discussion-login-required' ? loginRequired : anonymous;
+    const wait = deferred();
+    h.context.callApi = () => wait.promise;
+    const submitted = h.context.handleDiscussionComposeSubmit(h.event);
+    await flush();
+    if (field === 'title') h.context.discussionComposeTitle.value = 'new title';
+    if (field === 'board') h.context.discussionComposeBoard.value = 'campus';
+    if (field === 'loginRequired') loginRequired.checked = false;
+    if (field === 'anonymous') anonymous.checked = true;
+    wait.resolve({
+      moderation: { id: 's1', status: 'approved', publishedUrl: '/discussion?post=p1' },
+    });
+    await submitted;
+    assert.equal(h.input.value, '@Max hello', field);
+    assert.deepEqual(h.events, [], field);
+  }
+});
+
+test('a replayed withdrawn submission shows its detail instead of the old published URL', () => {
+  const h = submissionHarness();
+  assert.equal(
+    h.context.showModerationSubmitted({
+      moderation: {
+        id: 's1',
+        status: 'rejected',
+        publishedId: 'p1',
+        publishedUrl: '/discussion?post=p1',
+      },
+    }),
+    true,
+  );
+  assert.match(h.message.textContent, /已撤回/);
+  assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+});
+
+test('immediate approved responses use a validated publication link or their detail link', () => {
+  for (const publishedUrl of [
+    undefined,
+    'https://evil.invalid/discussion',
+    '//evil.invalid/discussion',
+    '/admin/users',
+    '/\\evil.invalid/discussion',
+  ]) {
+    const h = submissionHarness();
+    assert.equal(
+      h.context.showModerationSubmitted({
+        moderation: { id: 's1', status: 'approved', publishedUrl },
+      }),
+      true,
+    );
+    assert.match(h.message.textContent, /发布成功/);
+    assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+  }
 });
 
 test('fast automatic publication updates composer feedback without needing an author notice', async () => {

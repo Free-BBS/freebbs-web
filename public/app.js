@@ -3286,16 +3286,57 @@ function completeModerationSubmission(requestId) {
 }
 
 function showModerationSubmitted(payload, target = discussionComposeMessage) {
-  if (payload.moderation?.status !== 'pending') return false;
+  const submission = payload.moderation;
+  if (!submission) return false;
+  if (!submission.id || !['pending', 'approved', 'rejected', 'expired'].includes(submission.status))
+    throw new Error('内容处理结果暂时无法确认，请保留草稿后重试。');
   if (target) {
-    target.dataset.moderationSubmissionId = payload.moderation.id;
-    target.textContent = '内容已提交，正在处理，请稍候。';
-    const link = document.createElement('a');
-    link.href = `/moderation?mine=1&id=${encodeURIComponent(payload.moderation.id)}`;
-    link.textContent = '查看处理详情';
-    target.append(document.createTextNode(' '), link);
-    observeModerationSubmission(payload.moderation.id, target);
+    target.dataset.moderationSubmissionId = submission.id;
+    if (!showModerationSubmissionResult(submission, target, submission.id)) {
+      target.textContent = '内容已提交，正在处理，请稍候。';
+      const link = document.createElement('a');
+      link.href = `/moderation?mine=1&id=${encodeURIComponent(submission.id)}`;
+      link.textContent = '查看处理详情';
+      target.append(document.createTextNode(' '), link);
+      observeModerationSubmission(submission.id, target);
+    }
   }
+  return true;
+}
+
+function showModerationSubmissionResult(submission, target, id) {
+  const detailUrl = `/moderation?mine=1&id=${encodeURIComponent(id)}`;
+  let href = detailUrl;
+  let caption = '查看处理详情';
+  let text;
+  if (submission?.status === 'approved') {
+    const published = submission.publishedUrl;
+    if (typeof published === 'string' && published.startsWith('/') && !published.startsWith('//')) {
+      try {
+        const parsed = new URL(published, window.location.origin);
+        if (parsed.origin === window.location.origin && parsed.pathname === '/discussion') {
+          href = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+          caption = '查看已发布内容';
+        }
+      } catch {
+        // A malformed publication link must not hide the saved submission result.
+      }
+    }
+    text = '发布成功。';
+  } else if (submission?.status === 'rejected') {
+    text = submission.publishedId
+      ? '内容已撤回，请查看处理说明。'
+      : '内容未予发布，请查看处理说明。';
+  } else if (submission?.status === 'expired' || submission?.evidenceExpired) {
+    text = '相关材料已到期，请查看处理详情。';
+  } else {
+    return false;
+  }
+  target.textContent = text;
+  const link = document.createElement('a');
+  link.href = href;
+  link.textContent = caption;
+  target.append(document.createTextNode(' '), link);
   return true;
 }
 
@@ -3324,33 +3365,7 @@ async function observeModerationSubmission(id, target) {
     try {
       const result = await callApi(`/moderation/submissions/${encodeURIComponent(id)}`);
       if (!current()) return;
-      if (result.submission?.status === 'approved') {
-        const published = result.submission.publishedUrl;
-        let safeLink = '';
-        if (
-          typeof published === 'string' &&
-          published.startsWith('/') &&
-          !published.startsWith('//')
-        ) {
-          const parsed = new URL(published, window.location.origin);
-          if (parsed.origin === window.location.origin && parsed.pathname === '/discussion')
-            safeLink = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-        }
-        display('发布成功。', safeLink || detailUrl, safeLink ? '查看已发布内容' : '查看处理详情');
-        return;
-      }
-      if (result.submission?.status === 'rejected') {
-        display(
-          result.submission.publishedId
-            ? '内容已撤回，请查看处理说明。'
-            : '内容未予发布，请查看处理说明。',
-        );
-        return;
-      }
-      if (result.submission?.status === 'expired' || result.submission?.evidenceExpired) {
-        display('相关材料已到期，请查看处理详情。');
-        return;
-      }
+      if (showModerationSubmissionResult(result.submission, target, id)) return;
     } catch {
       // A status lookup failure never changes the outcome of the submission.
       break;
@@ -10454,7 +10469,8 @@ async function handleDiscussionCommentSubmit(event) {
   const input = form.querySelector('.discussion-comment-input');
   const message = form.querySelector('.discussion-comment-message');
   const parentCommentId = Number(form.dataset.parentCommentId || 0);
-  const contentMarkdown = input?.value.trim() || '';
+  const submittedInput = input?.value || '';
+  const contentMarkdown = submittedInput.trim();
   const postId = String(form.dataset.postId || discussionState.activePostId);
   const submitButton = form.querySelector('[type="submit"]');
   const submittedToken = userState.token;
@@ -10512,13 +10528,19 @@ async function handleDiscussionCommentSubmit(event) {
       }),
     });
 
-    completeModerationSubmission(requestId);
     if (!isCurrent()) return;
-    if (payload.moderation?.status === 'pending') {
-      clearDiscussionCommentComposer(form);
+    if (payload.moderation) {
       showModerationSubmitted(payload, message);
+      completeModerationSubmission(requestId);
+      if (
+        ['pending', 'approved'].includes(payload.moderation.status) &&
+        !payload.moderation.evidenceExpired &&
+        input?.value === submittedInput
+      )
+        clearDiscussionCommentComposer(form);
       return;
     }
+    completeModerationSubmission(requestId);
     const refreshComments = discussionState.commentsStatus !== 'ready';
     const newComments = [payload.comment].filter(Boolean);
     discussionState.comments = [...discussionState.comments, ...newComments];
@@ -10619,6 +10641,15 @@ async function handleDiscussionComposeSubmit(event) {
   setDiscussionMessage('正在发布帖子...');
   const submittedUid = userState.uid;
   const submittedToken = userState.token;
+  const draftSnapshot = () =>
+    JSON.stringify([
+      discussionComposeBoard.value,
+      discussionComposeTitle.value,
+      discussionComposeContent.value,
+      document.getElementById('discussion-login-required')?.checked,
+      document.getElementById('discussion-anonymous')?.checked,
+    ]);
+  const submittedDraft = draftSnapshot();
   const submissionBody = {
     boardSlug: discussionComposeBoard.value,
     loginRequired: document.getElementById('discussion-login-required')?.checked !== false,
@@ -10659,7 +10690,6 @@ async function handleDiscussionComposeSubmit(event) {
       }),
     });
 
-    completeModerationSubmission(requestId);
     if (
       !userState.isLoggedIn ||
       userState.uid !== submittedUid ||
@@ -10667,11 +10697,19 @@ async function handleDiscussionComposeSubmit(event) {
     )
       return;
     if (showModerationSubmitted(payload)) {
-      discussionComposeForm.dispatchEvent(new CustomEvent('discussion:submitted'));
-      discussionComposeForm.reset();
-      renderDiscussionUploadPreviews();
+      completeModerationSubmission(requestId);
+      if (
+        ['pending', 'approved'].includes(payload.moderation.status) &&
+        !payload.moderation.evidenceExpired &&
+        draftSnapshot() === submittedDraft
+      ) {
+        discussionComposeForm.dispatchEvent(new CustomEvent('discussion:submitted'));
+        discussionComposeForm.reset();
+        renderDiscussionUploadPreviews();
+      }
       return;
     }
+    completeModerationSubmission(requestId);
     setDiscussionMessage(payload.message || '帖子发布成功');
     discussionComposeForm.dispatchEvent(
       new CustomEvent('discussion:published', { detail: { post: payload.post } }),
