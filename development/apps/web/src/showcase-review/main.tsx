@@ -10,9 +10,13 @@ import {
   Navigate,
 } from 'react-router-dom';
 import { findOrganization } from '../modules/organizations/catalog.js';
-import { CuratedDepartmentShowcase } from '../modules/organizations/showcase/CuratedDepartmentShowcase.js';
+import {
+  CuratedDepartmentShowcase,
+  SubmittedDepartmentShowcase,
+} from '../modules/organizations/showcase/CuratedDepartmentShowcase.js';
 import { OrganizationShowcaseHome } from '../modules/organizations/showcase/OrganizationShowcaseHome.js';
 import { findShowcase } from '../modules/organizations/showcase/registry.js';
+import { usesFullPageShowcase } from '../modules/organizations/showcase/presentation.js';
 import { OrganizationMark } from '../modules/organizations/OrganizationMark.js';
 import { DepartmentShowcaseCard } from '../modules/organizations/showcase/DepartmentShowcaseCard.js';
 import '../styles/tokens.css';
@@ -28,6 +32,7 @@ function ReviewPage() {
   const group = organizationKey ? findOrganization(organizationKey) : undefined;
   const department = group?.departments.find((item) => item.key === departmentKey);
   const content = group ? findShowcase(`${group.key}.${departmentKey ?? 'position'}`) : undefined;
+  const fullPage = Boolean(content?.site && usesFullPageShowcase(content.departmentId));
   const invalid = Boolean(organizationKey && (!group || (departmentKey && !department)));
   const title =
     content?.shortName ?? content?.name ?? department?.name ?? group?.name ?? '风采展示';
@@ -43,7 +48,7 @@ function ReviewPage() {
     document.body.classList.toggle('theme-light', !dark);
   }, [dark]);
   return (
-    <>
+    <div className={`review-layout${fullPage ? ' review-layout--full-page' : ''}`}>
       <a className="review-skip" href="#main-content">
         跳到内容
       </a>
@@ -65,8 +70,11 @@ function ReviewPage() {
           </button>
         </nav>
       </header>
-      <main id="main-content" className="review-main organization-page">
-        {group ? (
+      <main
+        id="main-content"
+        className={`review-main organization-page${fullPage ? ' review-main--full-page' : ''}`}
+      >
+        {group && !fullPage ? (
           <nav className="organization-breadcrumb" aria-label="展厅位置">
             <Link to="/organizations">风采展示</Link>
             <span>/</span>
@@ -84,6 +92,8 @@ function ReviewPage() {
             <h1>没有找到这个展区</h1>
             <Link to="/organizations">返回全部展区</Link>
           </section>
+        ) : content && fullPage ? (
+          <SubmittedDepartmentShowcase key={content.slug} content={content} offline fullPage />
         ) : content ? (
           <CuratedDepartmentShowcase key={content.slug} content={content} publicReview />
         ) : department ? (
@@ -117,11 +127,13 @@ function ReviewPage() {
           <OrganizationShowcaseHome />
         )}
       </main>
-      <footer className="review-footer">
-        <Link to="/organizations">← 继续逛逛组织小街</Link>
-        <span>FREE BBS · 同在电子，亲如一家</span>
-      </footer>
-    </>
+      {!fullPage ? (
+        <footer className="review-footer">
+          <Link to="/organizations">← 继续逛逛组织小街</Link>
+          <span>FREE BBS · 同在电子，亲如一家</span>
+        </footer>
+      ) : null}
+    </div>
   );
 }
 

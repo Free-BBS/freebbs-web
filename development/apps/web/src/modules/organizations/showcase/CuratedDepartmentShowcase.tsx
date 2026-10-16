@@ -205,7 +205,15 @@ function SectionContent({
   );
 }
 
-function SubmittedShowcase({ content, offline }: { content: ShowcaseContent; offline: boolean }) {
+export function SubmittedDepartmentShowcase({
+  content,
+  offline = false,
+  fullPage = false,
+}: {
+  content: ShowcaseContent;
+  offline?: boolean;
+  fullPage?: boolean;
+}) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -253,35 +261,40 @@ function SubmittedShowcase({ content, offline }: { content: ShowcaseContent; off
   }, [loaded, version]);
   if (!content.site) return null;
   return (
-    <section className="sc-submitted-shell" aria-label={content.site.title}>
-      <div className="sc-window-bar">
-        <span className="sc-window-dots" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span>{content.name}的小天地</span>
-        <button
-          type="button"
-          onClick={() => {
-            setVersion(version + 1);
-            setLoaded(false);
-          }}
-          aria-label={`返回${content.name}展区首页`}
-        >
-          回到首页 ↺
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            void enterFullscreen();
-          }}
-          aria-label={`全屏浏览${content.name}展区`}
-        >
-          全屏浏览 ⛶
-        </button>
-      </div>
-      {fullscreenError ? (
+    <section
+      className={`sc-submitted-shell${fullPage ? ' sc-submitted-shell--full-page' : ''}`}
+      aria-label={content.site.title}
+    >
+      {!fullPage ? (
+        <div className="sc-window-bar">
+          <span className="sc-window-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>{content.name}的小天地</span>
+          <button
+            type="button"
+            onClick={() => {
+              setVersion(version + 1);
+              setLoaded(false);
+            }}
+            aria-label={`返回${content.name}展区首页`}
+          >
+            回到首页 ↺
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void enterFullscreen();
+            }}
+            aria-label={`全屏浏览${content.name}展区`}
+          >
+            全屏浏览 ⛶
+          </button>
+        </div>
+      ) : null}
+      {!fullPage && fullscreenError ? (
         <p className="sc-window-tip" role="status">
           当前浏览器未能进入全屏，可继续在小窗中浏览。
         </p>
@@ -391,7 +404,7 @@ export function CuratedDepartmentShowcase({
       </header>
       {content.site ? (
         <div id="showcase-world">
-          <SubmittedShowcase content={content} offline={publicReview} />
+          <SubmittedDepartmentShowcase content={content} offline={publicReview} />
         </div>
       ) : (
         <>

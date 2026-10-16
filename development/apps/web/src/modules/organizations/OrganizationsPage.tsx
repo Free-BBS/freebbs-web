@@ -5,10 +5,14 @@ import type { ApiClient } from '../../core/api/client.js';
 import { DepartmentHomepage } from './DepartmentHomepage.js';
 import { findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
-import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
+import {
+  CuratedDepartmentShowcase,
+  SubmittedDepartmentShowcase,
+} from './showcase/CuratedDepartmentShowcase.js';
 import { OrganizationShowcaseHome } from './showcase/OrganizationShowcaseHome.js';
 import { findShowcase } from './showcase/registry.js';
 import { DepartmentShowcaseCard } from './showcase/DepartmentShowcaseCard.js';
+import { usesFullPageShowcase } from './showcase/presentation.js';
 
 export function OrganizationsPage({
   organizationKey,
@@ -91,6 +95,12 @@ export function OrganizationsPage({
       ? departmentForRoute(organization.key, department?.key ?? 'position')
       : undefined;
   const curated = findShowcase(`${organization.key}.${department?.key ?? 'position'}`);
+  if (curated?.site && usesFullPageShowcase(curated.departmentId))
+    return (
+      <section ref={page} className="organization-page organization-page--full-page">
+        <SubmittedDepartmentShowcase key={curated.slug} content={curated} fullPage />
+      </section>
+    );
   const breadcrumb = (
     <nav className="organization-breadcrumb" aria-label="展厅位置">
       <Link to="/organizations">风采展示</Link>

@@ -5,6 +5,7 @@ import type { ApiClient } from '../../core/api/client.js';
 import { OrganizationsPage } from './OrganizationsPage.js';
 import { ORGANIZATION_GALLERY, organizationRegistrationPath } from './catalog.js';
 import { findShowcase } from './showcase/registry.js';
+import { usesFullPageShowcase } from './showcase/presentation.js';
 
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -237,7 +238,9 @@ describe('organization exhibition', () => {
   it.each(
     ORGANIZATION_GALLERY.flatMap((organization) =>
       organization.departments
-        .filter(({ key }) => key !== 'research')
+        .filter(
+          ({ key }) => key !== 'research' && !usesFullPageShowcase(`${organization.key}.${key}`),
+        )
         .map((department) => ({ organization, department })),
     ),
   )(
@@ -298,6 +301,25 @@ describe('organization exhibition', () => {
     expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '撰写部门文章' })).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['youth_league', 'sail'],
+    ['media_center', 'creative'],
+  ])('shows only the submitted document for %s/%s', (organization, department) => {
+    const content = findShowcase(`${organization}.${department}`)!;
+    const { request } = show(organization, department);
+    const frame = screen.getByTitle(content.site!.title);
+    expect(frame).toHaveAttribute('src', content.site!.entry);
+    expect(frame).toHaveAttribute('sandbox', expect.stringContaining('allow-scripts'));
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(frame.parentElement).toHaveClass('sc-submitted-shell--full-page');
+    expect(screen.queryByRole('navigation', { name: '展厅位置' })).not.toBeInTheDocument();
+    expect(
+      document.querySelector('.sc-hero, .sc-window-bar, #showcase-contact'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
     expect(request).not.toHaveBeenCalled();
   });
 

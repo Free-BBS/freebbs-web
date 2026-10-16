@@ -421,7 +421,7 @@ describe('AppShell', () => {
     expect(window.localStorage.getItem('free_bbs_theme_mode')).toBe('light');
   });
 
-  it('renders the main-site placeholder avatar and the demo identity switcher', () => {
+  it('renders the main-site placeholder avatar without exposing demo identity selection', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({
         authMode: 'demo',
@@ -435,7 +435,36 @@ describe('AppShell', () => {
       'src',
       expect.stringContaining('avatar_placeholder.webp'),
     );
-    expect(screen.getByTestId('demo-user-switcher')).toBeInTheDocument();
+    expect(screen.queryByTestId('demo-user-switcher')).not.toBeInTheDocument();
+    expect(document.querySelector('.demo-preview-toolbar')).not.toBeInTheDocument();
+  });
+
+  it.each(['/organizations/youth_league/sail', '/organizations/media_center/creative'])(
+    'keeps platform navigation and removes its footer for the full-page department at %s',
+    (route) => {
+      mockUseAuth.mockReturnValue(authenticatedAuth());
+      renderShell(route, { children: <iframe title="部门网页" /> });
+      expect(document.querySelector('.development-shell-root')).toHaveClass(
+        'development-shell-root--full-page',
+      );
+      expect(screen.getByRole('complementary', { name: '发展平台侧栏' })).toBeInTheDocument();
+      expect(document.querySelector('.main-site-header')).toBeInTheDocument();
+      expect(screen.getByTitle('部门网页')).toBeInTheDocument();
+      expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    '/organizations',
+    '/organizations/youth_league/research',
+    '/organizations/media_center/creative/edit',
+  ])('retains the normal shell outside the two exact full-page routes: %s', (route) => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell(route);
+    expect(document.querySelector('.development-shell-root')).not.toHaveClass(
+      'development-shell-root--full-page',
+    );
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
 
   it('shows a safe main-site login action for an unauthenticated user', () => {

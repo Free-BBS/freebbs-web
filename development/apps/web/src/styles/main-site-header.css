@@ -254,15 +254,6 @@ body.theme-dark .main-site-tool-button img {
   filter: brightness(0) invert(1);
 }
 
-.demo-preview-toolbar {
-  display: flex;
-  min-height: 46px;
-  justify-content: flex-end;
-  padding: 3px clamp(20px, 3vw, 44px);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-page);
-}
-
 .main-site-notifications {
   position: relative;
   flex: 0 0 auto;
@@ -540,11 +531,6 @@ body.theme-dark .main-site-tool-button img {
 
   body.theme-dark .main-site-mobile-theme img {
     filter: brightness(0) invert(1);
-  }
-
-  .demo-preview-toolbar {
-    min-height: 44px;
-    padding: 3px 14px;
   }
 }
 

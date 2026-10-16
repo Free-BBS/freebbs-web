@@ -107,6 +107,29 @@ a:focus-visible {
   height: min(920px, 82svh);
   min-height: 520px;
 }
+.review-layout--full-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+.review-layout--full-page > .review-header {
+  flex: none;
+}
+.review-layout--full-page > .review-main--full-page {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.review-main--full-page .sc-submitted-frame {
+  height: 100%;
+  min-height: 0;
+}
 .review-main .sc-group-hero > .organization-scene {
   width: 180px;
   height: 180px;
