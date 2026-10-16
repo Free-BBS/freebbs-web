@@ -38,8 +38,8 @@ const content: ShowcaseContent = {
   layout: 'community',
   hero: {
     ...image('01_jingsai', '新生理论知识竞赛“忆往無前”现场'),
-    aspectRatio: 2.6,
-    position: 'center 60%',
+    aspectRatio: 1.85,
+    position: 'center bottom',
   },
   logo: image('cover', '电子系 TMS 分会投稿封面', 'contain'),
   sections: [

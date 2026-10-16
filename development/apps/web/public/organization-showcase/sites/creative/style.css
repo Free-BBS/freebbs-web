@@ -195,3 +195,9 @@ body .welcome-notes,body .welcome-notes p{font-weight:400!important;font-size:14
 /* Approved diffuse background for every content page; keep the chosen home cover. */
 body:not(.page-home){--texture:url('assets/bg-diffuse.jpg.webp')}
 body:not(.page-home)::before{width:100vw;height:100vh;width:100dvw;height:100dvh;transform:translate(-50%,-50%);background-size:cover}
+
+/* Ordered, equal-height artwork rows preserve every submitted image in full. */
+.year-gallery.layout-ordered,.free-gallery.layout-ordered{display:block;position:relative;padding:0}
+.year-gallery.layout-ordered .collection-work:nth-child(n),.free-gallery.layout-ordered .collection-work:nth-child(n){position:absolute;margin:0;transform:none!important;transform-origin:center}
+.layout-ordered .collection-work a,.layout-ordered .collection-work a:hover,.layout-ordered .collection-work a:focus-visible{transform:none!important}
+.layout-ordered .collection-work img{display:block;width:100%;height:100%;max-height:none;object-fit:contain}

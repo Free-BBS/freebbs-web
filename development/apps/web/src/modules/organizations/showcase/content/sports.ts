@@ -60,10 +60,10 @@ const content: ShowcaseContent = {
       layout: 'gallery',
       images: [
         image(9, '六世（部长）同堂'),
-        image(10, '一起跨年的牢哥牢姐们'),
+        { ...image(10, '一起跨年的牢哥牢姐们'), position: 'center bottom' },
         image(11, '呜呼我们是亚军！'),
         image(12, '转身能看到老部长们的后背'),
-        { ...image(13, '见证国足U23大胜的体育中心'), position: 'center 38%' },
+        { ...image(13, '见证国足U23大胜的体育中心'), position: 'center 20%' },
         image(14, '被牢哥们巧手化妆的牢哥们（25男生节）'),
         image(15, '愉快的25年男生（受难）节'),
         image(16, '天天开心（沙滩版）'),

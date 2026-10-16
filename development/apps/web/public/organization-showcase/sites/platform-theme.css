@@ -113,6 +113,40 @@ html[data-showcase-site='software'][data-platform-theme='dark'] {
     background: #355669;
   }
 }
+/* A tall phone hero cannot crop the meeting photo without losing classmates. */
+@media (max-width: 700px) {
+  html[data-showcase-site='software'] {
+    & .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      height: auto;
+      min-height: 0;
+      background: #173b47;
+    }
+    & .hero-content {
+      order: 1;
+      padding-block: 36px;
+    }
+    & .hero-photo {
+      position: static;
+      order: 2;
+      z-index: auto;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    & .hero-shade {
+      display: none;
+    }
+    & .hero-caption {
+      position: static;
+      order: 3;
+      margin: 0;
+      padding: 12px 20px;
+    }
+  }
+}
 html[data-showcase-site='hardware'][data-platform-theme='dark'] {
   --ink: #e4efdf;
   --green: #b2d59d;
@@ -249,6 +283,9 @@ html[data-showcase-site='research'] {
   }
   & .practice-photos img[src*='调研组成员在实践中参加淮安大学座谈'] {
     object-position: center 25%;
+  }
+  & .practice-photos img[src*='队员与科普课家长和学生交流（一）'] {
+    object-position: center 20%;
   }
   & .practice-photos img[src*='调研组成员在实践中参观航天展览'] {
     object-position: center 7%;
@@ -431,6 +468,12 @@ html[data-showcase-site='humanities'][data-platform-theme='dark'] {
   & .grain {
     opacity: 0.08;
   }
+}
+/* All four submitted timeline photos are 4:3; show their complete original framing. */
+html[data-showcase-site='humanities'] .node__pic img {
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
 }
 /* The photo overlay is a figure; clear its browser margins and reserve caption room. */
 html[data-showcase-site='humanities'] .lightbox {
@@ -637,6 +680,128 @@ html[data-showcase-site='liaison'][data-platform-theme='dark'] {
   }
   & .lc-photo-frame {
     border-color: #544361;
+  }
+}
+html[data-showcase-site='liaison'] {
+  & .lc-gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  & .lc-gallery-card:nth-child(n) {
+    grid-column: auto !important;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: auto;
+  }
+  & .lc-gallery-card img {
+    flex: 0 0 auto;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  & .lc-gallery-card img[src*='舞会茶歇'] {
+    object-position: center 20%;
+  }
+  & .lc-gallery-card-content {
+    flex: 1 0 auto;
+    align-items: flex-start;
+  }
+  & .lc-work-modal-image {
+    align-self: start;
+    min-height: 0;
+    height: auto;
+  }
+  & .lc-work-modal-image img {
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    object-fit: contain;
+  }
+  & .lc-work-modal-image > span {
+    position: static;
+    display: block;
+    padding: 0 22px;
+    background: none;
+    color: var(--lc-muted);
+  }
+  @media (max-width: 700px) {
+    & .lc-gallery-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+/* Keep the editing-window artwork while giving every photograph its own clear frame. */
+@media (min-width: 961px) {
+  html[data-showcase-site='audiovisual'] .mm-app {
+    & #stories {
+      height: auto;
+      min-height: 100dvh;
+      overflow: visible;
+      align-items: flex-start;
+    }
+    & .stories-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      grid-template-rows: auto auto auto;
+      gap: 24px;
+      align-items: start;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+    }
+    & .story-copy {
+      position: static;
+      grid-column: 1;
+      grid-row: 1;
+      width: auto;
+    }
+    & .stories-grid :is(.story-window, .daily-window, .creation-window) {
+      position: relative;
+      inset: auto;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+      transform: none;
+    }
+    & .story-window {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    & .daily-window {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    & .creation-window {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      align-self: stretch;
+      contain: size;
+    }
+    & :is(.story-window, .daily-window) > .window-body {
+      flex: 0 0 auto;
+    }
+    & .stories-grid :is(.story-photo-stage, .story-slides, .story-image, .story-photo) {
+      height: auto;
+    }
+    & .stories-grid .story-photo img {
+      height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+    }
+    & .stories-grid .daily-image .story-photo img {
+      aspect-ratio: 4 / 3;
+    }
+    & .stories-grid .story-image figcaption {
+      position: static;
+      padding: 10px 12px;
+      background: var(--panel-deep);
+    }
+    & .creation-window > .window-body {
+      min-height: 0;
+      overflow: auto;
+    }
   }
 }
 /* These two submitted visual worlds already use a dark canvas. Keep media,

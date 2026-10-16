@@ -5,6 +5,7 @@ const image = (index: number, caption: string): ShowcaseImage => ({
   alt: caption,
   caption,
   fit: 'contain',
+  aspectRatio: 3 / 2,
 });
 
 export const arts: ShowcaseContent = {

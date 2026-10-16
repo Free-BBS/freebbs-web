@@ -30,7 +30,7 @@ const content: ShowcaseContent = {
   accent: '#8b8bea',
   darkAccent: '#c2bbff',
   layout: 'studio',
-  hero: { ...image(8, '新媒体部部员合影', 'cover'), aspectRatio: 2.65, position: 'center 65%' },
+  hero: { ...image(8, '新媒体部部员合影', 'cover'), aspectRatio: 2.65, position: 'center 60%' },
   sections: [
     {
       id: 'close-to-you',
@@ -41,21 +41,24 @@ const content: ShowcaseContent = {
         {
           title: '每一个飞驰的瞬间',
           description: '电子系田径队',
-          image: image(1, '《每一个飞驰的瞬间》推送封面'),
+          image: { ...image(1, '《每一个飞驰的瞬间》推送封面'), aspectRatio: 16 / 9 },
           href: 'https://mp.weixin.qq.com/s/e_0dzwnnxzjL7wPv6viQlA',
           linkLabel: '阅读推送',
         },
         {
           title: '我与我周旋久',
           description: '秦子驰',
-          image: image(2, '《我与我周旋久》推送封面'),
+          image: { ...image(2, '《我与我周旋久》推送封面'), aspectRatio: 16 / 9 },
           href: 'https://mp.weixin.qq.com/s/-SXwtiEwgvONESFsJQj5VA',
           linkLabel: '阅读推送',
         },
         {
           title: 'Electronic Enthusiasm',
           description: '李沐晟',
-          image: image(3, '《無限近距离 × Electronic Enthusiasm》推送封面'),
+          image: {
+            ...image(3, '《無限近距离 × Electronic Enthusiasm》推送封面'),
+            aspectRatio: 16 / 9,
+          },
           href: 'https://mp.weixin.qq.com/s/kFzHlqXTflK1w8EMNLNarw',
           linkLabel: '阅读推送',
         },
@@ -69,20 +72,20 @@ const content: ShowcaseContent = {
       items: [
         {
           title: '清华大学电子工程系 2026 年毕业典礼举行',
-          image: image(4, '电子工程系 2026 年毕业典礼报道封面'),
+          image: { ...image(4, '电子工程系 2026 年毕业典礼报道封面'), aspectRatio: 16 / 9 },
           href: 'https://mp.weixin.qq.com/s/BhrfXiRO8hckE2b4bAv4Jw',
           linkLabel: '阅读报道',
         },
         {
           title: '2026 级本科生迎新大会',
           description: '崭新起点，逐梦前行！',
-          image: image(5, '电子工程系 2026 级本科生迎新大会报道封面'),
+          image: { ...image(5, '电子工程系 2026 级本科生迎新大会报道封面'), aspectRatio: 16 / 9 },
           href: 'https://mp.weixin.qq.com/s/uVoL2Yj7Fwplqjjhyre0Qw',
           linkLabel: '阅读报道',
         },
         {
           title: '欢迎新同学！2026 电子工程系迎新实录',
-          image: image(6, '2026 电子工程系迎新实录封面'),
+          image: { ...image(6, '2026 电子工程系迎新实录封面'), aspectRatio: 16 / 9 },
           href: 'https://mp.weixin.qq.com/s/-YbBFA-D58sbefiCG7fY7Q',
           linkLabel: '阅读报道',
         },
