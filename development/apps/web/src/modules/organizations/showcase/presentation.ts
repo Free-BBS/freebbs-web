@@ -22,3 +22,18 @@ export function fullPageShowcaseParent(pathname: string): string | undefined {
     ? `/organizations/${route[1]}`
     : undefined;
 }
+import { ORGANIZATION_GALLERY } from '../catalog.js';
+
+const departmentPaths = new Set(
+  ORGANIZATION_GALLERY.flatMap((organization) =>
+    organization.key === 'tms'
+      ? ['/organizations/tms', '/organizations/tms/position']
+      : organization.departments.map(
+          (department) => `/organizations/${organization.key}/${department.key}`,
+        ),
+  ),
+);
+
+export function isDepartmentShowcasePath(pathname: string): boolean {
+  return departmentPaths.has(pathname.replace(/^\/development(?=\/)/, '').replace(/\/+$/, ''));
+}

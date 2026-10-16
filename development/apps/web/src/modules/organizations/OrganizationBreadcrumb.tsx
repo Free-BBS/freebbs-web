@@ -17,9 +17,13 @@ export function OrganizationBreadcrumb({
     >
       <Link to="/organizations">风采展示</Link>
       <span aria-hidden="true">/</span>
-      <Link to={`/organizations/${organization.key}`} aria-label={organization.name}>
-        {compact ? organization.shortName : organization.name}
-      </Link>
+      {organization.key === 'tms' && !departmentLabel ? (
+        <span aria-current="page">{compact ? organization.shortName : organization.name}</span>
+      ) : (
+        <Link to={`/organizations/${organization.key}`} aria-label={organization.name}>
+          {compact ? organization.shortName : organization.name}
+        </Link>
+      )}
       {departmentLabel ? (
         <>
           <span aria-hidden="true">/</span>

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../core/api/client.js';
 import { OrganizationsPage } from './OrganizationsPage.js';
@@ -206,6 +206,74 @@ describe('organization exhibition', () => {
     }
   });
 
+  it('resets the internal reading region when clearing a department fragment and preserves later anchor navigation', async () => {
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
+    const originalIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'scrollIntoView',
+    );
+    const scrollTo = vi.fn();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: scrollTo,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+    const request = vi.fn(async (path: string) =>
+      path.endsWith('/activities')
+        ? { active: [], past: [] }
+        : { html: null, canEdit: false, revision: 0 },
+    );
+    const departmentPath = '/organizations/youth_league/freshman';
+    const view = render(
+      <MemoryRouter initialEntries={[`${departmentPath}#showcase-contact`]}>
+        <Link to={departmentPath}>回到本部门入口</Link>
+        <Link to={`${departmentPath}#showcase-contact`}>跳到联系人</Link>
+        <OrganizationsPage
+          organizationKey="youth_league"
+          departmentKey="freshman"
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    try {
+      await screen.findByText('暂无活跃活动');
+      const reading = screen.getByRole('region', { name: '办公室·新生组页面内容' });
+      const contact = document.getElementById('showcase-contact');
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.contexts[0]).toBe(contact);
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(window.scrollTo).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('link', { name: '回到本部门入口' }));
+      expect(screen.getByRole('region', { name: '办公室·新生组页面内容' })).toBe(reading);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.contexts[0]).toBe(reading);
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'instant' });
+      expect(window.scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole('link', { name: '跳到联系人' }));
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+      expect(scrollIntoView.mock.contexts[1]).toBe(contact);
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'instant' });
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(window.scrollTo).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+      if (originalIntoView)
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalIntoView);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+
   it.each(ORGANIZATION_GALLERY.filter(({ key }) => key !== 'tms'))(
     'shows every $name department and retains its explicit root activity destination',
     (organization) => {
@@ -278,18 +346,33 @@ describe('organization exhibition', () => {
     ).toBeInTheDocument();
   });
 
-  it('loads TMS root from its exact server position department', async () => {
-    const { request } = show('tms');
-    await screen.findByText('暂无活跃活动');
-    expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
-      '/organizations/tms/position/activities',
-      '/organizations/tms/position/home',
-    ]);
-    expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(
-      'href',
-      '/collections/registrations?organization=tms',
-    );
-  });
+  it.each([undefined, 'position'])(
+    'loads the TMS entrance with department key %s directly from its exact server position',
+    async (departmentKey) => {
+      const { request } = show('tms', departmentKey);
+      await screen.findByText('暂无活跃活动');
+      expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
+        '/organizations/tms/position/activities',
+        '/organizations/tms/position/home',
+      ]);
+      expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(
+        'href',
+        '/collections/registrations?organization=tms',
+      );
+      expect(
+        screen.getByRole('heading', { name: '电子系 TMS 分会', level: 2 }),
+      ).toBeInTheDocument();
+      const trail = screen.getByRole('navigation', { name: '展厅位置' });
+      expect(trail).toHaveTextContent(/^风采展示\s*\/\s*TMS$/);
+      expect(within(trail).getAllByRole('link')).toHaveLength(1);
+      expect(within(trail).getByRole('link', { name: '风采展示' })).toHaveAttribute(
+        'href',
+        '/organizations',
+      );
+      expect(within(trail).getByText('TMS')).toHaveAttribute('aria-current', 'page');
+      expect(screen.queryByRole('heading', { name: '没有找到这个展区' })).not.toBeInTheDocument();
+    },
+  );
 
   it('opens research as an independent read-only exhibition without practice APIs or editing actions', () => {
     const { request } = show('youth_league', 'research');
@@ -354,7 +437,7 @@ describe('organization exhibition', () => {
     expect(frame.parentElement).not.toHaveClass('sc-submitted-shell--full-page');
     expect(document.querySelector('.sc-hero')).toHaveTextContent(content.shortName ?? content.name);
     expect(document.querySelector('.sc-window-bar')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '展厅位置' })).not.toHaveClass(
+    expect(screen.getByRole('navigation', { name: '展厅位置' })).toHaveClass(
       'organization-breadcrumb--compact',
     );
   });

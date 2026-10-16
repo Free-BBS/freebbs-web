@@ -4,10 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
-import {
-  fullPageShowcaseParent,
-  isFullPageShowcasePath,
-} from '../modules/organizations/showcase/presentation.js';
+import { isDepartmentShowcasePath } from '../modules/organizations/showcase/presentation.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import {
   canViewSystemSettings,
@@ -161,7 +158,7 @@ function PreviewDenied() {
 export function AppShell({ children, moduleStates }: AppShellProps) {
   const auth = useAuth();
   const location = useLocation();
-  const fullPageShowcase = isFullPageShowcasePath(location.pathname);
+  const fullPageShowcase = isDepartmentShowcasePath(location.pathname);
 
   const theme = useMainSiteTheme();
   const typography = useMainSiteTypography();
@@ -255,7 +252,6 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
 
         <div className="app-shell-main">
           <MainSiteHeader
-            backTo={fullPageShowcaseParent(location.pathname)}
             client={auth.client}
             user={auth.user}
             authMode={auth.authMode}

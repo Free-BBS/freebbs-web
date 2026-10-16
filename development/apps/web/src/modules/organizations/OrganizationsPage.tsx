@@ -6,6 +6,8 @@ import { DepartmentHomepage } from './DepartmentHomepage.js';
 import { findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
 import { OrganizationBreadcrumb } from './OrganizationBreadcrumb.js';
+import { OrganizationDepartmentViewport } from './OrganizationDepartmentViewport.js';
+import { MainSiteFooter } from '../../app/MainSiteFooter.js';
 import {
   CuratedDepartmentShowcase,
   SubmittedDepartmentShowcase,
@@ -55,6 +57,9 @@ export function OrganizationsPage({
         return;
       }
     }
+    page.current
+      ?.querySelector<HTMLElement>('.organization-department-scroll')
+      ?.scrollTo?.({ top: 0, left: 0, behavior: 'instant' });
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [organizationKey, departmentKey, hash]);
   useEffect(() => {
@@ -77,7 +82,8 @@ export function OrganizationsPage({
     );
   const organization = organizationKey ? findOrganization(organizationKey) : undefined;
   const department = organization?.departments.find(({ key }) => key === departmentKey);
-  if ((organizationKey && !organization) || (departmentKey && !department))
+  const tmsPosition = organization?.key === 'tms' && departmentKey === 'position';
+  if ((organizationKey && !organization) || (departmentKey && !department && !tmsPosition))
     return (
       <section ref={page} className="module-page organization-page">
         <h2>没有找到这个展区</h2>
@@ -96,17 +102,7 @@ export function OrganizationsPage({
       ? departmentForRoute(organization.key, department?.key ?? 'position')
       : undefined;
   const curated = findShowcase(`${organization.key}.${department?.key ?? 'position'}`);
-  if (curated?.site && usesFullPageShowcase(curated.departmentId))
-    return (
-      <section ref={page} className="organization-page organization-page--full-page">
-        <OrganizationBreadcrumb
-          organization={organization}
-          departmentLabel={curated.shortName ?? curated.name}
-          compact
-        />
-        <SubmittedDepartmentShowcase key={curated.slug} content={curated} fullPage />
-      </section>
-    );
+  const fullPage = Boolean(curated?.site && usesFullPageShowcase(curated.departmentId));
   const breadcrumb = (
     <OrganizationBreadcrumb
       organization={organization}
@@ -115,12 +111,18 @@ export function OrganizationsPage({
   );
   if (canonicalDepartment || (department && curated))
     return (
-      <section
+      <OrganizationDepartmentViewport
+        key={curated?.slug ?? canonicalDepartment?.id ?? department?.key}
         ref={page}
-        className={`module-page organization-page organization-page--${organization.key}`}
+        organization={organization}
+        departmentLabel={
+          curated?.shortName ?? curated?.name ?? department?.name ?? organization.name
+        }
+        fullPage={fullPage}
       >
-        {breadcrumb}
-        {canonicalDepartment ? (
+        {fullPage && curated ? (
+          <SubmittedDepartmentShowcase key={curated.slug} content={curated} fullPage />
+        ) : canonicalDepartment ? (
           <DepartmentHomepage
             key={canonicalDepartment.id}
             department={canonicalDepartment}
@@ -130,7 +132,8 @@ export function OrganizationsPage({
         ) : curated ? (
           <CuratedDepartmentShowcase content={curated} />
         ) : null}
-      </section>
+        {!fullPage ? <MainSiteFooter /> : null}
+      </OrganizationDepartmentViewport>
     );
   return (
     <section

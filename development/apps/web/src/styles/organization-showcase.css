@@ -1,7 +1,7 @@
 /* The campus street shares the development platform's five sheep characters. */
 .organization-page {
   --sc-header-offset: 100px;
-  --sc-caption-size: 16px;
+  --sc-caption-size: 17px;
   --sc-ink: var(--color-text);
   --sc-paper: var(--surface-raised);
   --sc-soft: var(--surface-muted);
@@ -642,14 +642,14 @@ body.theme-light .curated-showcase {
 .sc-formal-name {
   margin: 0 0 12px;
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: 14px;
   line-height: 1.65;
 }
 .sc-hero-summary {
   max-width: 700px;
   margin: 0;
   color: var(--color-muted);
-  font-size: 0.875rem;
+  font-size: 16px;
   line-height: 1.95;
 }
 .sc-hero-actions {
@@ -731,7 +731,7 @@ body.theme-light .curated-showcase {
   padding: 9px 12px;
   border-radius: 10px;
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: 14px;
   font-weight: 650;
   white-space: nowrap;
   text-decoration: none;
@@ -756,7 +756,7 @@ body.theme-light .curated-showcase {
 .sc-about-copy > p {
   margin: 0 0 14px;
   color: var(--color-muted);
-  font-size: 0.875rem;
+  font-size: 16px;
   line-height: 2;
 }
 .sc-about-logo {
@@ -819,7 +819,7 @@ body.theme-light .curated-showcase {
 }
 .sc-duty-board li > p {
   margin: 1px 0 0;
-  font-size: 0.75rem;
+  font-size: 16px;
   line-height: 1.85;
 }
 .sc-section {
@@ -864,7 +864,7 @@ body.theme-light .curated-showcase {
   max-width: 880px;
   margin: 0 0 17px;
   color: var(--color-muted);
-  font-size: 0.875rem;
+  font-size: 16px;
   line-height: 2;
 }
 .sc-items {
@@ -890,7 +890,7 @@ body.theme-light .curated-showcase {
 .sc-item-copy p {
   margin: 0 0 12px;
   color: var(--color-muted);
-  font-size: 0.8125rem;
+  font-size: 16px;
   line-height: 1.95;
   white-space: pre-line;
 }
@@ -904,7 +904,7 @@ body.theme-light .curated-showcase {
   border-radius: 7px;
   background: var(--sc-lilac);
   color: var(--color-muted);
-  font-size: 0.6875rem;
+  font-size: 14px;
 }
 .sc-item > .sc-photo {
   margin: 0;
@@ -1202,7 +1202,7 @@ body.theme-light .curated-showcase {
   list-style: none;
   padding: 18px 0;
   color: var(--sc-ink);
-  font-size: 0.875rem;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -1215,7 +1215,7 @@ body.theme-light .curated-showcase {
 .sc-faq details > p {
   margin: 0 0 20px;
   color: var(--color-muted);
-  font-size: 0.8125rem;
+  font-size: 16px;
   line-height: 1.95;
 }
 .sc-contact {
@@ -1241,7 +1241,7 @@ body.theme-light .curated-showcase {
 }
 .sc-contact-copy p {
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: 15px;
   line-height: 1.85;
 }
 .sc-contact-links {
@@ -1254,6 +1254,7 @@ body.theme-light .curated-showcase {
   display: grid;
   gap: 5px;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 62px;
   padding: 12px 38px 12px 15px;
   border: 1px solid var(--sc-line);
@@ -1268,11 +1269,14 @@ body.theme-light .curated-showcase {
 }
 .sc-email > span {
   color: var(--color-muted);
-  font-size: 0.6875rem;
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 .sc-email > strong {
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .sc-email > b {
@@ -1284,7 +1288,7 @@ body.theme-light .curated-showcase {
 .sc-back-link {
   padding: 10px 0 0;
   color: var(--sc-link, var(--sc-accent));
-  font-size: 0.75rem;
+  font-size: 14px;
   text-underline-offset: 4px;
 }
 .sc-default-introduction {
@@ -1339,7 +1343,7 @@ body.theme-light .curated-showcase {
   border-bottom: 1px solid var(--sc-line);
   background: var(--sc-yellow);
   color: var(--sc-ink);
-  font-size: 0.75rem;
+  font-size: 14px;
   font-weight: 650;
 }
 .sc-window-dots {
@@ -1369,7 +1373,7 @@ body.theme-light .curated-showcase {
   border-radius: 8px;
   background: var(--sc-paper);
   color: var(--sc-ink);
-  font-size: 0.6875rem;
+  font-size: 13px;
   cursor: pointer;
 }
 .sc-submitted-frame {
@@ -1404,7 +1408,7 @@ body.theme-light .curated-showcase {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-page);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
 }
 .organization-breadcrumb--compact a {
@@ -1417,7 +1421,7 @@ body.theme-light .curated-showcase {
     min-height: 40px;
     gap: 6px;
     padding: 6px 14px;
-    font-size: 13px;
+    font-size: 14px;
   }
 }
 .sc-submitted-shell--full-page {
@@ -1456,7 +1460,7 @@ body.theme-light .curated-showcase {
   margin: 0;
   padding: 15px;
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: 14px;
 }
 .sc-lightbox {
   position: fixed;
@@ -1511,6 +1515,10 @@ body.theme-light .curated-showcase {
 .sc-group-hero .organization-profile-mark {
   border: 0;
   background: transparent;
+}
+.sc-group-hero :is(h1, h2),
+.sc-hero-copy > :is(h2, h3) {
+  text-wrap: balance;
 }
 .sc-group-hero .organization-profile-mark .organization-scene {
   width: 230px;
@@ -1700,7 +1708,7 @@ body.theme-light .curated-showcase {
     font-size: 1rem;
   }
   .sc-hero-summary {
-    font-size: 0.8125rem;
+    font-size: 16px;
   }
   .sc-contact {
     grid-template-columns: 1fr;
@@ -1715,7 +1723,7 @@ body.theme-light .curated-showcase {
 }
 @media (max-width: 520px) {
   .organization-page {
-    --sc-caption-size: 15px;
+    --sc-caption-size: 16px;
   }
   .sc-default-introduction {
     grid-template-columns: 1fr;
@@ -1887,7 +1895,7 @@ body.theme-light .curated-showcase {
     font-size: 1.0625rem;
   }
   .sc-hero-summary {
-    font-size: 0.75rem;
+    font-size: 16px;
   }
   .sc-hero-actions {
     grid-column: 1;
@@ -1896,11 +1904,11 @@ body.theme-light .curated-showcase {
     gap: 6px;
   }
   .sc-hero-actions .sc-pill-link {
-    font-size: 0.75rem;
+    font-size: 14px;
     padding: 9px 15px;
   }
   .sc-hero-actions .sc-text-link {
-    font-size: 0.6875rem;
+    font-size: 14px;
   }
   .sc-hero-photo {
     grid-column: 1 / -1;
@@ -1918,7 +1926,7 @@ body.theme-light .curated-showcase {
   }
   .sc-jump-nav a {
     padding: 8px 10px;
-    font-size: 0.6875rem;
+    font-size: 14px;
   }
   .sc-about {
     gap: 23px;
@@ -1928,7 +1936,7 @@ body.theme-light .curated-showcase {
     font-size: 1.4375rem;
   }
   .sc-about-copy > p {
-    font-size: 0.8125rem;
+    font-size: 16px;
   }
   .sc-duty-board {
     padding: 20px;
@@ -1941,7 +1949,7 @@ body.theme-light .curated-showcase {
   }
   .sc-section-intro,
   .sc-section > p {
-    font-size: 0.8125rem;
+    font-size: 16px;
   }
   .sc-items,
   .sc-items--projects {
@@ -1996,11 +2004,11 @@ body.theme-light .curated-showcase {
     display: none;
   }
   .sc-window-bar > span:nth-child(2) {
-    font-size: 0.6875rem;
+    font-size: 14px;
   }
   .sc-window-bar button {
     padding-inline: 7px;
-    font-size: 0.625rem;
+    font-size: 13px;
   }
   .sc-submitted-frame {
     height: max(520px, 75svh);

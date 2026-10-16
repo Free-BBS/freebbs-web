@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { UserContext } from '@freebbs-development/contracts';
 
+import { ORGANIZATION_GALLERY } from '../modules/organizations/catalog.js';
 import { AppShell } from './AppShell.js';
 import { mainSiteHref } from './main-site-api.js';
 import { loadModuleStates } from './router.js';
@@ -440,14 +441,16 @@ describe('AppShell', () => {
   });
 
   it.each([
-    ['/organizations/youth_league/organization', '/organizations/youth_league'],
-    ['/organizations/youth_league/sail', '/organizations/youth_league'],
-    ['/organizations/youth_league/humanities', '/organizations/youth_league'],
-    ['/organizations/media_center/creative', '/organizations/media_center'],
-    ['/organizations/media_center/audiovisual', '/organizations/media_center'],
+    '/organizations/tms',
+    '/organizations/tms/position',
+    ...ORGANIZATION_GALLERY.flatMap((organization) =>
+      organization.departments.map(
+        (department) => `/organizations/${organization.key}/${department.key}`,
+      ),
+    ),
   ])(
-    'keeps platform navigation and removes its footer for the full-page department at %s',
-    (route, parent) => {
+    'keeps the platform title and navigation without a separate back button for department %s',
+    (route) => {
       mockUseAuth.mockReturnValue(authenticatedAuth());
       renderShell(route, { children: <iframe title="部门网页" /> });
       expect(document.querySelector('.development-shell-root')).toHaveClass(
@@ -455,10 +458,15 @@ describe('AppShell', () => {
       );
       expect(screen.getByRole('complementary', { name: '发展平台侧栏' })).toBeInTheDocument();
       expect(document.querySelector('.main-site-header')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: '返回上一级' })).toHaveAttribute('href', parent);
-      expect(screen.getByRole('link', { name: '返回上一级' }).closest('header')).toHaveClass(
-        'main-site-header--with-back',
+      expect(screen.getByRole('heading', { name: '风采展示', level: 1 })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: '返回上一级' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '返回上一级' })).not.toBeInTheDocument();
+      expect(document.querySelector('.main-site-back')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '打开我的个人主页' })).toHaveAttribute(
+        'href',
+        '/profile',
       );
+      expect(document.querySelector('.main-site-mobile-theme')).toBeInTheDocument();
       expect(screen.getByTitle('部门网页')).toBeInTheDocument();
       expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
     },
@@ -466,9 +474,9 @@ describe('AppShell', () => {
 
   it.each([
     '/organizations',
-    '/organizations/youth_league/research',
+    '/organizations/youth_league',
     '/organizations/media_center/creative/edit',
-  ])('retains the normal shell outside the exact full-page routes: %s', (route) => {
+  ])('retains the normal shell outside department showcase routes: %s', (route) => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell(route);
     expect(document.querySelector('.development-shell-root')).not.toHaveClass(

@@ -43,8 +43,8 @@ const content: ShowcaseContent = {
       eyebrow: 'ON THE FIELD',
       layout: 'gallery',
       images: [
-        image(1, '26年小马杯提前项'),
-        image(2, '26年大马杯季军'),
+        { ...image(1, '26年小马杯提前项'), aspectRatio: 16 / 9, position: 'center 70%' },
+        { ...image(2, '26年大马杯季军'), aspectRatio: 16 / 9 },
         image(3, '26-27第一次部会'),
         image(4, '25新生赤足'),
         image(5, '25年大马杯亚军'),

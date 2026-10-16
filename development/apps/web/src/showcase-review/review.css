@@ -80,24 +80,6 @@ a:focus-visible {
   color: var(--color-muted);
   font-weight: 500;
 }
-.review-showcase-back {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--surface-raised);
-  color: var(--color-text);
-  font-size: 14px;
-  font-weight: 650;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.review-showcase-back:hover {
-  background: var(--surface-muted);
-}
 .review-header nav {
   display: flex;
   align-items: center;
@@ -125,17 +107,17 @@ a:focus-visible {
   height: min(920px, 82svh);
   min-height: 520px;
 }
-.review-layout--full-page {
+.review-layout--department {
   display: flex;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
-.review-layout--full-page > .review-header {
+.review-layout--department > .review-header {
   flex: none;
 }
-.review-layout--full-page > .review-main--full-page {
+.review-layout--department > .review-main--department {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -145,11 +127,6 @@ a:focus-visible {
   margin: 0;
   padding: 0;
   overflow: hidden;
-}
-.review-main--full-page > .sc-submitted-shell {
-  flex: 1;
-  min-height: 0;
-  height: auto;
 }
 .review-main--full-page .sc-submitted-frame {
   height: 100%;

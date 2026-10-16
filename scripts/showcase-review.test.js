@@ -4,7 +4,9 @@ const { readFileSync, readdirSync, existsSync, statSync } = require('node:fs');
 const { join, resolve, dirname, relative } = require('node:path');
 const { Script } = require('node:vm');
 
-const root = resolve(__dirname, '../development/apps/web/dist-review');
+const root = process.env.SHOWCASE_REVIEW_DIR
+  ? resolve(process.env.SHOWCASE_REVIEW_DIR)
+  : resolve(__dirname, '../development/apps/web/dist-review');
 const text = (path) => readFileSync(path, 'utf8');
 const manifest = JSON.parse(text(join(root, '审核目录.json')));
 function walk(dir) {

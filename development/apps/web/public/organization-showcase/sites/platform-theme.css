@@ -1,10 +1,10 @@
 /* Submitted pages keep their typography and artwork; interface surfaces and photo captions follow the platform. */
 html[data-showcase-site] {
-  --showcase-caption-size: 16px;
+  --showcase-caption-size: 17px;
 }
 @media (max-width: 700px) {
   html[data-showcase-site] {
-    --showcase-caption-size: 15px;
+    --showcase-caption-size: 16px;
   }
 }
 html[data-showcase-site='software']
@@ -17,7 +17,15 @@ html[data-showcase-site='software']
     .group-photo figcaption > span:last-child,
     #gallery-caption
   ),
-html[data-showcase-site='hardware'] :is(.project-image.photo-button > span, #lightbox > p),
+html[data-showcase-site='hardware']
+  :is(
+    .project-image.photo-button > span,
+    .moment-caption,
+    .film-caption,
+    .film-caption > a,
+    .competition-media .group-photo > span,
+    #lightbox > p
+  ),
 html[data-showcase-site='research'] :is(figcaption, #lightbox > p),
 html[data-showcase-site='creative']
   :is(.work figcaption, .collection-work figcaption, .image-viewer figcaption),
@@ -31,6 +39,116 @@ html[data-showcase-site='audiovisual']
   font-size: var(--showcase-caption-size);
   line-height: 1.7;
   overflow-wrap: anywhere;
+}
+/* Raise reading copy without changing each department's display lettering or tool labels. */
+html[data-showcase-site='software'] .contacts a {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+html[data-showcase-site='software'] .contacts a > span {
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='software'] .contacts a > span:first-child {
+  flex: 0 0 auto;
+}
+html[data-showcase-site='hardware'] .contact-card {
+  grid-template-columns: minmax(132px, 0.8fr) minmax(0, 1.2fr) 52px;
+}
+html[data-showcase-site='hardware'] :is(.contact-name, .contact-email) {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] :is(.node p, .hero__lead) {
+  font-size: 16px;
+  line-height: 1.8;
+}
+html[data-showcase-site='humanities'] .facts .v {
+  font-size: 15px;
+  line-height: 1.7;
+}
+html[data-showcase-site='research']
+  :is(.duties p, .report-card p, .report-summary p, .message p:not(.eyebrow)) {
+  font-size: 16px;
+  line-height: 1.9;
+}
+html[data-showcase-site='liaison'] {
+  --lc-size-work-text: 15px;
+}
+html[data-showcase-site='audiovisual'] .mm-app {
+  --scene-description-size: 16px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields {
+  grid-template-columns: 6em minmax(0, 1fr);
+  font-size: 14px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields label {
+  font-size: 14px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields .email-link {
+  font-size: 15px;
+}
+html[data-showcase-site='audiovisual']
+  .mm-app
+  :is(
+    .about-roles p,
+    .phase-detail-copy > p:not(.mono),
+    .story-invitation,
+    .creation-mv,
+    .creation-pending-copy,
+    .creation-empty,
+    .contact-invitation,
+    .contact-fields > p,
+    #contact .voice-text
+  ) {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1200px) {
+  html[data-showcase-site='hardware'] .contact-card {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 5px 12px;
+  }
+  html[data-showcase-site='hardware'] .contact-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  html[data-showcase-site='hardware'] .contact-email {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  html[data-showcase-site='hardware'] .copy-label {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}
+@media (max-width: 800px) {
+  html[data-showcase-site='software'] .contacts a {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 3px;
+    padding-block: 12px;
+  }
+  html[data-showcase-site='software'] .contacts a > span:last-child {
+    text-align: left;
+  }
+}
+@media (max-width: 520px), (min-width: 961px) and (max-height: 820px) {
+  html[data-showcase-site='audiovisual'] .mm-app {
+    --scene-description-size: 15px;
+  }
+}
+@media (min-width: 961px) and (max-height: 690px) {
+  html[data-showcase-site='audiovisual'] .mm-app #contact {
+    height: auto;
+  }
+  html[data-showcase-site='audiovisual'] .mm-app .contact-grid {
+    height: 600px;
+  }
 }
 :root[data-platform-theme='dark'] {
   color-scheme: dark;
@@ -734,6 +852,15 @@ html[data-showcase-site='liaison'] {
 /* Keep the editing-window artwork while giving every photograph its own clear frame. */
 @media (min-width: 961px) {
   html[data-showcase-site='audiovisual'] .mm-app {
+    /* Longer chapters need continuous scrolling below the fixed editor controls. */
+    & .sequence-scroll {
+      scroll-snap-type: none;
+      scroll-padding-top: calc(var(--stage-top) + 20px);
+      scroll-padding-bottom: calc(var(--stage-bottom) + 20px);
+    }
+    &.workspace-entered .sequence-scroll {
+      clip-path: inset(var(--stage-top) 0 var(--stage-bottom));
+    }
     & #stories {
       height: auto;
       min-height: 100dvh;
