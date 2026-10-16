@@ -27,6 +27,7 @@ function setup(
     error?: boolean;
     empty?: boolean;
     departmentKey?: string;
+    organizationKey?: string;
     homeError?: boolean;
     active?: boolean;
   } = {},
@@ -70,7 +71,7 @@ function setup(
   const view = render(
     <MemoryRouter>
       <OrganizationsPage
-        organizationKey="student_union"
+        organizationKey={options.organizationKey ?? 'student_union'}
         departmentKey={options.departmentKey ?? 'sports_center'}
         client={{ request: request as ApiClient['request'] }}
       />
@@ -156,17 +157,22 @@ describe('department homepage', () => {
     expect(screen.getByRole('heading', { name: '学生体育中心', level: 2 })).toBeInTheDocument();
     expect(
       within(screen.getByRole('region', { name: '体育中心' })).getAllByRole('img'),
-    ).toHaveLength(8);
+    ).toHaveLength(4);
     expect(
       within(screen.getByRole('region', { name: '天天开心' })).getAllByRole('img'),
-    ).toHaveLength(8);
+    ).toHaveLength(4);
     expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByTitle('体育中心主页')).not.toBeInTheDocument();
   });
   it('keeps the original introduction fallback for departments without a submitted exhibition', async () => {
-    setup({ empty: true, canEdit: false, departmentKey: 'arts_center' });
+    setup({
+      empty: true,
+      canEdit: false,
+      organizationKey: 'science_association',
+      departmentKey: 'training',
+    });
     expect(await screen.findByText('部门主页正在准备中。')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '文艺中心', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '学习培养部', level: 2 })).toBeInTheDocument();
     expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
   });
   it('preserves accurate active and past activity destinations alongside the curated fallback', async () => {

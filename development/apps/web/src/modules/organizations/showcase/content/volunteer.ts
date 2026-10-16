@@ -21,6 +21,12 @@ const content: ShowcaseContent = {
   accent: '#ed9d76',
   darkAccent: '#ffc7ac',
   layout: 'field',
+  hero: {
+    src: '/development/organization-showcase/content/volunteer/01.webp',
+    alt: '志愿组合照',
+    caption: '志愿组合照',
+    fit: 'contain',
+  },
   sections: [
     {
       id: 'volunteering-nearby',
@@ -71,7 +77,7 @@ const content: ShowcaseContent = {
   ],
   sourceNotes: [
     '依据志愿组公开投稿《部门介绍.docx》整理。',
-    '保留部门职责、项目名称、公共邮箱及招新推送原链接；本次投稿没有独立图片。',
+    '保留部门职责、项目名称、公共邮箱及招新推送原链接；封面为 NotingSr 于 2026-10-16 补充指定的志愿组合照。',
   ],
 };
 

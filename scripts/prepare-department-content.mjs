@@ -18,6 +18,23 @@ const materialRoot = path.resolve(repo, '../../..', '66 发展端/组织风采')
 const publicRoot = path.join(repo, 'development/apps/web/public/organization-showcase/content');
 const qaRoot = path.resolve(repo, '../../..', 'tmp/org-content-qa');
 const departments = {
+  volunteer: {
+    folder: '志愿组',
+    files: ['志愿组合照-用户指定封面.jpg'],
+  },
+  arts: {
+    folder: '学生文艺中心',
+    files: [
+      '封面（掠影学生节大合影）.jpg',
+      '部门介绍出插图（系歌赛合影）.jpg',
+      '部门介绍处插图（free之夜合影）.jpg',
+      '部门介绍处插图（毕业舞会合影）.jpg',
+    ],
+  },
+  project: {
+    folder: '项目部',
+    files: ['图1.png', '图2.jpg', '图3.jpg', '图4.jpg', '图5.png'],
+  },
   tms: {
     folder: '电子系TMS分会',
     files: [
@@ -109,8 +126,20 @@ for (const [departmentId, entry] of Object.entries(departments)) {
     const target = ensureChild(outputDir, path.join(outputDir, `${stem}.webp`));
     const info = await sharp(source)
       .rotate()
-      .resize({ width: 1600, height: 1800, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: departmentId === 'new-media' && index < 6 ? 88 : 84, effort: 5 })
+      .resize({
+        width: ['arts', 'project'].includes(departmentId) ? 2000 : 1600,
+        height: 1800,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({
+        quality: ['arts', 'project'].includes(departmentId)
+          ? 86
+          : departmentId === 'new-media' && index < 6
+            ? 88
+            : 84,
+        effort: 5,
+      })
       .toFile(target);
     prepared.push({
       filename,
@@ -147,6 +176,18 @@ for (const [departmentId, entry] of Object.entries(departments)) {
   report[departmentId] = prepared;
 }
 await fs.writeFile(path.join(qaRoot, 'assets.json'), JSON.stringify(report, null, 2));
+await fs.writeFile(
+  path.join(repo, 'development/apps/web/src/modules/organizations/showcase/image-dimensions.json'),
+  JSON.stringify(
+    Object.fromEntries(
+      Object.values(report)
+        .flat()
+        .map(({ url, width, height }) => [url, { width, height }]),
+    ),
+    null,
+    2,
+  ) + '\n',
+);
 console.log(
   JSON.stringify(
     Object.fromEntries(

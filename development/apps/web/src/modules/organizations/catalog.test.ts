@@ -6,9 +6,9 @@ import { SHOWCASES, showcaseRoute } from './showcase/registry.js';
 describe('organization exhibition catalog', () => {
   it('keeps the five existing organizations and their department hierarchy with an independent research exhibition', () => {
     expect(ORGANIZATION_GALLERY.map(({ key }) => key)).toEqual([
-      'student_union',
-      'youth_league',
       'tms',
+      'youth_league',
+      'student_union',
       'science_association',
       'media_center',
     ]);
@@ -27,9 +27,19 @@ describe('organization exhibition catalog', () => {
       'sail',
       'research',
     ]);
-    expect(findOrganization('science_association')?.departments).toHaveLength(6);
+    expect(findOrganization('science_association')?.departments).toHaveLength(5);
+    expect(
+      findOrganization('science_association')?.departments.some(({ key }) => key === 'office'),
+    ).toBe(false);
+    expect(
+      findOrganization('science_association')?.departments.find(({ key }) => key === 'training')
+        ?.name,
+    ).toBe('学习培养部');
+    expect(
+      findOrganization('youth_league')?.departments.find(({ key }) => key === 'freshman')?.name,
+    ).toBe('办公室·新生组');
     expect(findOrganization('tms')?.departments).toHaveLength(0);
-    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(20);
+    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(19);
     for (const organization of ORGANIZATION_GALLERY) {
       expect(organization).not.toHaveProperty('leadership');
       expect(organization).not.toHaveProperty('supportingPositions');
@@ -64,10 +74,10 @@ describe('organization exhibition catalog', () => {
     );
     expect(findOrganization('invalid')).toBeUndefined();
   });
-  it('registers all fourteen submitted exhibitions at valid, unique browse routes', () => {
-    expect(SHOWCASES).toHaveLength(14);
-    expect(new Set(SHOWCASES.map(({ departmentId }) => departmentId)).size).toBe(14);
-    expect(new Set(SHOWCASES.map(showcaseRoute)).size).toBe(14);
+  it('registers all seventeen submitted exhibitions at valid, unique browse routes', () => {
+    expect(SHOWCASES).toHaveLength(17);
+    expect(new Set(SHOWCASES.map(({ departmentId }) => departmentId)).size).toBe(17);
+    expect(new Set(SHOWCASES.map(showcaseRoute)).size).toBe(17);
     for (const content of SHOWCASES) {
       const [organizationKey, departmentKey] = content.departmentId.split('.');
       const organization = findOrganization(organizationKey)!;

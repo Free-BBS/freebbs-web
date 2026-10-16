@@ -68,10 +68,10 @@ function localAsset(src: string) {
 }
 
 describe('curated organization exhibitions', () => {
-  it('ships fourteen exhibitions and every registered image and site entry inside repository public assets', () => {
-    expect(SHOWCASES).toHaveLength(14);
-    expect(native).toHaveLength(7);
-    expect(submitted).toHaveLength(7);
+  it('ships seventeen exhibitions and every registered image and site entry inside repository public assets', () => {
+    expect(SHOWCASES).toHaveLength(17);
+    expect(native).toHaveLength(9);
+    expect(submitted).toHaveLength(8);
     for (const content of SHOWCASES) {
       for (const image of contentImages(content)) {
         expect(image.alt.trim()).not.toBe('');
@@ -80,7 +80,7 @@ describe('curated organization exhibitions', () => {
       if (content.site)
         expect(existsSync(localAsset(content.site.entry)), content.site.entry).toBe(true);
     }
-    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(44);
+    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(54);
   });
 
   it.each(native)(
@@ -114,6 +114,8 @@ describe('curated organization exhibitions', () => {
     show(content);
     for (const section of content.sections) {
       const album = screen.getByRole('region', { name: section.title });
+      expect(within(album).getAllByRole('img')).toHaveLength(4);
+      fireEvent.click(within(album).getByRole('button', { name: /展开全部 8 张照片/ }));
       expect(within(album).getAllByRole('img')).toHaveLength(8);
       for (const image of section.images!)
         expect(within(album).getByText(image.caption!)).toBeInTheDocument();
@@ -151,25 +153,34 @@ describe('curated organization exhibitions', () => {
     }
   });
 
-  it('cycles through all five rights photos in both directions and offers the real public proposal destination', () => {
+  it('shows all five rights photos in a composed album and cycles full-size images with keyboard and buttons', () => {
     const content = findShowcase('student_union.rights_development_center')!;
     const photos = content.sections.find(({ layout }) => layout === 'carousel')!.images!;
     show(content);
-    const carousel = screen.getByRole('group', { name: '权发掠影照片相册' });
-    for (let index = 0; index < photos.length; index++) {
-      expect(within(carousel).getByRole('img')).toHaveAttribute('src', photos[index].src);
-      expect(within(carousel).getByRole('status')).toHaveTextContent(`${index + 1} / 5`);
-      fireEvent.click(within(carousel).getByRole('button', { name: '权发掠影下一张照片' }));
-    }
-    expect(within(carousel).getByRole('img')).toHaveAttribute('src', photos[0].src);
-    fireEvent.click(within(carousel).getByRole('button', { name: '权发掠影上一张照片' }));
-    expect(within(carousel).getByRole('img')).toHaveAttribute('src', photos[4].src);
-    expect(within(carousel).getByRole('img')).toHaveStyle({ objectFit: 'contain' });
+    const album = screen.getByRole('group', { name: '权发掠影照片相册' });
+    expect(within(album).getAllByRole('img')).toHaveLength(5);
+    fireEvent.click(within(album).getByRole('button', { name: `查看大图：${photos[0].caption}` }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '下一张照片' }));
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', photos[1].src);
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', photos[0].src);
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭大图' }));
     expect(screen.getByRole('link', { name: /前往公开提案池/ })).toHaveAttribute(
       'href',
       '/information/proposals',
     );
-    expect(screen.queryByText(/公开投稿.*提供联系邮箱/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the offline review independent of the login-required proposal destination', () => {
+    const content = findShowcase('student_union.rights_development_center')!;
+    render(
+      <MemoryRouter>
+        <CuratedDepartmentShowcase content={content} publicReview />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: /前往公开提案池/ })).not.toBeInTheDocument();
+    expect(screen.getByText('联系邮箱待部门补充。')).toBeInTheDocument();
   });
 
   it('keeps the six new-media article destinations, matching cover images, and safe external navigation', () => {
@@ -197,7 +208,7 @@ describe('curated organization exhibitions', () => {
     }
   });
 
-  it('retains all seven freshman photographs and the volunteer recruitment link without fabricating missing images', () => {
+  it('retains all seven freshman photographs and the supplied volunteer cover and recruitment link', () => {
     const freshman = findShowcase('youth_league.freshman')!;
     const view = show(freshman);
     for (const src of new Set(contentImages(freshman).map(({ src }) => src))) {
@@ -213,8 +224,10 @@ describe('curated organization exhibitions', () => {
       'href',
       'https://mp.weixin.qq.com/s/0s4SQgKZ1Ft-L9R_GZQvgQ',
     );
-    expect(screen.getAllByRole('img')).toHaveLength(1);
-    expect(screen.getByRole('img')).toHaveAccessibleName(/小羊/);
+    expect(screen.getByRole('img', { name: '志愿组合照' })).toHaveAttribute(
+      'src',
+      '/development/organization-showcase/content/volunteer/01.webp',
+    );
   });
 
   it.each(submitted)(

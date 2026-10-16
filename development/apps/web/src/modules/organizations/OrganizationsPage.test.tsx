@@ -86,8 +86,8 @@ describe('organization exhibition', () => {
     fireEvent.change(search, { target: { value: '采访' } });
     expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
     expect(screen.getByRole('link', { name: '了解新媒体部暨记者团' })).toBeInTheDocument();
-    fireEvent.click(within(filters).getByRole('button', { name: '媒中' }));
-    expect(within(filters).getByRole('button', { name: '媒中' })).toHaveAttribute(
+    fireEvent.click(within(filters).getByRole('button', { name: '媒体中心' }));
+    expect(within(filters).getByRole('button', { name: '媒体中心' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -102,8 +102,8 @@ describe('organization exhibition', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.getAllByRole('link', { name: /^了解/ })).toHaveLength(6);
-    expect(screen.getByRole('status')).toHaveTextContent('找到 6 个去处');
+    expect(screen.getAllByRole('link', { name: /^了解/ })).toHaveLength(5);
+    expect(screen.getByRole('status')).toHaveTextContent('找到 5 个去处');
   });
 
   it('resets both filters from the empty result state and ignores surrounding search whitespace', () => {

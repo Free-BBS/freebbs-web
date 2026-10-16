@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { OrganizationMark } from '../OrganizationMark.js';
 import type { ShowcaseContent, ShowcaseImage, ShowcaseSection } from './types.js';
+import imageDimensions from './image-dimensions.json';
+
+function photoShape(image: ShowcaseImage) {
+  const size = (imageDimensions as Record<string, { width: number; height: number }>)[image.src];
+  const ratio = size ? size.width / size.height : 1.5;
+  return ratio < 0.9 ? 'portrait' : ratio > 2.15 ? 'panorama' : 'landscape';
+}
 
 function contentStyle(content: ShowcaseContent): CSSProperties {
   return {
@@ -28,7 +35,7 @@ function Photo({
         alt={image.alt}
         loading="lazy"
         decoding="async"
-        style={{ objectFit: image.fit ?? 'cover', objectPosition: image.position }}
+        style={{ objectFit: 'contain', objectPosition: image.position }}
       />
       <span className="sc-photo-zoom" aria-hidden="true">
         ↗
@@ -36,7 +43,7 @@ function Photo({
     </>
   );
   return (
-    <figure className="sc-photo">
+    <figure className={`sc-photo sc-photo--${photoShape(image)}`}>
       {href ? (
         href.startsWith('/') && !href.startsWith('//') ? (
           <Link to={href} aria-label={linkLabel}>
@@ -61,7 +68,7 @@ function Photo({
   );
 }
 
-function PhotoCarousel({
+function PhotoGallery({
   images,
   title,
   onOpen,
@@ -70,31 +77,33 @@ function PhotoCarousel({
   title: string;
   onOpen: (image: ShowcaseImage) => void;
 }) {
-  const [index, setIndex] = useState(0);
-  const image = images[index];
-  if (!image) return null;
+  const [expanded, setExpanded] = useState(false);
+  const previewCount = 4;
+  const visible = expanded
+    ? images
+    : images.slice(0, images.length > 6 ? previewCount : images.length);
+  const triptych =
+    [3, 6].includes(visible.length) && visible.every((image) => photoShape(image) === 'landscape');
   return (
-    <div className="sc-carousel" role="group" aria-label={`${title}照片相册`}>
-      <Photo image={image} onOpen={onOpen} />
-      <div className="sc-carousel-controls">
-        <button
-          type="button"
-          onClick={() => setIndex((index + images.length - 1) % images.length)}
-          aria-label={`${title}上一张照片`}
-        >
-          ←
-        </button>
-        <span role="status" aria-live="polite">
-          {index + 1} / {images.length}
-        </span>
-        <button
-          type="button"
-          onClick={() => setIndex((index + 1) % images.length)}
-          aria-label={`${title}下一张照片`}
-        >
-          →
-        </button>
+    <div className="sc-album" role="group" aria-label={`${title}照片相册`}>
+      <div
+        className={`sc-photo-grid sc-photo-grid--composed${images.length === 1 ? ' sc-photo-grid--single' : ''}${triptych ? ' sc-photo-grid--triptych' : ''}`}
+      >
+        {visible.map((image) => (
+          <Photo key={image.src} image={image} onOpen={onOpen} />
+        ))}
       </div>
+      {images.length > 6 ? (
+        <button
+          className="sc-album-expand"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? '收起相册' : `展开全部 ${images.length} 张照片`}{' '}
+          <span aria-hidden="true">{expanded ? '↑' : '↓'}</span>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -116,15 +125,7 @@ function SectionContent({
         <p key={paragraph}>{paragraph}</p>
       ))}
       {section.images?.length ? (
-        section.layout === 'carousel' ? (
-          <PhotoCarousel images={section.images} title={section.title} onOpen={onOpen} />
-        ) : (
-          <div className="sc-photo-grid">
-            {section.images.map((image) => (
-              <Photo key={image.src} image={image} onOpen={onOpen} />
-            ))}
-          </div>
-        )
+        <PhotoGallery images={section.images} title={section.title} onOpen={onOpen} />
       ) : null}
       {section.items?.length ? (
         <div
@@ -170,13 +171,7 @@ function SectionContent({
                 ) : null}
               </div>
               {item.images?.length ? (
-                <div
-                  className={`sc-photo-grid${item.images.length === 2 ? ' sc-photo-grid--pair' : ''}`}
-                >
-                  {item.images.map((image) => (
-                    <Photo key={image.src} image={image} onOpen={onOpen} />
-                  ))}
-                </div>
+                <PhotoGallery images={item.images} title={item.title} onOpen={onOpen} />
               ) : null}
             </article>
           ))}
@@ -281,10 +276,11 @@ function SubmittedShowcase({ content }: { content: ShowcaseContent }) {
           全屏浏览 ⛶
         </button>
       </div>
-      <p className="sc-window-tip" aria-live="polite">
-        在小窗里继续向下逛，也可以全屏浏览。
-        {fullscreenError ? '当前浏览器未能进入全屏，可继续在小窗中浏览。' : ''}
-      </p>
+      {fullscreenError ? (
+        <p className="sc-window-tip" role="status">
+          当前浏览器未能进入全屏，可继续在小窗中浏览。
+        </p>
+      ) : null}
       {!loaded ? (
         <p className="sc-frame-loading" role="status">
           小羊正在带路，马上就到…
@@ -299,15 +295,43 @@ function SubmittedShowcase({ content }: { content: ShowcaseContent }) {
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-presentation"
         referrerPolicy="no-referrer"
         allow="fullscreen"
-        onLoad={() => setLoaded(true)}
+        onLoad={() => {
+          setLoaded(true);
+          frame.current?.contentWindow?.postMessage(
+            {
+              type: 'showcase-theme',
+              mode: document.body.classList.contains('theme-light') ? 'light' : 'dark',
+            },
+            '*',
+          );
+        }}
       />
     </section>
   );
 }
 
-export function CuratedDepartmentShowcase({ content }: { content: ShowcaseContent }) {
+export function CuratedDepartmentShowcase({
+  content,
+  publicReview = false,
+}: {
+  content: ShowcaseContent;
+  publicReview?: boolean;
+}) {
   const [selected, setSelected] = useState<ShowcaseImage | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const photos = useMemo(() => {
+    const images = [
+      ...content.sections.flatMap((section) => [
+        ...(section.images ?? []),
+        ...(section.items ?? []).flatMap((item) => [item.image, ...(item.images ?? [])]),
+      ]),
+      content.hero,
+    ].filter((image): image is ShowcaseImage => Boolean(image));
+    return [...new Map(images.map((image) => [image.src, image])).values()];
+  }, [content]);
+  const selectedIndex = photos.findIndex((image) => image.src === selected?.src);
+  const changePhoto = (step: number) =>
+    setSelected(photos[(selectedIndex + step + photos.length) % photos.length] ?? null);
   const organizationKey = content.departmentId.split('.')[0];
   useEffect(() => {
     if (!selected || !dialog.current) return;
@@ -349,7 +373,7 @@ export function CuratedDepartmentShowcase({ content }: { content: ShowcaseConten
           </span>
         </div>
         {content.hero && !content.site ? (
-          <div className="sc-hero-photo">
+          <div className={`sc-hero-photo sc-hero-photo--${content.slug}`}>
             <Photo image={content.hero} onOpen={setSelected} />
           </div>
         ) : null}
@@ -442,7 +466,8 @@ export function CuratedDepartmentShowcase({ content }: { content: ShowcaseConten
               <b aria-hidden="true">↗</b>
             </a>
           ))}
-          {!content.contacts.length &&
+          {!publicReview &&
+          !content.contacts.length &&
           content.departmentId === 'student_union.rights_development_center' ? (
             <Link className="sc-email" to="/information/proposals">
               <span>把想法说出来</span>
@@ -450,6 +475,7 @@ export function CuratedDepartmentShowcase({ content }: { content: ShowcaseConten
               <b aria-hidden="true">↗</b>
             </Link>
           ) : null}
+          {publicReview && !content.contacts.length ? <p>联系邮箱待部门补充。</p> : null}
           <Link className="sc-back-link" to="/organizations">
             ← 再去其他部门逛逛
           </Link>
@@ -464,6 +490,12 @@ export function CuratedDepartmentShowcase({ content }: { content: ShowcaseConten
           onClick={(event) => {
             if (event.target === event.currentTarget) dialog.current?.close();
           }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              changePhoto(event.key === 'ArrowRight' ? 1 : -1);
+            }
+          }}
         >
           <button
             type="button"
@@ -477,6 +509,19 @@ export function CuratedDepartmentShowcase({ content }: { content: ShowcaseConten
             <img src={selected.src} alt={selected.alt} />
             <figcaption>{selected.caption ?? selected.alt}</figcaption>
           </figure>
+          {photos.length > 1 ? (
+            <nav className="sc-lightbox-navigation" aria-label="大图浏览">
+              <button type="button" onClick={() => changePhoto(-1)} aria-label="上一张照片">
+                ←
+              </button>
+              <span aria-live="polite">
+                {selectedIndex + 1} / {photos.length}
+              </span>
+              <button type="button" onClick={() => changePhoto(1)} aria-label="下一张照片">
+                →
+              </button>
+            </nav>
+          ) : null}
         </dialog>
       ) : null}
     </div>

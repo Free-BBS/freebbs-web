@@ -5,7 +5,16 @@ import { describe, expect, it } from 'vitest';
 
 const publicRoot = resolve(process.cwd(), 'apps/web/public');
 const sitesRoot = join(publicRoot, 'organization-showcase/sites');
-const slugs = ['research', 'creative', 'audiovisual', 'sail', 'humanities', 'hardware', 'software'];
+const slugs = [
+  'research',
+  'creative',
+  'audiovisual',
+  'sail',
+  'humanities',
+  'hardware',
+  'software',
+  'liaison',
+];
 
 function walk(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

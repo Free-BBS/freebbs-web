@@ -22,6 +22,7 @@ const roots = [
   ['humanities', '人文组', '人文组.html'],
   ['hardware', '硬件部/FREE-BBS-hardware-page', 'index.html'],
   ['software', '软件部', '网页示例.html'],
+  ['liaison', '学生联络中心', 'index.html'],
 ];
 const runtimeExtensions = new Set([
   '.html',
@@ -181,6 +182,10 @@ const bridge = String.raw`(() => {
   'use strict';
   const script = document.currentScript;
   const site = script?.dataset.site || '';
+  document.documentElement.dataset.showcaseSite = site;
+  const themeSheet = document.createElement('link');
+  themeSheet.rel = 'stylesheet'; themeSheet.href = new URL('platform-theme.css', script.src).href;
+  document.head.append(themeSheet);
   const home = new URL(script?.dataset.home || 'index.html', location.href).href;
   const siteRoot = new URL('./', home).href;
   let ephemeral = false;
@@ -237,7 +242,7 @@ const bridge = String.raw`(() => {
     document.head.append(css);
     const link = document.createElement('a'); link.className = 'showcase-platform-home';
     link.href = home; link.textContent = '← 本展区首页'; link.setAttribute('aria-label', '返回本部门展区首页');
-    document.body.append(link);
+    if (new URL(location.href).pathname !== new URL(home).pathname) document.body.append(link);
     if (site === 'humanities' && ephemeral) {
       const note = document.createElement('p'); note.className = 'showcase-storage-note';
       note.textContent = '草稿、自定义词句与留言在本次浏览中临时保存，离开前请导出作品；留言不会发送给部门，联系请使用邮箱。';
@@ -254,6 +259,10 @@ const bridge = String.raw`(() => {
 `;
 await mkdir(destination, { recursive: true });
 await writeOutput(within(destination, join(destination, 'platform-bridge.js')), bridge);
+await writeOutput(
+  within(destination, join(destination, 'platform-theme.css')),
+  await readFile(join(repo, 'scripts/showcase/platform-theme.css')),
+);
 
 const summary = [];
 for (const [slug, folder, entry] of roots.filter(
@@ -433,10 +442,39 @@ for (const [slug, folder, entry] of roots.filter(
   for (const name of files) {
     const published = renamed.get(name);
     let buffer = buffers.get(name);
-    if (/\.(?:html?|css|js)$/i.test(name)) {
+    if (/\.(?:html?|css|js|svg)$/i.test(name)) {
       let text = buffer.toString('utf8');
       if (replacementPattern)
         text = text.replace(replacementPattern, (match) => replacements.get(match));
+      if (slug === 'liaison') {
+        text = text
+          .replace(/[ \t]+$/gm, '')
+          .replace(/（占位，待替换）|（占位）/g, '')
+          .replace(/照片占位图/g, '照片')
+          .replace(/设计占位图/g, '工作示意图');
+        if (name === 'index.html')
+          text = text.replaceAll('assets/hero-placeholder.svg', 'assets/破冰合照1.jpg');
+        text = text
+          .replace(
+            '四组记忆，每组都是一本可以翻阅的小相册。点击活动卡片，左右切换浏览更多瞬间。',
+            '一起经历的校园时光。',
+          )
+          .replace(' 张照片 · 点击翻阅', ' 张照片');
+        if (name === 'style.css')
+          text += `\n/* Preserve complete group photos in the submitted layout. */
+.lc-photo-frame { height:auto; width:min(100%,560px); }
+.lc-hero-photo-inner { height:auto; aspect-ratio:auto; }
+.lc-hero-photo-inner img { object-fit:contain; height:auto; aspect-ratio:4/3; }
+.lc-hero-photo-overlay { position:static; padding:12px 16px; color:var(--lc-ink); background:none; }
+.lc-hero-art { height:480px; }
+.lc-gallery-card { height:auto; }
+.lc-gallery-card img { aspect-ratio:3/2; height:auto; object-fit:contain; }
+.lc-gallery-card-content { position:relative; padding:18px 22px; }
+.lc-gallery-card::after { display:none; }
+.lc-interaction-hint,.lc-gallery-note,.lc-slide-hint { display:none; }
+@media(max-width:600px){.lc-hero-art{height:350px}.lc-photo-frame{width:90%}.lc-gallery .lc-heading-aside{transform:none}.lc-gallery-card{height:auto}}
+`;
+      }
       if (slug === 'research' && name === 'style.css')
         text +=
           '\n/* Keep complete reference URLs readable on narrow report pages. */\n.reader{overflow-wrap:anywhere}\n';

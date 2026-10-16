@@ -1,0 +1,408 @@
+/* Submitted pages keep their typography and artwork; only interface surfaces change. */
+:root[data-platform-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-platform-theme='dark'] .showcase-platform-home {
+  background: #203630;
+  color: #e3f4ed;
+  border-color: #537166;
+}
+:root[data-platform-theme='dark'] .showcase-platform-home:hover {
+  background: #2b4940;
+}
+:root[data-platform-theme='dark'] .showcase-storage-note {
+  background: #24352e;
+  color: #e0ede3;
+  border-color: #647a69;
+}
+
+html[data-showcase-site='software'][data-platform-theme='dark'] {
+  --ink: #e9f1f5;
+  --muted: #b2c3cb;
+  --line: #43545c;
+  --paper: #172830;
+  --blue: #8ed0f6;
+  &
+    :is(
+      body,
+      .site-header,
+      .site-header nav,
+      .contest-card,
+      .browser-bar,
+      dialog,
+      .gallery-stage,
+      .daily-section
+    ) {
+    background: #172830;
+    color: var(--ink);
+  }
+  &
+    :is(
+      .light,
+      .image-label,
+      .icon-button,
+      .gallery-stage > .icon-button,
+      .tags span,
+      .menu-button,
+      .skip-link
+    ) {
+    background: #29404c;
+    color: #dfeef6;
+  }
+  & :is(.primary, .identity-band) {
+    background: #165d84;
+    color: #fff;
+  }
+  & .primary:hover {
+    background: #2273a0;
+  }
+  &
+    :is(
+      .season,
+      .season > span,
+      .season.winter,
+      .season.winter > span,
+      .daily-grid figcaption span
+    ) {
+    color: #c5d9e6;
+  }
+  & .card-body .text-button {
+    color: #9cd5f6;
+  }
+  & .card-signature {
+    background: #263c47;
+    color: #c6e5f7;
+  }
+  & .menu-button span {
+    background: #dceef6;
+  }
+  & .icon-button:hover {
+    background: #355669;
+  }
+}
+html[data-showcase-site='hardware'][data-platform-theme='dark'] {
+  --ink: #e4efdf;
+  --green: #b2d59d;
+  --paper: #17261f;
+  --muted: #b3c6b4;
+  --line: #3f5546;
+  --lime: #4d652f;
+  &
+    :is(
+      .moments,
+      .weekly-feature,
+      .collaboration,
+      .team-life,
+      .activity-card,
+      .activity-card:nth-child(2),
+      .activity-card:nth-child(3),
+      .quote,
+      .quote:nth-child(3n + 2),
+      .quote:nth-child(3n),
+      .publication-link,
+      .tags span,
+      .header .contact-nav
+    ) {
+    background: #24372b;
+    color: #dce9d7;
+  }
+  &
+    :is(
+      .hero-label,
+      .hero-bottom,
+      .green,
+      .project-note,
+      .mini-label,
+      .film-caption > a,
+      .feature-body > p,
+      .weekly-topics p,
+      .activity-list p,
+      .activity-type,
+      .activity-card p,
+      .quote blockquote,
+      .quote-person small,
+      .publication-index,
+      .quote-card-footer
+    ) {
+    color: #b9cead;
+  }
+  & :is(.discipline-strip, .contact, .platform-feature, .chip) {
+    background: #213f2f;
+    color: #eef4e5;
+  }
+  &
+    :is(
+      .discipline-strip > span:first-child,
+      .strip-code,
+      .chip,
+      .contact h2 > span,
+      .contact-list b,
+      .caption-num,
+      .copy-label
+    ) {
+    color: #d1ec9d;
+  }
+  & .contact-card {
+    color: #e7f0dc;
+  }
+  & .copy-status {
+    background: #2e4935;
+    color: #e7f0dc;
+  }
+  & .publication-link:hover {
+    background: #314c37;
+    color: #e9f5da;
+  }
+  & .recruitment > a {
+    background: #cde9a5;
+    color: #213820;
+  }
+  & .recruitment > a:hover {
+    background: #ddf6bd;
+  }
+  & .primary:hover {
+    color: #17261f;
+  }
+}
+html[data-showcase-site='research'][data-platform-theme='dark'] {
+  & :is(body, header, dialog, .brand-report) {
+    background: #172923;
+    color: #e0eee4;
+  }
+  & :is(.reports, .gallery-section, .contact, .ticker, .image-tag, .report-card.light) {
+    background: #263d2f;
+    color: #e2eedb;
+  }
+  &
+    :is(
+      .lead,
+      .note,
+      .duties p,
+      .report-summary p,
+      figcaption,
+      .message p:not(.eyebrow),
+      .member-role,
+      .activity-subtitle,
+      .practice-intro p,
+      .practice-photos summary,
+      .filters button,
+      .close
+    ) {
+    color: #b9cdbb;
+  }
+  & :is(.hero h1 span, .duties b, .story .section-label) {
+    color: #b7d394;
+  }
+  & .filters button[aria-pressed='true'] {
+    background: #b4d4ab;
+    color: #183426;
+  }
+}
+html[data-showcase-site='creative'][data-platform-theme='dark'] {
+  --paper: #27202b;
+  --ink: #f1c3c5;
+  --line: #68505d;
+  & body:not(.page-home) {
+    background: var(--paper);
+  }
+  & body:not(.page-home)::before {
+    opacity: 0.08;
+  }
+  & .about-page {
+    color: var(--ink);
+  }
+  & :is(.about-copy, .collection-work figcaption) {
+    color: #d9cbd5;
+  }
+  & :is(.about-english, .about-vertical) {
+    background: #f3e8e6;
+    border-radius: 8px;
+  }
+  & .media-center-logo {
+    background: #f3e8e6;
+    border-radius: 12px;
+    padding: 8px;
+  }
+  & :is(.image-viewer, .image-viewer button) {
+    background: #352c39;
+    color: #f1dce8;
+  }
+  & .page-home .cover-nav,
+  & body.page-home .cover-nav {
+    color: #743138;
+  }
+  & .work a {
+    background: #352c39;
+  }
+  & :is(.title-art, .wheel) {
+    background: #fff8cf;
+    border-radius: 12px;
+  }
+}
+html[data-showcase-site='humanities'][data-platform-theme='dark'] {
+  --ink: #eee8dc;
+  --ink-soft: #d0c5b4;
+  --ink-faint: #b3a695;
+  --paper: #242521;
+  --paper-2: #30312b;
+  --paper-3: #3b3b32;
+  --kraft: #4a4235;
+  --line: #615d50;
+  --line-soft: #a69e8c33;
+  --accent: #efb29a;
+  --accent-hi: #ffd0ba;
+  --accent-soft: #d7a589;
+  --accent-wash: #413127;
+  --thu: #d7b4ec;
+  --thu-deep: #ddc4ed;
+  --thu-soft: #372d3f;
+  --red: #efaa95;
+  & body {
+    background-image: none;
+  }
+  & .topbar {
+    background: #292a25f5;
+  }
+  & :is(.history-list button, .acc, .pool, .custom-input, .wm__chips button, .help-item, kbd) {
+    background: #30312b;
+    color: var(--ink);
+  }
+  &
+    :is(
+      .btn--primary,
+      .wm__chips button[aria-pressed='true'],
+      .piece-tools button[aria-pressed='true']
+    ) {
+    background: #8a4936;
+    color: #fff3ea;
+  }
+  & .btn--primary:hover {
+    background: #a45f47;
+    color: #fff3ea;
+  }
+  & :is(.drop:hover, .drop.is-over) {
+    background: #443a49;
+  }
+  & :is(input, textarea, select, dialog) {
+    background: #30312b;
+    color: #eee8dc;
+  }
+  & .grain {
+    opacity: 0.08;
+  }
+}
+html[data-showcase-site='liaison'][data-platform-theme='dark'] {
+  --lc-ink: #ece6f5;
+  --lc-muted: #c5bad5;
+  --lc-purple: #ceb4f1;
+  --lc-purple-dark: #e1cdf7;
+  --lc-violet: #b5a3e6;
+  --lc-paper: #211d2c;
+  --lc-lilac: #30283e;
+  --lc-sky: #293441;
+  --lc-border: #665574;
+  &
+    :is(
+      .lc-header,
+      .lc-nav,
+      .lc-about,
+      .lc-work,
+      .lc-work-card,
+      .lc-contact-right,
+      .lc-work-modal-panel,
+      .lc-lightbox-panel,
+      .lc-photo-frame,
+      .lc-orbit-label
+    ) {
+    background: #292333;
+    color: #ece6f5;
+  }
+  & .lc-hero {
+    background:
+      radial-gradient(circle at 77% 26%, #4f3d6c66, transparent 40%),
+      linear-gradient(#211d2c, #2b223a);
+  }
+  &
+    :is(
+      .lc-contact,
+      .lc-filter button,
+      .lc-lightbox-stage img,
+      .lc-work-modal-image,
+      .lc-hero-photo-inner
+    ) {
+    background: #332b42;
+    color: #e5daef;
+  }
+  &
+    :is(
+      .lc-hero-intro,
+      .lc-brand-copy small,
+      .lc-hero-index,
+      .lc-hero-sidecode,
+      .lc-hero-bottom,
+      .lc-section-marker,
+      .lc-about-lead p,
+      .lc-heading-aside,
+      .lc-work-card p,
+      .lc-work-num,
+      .lc-card-bottom,
+      .lc-work-foot,
+      .lc-contact-left p,
+      .lc-contact-card-title,
+      .lc-contact-entry small,
+      .lc-contact-card-bottom,
+      .lc-detail-kicker,
+      .lc-detail-lead,
+      .lc-work-modal-content h3,
+      .lc-work-modal-content li,
+      .lc-detail-note,
+      .lc-lightbox-kicker,
+      .lc-lightbox-stage figcaption,
+      .lc-lightbox-bottom,
+      .lc-photo-head,
+      .lc-benefits li
+    ) {
+    color: #c9bcd9;
+  }
+  &
+    :is(
+      .lc-nav > a:hover,
+      .lc-nav > a.is-current,
+      .lc-marker-number,
+      .lc-work-type,
+      .lc-work-card[data-type='outer'] .lc-work-type,
+      .lc-node-left,
+      .lc-node-right,
+      .lc-pillar-outer
+    ) {
+    background: #3c334d;
+    color: #dfd0f0;
+  }
+  & :is(.lc-button-primary, .lc-filter .lc-filter-active, .lc-band) {
+    background: #674995;
+    color: #fff !important;
+  }
+  & .lc-button-primary:hover {
+    background: #7b5ba9;
+  }
+  & :is(.lc-slide-arrow, .lc-modal-close) {
+    color: #dfc7f8;
+    background: #3a2f49;
+  }
+  & :is(.lc-slide-arrow:hover, .lc-modal-close:hover) {
+    background: #64448e;
+    color: #fff;
+  }
+  & .lc-nav-contact {
+    background: #3a2f49;
+  }
+  & .lc-photo-frame {
+    border-color: #544361;
+  }
+}
+/* These two submitted visual worlds already use a dark canvas. Keep media,
+   photographic overlays and editing tools in their original coordinated palette. */
+html[data-showcase-site='sail'],
+html[data-showcase-site='audiovisual'] {
+  color-scheme: dark;
+}

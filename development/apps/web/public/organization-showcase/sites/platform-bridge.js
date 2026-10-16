@@ -2,6 +2,10 @@
   'use strict';
   const script = document.currentScript;
   const site = script?.dataset.site || '';
+  document.documentElement.dataset.showcaseSite = site;
+  const themeSheet = document.createElement('link');
+  themeSheet.rel = 'stylesheet'; themeSheet.href = new URL('platform-theme.css', script.src).href;
+  document.head.append(themeSheet);
   const home = new URL(script?.dataset.home || 'index.html', location.href).href;
   const siteRoot = new URL('./', home).href;
   let ephemeral = false;
@@ -58,7 +62,7 @@
     document.head.append(css);
     const link = document.createElement('a'); link.className = 'showcase-platform-home';
     link.href = home; link.textContent = '← 本展区首页'; link.setAttribute('aria-label', '返回本部门展区首页');
-    document.body.append(link);
+    if (new URL(location.href).pathname !== new URL(home).pathname) document.body.append(link);
     if (site === 'humanities' && ephemeral) {
       const note = document.createElement('p'); note.className = 'showcase-storage-note';
       note.textContent = '草稿、自定义词句与留言在本次浏览中临时保存，离开前请导出作品；留言不会发送给部门，联系请使用邮箱。';

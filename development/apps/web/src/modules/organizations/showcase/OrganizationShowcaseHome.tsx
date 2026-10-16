@@ -61,7 +61,7 @@ export function OrganizationShowcaseHome() {
               .toLocaleLowerCase(),
           };
         });
-      }).sort((a, b) => Number(Boolean(b.content)) - Number(Boolean(a.content))),
+      }),
     [],
   );
   const query = search.trim().toLocaleLowerCase();

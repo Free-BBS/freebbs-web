@@ -6,6 +6,8 @@ import freshman from './content/freshman.js';
 import rights from './content/rights.js';
 import newMedia from './content/new-media.js';
 import volunteer from './content/volunteer.js';
+import { arts } from './content/arts.js';
+import { project } from './content/project.js';
 
 const asset = (slug: string, file: string) =>
   `/development/organization-showcase/sites/${slug}/${file}`;
@@ -359,7 +361,39 @@ const software = submitted({
   ],
 });
 
+const liaison = submitted({
+  slug: 'liaison',
+  departmentId: 'student_union.liaison_center',
+  name: '学生联络中心',
+  englishName: 'CONNECT CAMPUS AND BEYOND',
+  tagline: '让联结，成为更多可能',
+  summary:
+    '对内协调组织、服务同学；对外联络企业、拓展合作。名企微体验、校园活动和毕业生服务，都有我们在其中牵线搭桥。',
+  introduction: ['学生联络中心既是学生会内部高效协作的纽带，也是电子系与校外企业交流合作的窗口。'],
+  duties: [
+    '新生班级对接、跨部门协调与内部建设。',
+    '组织名企微体验，联系校外企业与活动赞助。',
+    '参与校园活动与路演，提供毕业生专属服务。',
+  ],
+  contacts: [{ name: '联络中心联系邮箱', email: 'chenyu-w24@mails.tsinghua.edu.cn' }],
+  accent: '#8b67b2',
+  darkAccent: '#d0b9f0',
+  layout: 'community',
+  hero: {
+    src: asset('liaison', 'assets/破冰合照1.jpg'),
+    alt: '学生联络中心破冰合照',
+    fit: 'contain',
+  },
+  keywords: ['名企微体验', '企业参访', '赞助', '路演', '新生舞会', '毕业游园会', '秦皇岛', '内联'],
+  sourceNotes: [
+    '学生联络中心/index.html、content.js、page.js、style.css，保留六项工作弹窗与四组原生相册。工作图中的SVG为原稿示意图。',
+  ],
+});
+
 export const SHOWCASES: readonly ShowcaseContent[] = [
+  arts,
+  liaison,
+  project,
   sports,
   rights,
   freshman,

@@ -157,7 +157,7 @@ const exhibitionDefinitions: Array<
   {
     key: 'media_center',
     name: '电子系学生媒体中心',
-    shortName: '媒中',
+    shortName: '媒体中心',
     motto: '把校园故事，装进镜头与文字。',
     introduction:
       '从创意设计到影音策划，从采访记录到新媒体分享，媒体中心用镜头、文字与设计留下校园生活的每一个鲜活瞬间。',
@@ -166,19 +166,39 @@ const exhibitionDefinitions: Array<
   },
 ];
 
-export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDefinitions.map(
-  (definition) => {
+const galleryOrder = [
+  'tms',
+  'youth_league',
+  'student_union',
+  'science_association',
+  'media_center',
+];
+
+export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibitionDefinitions]
+  .sort((a, b) => galleryOrder.indexOf(a.key) - galleryOrder.indexOf(b.key))
+  .map((definition) => {
     const section = DEVELOPMENT_IDENTITY_SECTIONS.find(({ id }) => id === definition.key)!;
     return {
       ...definition,
       departments: section.groups
-        .filter(({ id }) => !/\.(executive|chair|position|finance)$/.test(id))
+        .filter(
+          ({ id }) =>
+            !/\.(executive|chair|position|finance)$/.test(id) &&
+            id !== 'science_association.office',
+        )
         .map((group) => {
           const key = group.id.split('.').at(-1)!;
           const details = departmentIntroductions[key];
           return {
             key,
-            name: key === 'planning' ? '智能策划部' : group.label,
+            name:
+              (
+                {
+                  planning: '智能策划部',
+                  training: '学习培养部',
+                  freshman: '办公室·新生组',
+                } as Record<string, string>
+              )[key] ?? group.label,
             introduction: details?.introduction ?? '了解部门工作，发现可以一起参与的活动。',
             focus: details?.focus ?? [],
             organizationIds:
@@ -203,8 +223,7 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDe
             : [],
         ),
     };
-  },
-);
+  });
 
 export function findOrganization(key: string): OrganizationExhibit | undefined {
   return ORGANIZATION_GALLERY.find((item) => item.key === key);

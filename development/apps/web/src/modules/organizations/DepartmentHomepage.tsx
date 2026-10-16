@@ -10,6 +10,7 @@ import { ApiError, createApiClient, type ApiClient } from '../../core/api/client
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { IsolatedDepartmentDocument } from './IsolatedDepartmentDocument.js';
 import { OrganizationMark } from './OrganizationMark.js';
+import { findOrganization } from './catalog.js';
 import { findShowcase } from './showcase/registry.js';
 import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
 
@@ -22,6 +23,10 @@ export function DepartmentHomepage({
   introduction: string;
   client?: Pick<ApiClient, 'request'>;
 }) {
+  const displayName =
+    findOrganization(department.organizationKey)?.departments.find(
+      (entry) => entry.key === department.departmentKey,
+    )?.name ?? department.name;
   const fallback = useMemo(createApiClient, []);
   const api = client ?? fallback;
   const auth = useOptionalAuth();
@@ -143,7 +148,7 @@ export function DepartmentHomepage({
       >
         <div>
           <p className="organization-eyebrow">{department.organizationName}</p>
-          {!showcase || home?.html ? <h2>{department.name}</h2> : null}
+          {!showcase || home?.html ? <h2>{displayName}</h2> : null}
         </div>
         {department.id === 'tms.position' ? (
           <Link to="/collections/registrations?organization=tms">
