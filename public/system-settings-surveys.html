@@ -12,8 +12,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/surveys.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
   </head>
-  <body class="activities-page">
+  <body class="activities-page admin-settings-detail-page">
     <div class="page-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -74,9 +75,15 @@
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
       <main class="main-content activities-main">
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
         <header class="activity-hero">
-          <a href="/system-settings">← 系统设置</a>
-
           <h1>让每一次招募，<br /><span>有序发生。</span></h1>
           <p>创建活动，分享公开报名链接，按计划抽取测试名额。</p>
           <a href="/surveys" target="_blank" rel="noopener">打开公开报名大厅 ↗</a>

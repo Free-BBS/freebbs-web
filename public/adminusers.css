@@ -1236,3 +1236,122 @@ body.adminusers-page .admin-user-empty span {
     animation: none;
   }
 }
+
+.admin-ai-export-dialog {
+  box-sizing: border-box;
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  padding: 24px;
+  border: 1px solid var(--ui-line, #d8e5e5);
+  border-radius: 18px;
+  color: var(--ui-text, #162f36);
+  background: var(--ui-surface, #fff);
+  overflow-y: auto;
+}
+.admin-ai-export-dialog::backdrop {
+  background: rgb(0 18 24 / 65%);
+}
+.admin-ai-export-dialog header,
+.admin-ai-export-dialog footer {
+  display: flex;
+  align-items: start;
+  gap: 16px;
+  justify-content: space-between;
+}
+.admin-ai-export-dialog h2 {
+  margin: 0 0 10px;
+}
+.admin-ai-export-dialog p {
+  line-height: 1.65;
+}
+.admin-ai-export-dialog form,
+.admin-ai-export-dialog fieldset,
+.admin-ai-export-dialog form > label {
+  display: grid;
+  gap: 12px;
+}
+.admin-ai-export-dialog fieldset {
+  border: 1px solid var(--ui-line, #d8e5e5);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.admin-ai-export-dialog legend {
+  font-weight: 700;
+  padding-inline: 4px;
+}
+.admin-ai-export-dialog label:not(.ai-export-options label) {
+  display: grid;
+  gap: 8px;
+}
+.admin-ai-export-dialog input:not([type='checkbox']),
+.admin-ai-export-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ui-line, #c7d6d9);
+  border-radius: 8px;
+  background: var(--ui-surface, #fff);
+  color: inherit;
+  font: inherit;
+  box-sizing: border-box;
+}
+.ai-export-options {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.ai-export-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 4px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.ai-export-options label[hidden] {
+  display: none;
+}
+.ai-export-options input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+.ai-export-options span {
+  overflow-wrap: anywhere;
+}
+.ai-export-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ai-export-help {
+  font-size: 0.9rem;
+  margin: 0;
+}
+.ai-export-audit {
+  margin-top: 24px;
+  border-top: 1px solid var(--ui-line, #d8e5e5);
+  padding-top: 16px;
+}
+.ai-export-audit summary {
+  cursor: pointer;
+  padding-block: 10px;
+  font-weight: 700;
+}
+.ai-export-audit article {
+  border-top: 1px solid var(--ui-line, #d8e5e5);
+  padding-block: 14px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 520px) {
+  .admin-ai-export-dialog {
+    padding: 16px;
+  }
+  .admin-ai-export-dialog header {
+    flex-direction: column-reverse;
+  }
+  .ai-export-dates {
+    grid-template-columns: 1fr;
+  }
+}

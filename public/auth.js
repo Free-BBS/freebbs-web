@@ -341,6 +341,7 @@ async function handleAuthSubmit(event) {
   );
 
   try {
+    const initialAuthToken = localStorage.getItem(STORAGE_KEY);
     if (mode === 'register' || mode === 'remake') {
       const studentId = document.getElementById('auth-student-id').value.trim();
       const password = document.getElementById('auth-password').value;
@@ -368,9 +369,11 @@ async function handleAuthSubmit(event) {
     let payload;
 
     if (mode === 'login') {
+      if (!window.freeBbsPrivacy) throw new Error('隐私政策未加载，请刷新后重试');
       const credentials = {
         identifier: document.getElementById('auth-identifier').value.trim(),
         password: document.getElementById('auth-password').value,
+        ...(await window.freeBbsPrivacy.loginAcknowledgement()),
       };
       payload = await callApi('/auth/login', {
         method: 'POST',
@@ -422,6 +425,9 @@ async function handleAuthSubmit(event) {
       setMessage('已取消验证，填写内容已保留。');
       return;
     }
+    if (localStorage.getItem(STORAGE_KEY) !== initialAuthToken) {
+      throw new Error('登录状态已在其他页面更改，请刷新后重新操作。');
+    }
     if (localStorage.getItem(STORAGE_KEY) !== payload.token) {
       try {
         sessionStorage.removeItem('freebbs_activity_receipts_v2');
@@ -430,6 +436,8 @@ async function handleAuthSubmit(event) {
       }
     }
     localStorage.setItem(STORAGE_KEY, payload.token);
+    if (!window.freeBbsPrivacy) throw new Error('隐私政策未加载，请刷新后重试');
+    await window.freeBbsPrivacy.ensureAccepted(payload.token, payload.privacyPolicy);
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
@@ -437,6 +445,8 @@ async function handleAuthSubmit(event) {
       activityReturnPath() ||
       (window.matchMedia?.('(max-width: 900px)').matches ? '/discussion' : '/');
   } catch (error) {
+    if (error.code === 'privacy_declined')
+      window.freeBbsPrivacy?.clearDeclinedSession(error.sessionToken);
     if (!showRegistrationError(error, submittedFields)) setMessage(error.message);
   } finally {
     authSubmit.disabled = false;
@@ -535,6 +545,7 @@ function activityReturnPath() {
     const next = new URL(value, window.location.origin);
     const allowed =
       next.pathname === '/publish' ||
+      next.pathname === '/moderation' ||
       next.pathname === '/surveys' ||
       next.pathname.startsWith('/development/') ||
       (next.pathname === '/discussion' &&

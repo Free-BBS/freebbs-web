@@ -24,8 +24,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/admin-rewards.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
   </head>
-  <body class="system-settings-page system-settings-rewards-page">
+  <body class="system-settings-page system-settings-rewards-page admin-settings-detail-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -102,12 +103,18 @@
         id="system-settings-content"
         data-admin-content
       >
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
         <section
           class="system-settings-shell system-settings-detail-shell"
           aria-labelledby="system-rewards-title"
         >
-          <a class="system-settings-back" href="/system-settings">← 返回系统设置</a>
-
           <header class="system-settings-intro">
             <h1 class="visually-hidden" id="system-rewards-title">奖励方案</h1>
             <p>感谢每一份认真反馈。为选中的同学追加奖励，并同步发送站内到账通知。</p>

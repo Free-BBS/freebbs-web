@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS ai_dialog_export_audit (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    actor_user_id BIGINT NOT NULL,
+    actor_username VARCHAR(64) NOT NULL,
+    reason VARCHAR(1000) NOT NULL,
+    user_ids_json JSON NOT NULL,
+    dialog_ids_json JSON NOT NULL,
+    range_start DATETIME(3) NOT NULL,
+    range_end DATETIME(3) NOT NULL,
+    time_basis VARCHAR(32) NOT NULL DEFAULT 'dialog_updated_at',
+    status ENUM('started', 'generated', 'failed') NOT NULL DEFAULT 'started',
+    dialog_count INT UNSIGNED NOT NULL DEFAULT 0,
+    message_count INT UNSIGNED NOT NULL DEFAULT 0,
+    byte_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    failure_code VARCHAR(64) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    finished_at DATETIME(3) NULL,
+    INDEX idx_ai_export_actor_time (actor_user_id, created_at),
+    INDEX idx_ai_export_time (created_at)
+) ENGINE=InnoDB;

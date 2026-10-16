@@ -270,6 +270,16 @@ username: admin
 password: free-bbs
 ```
 
+正式网站接入另见[正式上线与回退步骤](docs/moderation-production-rollout.md)：独立 production 开关支持分离的数据库服务器；提交前确认数据处理说明，私有图片保存到部署目录之外。正式自动审核默认关闭，首次控制状态暂停；测试开关不用于正式部署。
+
+讨论区人工审核的隔离测试开关、私有图片、负责人管理和后续模型接入范围见
+[监管 Agent 首版实施与验收清单](docs/moderation-agent-v1.md)。当前默认关闭新稿件审核；
+设置 `DISCUSSION_MODERATION_ENABLED=true` 后，新帖子和评论先进入审核工作台，人工批准后发布。
+本机测试环境可另行启用[无问芯穹文字试审](docs/moderation-ai-test.md)，用虚构内容验证脱敏与模型建议，最终仍由负责人决定。
+融合版[规则审核工作台](docs/moderation-policy-workbench.md)提供使用中文编号的禁止内容清单、独立关怀提示、逐条证据、人工纠错和回归样例导出；[清单与官方来源](docs/moderation-policy-sources.md)说明法律、本站规则与心理支持指引的适用边界。
+
+[自动审核测试版](docs/moderation-automation-test.md)另设默认关闭的开关，仅用于本机虚构稿件。管理员开启后文字使用 Qwen3.6-27B；另行启用图片开关后，Kimi K2.6 分批审核全部图片。严格通过且无隐私、不可读图片或政治/心理关怀待核事项时可自动发布；含图内容同时进入负责人专门的图片复核队列，支持确认与撤回。GLM-5.1 保留为手动文字备选，调用失败转人工，不自动换模型。图片尚未可靠脱敏，真实用户上线前需完成外发告知等准备；定向图片评测见[测试说明](docs/moderation-image-evaluation.md)。
+
 ## 当前功能分布
 
 | 功能                   | 前端位置                                                                                               | 后端/数据依赖                             |

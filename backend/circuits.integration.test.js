@@ -12,7 +12,11 @@ const mysql = require('mysql2/promise');
 const sharp = require('sharp');
 const engine = require('../public/circuit-engine');
 const { hashPassword } = require('./password');
-const { solveAuthChallenge } = require('./test-helpers/auth');
+const {
+  solveAuthChallenge,
+  privacyAcknowledgement,
+  acceptCurrentPrivacy,
+} = require('./test-helpers/auth');
 
 async function reservePort() {
   const server = net.createServer();
@@ -217,10 +221,17 @@ test(
         method: 'POST',
         body: { identifier },
       });
-      return api('/auth/login', {
+      const result = await api('/auth/login', {
         method: 'POST',
-        body: { identifier, password: 'free-bbs', captcha: solveAuthChallenge(challenge) },
+        body: {
+          identifier,
+          password: 'free-bbs',
+          captcha: solveAuthChallenge(challenge),
+          ...privacyAcknowledgement(),
+        },
       });
+      result.privacyPolicy = await acceptCurrentPrivacy(base, result.token);
+      return result;
     }
     async function createUser(username, studentId) {
       const [inserted] = await db.execute(

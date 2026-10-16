@@ -176,7 +176,9 @@ test('code examples cannot supply or duplicate scored Markdown question titles',
     assert.equal(parseDemo(inserted).id, 'SS-01-01');
     assert.throws(
       () =>
-        parseDemo(inserted.replace(/#### 题目 SS-01-01-Q02(?=\n\n题型)/, '#### 题目 OTHER-Q02')),
+        parseDemo(
+          inserted.replace(/#### 题目 SS-01-01-Q02(?=\r?\n\r?\n题型)/, '#### 题目 OTHER-Q02'),
+        ),
       /SS-01-01-Q02.*缺少对应/,
     );
   }
@@ -311,7 +313,7 @@ test('portable origin reader has runtime parity for real, empty and fenced headi
 });
 
 test('submission requires nonempty origin in its actual applications section, not a code title or following section', () => {
-  const emptyOrigin = source.replace(/(### 知识起源\n)[\s\S]*?(?=### 应用场景)/, '$1\n');
+  const emptyOrigin = source.replace(/(### 知识起源\r?\n)[\s\S]*?(?=### 应用场景)/, '$1\n');
   assert.throws(() => parseDemo(emptyOrigin), /非空.*知识起源/);
   for (const fence of ['```', '~~~~']) {
     const fencedOrigin = source
@@ -320,7 +322,7 @@ test('submission requires nonempty origin in its actual applications section, no
     assert.throws(() => parseDemo(fencedOrigin), /非空.*知识起源/);
   }
   const bodyOnlyOrigin = emptyOrigin
-    .replace('### 知识起源\n', '### 起源待编写\n')
+    .replace(/### 知识起源\r?\n/, '### 起源待编写\n')
     .replace(
       '### 定义与适用条件',
       '### 知识起源\n正文里的起源不能代替背景分区。\n\n### 定义与适用条件',

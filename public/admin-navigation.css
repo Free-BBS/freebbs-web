@@ -1,0 +1,63 @@
+/* Every administrator detail page keeps its return action below the fixed site header. */
+body.admin-settings-detail-page {
+  --admin-navigation-top: 92px;
+  --admin-navigation-height: 60px;
+}
+
+body.admin-settings-detail-page .main-content {
+  padding-top: calc(124px + var(--admin-navigation-height)) !important;
+}
+
+body.admin-settings-detail-page .admin-settings-navigation {
+  position: fixed;
+  top: var(--admin-navigation-top);
+  left: calc(var(--bbs-shell-width) + var(--bbs-content-gutter));
+  right: var(--bbs-content-gutter);
+  z-index: 109;
+  display: flex;
+  align-items: center;
+  min-height: var(--admin-navigation-height);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-line);
+  background: var(--ui-page);
+}
+
+body.admin-settings-detail-page .admin-settings-navigation .system-settings-back {
+  min-height: 44px;
+  padding: 10px 16px;
+  color: var(--action-foreground) !important;
+  font-size: 0.94rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html:has(body.admin-settings-detail-page) {
+  scroll-padding-top: 168px;
+}
+
+@media (max-width: 900px) {
+  body.admin-settings-detail-page {
+    --admin-navigation-top: calc(120px + env(safe-area-inset-top, 0px));
+  }
+
+  body.admin-settings-detail-page .main-content {
+    padding-top: calc(196px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  body.admin-settings-detail-page .admin-settings-navigation {
+    left: calc(var(--bbs-content-gutter) + env(safe-area-inset-left, 0px));
+    right: calc(var(--bbs-content-gutter) + env(safe-area-inset-right, 0px));
+  }
+
+  body.admin-settings-detail-page .admin-settings-navigation::before {
+    content: '';
+    position: absolute;
+    inset: -56px 0 100%;
+    background: var(--ui-page);
+  }
+
+  html:has(body.admin-settings-detail-page) {
+    scroll-padding-top: calc(196px + env(safe-area-inset-top, 0px));
+  }
+}

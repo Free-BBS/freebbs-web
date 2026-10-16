@@ -35,8 +35,8 @@ test('persists one generated image and replaces private payload data with Markdo
   const result = await persistGeneratedImages(payload, { ownerId: 42, uploadDir });
   assert.equal(result.generatedCount, 1);
   assert.equal(Object.hasOwn(result.payload, 'generated_images'), false);
-  assert.match(result.payload.answer, /!\[示意图\]\(\/uploads\/max-image-42-/);
-  assert.match(result.payload.chat_answer, /\/uploads\/max-image-42-/);
+  assert.match(result.payload.answer, /!\[示意图\]\(\/api\/ai\/images\/max-image-42-/);
+  assert.match(result.payload.chat_answer, /\/api\/ai\/images\/max-image-42-/);
   assert.equal((await fs.promises.readdir(uploadDir)).length, 1);
   assert.equal(
     (await fs.promises.readdir(uploadDir)).some((fileName) => fileName.endsWith('.uploading')),
@@ -44,7 +44,7 @@ test('persists one generated image and replaces private payload data with Markdo
   );
   // Inspect bytes, not a pathname: libvips may cache a Windows file handle after metadata().
   const metadata = await sharp(
-    await fs.promises.readFile(path.join(uploadDir, result.files[0])),
+    await fs.promises.readFile(path.join(uploadDir, '.max-images', result.files[0])),
   ).metadata();
   assert.equal(metadata.format, 'webp');
 });
@@ -59,6 +59,29 @@ test('image generation gate blocks concurrent and cooldown requests', () => {
   assert.equal(second.allowed, true);
   second.release(true);
   assert.equal(gate.acquire('u1').allowed, false);
+});
+
+test('only the server discussion context uses the historical upload location', async (t) => {
+  const uploadDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'freebbs-discussion-image-'));
+  t.after(() => fs.promises.rm(uploadDir, { recursive: true, force: true }));
+  const source = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#fff' } })
+    .png()
+    .toBuffer();
+  const result = await persistGeneratedImages(
+    {
+      answer: '[[MAX_IMAGE_0]]',
+      generated_images: [
+        {
+          placeholder: '[[MAX_IMAGE_0]]',
+          dataUrl: `data:image/png;base64,${source.toString('base64')}`,
+        },
+      ],
+    },
+    { ownerId: 42, uploadDir, visibility: 'discussion' },
+  );
+  assert.match(result.payload.answer, /\/uploads\/max-image-42-/);
+  assert.equal((await fs.promises.stat(path.join(uploadDir, result.files[0]))).isFile(), true);
+  assert.equal(fs.existsSync(path.join(uploadDir, '.max-images')), false);
 });
 
 test('alt text cannot break generated Markdown', () => {
@@ -99,7 +122,7 @@ test('persists generated images inside the final reasoning SSE payload', async (
 
   const persisted = await persistGeneratedSsePayload(original, { ownerId: 7, uploadDir });
   assert.equal(persisted.generatedCount, 1);
-  assert.match(persisted.event.result.answer, /\/uploads\/max-image-7-/);
+  assert.match(persisted.event.result.answer, /\/api\/ai\/images\/max-image-7-/);
   assert.equal(Object.hasOwn(persisted.event.result, 'generated_images'), false);
 });
 

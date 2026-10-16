@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="FreeBBS 管理员数据保存检查。" />
+    <title>FREE-BBS - 数据保存</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/data-retention.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
+  </head>
+  <body class="system-settings-page retention-page admin-settings-detail-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="登录或注册">
+                <img
+                  class="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="当前用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="个人设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status" aria-label="账户资产">
+              <span class="currency currency-electric" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-heat" aria-label="热力">
+                <img class="currency-icon" src="/assets/icons/flame.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main class="main-content settings-main system-settings-main">
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
+        <section
+          class="system-settings-shell system-settings-detail-shell retention-shell"
+          aria-labelledby="retention-title"
+        >
+          <header class="system-settings-intro">
+            <h1 id="retention-title">数据保存</h1>
+            <p>核对各类资料的保存安排，及时发现需要处理的记录。</p>
+          </header>
+          <p id="retention-access" role="status">此页面仅供网站管理员使用，请先登录管理员账号。</p>
+          <div id="data-retention-content" hidden>
+            <div class="retention-summary">
+              <p>
+                <strong>本页只检查，不执行删除。</strong
+                >五年安排为待确认的分类方案；现有审核证据等清理机制继续运行，其他新增长期清理尚未启用。
+              </p>
+              <p>没有到期记录不代表保存措施全部完成。未知或未覆盖的类别仍需核对。</p>
+            </div>
+            <div class="retention-toolbar">
+              <p id="retention-status" role="status" aria-live="polite"></p>
+              <button
+                class="bbs-action"
+                data-action-tone="secondary"
+                id="retention-refresh"
+                type="button"
+              >
+                重新检查
+              </button>
+            </div>
+            <div class="retention-categories" id="retention-categories"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
+    <script src="/app.js"></script>
+    <script src="/data-retention.js"></script>
+    <script src="/notifications.js"></script>
+  </body>
+</html>

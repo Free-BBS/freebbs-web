@@ -1,4 +1,27 @@
 const assert = require('node:assert/strict');
+const { policy } = require('../privacy-policy');
+
+function privacyAcknowledgement() {
+  return {
+    privacyAccepted: true,
+    privacyPolicyVersion: policy.version,
+    privacyPolicyHash: policy.contentHash,
+  };
+}
+
+async function acceptCurrentPrivacy(baseUrl, token) {
+  const response = await fetch(`${baseUrl}/privacy-policy/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(privacyAcknowledgement()),
+  });
+  const result = await response.json();
+  assert.equal(response.status, 200, `privacy acceptance: ${JSON.stringify(result)}`);
+  assert.equal(result.accepted, true);
+  assert.equal(result.version, policy.version);
+  assert.equal(result.contentHash, policy.contentHash);
+  return result;
+}
 
 function solveBandChallenge({ challengeId, carrier, objective, band }) {
   assert.ok(challengeId);
@@ -55,4 +78,9 @@ function solveAuthChallenge(challenge) {
   return solveBandChallenge(challenge);
 }
 
-module.exports = { solveBandChallenge, solveAuthChallenge };
+module.exports = {
+  solveBandChallenge,
+  solveAuthChallenge,
+  privacyAcknowledgement,
+  acceptCurrentPrivacy,
+};
