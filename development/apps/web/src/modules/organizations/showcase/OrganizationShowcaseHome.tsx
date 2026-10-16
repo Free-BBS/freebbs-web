@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ORGANIZATION_GALLERY } from '../catalog.js';
 import { OrganizationMark } from '../OrganizationMark.js';
 import { findShowcase } from './registry.js';
+import { DepartmentShowcaseCard } from './DepartmentShowcaseCard.js';
 
 export function OrganizationShowcaseHome() {
   const [group, setGroup] = useState('all');
@@ -208,45 +209,11 @@ export function OrganizationShowcaseHome() {
         {visible.length ? (
           <div className="sc-discover-grid">
             {visible.map((entry) => (
-              <Link
-                className={`sc-discover-card sc-discover-card--${entry.organization.key}${entry.content?.hero ? ' sc-discover-card--photo' : ''}`}
-                to={entry.route}
+              <DepartmentShowcaseCard
                 key={`${entry.organization.key}.${entry.department.key}`}
-                aria-label={`了解${entry.title}`}
-                aria-describedby={`sc-discover-summary-${entry.organization.key}-${entry.department.key}`}
-              >
-                <div className="sc-discover-art">
-                  {entry.content?.hero ? (
-                    <img
-                      src={entry.content.hero.src}
-                      alt={entry.content.hero.alt}
-                      loading="lazy"
-                      decoding="async"
-                      style={{
-                        objectFit: entry.content.hero.fit ?? 'cover',
-                        objectPosition: entry.content.hero.position,
-                      }}
-                    />
-                  ) : (
-                    <OrganizationMark variant={entry.organization.key} />
-                  )}
-                  <span className="sc-card-label">{entry.organization.shortName}</span>
-                </div>
-                <div className="sc-discover-copy">
-                  <h4>
-                    {entry.title}
-                    <span aria-hidden="true">↗</span>
-                  </h4>
-                  <p id={`sc-discover-summary-${entry.organization.key}-${entry.department.key}`}>
-                    {entry.summary}
-                  </p>
-                  <div className="sc-card-tags">
-                    {entry.department.focus.slice(0, 3).map((focus) => (
-                      <span key={focus}>{focus}</span>
-                    ))}
-                  </div>
-                </div>
-              </Link>
+                organization={entry.organization}
+                department={entry.department}
+              />
             ))}
           </div>
         ) : (

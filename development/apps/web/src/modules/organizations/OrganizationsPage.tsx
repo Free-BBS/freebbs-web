@@ -8,6 +8,7 @@ import { OrganizationMark } from './OrganizationMark.js';
 import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
 import { OrganizationShowcaseHome } from './showcase/OrganizationShowcaseHome.js';
 import { findShowcase } from './showcase/registry.js';
+import { DepartmentShowcaseCard } from './showcase/DepartmentShowcaseCard.js';
 
 export function OrganizationsPage({
   organizationKey,
@@ -160,50 +161,14 @@ export function OrganizationsPage({
           <h3>走进各部门</h3>
           <span>看作品，听故事，一起认识它的日常。</span>
         </header>
-        <div className="organization-department-grid">
-          {organization.departments.map((item) => {
-            const content = findShowcase(`${organization.key}.${item.key}`);
-            return (
-              <Link
-                className="organization-department-card sc-group-department-card"
-                key={item.key}
-                to={`/organizations/${organization.key}/${item.key}`}
-                aria-label={`了解${content?.shortName ?? item.name}`}
-                aria-describedby={`sc-group-summary-${organization.key}-${item.key}`}
-              >
-                <div className="sc-group-department-art">
-                  {content?.hero ? (
-                    <img
-                      src={content.hero.src}
-                      alt={content.hero.alt}
-                      loading="lazy"
-                      decoding="async"
-                      style={{
-                        objectFit: content.hero.fit ?? 'cover',
-                        objectPosition: content.hero.position,
-                      }}
-                    />
-                  ) : (
-                    <OrganizationMark variant={organization.key} />
-                  )}
-                </div>
-                <div className="sc-group-department-copy">
-                  <h4>{content?.shortName ?? item.name}</h4>
-                  <p id={`sc-group-summary-${organization.key}-${item.key}`}>
-                    {content?.summary ?? item.introduction}
-                  </p>
-                  <div className="organization-focus">
-                    {item.focus.map((focus) => (
-                      <span key={focus}>{focus}</span>
-                    ))}
-                  </div>
-                  <span className="organization-department-arrow" aria-hidden="true">
-                    ↗
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="sc-discover-grid">
+          {organization.departments.map((department) => (
+            <DepartmentShowcaseCard
+              key={department.key}
+              organization={organization}
+              department={department}
+            />
+          ))}
         </div>
       </section>
     </section>

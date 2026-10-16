@@ -209,10 +209,14 @@ describe('organization exhibition', () => {
       for (const department of organization.departments) {
         const content = findShowcase(`${organization.key}.${department.key}`);
         expect(
-          screen.getByRole('link', { name: `了解${content?.shortName ?? department.name}` }),
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
         ).toHaveAttribute('href', `/organizations/${organization.key}/${department.key}`);
         expect(
-          screen.getByRole('link', { name: `了解${content?.shortName ?? department.name}` }),
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
         ).toHaveAccessibleDescription(content?.summary ?? department.introduction);
       }
       expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(

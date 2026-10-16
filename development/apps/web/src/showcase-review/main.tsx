@@ -14,6 +14,7 @@ import { CuratedDepartmentShowcase } from '../modules/organizations/showcase/Cur
 import { OrganizationShowcaseHome } from '../modules/organizations/showcase/OrganizationShowcaseHome.js';
 import { findShowcase } from '../modules/organizations/showcase/registry.js';
 import { OrganizationMark } from '../modules/organizations/OrganizationMark.js';
+import { DepartmentShowcaseCard } from '../modules/organizations/showcase/DepartmentShowcaseCard.js';
 import '../styles/tokens.css';
 import '../styles/theme.css';
 import '../styles/organizations.css';
@@ -116,13 +117,13 @@ function ReviewPage() {
                 <p>{group.introduction}</p>
               </div>
             </header>
-            <div className="review-department-grid">
-              {group.departments.map((item) => (
-                <Link key={item.key} to={`/organizations/${group.key}/${item.key}`}>
-                  <h2>{findShowcase(`${group.key}.${item.key}`)?.shortName ?? item.name}</h2>
-                  <p>{findShowcase(`${group.key}.${item.key}`)?.summary ?? item.introduction}</p>
-                  <span>走进这个部门 ↗</span>
-                </Link>
+            <div className="sc-discover-grid">
+              {group.departments.map((department) => (
+                <DepartmentShowcaseCard
+                  key={department.key}
+                  organization={group}
+                  department={department}
+                />
               ))}
             </div>
           </>
