@@ -45,12 +45,17 @@ test('standalone script runs without module loading, Node globals, authenticatio
 test('all local HTML and CSS asset references resolve inside the portable package', () => {
   const failures = [];
   for (const file of walk(root).filter((candidate) => /\.(?:html?|css)$/.test(candidate))) {
-    const source = text(file)
+    const rawSource = text(file);
+    const scripts = [...rawSource.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)].map(
+      (match) => match[1],
+    );
+    const source = rawSource
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<!--[\s\S]*?-->/g, '');
     const references = [...source.matchAll(/\b(?:src|href|poster)=["']([^"']+)["']/gi)].map(
       (match) => match[1],
     );
+    references.push(...scripts);
     references.push(
       ...[...source.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)].map((match) => match[1]),
     );

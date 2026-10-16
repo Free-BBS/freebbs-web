@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CuratedDepartmentShowcase } from './CuratedDepartmentShowcase.js';
 import { SHOWCASES, findShowcase } from './registry.js';
 import type { ShowcaseContent, ShowcaseImage } from './types.js';
+import { submittedFrameSandbox } from './submitted-frame.js';
 
 const native = SHOWCASES.filter((content) => !content.site);
 const submitted = SHOWCASES.filter((content) => content.site);
@@ -68,6 +69,34 @@ function localAsset(src: string) {
 }
 
 describe('curated organization exhibitions', () => {
+  it('limits local file compatibility to the eight bundled exhibitions and keeps website frames isolated', () => {
+    for (const content of submitted) {
+      const websiteEntry = content.site!.entry;
+      const fileEntry = websiteEntry.replace('/development/', './');
+      for (const entry of [websiteEntry, fileEntry]) {
+        expect(submittedFrameSandbox(true, 'file:', entry).split(' ')).toContain(
+          'allow-same-origin',
+        );
+        expect(submittedFrameSandbox(false, 'file:', entry).split(' ')).not.toContain(
+          'allow-same-origin',
+        );
+        for (const protocol of ['http:', 'https:'])
+          expect(submittedFrameSandbox(true, protocol, entry).split(' ')).not.toContain(
+            'allow-same-origin',
+          );
+      }
+    }
+    for (const entry of [
+      'https://example.com/index.html',
+      './organization-showcase/sites/unknown/index.html',
+      './organization-showcase/sites/sail/../../private.html',
+      './organization-showcase/sites/sail/index.html?other=1',
+    ])
+      expect(submittedFrameSandbox(true, 'file:', entry).split(' ')).not.toContain(
+        'allow-same-origin',
+      );
+  });
+
   it('ships eighteen exhibitions and every registered image and site entry inside repository public assets', () => {
     expect(SHOWCASES).toHaveLength(18);
     expect(native).toHaveLength(10);
@@ -83,12 +112,17 @@ describe('curated organization exhibitions', () => {
     expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(65);
   });
 
-  it('uses the practice documents without inventing contacts or leaving an empty contact destination', () => {
+  it('retains the practice documents and the contact supplied by the organizer', () => {
     const content = findShowcase('youth_league.practice')!;
     show(content);
     expect(new Set(contentImages(content).map(({ src }) => src)).size).toBe(11);
-    expect(content.contacts).toEqual([]);
-    expect(screen.queryByRole('link', { name: /联系这个部门/ })).not.toBeInTheDocument();
+    expect(content.contacts).toEqual([
+      { name: '实践组副书记 田铠瑄', email: 'tkx23@mails.tsinghua.edu.cn' },
+    ]);
+    expect(screen.getByRole('link', { name: /联系这个部门/ })).toHaveAttribute(
+      'href',
+      '#showcase-contact',
+    );
     expect(screen.getByRole('link', { name: /再去其他部门逛逛/ })).toBeInTheDocument();
     for (const title of [
       'E方水土：走近专业与产业',

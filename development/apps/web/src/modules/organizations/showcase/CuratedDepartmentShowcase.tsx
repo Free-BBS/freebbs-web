@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { OrganizationMark } from '../OrganizationMark.js';
 import type { ShowcaseContent, ShowcaseImage, ShowcaseSection } from './types.js';
 import imageDimensions from './image-dimensions.json';
+import { submittedFrameSandbox } from './submitted-frame.js';
 
 function photoShape(image: ShowcaseImage) {
   const size = (imageDimensions as Record<string, { width: number; height: number }>)[image.src];
@@ -204,7 +205,7 @@ function SectionContent({
   );
 }
 
-function SubmittedShowcase({ content }: { content: ShowcaseContent }) {
+function SubmittedShowcase({ content, offline }: { content: ShowcaseContent; offline: boolean }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -296,7 +297,7 @@ function SubmittedShowcase({ content }: { content: ShowcaseContent }) {
         className="sc-submitted-frame"
         title={content.site.title}
         src={content.site.entry}
-        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-presentation"
+        sandbox={submittedFrameSandbox(offline, window.location.protocol, content.site.entry)}
         referrerPolicy="no-referrer"
         allow="fullscreen"
         onLoad={() => {
@@ -390,7 +391,7 @@ export function CuratedDepartmentShowcase({
       </header>
       {content.site ? (
         <div id="showcase-world">
-          <SubmittedShowcase content={content} />
+          <SubmittedShowcase content={content} offline={publicReview} />
         </div>
       ) : (
         <>
