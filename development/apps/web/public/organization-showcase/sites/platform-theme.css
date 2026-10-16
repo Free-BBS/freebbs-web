@@ -164,6 +164,70 @@ html[data-showcase-site='hardware'][data-platform-theme='dark'] {
     color: #17261f;
   }
 }
+html[data-showcase-site='research'] {
+  & :is(body, button, input, textarea, select) {
+    font-family: var(
+      --font-ui,
+      'Segoe UI',
+      'PingFang SC',
+      'Microsoft YaHei',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif
+    );
+  }
+  & :is(h1, h2, h3, h4) {
+    font-weight: 600;
+    letter-spacing: normal;
+  }
+  & .practice-photos .gallery {
+    display: block;
+    column-count: 3;
+    column-gap: 24px;
+  }
+  & .practice-photos .gallery:has(> .photo:only-child) {
+    column-count: 1;
+    max-width: 760px;
+  }
+  & .practice-photos .photo {
+    min-width: 0;
+    break-inside: avoid;
+    margin: 0 0 28px;
+  }
+  & .practice-photos .zoom {
+    border-radius: 12px;
+    cursor: zoom-in;
+  }
+  & .practice-photos .photo img {
+    height: auto;
+    aspect-ratio: auto;
+    object-fit: contain;
+  }
+  & .practice-photos .zoom:hover img {
+    transform: none;
+  }
+  & .practice-photos figcaption {
+    margin-top: 10px;
+    color: #4a6559;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 1000px) {
+    & .practice-photos .gallery {
+      column-count: 2;
+    }
+  }
+  @media (max-width: 620px) {
+    & .practice-photos .gallery {
+      column-count: 1;
+    }
+    & .practice-photos .photo {
+      margin-bottom: 26px;
+    }
+  }
+}
 html[data-showcase-site='research'][data-platform-theme='dark'] {
   & :is(body, header, dialog, .brand-report) {
     background: #172923;
@@ -184,7 +248,6 @@ html[data-showcase-site='research'][data-platform-theme='dark'] {
       .member-role,
       .activity-subtitle,
       .practice-intro p,
-      .practice-photos summary,
       .filters button,
       .close
     ) {
@@ -263,6 +326,13 @@ html[data-showcase-site='humanities'][data-platform-theme='dark'] {
   & .topbar {
     background: #292a25f5;
   }
+  & :is(.node__pic, .tpl-card) {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+  & :is(.node__pic figcaption, .tpl-card > span) {
+    color: var(--ink-soft);
+  }
   & :is(.history-list button, .acc, .pool, .custom-input, .wm__chips button, .help-item, kbd) {
     background: #30312b;
     color: var(--ink);
@@ -290,6 +360,104 @@ html[data-showcase-site='humanities'][data-platform-theme='dark'] {
   & .grain {
     opacity: 0.08;
   }
+}
+/* The photo overlay is a figure; clear its browser margins and reserve caption room. */
+html[data-showcase-site='humanities'] .lightbox {
+  --humanities-lightbox-padding: clamp(12px, 3vw, 32px);
+  margin: 0;
+  padding: var(--humanities-lightbox-padding);
+  overflow: auto;
+}
+html[data-showcase-site='humanities'] .lightbox > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(1200px, 100%);
+  min-width: 0;
+  max-height: 100%;
+}
+html[data-showcase-site='humanities'] .lightbox img {
+  display: block;
+  flex: 0 1 auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(
+    100vh - var(--humanities-lightbox-padding) - var(--humanities-lightbox-padding) - 72px
+  );
+  max-height: calc(
+    100dvh - var(--humanities-lightbox-padding) - var(--humanities-lightbox-padding) - 72px
+  );
+  object-fit: contain;
+}
+html[data-showcase-site='humanities'] .lightbox figcaption {
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] .lightbox__close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #ffffff80;
+  border-radius: 50%;
+  background: #242521e8;
+  color: #fff;
+  font:
+    30px/1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+html[data-showcase-site='humanities'] .lightbox__close:hover {
+  background: #413127;
+}
+html[data-showcase-site='humanities'] .lightbox__close:focus-visible {
+  outline: 3px solid #ffd0ba;
+  outline-offset: 3px;
+}
+/* Let the submitted template chooser shrink within its embedded viewport. */
+html[data-showcase-site='humanities']
+  #modalTemplate
+  :is(.modal__box, .modal__body, .tpl-grid, .tpl-card) {
+  min-width: 0;
+  max-width: 100%;
+}
+html[data-showcase-site='humanities'] #modalTemplate .tpl-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(148px, 100%), 1fr));
+}
+html[data-showcase-site='humanities'] #modalTemplate .tpl-card {
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head .btn {
+  margin-left: 0;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head [data-close] {
+  margin-left: auto;
+}
+html[data-showcase-site='humanities'] #modalTemplate .ctrl-row {
+  flex-wrap: wrap;
+}
+html[data-showcase-site='humanities'] #modalTemplate .ctrl-row input[type='range'] {
+  flex: 1 1 80px;
+  min-width: 0;
+  max-width: 100%;
 }
 html[data-showcase-site='liaison'][data-platform-theme='dark'] {
   --lc-ink: #ece6f5;

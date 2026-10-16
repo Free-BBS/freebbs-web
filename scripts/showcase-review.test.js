@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { readFileSync, readdirSync, existsSync, statSync } = require('node:fs');
 const { join, resolve, dirname, relative } = require('node:path');
 const { Script } = require('node:vm');
+
 const root = resolve(__dirname, '../development/apps/web/dist-review');
 const text = (path) => readFileSync(path, 'utf8');
 const manifest = JSON.parse(text(join(root, '审核目录.json')));
@@ -19,6 +20,10 @@ test('offline package provides twenty portable department entries in the request
     ['TMS', '团委', '学生会', '科协', '媒体中心'],
   );
   assert.equal(manifest.filter((item) => item.group === '科协').length, 5);
+  assert.deepEqual(
+    manifest.filter((item) => item.group === '团委').map((item) => item.name),
+    ['组织组', '办公室·新生组', '志愿组', '实践组', '调研组', '人文组', '扬帆计划组'],
+  );
   assert.ok(manifest.some((item) => item.name === '学习培养部'));
   assert.ok(manifest.some((item) => item.name === '办公室·新生组'));
   for (const item of manifest) {
@@ -39,7 +44,7 @@ test('standalone script runs without module loading, Node globals, authenticatio
 });
 test('all local HTML and CSS asset references resolve inside the portable package', () => {
   const failures = [];
-  for (const file of walk(root).filter((file) => /\.(?:html?|css)$/.test(file))) {
+  for (const file of walk(root).filter((candidate) => /\.(?:html?|css)$/.test(candidate))) {
     const source = text(file)
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<!--[\s\S]*?-->/g, '');

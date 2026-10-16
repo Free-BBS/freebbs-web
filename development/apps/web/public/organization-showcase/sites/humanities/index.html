@@ -1690,6 +1690,7 @@ kbd {
 
 
 <figure class="lightbox" id="lightbox" hidden>
+  <button type="button" class="lightbox__close" id="lightboxClose" aria-label="关闭大图">×</button>
   <div>
     <img id="lightboxImg" src="" alt="">
     <figcaption id="lightboxCap"></figcaption>
@@ -6100,6 +6101,7 @@ kbd {
     if (!box || !img) return;
 
     const close = () => { box.hidden = true; img.src = ''; };
+    $('#lightboxClose')?.addEventListener('click', close);
 
     /* 活动照片与时间线上的照片都能点开放大 */
     $$('.photo, .node__pic').forEach((fig) => {

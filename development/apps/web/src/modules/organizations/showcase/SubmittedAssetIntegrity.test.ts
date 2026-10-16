@@ -113,6 +113,10 @@ describe('reviewed submitted-site artifacts', () => {
       expect(source, slug).toContain('../platform-bridge.js');
     }
     expect(existsSync(join(sitesRoot, 'platform-bridge.js'))).toBe(true);
+    for (const file of htmlFiles)
+      expect(readFileSync(file, 'utf8'), relative(sitesRoot, file)).toContain(
+        '../platform-bridge.js',
+      );
   });
 
   it('compiles classic browser scripts without executing submitted code', () => {

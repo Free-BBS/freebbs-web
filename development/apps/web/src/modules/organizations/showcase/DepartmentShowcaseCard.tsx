@@ -32,7 +32,7 @@ export function DepartmentShowcaseCard({
             loading="lazy"
             decoding="async"
             style={{
-              objectFit: content.hero.fit ?? 'cover',
+              objectFit: 'cover',
               objectPosition: content.hero.position,
             }}
           />

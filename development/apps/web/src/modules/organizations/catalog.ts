@@ -130,7 +130,7 @@ const exhibitionDefinitions: Array<
     shortName: '团委',
     motto: '一起出发，也彼此陪伴。',
     introduction:
-      '组织、新生、志愿、实践、人文与扬帆计划，连接大学生活中不同的探索路径，让参与、交流与成长持续发生。',
+      '组织、新生、志愿、实践、调研、人文与扬帆计划，连接大学生活中不同的探索路径，让参与、交流与成长持续发生。',
     focus: ['组织建设', '志愿实践', '人文交流', '新生成长'],
     organizationIds: ['tuanwei'],
   },
@@ -173,6 +173,15 @@ const galleryOrder = [
   'science_association',
   'media_center',
 ];
+const youthLeagueOrder = [
+  'organization',
+  'freshman',
+  'volunteer',
+  'practice',
+  'research',
+  'humanities',
+  'sail',
+];
 
 export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibitionDefinitions]
   .sort((a, b) => galleryOrder.indexOf(a.key) - galleryOrder.indexOf(b.key))
@@ -197,6 +206,7 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibiti
                   planning: '智能策划部',
                   training: '学习培养部',
                   freshman: '办公室·新生组',
+                  rights_development_center: '学生权益发展中心',
                 } as Record<string, string>
               )[key] ?? group.label,
             introduction: details?.introduction ?? '了解部门工作，发现可以一起参与的活动。',
@@ -221,6 +231,11 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibiti
                 },
               ]
             : [],
+        )
+        .sort((a, b) =>
+          definition.key === 'youth_league'
+            ? youthLeagueOrder.indexOf(a.key) - youthLeagueOrder.indexOf(b.key)
+            : 0,
         ),
     };
   });

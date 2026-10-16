@@ -32,7 +32,7 @@ export const project: ShowcaseContent = {
   accent: '#377f89',
   darkAccent: '#9fdae0',
   layout: 'lab',
-  hero: image(2, '电子系挑战杯合影'),
+  hero: { ...image(2, '电子系挑战杯合影'), aspectRatio: 2.65, position: 'center 68%' },
   keywords: ['挑战杯', '科创年会', 'LabView', '实验室探访', '启航计划', '启航沙龙', '科研'],
   sections: [
     {
@@ -53,7 +53,10 @@ export const project: ShowcaseContent = {
       paragraphs: [
         '科创年会是展示成果的窗口，也是交流想法的现场。在分享与讨论中，看见不同方向的探索，听见项目背后的经历，让新的启发从交流中发生。',
       ],
-      images: [image(3, '启航计划介绍'), image(4, '启航沙龙')],
+      images: [
+        { ...image(3, '启航计划介绍'), fit: 'cover', aspectRatio: 1.65, position: 'center 55%' },
+        { ...image(4, '启航沙龙'), fit: 'cover', aspectRatio: 1.65 },
+      ],
     },
     {
       id: 'labview',

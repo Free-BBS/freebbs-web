@@ -23,9 +23,9 @@ describe('organization exhibition catalog', () => {
       'freshman',
       'volunteer',
       'practice',
+      'research',
       'humanities',
       'sail',
-      'research',
     ]);
     expect(findOrganization('science_association')?.departments).toHaveLength(5);
     expect(

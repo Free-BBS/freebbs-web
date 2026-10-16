@@ -32,7 +32,7 @@ export const arts: ShowcaseContent = {
   accent: '#b55074',
   darkAccent: '#f5abc6',
   layout: 'studio',
-  hero: image(1, '“掠影”学生节大合影'),
+  hero: { ...image(1, '“掠影”学生节大合影'), aspectRatio: 2.7, position: 'center 72%' },
   keywords: ['文艺', '学生节', '系歌赛', '舞会', 'Free之夜', '灯光', '舞台', '排练'],
   sections: [
     {

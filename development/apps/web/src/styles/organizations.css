@@ -12,9 +12,13 @@
   align-items: center;
   color: var(--color-muted);
   font-size: 0.85rem;
+  margin: 0 0 24px;
 }
 .organization-breadcrumb a {
   text-decoration: none;
+}
+.module-page.organization-page > .organization-breadcrumb {
+  margin-bottom: 0;
 }
 .organization-breadcrumb a:hover {
   color: var(--action-primary);

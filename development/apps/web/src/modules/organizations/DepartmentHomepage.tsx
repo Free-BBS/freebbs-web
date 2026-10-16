@@ -143,21 +143,21 @@ export function DepartmentHomepage({
   const showcase = findShowcase(department.id);
   return (
     <>
-      <header
-        className={`department-heading${showcase && !home?.html ? ' department-heading--curated' : ''}`}
-      >
-        <div>
-          <p className="organization-eyebrow">{department.organizationName}</p>
-          {!showcase || home?.html ? <h2>{displayName}</h2> : null}
-        </div>
-        {department.id === 'tms.position' ? (
-          <Link to="/collections/registrations?organization=tms">
-            查看相关活动 <span aria-hidden="true">↗</span>
-          </Link>
-        ) : (
-          <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
-        )}
-      </header>
+      {!showcase || home?.html ? (
+        <header className="department-heading">
+          <div>
+            <p className="organization-eyebrow">{department.organizationName}</p>
+            <h2>{displayName}</h2>
+          </div>
+          {department.id === 'tms.position' ? (
+            <Link to="/collections/registrations?organization=tms">
+              查看相关活动 <span aria-hidden="true">↗</span>
+            </Link>
+          ) : (
+            <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
+          )}
+        </header>
+      ) : null}
       {department.id === 'youth_league.organization' ? (
         <Link className="og-department-entry" to="/organizations/youth_league/organization/ledger">
           <span>
@@ -260,6 +260,9 @@ export function DepartmentHomepage({
       ) : null}
       <section className="department-activities" aria-label="相关活动">
         <nav className="activity-authoring-actions" aria-label="部门协作">
+          {showcase && !home?.html && department.id === 'tms.position' ? (
+            <Link to="/collections/registrations?organization=tms">查看相关活动 ↗</Link>
+          ) : null}
           <Link to={`/collections/tools?department=${encodeURIComponent(department.id)}`}>
             时间与资料协作
           </Link>

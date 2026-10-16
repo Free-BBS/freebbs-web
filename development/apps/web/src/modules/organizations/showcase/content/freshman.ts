@@ -30,7 +30,7 @@ const content: ShowcaseContent = {
   accent: '#f1bb49',
   darkAccent: '#ffe09a',
   layout: 'community',
-  hero: image(2, '迎新现场'),
+  hero: { ...image(2, '迎新现场'), aspectRatio: 2.5, position: 'center 68%' },
   sections: [
     {
       id: 'welcome',
@@ -68,9 +68,8 @@ const content: ShowcaseContent = {
         },
         {
           title: '新生工作坊',
-          meta: '2024 年秋季开始',
           paragraphs: [
-            '我们开创了“新生工作坊”活动，为新生们举办了“冰壶”“射箭”“LaTeX”等体育技能、实用技能的体验教学活动，帮助大家多多探索清华园里的资源。我们会继续这项活动，欢迎大家积极反馈感兴趣的工作坊，说不定就会在下次通知中看到它啦！',
+            '自 2024 年秋季起，我们开创了“新生工作坊”活动，为新生们举办了“冰壶”“射箭”“LaTeX”等体育技能、实用技能的体验教学活动，帮助大家多多探索清华园里的资源。我们会继续这项活动，欢迎大家积极反馈感兴趣的工作坊，说不定就会在下次通知中看到它啦！',
           ],
         },
         {

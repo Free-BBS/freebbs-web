@@ -99,6 +99,22 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function prepareResearchPage(source) {
+  return source.replace(
+    /<details\b([^>]*)>([\s\S]*?)<\/details\s*>/gi,
+    (element, attributes, body) => {
+      // The submitted photo groups become part of the page; ordinary details remain interactive.
+      if (
+        !/\bclass\s*=\s*(["'])[^"']*\bpractice-photos\b[^"']*\1/i.test(attributes) ||
+        !/<div\b[^>]*\bclass\s*=\s*(["'])[^"']*\bgallery\b[^"']*\1/i.test(body)
+      )
+        return element;
+      const gallery = body.replace(/<summary\b[^>]*>[\s\S]*?<\/summary\s*>/i, '');
+      return `<div${attributes}>${gallery}</div>`;
+    },
+  );
+}
+
 function prepareHumanitiesPage(source) {
   return (
     source
@@ -124,6 +140,14 @@ function prepareHumanitiesPage(source) {
       .replace(
         "const dark = !!(curT && curT.dark) || board.tpl === 'carbon';",
         "const dark = !!(curT && (curT.dark || curT.tone === 'charcoal'));",
+      )
+      .replace(
+        /(<figure class="lightbox" id="lightbox" hidden>)(\r?\n)/,
+        '$1$2  <button type="button" class="lightbox__close" id="lightboxClose" aria-label="关闭大图">×</button>$2',
+      )
+      .replace(
+        "const close = () => { box.hidden = true; img.src = ''; };",
+        "const close = () => { box.hidden = true; img.src = ''; };\n    $('#lightboxClose')?.addEventListener('click', close);",
       )
       .replace(/<button\b[^>]*\brole="tab"[^>]*>/g, (tag) => {
         const clean = tag.replace(/\s+tabindex="[^"]*"/g, '');
@@ -242,7 +266,11 @@ const bridge = String.raw`(() => {
     document.head.append(css);
     const link = document.createElement('a'); link.className = 'showcase-platform-home';
     link.href = home; link.textContent = '← 本展区首页'; link.setAttribute('aria-label', '返回本部门展区首页');
-    if (new URL(location.href).pathname !== new URL(home).pathname) document.body.append(link);
+    const hasHomeLink = [...document.querySelectorAll('a[href]')].some((anchor) => {
+      try { return new URL(anchor.href, location.href).pathname === new URL(home).pathname; }
+      catch { return false; }
+    });
+    if (new URL(location.href).pathname !== new URL(home).pathname && !hasHomeLink) document.body.append(link);
     if (site === 'humanities' && ephemeral) {
       const note = document.createElement('p'); note.className = 'showcase-storage-note';
       note.textContent = '草稿、自定义词句与留言在本次浏览中临时保存，离开前请导出作品；留言不会发送给部门，联系请使用邮箱。';
@@ -464,11 +492,14 @@ for (const [slug, folder, entry] of roots.filter(
           text += `\n/* Preserve complete group photos in the submitted layout. */
 .lc-photo-frame { height:auto; width:min(100%,560px); }
 .lc-hero-photo-inner { height:auto; aspect-ratio:auto; }
-.lc-hero-photo-inner img { object-fit:contain; height:auto; aspect-ratio:4/3; }
+.lc-hero-photo-inner img { object-fit:cover; height:auto; aspect-ratio:auto; }
 .lc-hero-photo-overlay { position:static; padding:12px 16px; color:var(--lc-ink); background:none; }
 .lc-hero-art { height:480px; }
 .lc-gallery-card { height:auto; }
-.lc-gallery-card img { aspect-ratio:3/2; height:auto; object-fit:contain; }
+.lc-gallery-card img { aspect-ratio:3/2; height:auto; object-fit:cover; }
+.lc-work-modal-image:has(img[src$='.svg']) { min-height:0; align-self:center; }
+.lc-work-modal-image img[src$='.svg'] { height:auto; min-height:0; max-height:none; aspect-ratio:1200/850; object-fit:contain; }
+.lc-work-modal-image:has(img[src$='.svg']) > span { position:static; display:block; padding:14px 22px; background:none; color:var(--lc-muted); }
 .lc-gallery-card-content { position:relative; padding:18px 22px; }
 .lc-gallery-card::after { display:none; }
 .lc-interaction-hint,.lc-gallery-note,.lc-slide-hint { display:none; }
@@ -561,6 +592,9 @@ for (const [slug, folder, entry] of roots.filter(
           'const text = !audioAuthorized ? "点击播放音乐开启" : !configured ?',
         );
       }
+      if (slug === 'research' && /\.html?$/i.test(name)) {
+        text = prepareResearchPage(text);
+      }
       if (slug === 'humanities' && /\.html$/i.test(name)) {
         text = prepareHumanitiesPage(text);
       }
@@ -596,9 +630,18 @@ for (const [slug, folder, entry] of roots.filter(
           return `<${tag}${clean} preload="none">`;
         });
         const injected = `<script src="../platform-bridge.js" data-site="${slug}" data-home="index.html"></script>`;
-        text = text.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${injected}`);
+        if (/<head(?:\s[^>]*)?>/i.test(text)) {
+          text = text.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${injected}`);
+        } else {
+          text = text.replace(
+            /(<html\b[^>]*>)([\s\S]*?)(?=<(?:body|main|section|header)\b)/i,
+            (_, root, metadata) => `${root}<head>${injected}${metadata}</head>`,
+          );
+        }
+        if (!text.includes(injected)) throw new Error(`Missing showcase bridge in ${slug}/${name}`);
         // Remove source-only editorial notes; no unpublished operational material is shipped.
         text = text.replace(/<!--(?!\[if)[\s\S]*?-->/g, '');
+        if (slug === 'liaison') text = text.replace(/[ \t]+(?=\r?$)/gm, '');
       }
       buffer = Buffer.from(text);
     }

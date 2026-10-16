@@ -157,10 +157,10 @@ describe('department homepage', () => {
     expect(screen.getByRole('heading', { name: '学生体育中心', level: 2 })).toBeInTheDocument();
     expect(
       within(screen.getByRole('region', { name: '体育中心' })).getAllByRole('img'),
-    ).toHaveLength(4);
+    ).toHaveLength(8);
     expect(
       within(screen.getByRole('region', { name: '天天开心' })).getAllByRole('img'),
-    ).toHaveLength(4);
+    ).toHaveLength(8);
     expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByTitle('体育中心主页')).not.toBeInTheDocument();
   });

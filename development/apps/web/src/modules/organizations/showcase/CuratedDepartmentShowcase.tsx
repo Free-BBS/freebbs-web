@@ -22,12 +22,23 @@ function Photo({
   onOpen,
   href,
   linkLabel,
+  hero = false,
 }: {
   image: ShowcaseImage;
   onOpen: (image: ShowcaseImage) => void;
   href?: string;
   linkLabel?: string;
+  hero?: boolean;
 }) {
+  const size = (imageDimensions as Record<string, { width: number; height: number }>)[image.src];
+  const naturalRatio = size ? size.width / size.height : 1.5;
+  const ratio =
+    image.aspectRatio ??
+    (hero ? 2.8 : image.fit === 'contain' || photoShape(image) === 'portrait' ? naturalRatio : 1.5);
+  const photoStyle = {
+    '--sc-photo-ratio': ratio,
+    '--sc-photo-ratio-mobile': image.mobileAspectRatio ?? (hero ? Math.min(ratio, 1.9) : ratio),
+  } as CSSProperties;
   const picture = (
     <>
       <img
@@ -35,7 +46,10 @@ function Photo({
         alt={image.alt}
         loading="lazy"
         decoding="async"
-        style={{ objectFit: 'contain', objectPosition: image.position }}
+        style={{
+          objectFit: hero ? 'cover' : (image.fit ?? 'cover'),
+          objectPosition: image.position,
+        }}
       />
       <span className="sc-photo-zoom" aria-hidden="true">
         ↗
@@ -43,7 +57,10 @@ function Photo({
     </>
   );
   return (
-    <figure className={`sc-photo sc-photo--${photoShape(image)}`}>
+    <figure
+      className={`sc-photo sc-photo--${photoShape(image)}${hero ? ' sc-photo--hero' : ''}`}
+      style={photoStyle}
+    >
       {href ? (
         href.startsWith('/') && !href.startsWith('//') ? (
           <Link to={href} aria-label={linkLabel}>
@@ -77,33 +94,17 @@ function PhotoGallery({
   title: string;
   onOpen: (image: ShowcaseImage) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const previewCount = 4;
-  const visible = expanded
-    ? images
-    : images.slice(0, images.length > 6 ? previewCount : images.length);
   const triptych =
-    [3, 6].includes(visible.length) && visible.every((image) => photoShape(image) === 'landscape');
+    [3, 6].includes(images.length) && images.every((image) => photoShape(image) !== 'portrait');
   return (
     <div className="sc-album" role="group" aria-label={`${title}照片相册`}>
       <div
         className={`sc-photo-grid sc-photo-grid--composed${images.length === 1 ? ' sc-photo-grid--single' : ''}${triptych ? ' sc-photo-grid--triptych' : ''}`}
       >
-        {visible.map((image) => (
+        {images.map((image) => (
           <Photo key={image.src} image={image} onOpen={onOpen} />
         ))}
       </div>
-      {images.length > 6 ? (
-        <button
-          className="sc-album-expand"
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? '收起相册' : `展开全部 ${images.length} 张照片`}{' '}
-          <span aria-hidden="true">{expanded ? '↑' : '↓'}</span>
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -129,15 +130,13 @@ function SectionContent({
       ) : null}
       {section.items?.length ? (
         <div
-          className={`sc-items sc-items--${section.layout}${textTimeline ? ' sc-items--text-timeline' : ''}`}
+          className={`sc-items sc-items--${section.layout} sc-items--count-${section.items.length}${textTimeline ? ' sc-items--text-timeline' : ''}`}
         >
           {section.items.map((item, index) => (
-            <article className="sc-item" key={`${item.title}:${index}`}>
-              {section.layout === 'timeline' ? (
-                <span className="sc-step" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-              ) : null}
+            <article
+              className={`sc-item${item.image ? ' sc-item--with-photo' : ''}${item.image && photoShape(item.image) === 'portrait' ? ' sc-item--portrait' : ''}${item.images?.length ? ' sc-item--with-album' : ''}`}
+              key={`${item.title}:${index}`}
+            >
               {item.image ? (
                 <Photo
                   image={item.image}
@@ -147,6 +146,11 @@ function SectionContent({
                 />
               ) : null}
               <div className="sc-item-copy">
+                {section.layout === 'timeline' ? (
+                  <span className="sc-step" aria-hidden="true">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                ) : null}
                 {item.meta ? <span className="sc-item-meta">{item.meta}</span> : null}
                 <h4>{item.title}</h4>
                 {item.description ? <p>{item.description}</p> : null}
@@ -345,6 +349,7 @@ export function CuratedDepartmentShowcase({
   return (
     <div
       className={`curated-showcase sc-layout--${content.layout}${content.site ? ' sc-has-submitted-site' : ''}`}
+      data-showcase={content.slug}
       style={contentStyle(content)}
     >
       <header className="sc-hero">
@@ -374,7 +379,7 @@ export function CuratedDepartmentShowcase({
         </div>
         {content.hero && !content.site ? (
           <div className={`sc-hero-photo sc-hero-photo--${content.slug}`}>
-            <Photo image={content.hero} onOpen={setSelected} />
+            <Photo image={content.hero} onOpen={setSelected} hero />
           </div>
         ) : null}
       </header>
@@ -393,7 +398,11 @@ export function CuratedDepartmentShowcase({
             ))}
             {content.faq?.length ? <a href="#showcase-faq">你可能想问</a> : null}
           </nav>
-          <section className="sc-about" id="showcase-about" aria-label="部门介绍">
+          <section
+            className={`sc-about${!content.logo && content.introduction.join('').length < 220 ? ' sc-about--compact' : ''}`}
+            id="showcase-about"
+            aria-label="部门介绍"
+          >
             <div className="sc-about-copy">
               <span className="sc-sticker">认识一下</span>
               <h3>我们平时在忙什么？</h3>
@@ -456,7 +465,9 @@ export function CuratedDepartmentShowcase({
             <br />
             都可以成为相识的开始。
           </h3>
-          {content.contactNote ? <p>{content.contactNote}</p> : null}
+          {content.contactNote && !(publicReview && !content.contacts.length) ? (
+            <p>{content.contactNote}</p>
+          ) : null}
         </div>
         <div className="sc-contact-links">
           {content.contacts.map((contact) => (

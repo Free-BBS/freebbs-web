@@ -25,7 +25,10 @@ const content: ShowcaseContent = {
     src: '/development/organization-showcase/content/volunteer/01.webp',
     alt: '志愿组合照',
     caption: '志愿组合照',
-    fit: 'contain',
+    fit: 'cover',
+    aspectRatio: 2.35,
+    mobileAspectRatio: 1.75,
+    position: 'center 70%',
   },
   sections: [
     {

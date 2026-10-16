@@ -114,9 +114,8 @@ describe('curated organization exhibitions', () => {
     show(content);
     for (const section of content.sections) {
       const album = screen.getByRole('region', { name: section.title });
-      expect(within(album).getAllByRole('img')).toHaveLength(4);
-      fireEvent.click(within(album).getByRole('button', { name: /展开全部 8 张照片/ }));
       expect(within(album).getAllByRole('img')).toHaveLength(8);
+      expect(within(album).queryByRole('button', { name: /展开/ })).not.toBeInTheDocument();
       for (const image of section.images!)
         expect(within(album).getByText(image.caption!)).toBeInTheDocument();
     }
@@ -153,12 +152,23 @@ describe('curated organization exhibitions', () => {
     }
   });
 
-  it('shows all five rights photos in a composed album and cycles full-size images with keyboard and buttons', () => {
+  it('places the rights reference images beside their text and cycles the activity album', () => {
     const content = findShowcase('student_union.rights_development_center')!;
     const photos = content.sections.find(({ layout }) => layout === 'carousel')!.images!;
     show(content);
     const album = screen.getByRole('group', { name: '权发掠影照片相册' });
-    expect(within(album).getAllByRole('img')).toHaveLength(5);
+    expect(within(album).getAllByRole('img')).toHaveLength(3);
+    expect(
+      within(screen.getByRole('region', { name: '系主任下午茶，让真实想法被听见' })).getByRole(
+        'img',
+        { name: '师生交流现场' },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '让信息更近，让选择更清楚' })).getByRole('img', {
+        name: '限选课选课指南页面',
+      }),
+    ).toBeInTheDocument();
     fireEvent.click(within(album).getByRole('button', { name: `查看大图：${photos[0].caption}` }));
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: '下一张照片' }));

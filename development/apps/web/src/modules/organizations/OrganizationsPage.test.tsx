@@ -64,6 +64,11 @@ describe('organization exhibition', () => {
       'href',
       '/organizations/tms',
     );
+    expect(
+      within(screen.getByRole('group', { name: '按组织筛选' })).getByRole('link', {
+        name: 'TMS',
+      }),
+    ).toHaveAttribute('href', '/organizations/tms');
     expect(request).not.toHaveBeenCalled();
   });
 

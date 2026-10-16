@@ -168,16 +168,22 @@ export function OrganizationShowcaseHome() {
             <button type="button" aria-pressed={group === 'all'} onClick={() => setGroup('all')}>
               全部
             </button>
-            {ORGANIZATION_GALLERY.map((organization) => (
-              <button
-                type="button"
-                key={organization.key}
-                aria-pressed={group === organization.key}
-                onClick={() => setGroup(organization.key)}
-              >
-                {organization.shortName}
-              </button>
-            ))}
+            {ORGANIZATION_GALLERY.map((organization) =>
+              organization.key === 'tms' ? (
+                <Link key={organization.key} to="/organizations/tms">
+                  TMS
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  key={organization.key}
+                  aria-pressed={group === organization.key}
+                  onClick={() => setGroup(organization.key)}
+                >
+                  {organization.shortName}
+                </button>
+              ),
+            )}
           </div>
           <label className="sc-search">
             <span aria-hidden="true">⌕</span>

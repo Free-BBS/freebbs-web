@@ -4,6 +4,8 @@ export interface ShowcaseImage {
   caption?: string;
   fit?: 'cover' | 'contain';
   position?: string;
+  aspectRatio?: number;
+  mobileAspectRatio?: number;
 }
 
 export interface ShowcaseItem {

@@ -731,11 +731,14 @@ body { overflow-x:clip; }
 /* Preserve complete group photos in the submitted layout. */
 .lc-photo-frame { height:auto; width:min(100%,560px); }
 .lc-hero-photo-inner { height:auto; aspect-ratio:auto; }
-.lc-hero-photo-inner img { object-fit:contain; height:auto; aspect-ratio:4/3; }
+.lc-hero-photo-inner img { object-fit:cover; height:auto; aspect-ratio:auto; }
 .lc-hero-photo-overlay { position:static; padding:12px 16px; color:var(--lc-ink); background:none; }
 .lc-hero-art { height:480px; }
 .lc-gallery-card { height:auto; }
-.lc-gallery-card img { aspect-ratio:3/2; height:auto; object-fit:contain; }
+.lc-gallery-card img { aspect-ratio:3/2; height:auto; object-fit:cover; }
+.lc-work-modal-image:has(img[src$='.svg']) { min-height:0; align-self:center; }
+.lc-work-modal-image img[src$='.svg'] { height:auto; min-height:0; max-height:none; aspect-ratio:1200/850; object-fit:contain; }
+.lc-work-modal-image:has(img[src$='.svg']) > span { position:static; display:block; padding:14px 22px; background:none; color:var(--lc-muted); }
 .lc-gallery-card-content { position:relative; padding:18px 22px; }
 .lc-gallery-card::after { display:none; }
 .lc-interaction-hint,.lc-gallery-note,.lc-slide-hint { display:none; }

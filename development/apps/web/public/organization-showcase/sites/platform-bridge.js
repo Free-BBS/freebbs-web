@@ -62,7 +62,11 @@
     document.head.append(css);
     const link = document.createElement('a'); link.className = 'showcase-platform-home';
     link.href = home; link.textContent = '← 本展区首页'; link.setAttribute('aria-label', '返回本部门展区首页');
-    if (new URL(location.href).pathname !== new URL(home).pathname) document.body.append(link);
+    const hasHomeLink = [...document.querySelectorAll('a[href]')].some((anchor) => {
+      try { return new URL(anchor.href, location.href).pathname === new URL(home).pathname; }
+      catch { return false; }
+    });
+    if (new URL(location.href).pathname !== new URL(home).pathname && !hasHomeLink) document.body.append(link);
     if (site === 'humanities' && ephemeral) {
       const note = document.createElement('p'); note.className = 'showcase-storage-note';
       note.textContent = '草稿、自定义词句与留言在本次浏览中临时保存，离开前请导出作品；留言不会发送给部门，联系请使用邮箱。';

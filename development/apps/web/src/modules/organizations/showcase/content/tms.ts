@@ -36,7 +36,11 @@ const content: ShowcaseContent = {
   accent: '#ed6f74',
   darkAccent: '#ffabb2',
   layout: 'community',
-  hero: image('01_jingsai', '新生理论知识竞赛“忆往無前”现场'),
+  hero: {
+    ...image('01_jingsai', '新生理论知识竞赛“忆往無前”现场'),
+    aspectRatio: 2.6,
+    position: 'center 60%',
+  },
   logo: image('cover', '电子系 TMS 分会投稿封面', 'contain'),
   sections: [
     {

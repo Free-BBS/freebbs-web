@@ -30,7 +30,12 @@ const content: ShowcaseContent = {
   accent: '#43b58a',
   darkAccent: '#9be6c5',
   layout: 'community',
-  hero: { ...image(2, '26年大马杯季军'), position: 'center 80%' },
+  hero: {
+    ...image(2, '26年大马杯季军'),
+    aspectRatio: 3.35,
+    mobileAspectRatio: 1.85,
+    position: 'center 80%',
+  },
   sections: [
     {
       id: 'sports-center-album',
@@ -58,7 +63,7 @@ const content: ShowcaseContent = {
         image(10, '一起跨年的牢哥牢姐们'),
         image(11, '呜呼我们是亚军！'),
         image(12, '转身能看到老部长们的后背'),
-        image(13, '见证国足U23大胜的体育中心'),
+        { ...image(13, '见证国足U23大胜的体育中心'), position: 'center 38%' },
         image(14, '被牢哥们巧手化妆的牢哥们（25男生节）'),
         image(15, '愉快的25年男生（受难）节'),
         image(16, '天天开心（沙滩版）'),

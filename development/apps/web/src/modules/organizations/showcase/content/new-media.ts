@@ -30,7 +30,7 @@ const content: ShowcaseContent = {
   accent: '#8b8bea',
   darkAccent: '#c2bbff',
   layout: 'studio',
-  hero: image(8, '新媒体部部员合影', 'cover'),
+  hero: { ...image(8, '新媒体部部员合影', 'cover'), aspectRatio: 2.65, position: 'center 65%' },
   sections: [
     {
       id: 'close-to-you',
