@@ -931,6 +931,44 @@ html[data-showcase-site='liaison'] {
     }
   }
 }
+/* Keep the submitted photo-paper treatment without hiding faces under other photos. */
+html[data-showcase-site='creative'] {
+  & .about-story {
+    align-self: start;
+  }
+  & .photo-collage {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: auto;
+    margin: 12px 0 0;
+  }
+  & .scattered-photo {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    z-index: auto;
+    transform: none;
+  }
+  & .scattered-photo img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1.6;
+    object-fit: contain;
+  }
+  & .scattered-photo:is(:hover, :focus-visible) {
+    transform: translateY(-3px);
+  }
+  @media (max-width: 600px) {
+    & .photo-collage {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
 /* These two submitted visual worlds already use a dark canvas. Keep media,
    photographic overlays and editing tools in their original coordinated palette. */
 html[data-showcase-site='sail'],

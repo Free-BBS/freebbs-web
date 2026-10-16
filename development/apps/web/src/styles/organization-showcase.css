@@ -1272,6 +1272,7 @@ body.theme-light .curated-showcase {
   font-size: 15px;
   line-height: 1.65;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .sc-email > strong {
   min-width: 0;
