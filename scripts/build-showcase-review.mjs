@@ -61,7 +61,7 @@ const destinations = [
   ['团委', '组织组', 'youth_league/organization', false],
   ['团委', '办公室·新生组', 'youth_league/freshman'],
   ['团委', '志愿组', 'youth_league/volunteer'],
-  ['团委', '实践组', 'youth_league/practice', false],
+  ['团委', '实践组', 'youth_league/practice'],
   ['团委', '调研组', 'youth_league/research'],
   ['团委', '人文组', 'youth_league/humanities'],
   ['团委', '扬帆计划组', 'youth_league/sail'],

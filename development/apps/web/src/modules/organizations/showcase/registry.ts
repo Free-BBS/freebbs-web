@@ -8,6 +8,7 @@ import newMedia from './content/new-media.js';
 import volunteer from './content/volunteer.js';
 import { arts } from './content/arts.js';
 import { project } from './content/project.js';
+import practice from './content/practice.js';
 
 const asset = (slug: string, file: string) =>
   `/development/organization-showcase/sites/${slug}/${file}`;
@@ -398,6 +399,7 @@ export const SHOWCASES: readonly ShowcaseContent[] = [
   rights,
   freshman,
   volunteer,
+  practice,
   humanities,
   sail,
   research,

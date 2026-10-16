@@ -54,8 +54,8 @@ const departmentIntroductions: Record<string, { introduction: string; focus: str
     focus: ['志愿服务', '项目招募', '服务交流'],
   },
   practice: {
-    introduction: '从支队筹备到行程分享，关注社会实践、支队交流与实践资源。',
-    focus: ['社会实践', '支队交流', '实践资源'],
+    introduction: '从实践动员、行前培训到总结评比与报销，陪同学把想法变成一次出发。',
+    focus: ['社会实践', '实践培训', '支队交流'],
   },
   humanities: {
     introduction: '在阅读、对话与文化活动中，发现专业之外更宽广的校园生活。',

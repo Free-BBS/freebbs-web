@@ -14,7 +14,7 @@ function walk(dir) {
 }
 test('offline package provides twenty portable department entries in the requested order', () => {
   assert.equal(manifest.length, 20);
-  assert.equal(manifest.filter((item) => item.submitted).length, 17);
+  assert.equal(manifest.filter((item) => item.submitted).length, 18);
   assert.deepEqual(
     [...new Set(manifest.map((item) => item.group))],
     ['TMS', '团委', '学生会', '科协', '媒体中心'],

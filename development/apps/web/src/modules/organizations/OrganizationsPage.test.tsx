@@ -89,8 +89,9 @@ describe('organization exhibition', () => {
     const filters = screen.getByRole('group', { name: '按组织筛选' });
     const search = screen.getByRole('searchbox', { name: '搜索部门、活动或兴趣' });
     fireEvent.change(search, { target: { value: '采访' } });
-    expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
+    expect(screen.getByRole('status')).toHaveTextContent('找到 2 个去处');
     expect(screen.getByRole('link', { name: '了解新媒体部暨记者团' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '了解实践组' })).toBeInTheDocument();
     fireEvent.click(within(filters).getByRole('button', { name: '媒体中心' }));
     expect(within(filters).getByRole('button', { name: '媒体中心' })).toHaveAttribute(
       'aria-pressed',
@@ -115,7 +116,7 @@ describe('organization exhibition', () => {
     show();
     const search = screen.getByRole('searchbox', { name: '搜索部门、活动或兴趣' });
     fireEvent.change(search, { target: { value: '  采访  ' } });
-    expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
+    expect(screen.getByRole('status')).toHaveTextContent('找到 2 个去处');
     fireEvent.click(screen.getByRole('button', { name: '学生会' }));
     fireEvent.click(screen.getByRole('button', { name: '看看全部' }));
     expect(search).toHaveValue('');

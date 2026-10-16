@@ -337,6 +337,9 @@ export function CuratedDepartmentShowcase({
   const changePhoto = (step: number) =>
     setSelected(photos[(selectedIndex + step + photos.length) % photos.length] ?? null);
   const organizationKey = content.departmentId.split('.')[0];
+  const hasContactDestination =
+    content.contacts.length > 0 ||
+    (!publicReview && content.departmentId === 'student_union.rights_development_center');
   useEffect(() => {
     if (!selected || !dialog.current) return;
     dialog.current.showModal();
@@ -365,9 +368,11 @@ export function CuratedDepartmentShowcase({
             <a className="sc-pill-link" href={content.site ? '#showcase-world' : '#showcase-about'}>
               一起逛逛 <span aria-hidden="true">↓</span>
             </a>
-            <a className="sc-text-link" href="#showcase-contact">
-              联系这个部门 ↗
-            </a>
+            {hasContactDestination ? (
+              <a className="sc-text-link" href="#showcase-contact">
+                联系这个部门 ↗
+              </a>
+            ) : null}
           </div>
         </div>
         <div className="sc-hero-character">
@@ -457,40 +462,50 @@ export function CuratedDepartmentShowcase({
           ) : null}
         </>
       )}
-      <footer className="sc-contact" id="showcase-contact" aria-labelledby="showcase-contact-title">
-        <div className="sc-contact-copy">
-          <span className="sc-sticker">下次，一起！</span>
-          <h3 id="showcase-contact-title">
-            一个问题，一点想法，
-            <br />
-            都可以成为相识的开始。
-          </h3>
-          {content.contactNote && !(publicReview && !content.contacts.length) ? (
-            <p>{content.contactNote}</p>
-          ) : null}
-        </div>
-        <div className="sc-contact-links">
-          {content.contacts.map((contact) => (
-            <a key={contact.email} href={`mailto:${contact.email}`} className="sc-email">
-              <span>{contact.name}</span>
-              <strong>{contact.email}</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-          ))}
-          {!publicReview &&
-          !content.contacts.length &&
-          content.departmentId === 'student_union.rights_development_center' ? (
-            <Link className="sc-email" to="/information/proposals">
-              <span>把想法说出来</span>
-              <strong>前往公开提案池</strong>
-              <b aria-hidden="true">↗</b>
+      {hasContactDestination ? (
+        <footer
+          className="sc-contact"
+          id="showcase-contact"
+          aria-labelledby="showcase-contact-title"
+        >
+          <div className="sc-contact-copy">
+            <span className="sc-sticker">下次，一起！</span>
+            <h3 id="showcase-contact-title">
+              一个问题，一点想法，
+              <br />
+              都可以成为相识的开始。
+            </h3>
+            {content.contactNote && !(publicReview && !content.contacts.length) ? (
+              <p>{content.contactNote}</p>
+            ) : null}
+          </div>
+          <div className="sc-contact-links">
+            {content.contacts.map((contact) => (
+              <a key={contact.email} href={`mailto:${contact.email}`} className="sc-email">
+                <span>{contact.name}</span>
+                <strong>{contact.email}</strong>
+                <b aria-hidden="true">↗</b>
+              </a>
+            ))}
+            {!publicReview &&
+            !content.contacts.length &&
+            content.departmentId === 'student_union.rights_development_center' ? (
+              <Link className="sc-email" to="/information/proposals">
+                <span>把想法说出来</span>
+                <strong>前往公开提案池</strong>
+                <b aria-hidden="true">↗</b>
+              </Link>
+            ) : null}
+            <Link className="sc-back-link" to="/organizations">
+              ← 再去其他部门逛逛
             </Link>
-          ) : null}
-          <Link className="sc-back-link" to="/organizations">
-            ← 再去其他部门逛逛
-          </Link>
-        </div>
-      </footer>
+          </div>
+        </footer>
+      ) : (
+        <footer className="sc-campus-footer">
+          <Link to="/organizations">← 再去其他部门逛逛</Link>
+        </footer>
+      )}
       {selected ? (
         <dialog
           ref={dialog}

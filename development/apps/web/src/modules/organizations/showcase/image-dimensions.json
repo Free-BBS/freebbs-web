@@ -214,5 +214,49 @@
   "/development/organization-showcase/content/new-media/08.webp": {
     "width": 514,
     "height": 385
+  },
+  "/development/organization-showcase/content/practice/01.webp": {
+    "width": 634,
+    "height": 476
+  },
+  "/development/organization-showcase/content/practice/02.webp": {
+    "width": 665,
+    "height": 374
+  },
+  "/development/organization-showcase/content/practice/03.webp": {
+    "width": 573,
+    "height": 357
+  },
+  "/development/organization-showcase/content/practice/04.webp": {
+    "width": 653,
+    "height": 436
+  },
+  "/development/organization-showcase/content/practice/05.webp": {
+    "width": 586,
+    "height": 438
+  },
+  "/development/organization-showcase/content/practice/06.webp": {
+    "width": 629,
+    "height": 419
+  },
+  "/development/organization-showcase/content/practice/07.webp": {
+    "width": 632,
+    "height": 522
+  },
+  "/development/organization-showcase/content/practice/08.webp": {
+    "width": 667,
+    "height": 500
+  },
+  "/development/organization-showcase/content/practice/09.webp": {
+    "width": 562,
+    "height": 375
+  },
+  "/development/organization-showcase/content/practice/10.webp": {
+    "width": 566,
+    "height": 424
+  },
+  "/development/organization-showcase/content/practice/11.webp": {
+    "width": 1266,
+    "height": 844
   }
 }

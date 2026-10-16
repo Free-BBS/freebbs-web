@@ -68,9 +68,9 @@ function localAsset(src: string) {
 }
 
 describe('curated organization exhibitions', () => {
-  it('ships seventeen exhibitions and every registered image and site entry inside repository public assets', () => {
-    expect(SHOWCASES).toHaveLength(17);
-    expect(native).toHaveLength(9);
+  it('ships eighteen exhibitions and every registered image and site entry inside repository public assets', () => {
+    expect(SHOWCASES).toHaveLength(18);
+    expect(native).toHaveLength(10);
     expect(submitted).toHaveLength(8);
     for (const content of SHOWCASES) {
       for (const image of contentImages(content)) {
@@ -80,7 +80,23 @@ describe('curated organization exhibitions', () => {
       if (content.site)
         expect(existsSync(localAsset(content.site.entry)), content.site.entry).toBe(true);
     }
-    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(54);
+    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(65);
+  });
+
+  it('uses the practice documents without inventing contacts or leaving an empty contact destination', () => {
+    const content = findShowcase('youth_league.practice')!;
+    show(content);
+    expect(new Set(contentImages(content).map(({ src }) => src)).size).toBe(11);
+    expect(content.contacts).toEqual([]);
+    expect(screen.queryByRole('link', { name: /联系这个部门/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /再去其他部门逛逛/ })).toBeInTheDocument();
+    for (const title of [
+      'E方水土：走近专业与产业',
+      'E起向未来：把专业带进课堂',
+      '海外实践：让交流越过山海',
+      '特色主题实践：从你的问题出发',
+    ])
+      expect(screen.getByRole('region', { name: title })).toBeInTheDocument();
   });
 
   it.each(native)(

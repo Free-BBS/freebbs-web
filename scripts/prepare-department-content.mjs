@@ -18,6 +18,15 @@ const materialRoot = path.resolve(repo, '../../..', '66 发展端/组织风采')
 const publicRoot = path.join(repo, 'development/apps/web/public/organization-showcase/content');
 const qaRoot = path.resolve(repo, '../../..', 'tmp/org-content-qa');
 const departments = {
+  practice: {
+    folder: '实践组/配图',
+    files: [
+      'intro-image1.jpeg',
+      'intro-image2.jpeg',
+      'intro-image3.png',
+      ...Array.from({ length: 8 }, (_, index) => `practice-image${index + 1}.jpeg`),
+    ],
+  },
   volunteer: {
     folder: '志愿组',
     files: ['志愿组合照-用户指定封面.jpg'],
@@ -113,9 +122,14 @@ function ensureChild(root, candidate) {
   return candidate;
 }
 
+const onlyIndex = process.argv.indexOf('--only');
+const only = onlyIndex === -1 ? undefined : process.argv[onlyIndex + 1];
+if (onlyIndex !== -1 && (!only || !Object.hasOwn(departments, only)))
+  throw new Error(`Unknown department: ${only ?? '(missing --only value)'}`);
 const report = {};
 await fs.mkdir(qaRoot, { recursive: true });
 for (const [departmentId, entry] of Object.entries(departments)) {
+  if (only && departmentId !== only) continue;
   const outputDir = ensureChild(publicRoot, path.join(publicRoot, departmentId));
   await fs.mkdir(outputDir, { recursive: true });
   const prepared = [];
@@ -176,14 +190,22 @@ for (const [departmentId, entry] of Object.entries(departments)) {
   report[departmentId] = prepared;
 }
 await fs.writeFile(path.join(qaRoot, 'assets.json'), JSON.stringify(report, null, 2));
+const dimensionsFile = path.join(
+  repo,
+  'development/apps/web/src/modules/organizations/showcase/image-dimensions.json',
+);
+const existingDimensions = only ? JSON.parse(await fs.readFile(dimensionsFile, 'utf8')) : {};
 await fs.writeFile(
-  path.join(repo, 'development/apps/web/src/modules/organizations/showcase/image-dimensions.json'),
+  dimensionsFile,
   JSON.stringify(
-    Object.fromEntries(
-      Object.values(report)
-        .flat()
-        .map(({ url, width, height }) => [url, { width, height }]),
-    ),
+    {
+      ...existingDimensions,
+      ...Object.fromEntries(
+        Object.values(report)
+          .flat()
+          .map(({ url, width, height }) => [url, { width, height }]),
+      ),
+    },
     null,
     2,
   ) + '\n',
