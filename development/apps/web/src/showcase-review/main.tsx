@@ -9,7 +9,7 @@ import {
   Route,
   Navigate,
 } from 'react-router-dom';
-import { ORGANIZATION_GALLERY, findOrganization } from '../modules/organizations/catalog.js';
+import { findOrganization } from '../modules/organizations/catalog.js';
 import { CuratedDepartmentShowcase } from '../modules/organizations/showcase/CuratedDepartmentShowcase.js';
 import { OrganizationShowcaseHome } from '../modules/organizations/showcase/OrganizationShowcaseHome.js';
 import { findShowcase } from '../modules/organizations/showcase/registry.js';
@@ -20,19 +20,6 @@ import '../styles/theme.css';
 import '../styles/organizations.css';
 import '../styles/organization-showcase.css';
 import './review.css';
-
-const destinations = ORGANIZATION_GALLERY.flatMap((group) =>
-  group.key === 'tms'
-    ? [{ name: group.name, path: '/organizations/tms', submitted: true }]
-    : group.departments.map((department) => ({
-        name:
-          findShowcase(`${group.key}.${department.key}`)?.shortName ??
-          findShowcase(`${group.key}.${department.key}`)?.name ??
-          department.name,
-        path: `/organizations/${group.key}/${department.key}`,
-        submitted: Boolean(findShowcase(`${group.key}.${department.key}`)),
-      })),
-);
 
 function ReviewPage() {
   const { organizationKey, departmentKey } = useParams();
@@ -64,10 +51,10 @@ function ReviewPage() {
         <Link className="review-brand" to="/organizations">
           <OrganizationMark variant="science_association" />
           <span>
-            FREE BBS<small>组织风采 · 离线审核</small>
+            FREE BBS<small>组织风采</small>
           </span>
         </Link>
-        <nav aria-label="审核页操作">
+        <nav aria-label="风采展示操作">
           <Link to="/organizations">全部展区</Link>
           <button
             type="button"
@@ -104,7 +91,6 @@ function ReviewPage() {
             <OrganizationMark variant={group!.key} />
             <h1>{department.name}</h1>
             <p>{department.introduction}</p>
-            <p>这个部门的特色材料还在准备中，先认识它的日常工作吧。</p>
             <Link to={`/organizations/${group!.key}`}>返回{group!.shortName}</Link>
           </section>
         ) : group ? (
@@ -128,25 +114,7 @@ function ReviewPage() {
             </div>
           </>
         ) : (
-          <>
-            <OrganizationShowcaseHome />
-            <section className="review-link-list" id="review-help">
-              <header>
-                <div>
-                  <span className="sc-sticker">一起把页面做得更好</span>
-                  <h2>部门审核目录</h2>
-                </div>
-              </header>
-              <div>
-                {destinations.map((item) => (
-                  <Link key={item.path} to={item.path}>
-                    {item.name}
-                    <small>{item.submitted ? '查看展示 ↗' : '介绍页 · 待投稿'}</small>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          </>
+          <OrganizationShowcaseHome />
         )}
       </main>
       <footer className="review-footer">

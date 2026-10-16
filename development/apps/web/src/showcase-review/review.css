@@ -86,8 +86,7 @@ a:focus-visible {
   gap: 14px;
   font-size: 0.8rem;
 }
-.review-header button,
-.review-link-list button {
+.review-header button {
   padding: 9px 13px;
   border: 1px solid #b3cfc8;
   border-radius: 12px;
@@ -127,38 +126,6 @@ a:focus-visible {
 .review-empty .organization-scene {
   width: 180px;
   height: 180px;
-}
-.review-link-list {
-  margin-top: 70px;
-  padding: 30px;
-  border: 1px solid var(--sc-line);
-  border-radius: 24px;
-  background: var(--sc-paper);
-}
-.review-link-list header {
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-}
-.review-link-list p {
-  color: var(--color-muted);
-}
-.review-link-list > div {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.review-link-list a {
-  border-bottom: 1px dashed var(--sc-line);
-  padding: 12px 0;
-  text-decoration: none;
-}
-.review-link-list small {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--color-muted);
 }
 .review-footer {
   border-top: 1px solid #b8cfca;
@@ -210,16 +177,6 @@ a:focus-visible {
   .review-main {
     padding: 22px 14px 38px;
     --sc-header-offset: 63px;
-  }
-  .review-link-list {
-    padding: 20px;
-  }
-  .review-link-list header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .review-link-list > div {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .review-empty {
     padding: 24px;

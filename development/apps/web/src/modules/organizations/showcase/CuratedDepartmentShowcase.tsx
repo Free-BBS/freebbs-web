@@ -486,7 +486,6 @@ export function CuratedDepartmentShowcase({
               <b aria-hidden="true">↗</b>
             </Link>
           ) : null}
-          {publicReview && !content.contacts.length ? <p>联系邮箱待部门补充。</p> : null}
           <Link className="sc-back-link" to="/organizations">
             ← 再去其他部门逛逛
           </Link>

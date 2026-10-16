@@ -190,7 +190,7 @@ describe('curated organization exhibitions', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByRole('link', { name: /前往公开提案池/ })).not.toBeInTheDocument();
-    expect(screen.getByText('联系邮箱待部门补充。')).toBeInTheDocument();
+    expect(screen.queryByText('联系邮箱待部门补充。')).not.toBeInTheDocument();
   });
 
   it('keeps the six new-media article destinations, matching cover images, and safe external navigation', () => {

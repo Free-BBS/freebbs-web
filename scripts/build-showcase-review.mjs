@@ -85,7 +85,7 @@ const destinations = [
   file: `${String(index + 1).padStart(2, '0')}-${name}.html`,
 }));
 function page(title, route) {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title} · FREE BBS 离线审核</title><link rel="stylesheet" href="./review.css"><script defer src="./review.js"></script></head><body class="theme-light" data-route="${route}"><div id="root"></div><noscript>请使用启用 JavaScript 的浏览器打开。无需登录，也不需要启动服务器。</noscript></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title} · FREE BBS 组织风采</title><link rel="stylesheet" href="./review.css"><script defer src="./review.js"></script></head><body class="theme-light" data-route="${route}"><div id="root"></div><noscript>请使用启用 JavaScript 的浏览器打开。无需登录，也不需要启动服务器。</noscript></body></html>`;
 }
 await writeFile(join(out, '开始浏览.html'), page('组织风采', '/organizations'));
 await writeFile(join(out, 'index.html'), page('组织风采', '/organizations'));
@@ -96,20 +96,17 @@ const directoryGroups = [...new Set(destinations.map((item) => item.group))]
     (group) =>
       `<section><h2>${group}</h2>${destinations
         .filter((item) => item.group === group)
-        .map(
-          (item) =>
-            `<a href="./${item.file}">${item.name}<span>${item.submitted ? '↗' : '待投稿'}</span></a>`,
-        )
+        .map((item) => `<a href="./${item.file}">${item.name}<span>↗</span></a>`)
         .join('')}</section>`,
   )
   .join('');
 await writeFile(
   join(out, '部门目录.html'),
-  `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>部门审核目录 · FREE BBS</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f8f5;color:#193d36;font:17px/1.7 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px}header{background:#dff5e9;border:1px solid #b9d7c7;border-radius:24px;padding:28px}h1{margin:8px 0}header a{color:inherit}article{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:28px 0}section{border:1px solid #c7d7cb;background:#fff;border-radius:20px;padding:22px}section:nth-child(3n){background:#fff5d9}h2{margin:0 0 12px}section a{display:flex;justify-content:space-between;gap:16px;color:inherit;text-decoration:none;padding:12px 0;border-bottom:1px dashed #c7d7cb}a:hover{text-decoration:underline}span{font-size:13px;color:#52695a}@media(max-width:600px){article{grid-template-columns:1fr}}@media(prefers-color-scheme:dark){body{background:#14251e;color:#e1efe6}header{background:#234d39}section{background:#22392c}section:nth-child(3n){background:#413d29}span{color:#b6cbbb}}</style><main><header>FREE BBS · 组织风采<h1>部门审核目录</h1><a href="./开始浏览.html">进入组织小街 ↗</a></header><article>${directoryGroups}</article></main></html>`,
+  `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>部门目录 · FREE BBS</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f8f5;color:#193d36;font:17px/1.7 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px}header{background:#dff5e9;border:1px solid #b9d7c7;border-radius:24px;padding:28px}h1{margin:8px 0}header a{color:inherit}article{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:28px 0}section{border:1px solid #c7d7cb;background:#fff;border-radius:20px;padding:22px}section:nth-child(3n){background:#fff5d9}h2{margin:0 0 12px}section a{display:flex;justify-content:space-between;gap:16px;color:inherit;text-decoration:none;padding:12px 0;border-bottom:1px dashed #c7d7cb}a:hover{text-decoration:underline}span{font-size:13px;color:#52695a}@media(max-width:600px){article{grid-template-columns:1fr}}@media(prefers-color-scheme:dark){body{background:#14251e;color:#e1efe6}header{background:#234d39}section{background:#22392c}section:nth-child(3n){background:#413d29}span{color:#b6cbbb}}</style><main><header>FREE BBS · 组织风采<h1>部门目录</h1><a href="./开始浏览.html">进入组织小街 ↗</a></header><article>${directoryGroups}</article></main></html>`,
 );
 await writeFile(
   join(out, '请先阅读.txt'),
-  '\uFEFFFREE BBS · 组织风采离线审核包\r\n\r\n1. 请先完整解压，再用 Edge、Chrome 或其他现代浏览器打开“开始浏览.html”。无需账号、无需安装依赖、无需启动服务器。\r\n2. 根目录每个部门的 HTML 文件可直接进入对应展区。网页与 review.js、review.css、organization-showcase 文件夹要放在一起。转发请发送完整 ZIP，不要仅发送一个 HTML 入口。\r\n3. 本地图片、部门互动和硬件部现有约75.5 MB视频已随包提供。尚未下载的约800 MB视频不在包内。已有推送、外链视频需要联网，邮箱链接需要邮件软件。\r\n4. 请核对名称、介绍、职责、联系方式、照片说明与展示布局；反馈请回传给审核组织者。网页不会收集或提交审核意见。\r\n5. 组织组、实践组、学习培养部暂为介绍页，等待投稿。\r\n6. 此包未发布到互联网。在微信/QQ内置文件预览中可能无法运行，请下载解压后用浏览器打开，建议电脑审核。\r\n',
+  '\uFEFFFREE BBS · 组织风采离线浏览说明\r\n\r\n1. 请先完整解压，再用 Edge、Chrome 或其他现代浏览器打开“开始浏览.html”。无需登录、无需安装依赖、无需启动服务器。\r\n2. 根目录每个部门的 HTML 文件可直接进入对应展区。请保留文件夹结构，分享时发送完整压缩包，不要仅发送一个 HTML 文件。\r\n3. 图片和已提供的视频可在本地浏览，文章及其他外链需要联网。\r\n4. 微信、QQ 内置文件预览可能无法运行网页，请下载并完整解压后使用浏览器打开，建议使用电脑浏览。\r\n',
 );
 console.log(
   JSON.stringify({
