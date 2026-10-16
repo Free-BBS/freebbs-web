@@ -53,12 +53,18 @@ function ReviewPage() {
         跳到内容
       </a>
       <header className="review-header main-site-header">
-        <Link className="review-brand" to="/organizations">
-          <OrganizationMark variant="science_association" />
-          <span>
-            FREE BBS<small>组织风采</small>
-          </span>
-        </Link>
+        {fullPage ? (
+          <Link className="review-showcase-back" to={`/organizations/${group!.key}`}>
+            <span aria-hidden="true">←</span> 返回上一级
+          </Link>
+        ) : (
+          <Link className="review-brand" to="/organizations">
+            <OrganizationMark variant="science_association" />
+            <span>
+              FREE BBS<small>组织风采</small>
+            </span>
+          </Link>
+        )}
         <nav aria-label="风采展示操作">
           <Link to="/organizations">全部展区</Link>
           <button

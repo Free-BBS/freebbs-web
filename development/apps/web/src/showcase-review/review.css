@@ -80,6 +80,24 @@ a:focus-visible {
   color: var(--color-muted);
   font-weight: 500;
 }
+.review-showcase-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.review-showcase-back:hover {
+  background: var(--surface-muted);
+}
 .review-header nav {
   display: flex;
   align-items: center;

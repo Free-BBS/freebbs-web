@@ -27,6 +27,7 @@ import { mainSiteTypography } from './main-site-typography.js';
 export { mainSiteTypography } from './main-site-typography.js';
 
 interface MainSiteHeaderProps {
+  backTo?: string;
   user: UserContext;
   authMode: AuthMode;
   themeMode: ThemeMode;
@@ -202,6 +203,7 @@ function Currency({
 }
 
 export function MainSiteHeader({
+  backTo,
   user,
   authMode,
   themeMode,
@@ -296,8 +298,18 @@ export function MainSiteHeader({
 
   return (
     <>
-      <header className="main-site-header" style={mainSiteTypography()}>
-        <h1 className="main-site-header-title">{developmentTitle(location.pathname)}</h1>
+      <header
+        className={`main-site-header${backTo ? ' main-site-header--with-back' : ''}`}
+        style={mainSiteTypography()}
+      >
+        {backTo ? (
+          <Link className="main-site-back" to={backTo}>
+            <span aria-hidden="true">←</span>
+            返回上一级
+          </Link>
+        ) : (
+          <h1 className="main-site-header-title">{developmentTitle(location.pathname)}</h1>
+        )}
         <div className="main-site-account">
           <a
             className="main-site-search main-site-tool-button"

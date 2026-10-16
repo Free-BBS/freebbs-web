@@ -439,9 +439,14 @@ describe('AppShell', () => {
     expect(document.querySelector('.demo-preview-toolbar')).not.toBeInTheDocument();
   });
 
-  it.each(['/organizations/youth_league/sail', '/organizations/media_center/creative'])(
+  it.each([
+    ['/organizations/youth_league/sail', '/organizations/youth_league'],
+    ['/organizations/youth_league/humanities', '/organizations/youth_league'],
+    ['/organizations/media_center/creative', '/organizations/media_center'],
+    ['/organizations/media_center/audiovisual', '/organizations/media_center'],
+  ])(
     'keeps platform navigation and removes its footer for the full-page department at %s',
-    (route) => {
+    (route, parent) => {
       mockUseAuth.mockReturnValue(authenticatedAuth());
       renderShell(route, { children: <iframe title="部门网页" /> });
       expect(document.querySelector('.development-shell-root')).toHaveClass(
@@ -449,6 +454,10 @@ describe('AppShell', () => {
       );
       expect(screen.getByRole('complementary', { name: '发展平台侧栏' })).toBeInTheDocument();
       expect(document.querySelector('.main-site-header')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '返回上一级' })).toHaveAttribute('href', parent);
+      expect(screen.getByRole('link', { name: '返回上一级' }).closest('header')).toHaveClass(
+        'main-site-header--with-back',
+      );
       expect(screen.getByTitle('部门网页')).toBeInTheDocument();
       expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
     },
@@ -458,13 +467,14 @@ describe('AppShell', () => {
     '/organizations',
     '/organizations/youth_league/research',
     '/organizations/media_center/creative/edit',
-  ])('retains the normal shell outside the two exact full-page routes: %s', (route) => {
+  ])('retains the normal shell outside the exact full-page routes: %s', (route) => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell(route);
     expect(document.querySelector('.development-shell-root')).not.toHaveClass(
       'development-shell-root--full-page',
     );
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回上一级' })).not.toBeInTheDocument();
   });
 
   it('shows a safe main-site login action for an unauthenticated user', () => {

@@ -4,7 +4,10 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
-import { isFullPageShowcasePath } from '../modules/organizations/showcase/presentation.js';
+import {
+  fullPageShowcaseParent,
+  isFullPageShowcasePath,
+} from '../modules/organizations/showcase/presentation.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import {
   canViewSystemSettings,
@@ -252,6 +255,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
 
         <div className="app-shell-main">
           <MainSiteHeader
+            backTo={fullPageShowcaseParent(location.pathname)}
             client={auth.client}
             user={auth.user}
             authMode={auth.authMode}

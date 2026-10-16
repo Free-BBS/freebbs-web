@@ -306,7 +306,9 @@ describe('organization exhibition', () => {
 
   it.each([
     ['youth_league', 'sail'],
+    ['youth_league', 'humanities'],
     ['media_center', 'creative'],
+    ['media_center', 'audiovisual'],
   ])('shows only the submitted document for %s/%s', (organization, department) => {
     const content = findShowcase(`${organization}.${department}`)!;
     const { request } = show(organization, department);

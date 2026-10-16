@@ -21,6 +21,37 @@
   overflow-wrap: anywhere;
 }
 
+.main-site-back {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-right: auto;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.main-site-back:hover {
+  border-color: var(--color-focus);
+  background: var(--surface-muted);
+}
+
+.main-site-back:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
 .main-site-account,
 .main-site-user {
   display: flex;
@@ -431,6 +462,26 @@ body.theme-dark .main-site-tool-button img {
     grid-template-areas: 'user bell theme' 'economy economy economy';
     grid-template-columns: minmax(0, 1fr) 44px 44px;
     gap: 10px;
+  }
+
+  .main-site-header--with-back {
+    display: grid;
+    grid-template-areas: 'back user bell theme' 'economy economy economy economy';
+    grid-template-columns: minmax(0, 1fr) 44px 44px 44px;
+    gap: 10px;
+  }
+
+  .main-site-header--with-back .main-site-account {
+    display: contents;
+  }
+
+  .main-site-back {
+    grid-area: back;
+    justify-self: start;
+    gap: 5px;
+    margin-right: 0;
+    padding: 10px;
+    font-size: 14px;
   }
 
   .main-site-tools {
