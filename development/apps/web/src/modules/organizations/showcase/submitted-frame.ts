@@ -2,7 +2,7 @@ const sandbox =
   'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-presentation';
 
 const bundledEntry =
-  /^(?:\.\/|\/development\/)organization-showcase\/sites\/(?:research|creative|audiovisual|sail|humanities|hardware|software|liaison)\/index\.html$/;
+  /^(?:\.\/|\/development\/)organization-showcase\/sites\/(?:organization|research|creative|audiovisual|sail|humanities|hardware|software|liaison)\/index\.html$/;
 
 export function submittedFrameSandbox(offline: boolean, protocol: string, entry: string): string {
   // An opaque file frame cannot load its sibling styles, scripts or images.

@@ -1,4 +1,5 @@
 const fullPageDepartments = new Set([
+  'youth_league.organization',
   'youth_league.sail',
   'youth_league.humanities',
   'media_center.creative',

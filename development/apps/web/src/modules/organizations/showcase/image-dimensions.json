@@ -258,5 +258,33 @@
   "/development/organization-showcase/content/practice/11.webp": {
     "width": 1266,
     "height": 844
+  },
+  "/development/organization-showcase/images/training-01.webp": {
+    "width": 1706,
+    "height": 1279
+  },
+  "/development/organization-showcase/images/training-02.webp": {
+    "width": 2400,
+    "height": 1800
+  },
+  "/development/organization-showcase/images/training-03.webp": {
+    "width": 714,
+    "height": 644
+  },
+  "/development/organization-showcase/images/training-04.webp": {
+    "width": 1702,
+    "height": 1276
+  },
+  "/development/organization-showcase/images/training-05.webp": {
+    "width": 2400,
+    "height": 1800
+  },
+  "/development/organization-showcase/images/training-06.webp": {
+    "width": 1800,
+    "height": 2400
+  },
+  "/development/organization-showcase/sites/organization/assets/cover.svg": {
+    "width": 1200,
+    "height": 600
   }
 }

@@ -136,6 +136,8 @@ a:focus-visible {
   flex: none;
 }
 .review-layout--full-page > .review-main--full-page {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -143,6 +145,11 @@ a:focus-visible {
   margin: 0;
   padding: 0;
   overflow: hidden;
+}
+.review-main--full-page > .sc-submitted-shell {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 .review-main--full-page .sc-submitted-frame {
   height: 100%;

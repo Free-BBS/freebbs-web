@@ -69,7 +69,7 @@ function localAsset(src: string) {
 }
 
 describe('curated organization exhibitions', () => {
-  it('limits local file compatibility to the eight bundled exhibitions and keeps website frames isolated', () => {
+  it('limits local file compatibility to bundled exhibitions and keeps website frames isolated', () => {
     for (const content of submitted) {
       const websiteEntry = content.site!.entry;
       const fileEntry = websiteEntry.replace('/development/', './');
@@ -97,10 +97,10 @@ describe('curated organization exhibitions', () => {
       );
   });
 
-  it('ships eighteen exhibitions and every registered image and site entry inside repository public assets', () => {
-    expect(SHOWCASES).toHaveLength(18);
-    expect(native).toHaveLength(10);
-    expect(submitted).toHaveLength(8);
+  it('ships all twenty exhibitions and every registered image and site entry inside repository public assets', () => {
+    expect(SHOWCASES).toHaveLength(20);
+    expect(native).toHaveLength(11);
+    expect(submitted).toHaveLength(9);
     for (const content of SHOWCASES) {
       for (const image of contentImages(content)) {
         expect(image.alt.trim()).not.toBe('');
@@ -109,7 +109,7 @@ describe('curated organization exhibitions', () => {
       if (content.site)
         expect(existsSync(localAsset(content.site.entry)), content.site.entry).toBe(true);
     }
-    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(65);
+    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(71);
   });
 
   it('retains the practice documents and the contact supplied by the organizer', () => {

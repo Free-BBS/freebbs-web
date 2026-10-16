@@ -9,6 +9,8 @@ import volunteer from './content/volunteer.js';
 import { arts } from './content/arts.js';
 import { project } from './content/project.js';
 import practice from './content/practice.js';
+import organization from './content/organization.js';
+import training from './content/training.js';
 
 const asset = (slug: string, file: string) =>
   `/development/organization-showcase/sites/${slug}/${file}`;
@@ -392,6 +394,8 @@ const liaison = submitted({
 });
 
 export const SHOWCASES: readonly ShowcaseContent[] = [
+  organization,
+  training,
   arts,
   liaison,
   project,

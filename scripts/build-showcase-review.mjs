@@ -58,7 +58,7 @@ for (const file of await walk(out)) {
 }
 const destinations = [
   ['TMS', '电子系 TMS 分会', 'tms'],
-  ['团委', '组织组', 'youth_league/organization', false],
+  ['团委', '组织组', 'youth_league/organization'],
   ['团委', '办公室·新生组', 'youth_league/freshman'],
   ['团委', '志愿组', 'youth_league/volunteer'],
   ['团委', '实践组', 'youth_league/practice'],
@@ -71,7 +71,7 @@ const destinations = [
   ['学生会', '学生权益发展中心', 'student_union/rights_development_center'],
   ['科协', '软件部', 'science_association/software'],
   ['科协', '硬件部', 'science_association/hardware'],
-  ['科协', '学习培养部', 'science_association/training', false],
+  ['科协', '学习培养部', 'science_association/training'],
   ['科协', '项目部', 'science_association/project'],
   ['科协', '智能策划部', 'science_association/planning'],
   ['媒体中心', '创意设计部', 'media_center/creative'],

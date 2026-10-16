@@ -305,24 +305,58 @@ describe('organization exhibition', () => {
   });
 
   it.each([
+    ['youth_league', 'organization'],
     ['youth_league', 'sail'],
     ['youth_league', 'humanities'],
     ['media_center', 'creative'],
     ['media_center', 'audiovisual'],
-  ])('shows only the submitted document for %s/%s', (organization, department) => {
+  ])(
+    'retains working hierarchy links above the full-page document for %s/%s',
+    (organization, department) => {
+      const content = findShowcase(`${organization}.${department}`)!;
+      const { request } = show(organization, department);
+      const frame = screen.getByTitle(content.site!.title);
+      expect(frame).toHaveAttribute('src', content.site!.entry);
+      expect(frame).toHaveAttribute('sandbox', expect.stringContaining('allow-scripts'));
+      expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+      expect(frame.parentElement).toHaveClass('sc-submitted-shell--full-page');
+      const breadcrumb = screen.getByRole('navigation', { name: '展厅位置' });
+      expect(breadcrumb).toHaveClass('organization-breadcrumb--compact');
+      expect(within(breadcrumb).getByRole('link', { name: '风采展示' })).toHaveAttribute(
+        'href',
+        '/organizations',
+      );
+      expect(
+        within(breadcrumb).getByRole('link', {
+          name: ORGANIZATION_GALLERY.find(({ key }) => key === organization)!.name,
+        }),
+      ).toHaveAttribute('href', `/organizations/${organization}`);
+      expect(breadcrumb.querySelector('[aria-current="page"]')).toHaveTextContent(
+        content.shortName ?? content.name,
+      );
+      expect(
+        document.querySelector('.sc-hero, .sc-window-bar, #showcase-contact'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['student_union', 'liaison_center'],
+    ['science_association', 'software'],
+    ['science_association', 'hardware'],
+    ['youth_league', 'research'],
+  ])('keeps the introduction and window layout for %s/%s', async (organization, department) => {
     const content = findShowcase(`${organization}.${department}`)!;
-    const { request } = show(organization, department);
-    const frame = screen.getByTitle(content.site!.title);
-    expect(frame).toHaveAttribute('src', content.site!.entry);
-    expect(frame).toHaveAttribute('sandbox', expect.stringContaining('allow-scripts'));
-    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
-    expect(frame.parentElement).toHaveClass('sc-submitted-shell--full-page');
-    expect(screen.queryByRole('navigation', { name: '展厅位置' })).not.toBeInTheDocument();
-    expect(
-      document.querySelector('.sc-hero, .sc-window-bar, #showcase-contact'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
-    expect(request).not.toHaveBeenCalled();
+    show(organization, department);
+    const frame = await screen.findByTitle(content.site!.title);
+    expect(frame.parentElement).not.toHaveClass('sc-submitted-shell--full-page');
+    expect(document.querySelector('.sc-hero')).toHaveTextContent(content.shortName ?? content.name);
+    expect(document.querySelector('.sc-window-bar')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '展厅位置' })).not.toHaveClass(
+      'organization-breadcrumb--compact',
+    );
   });
 
   it.each([

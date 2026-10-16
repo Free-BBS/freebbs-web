@@ -14,7 +14,7 @@ function walk(dir) {
 }
 test('offline package provides twenty portable department entries in the requested order', () => {
   assert.equal(manifest.length, 20);
-  assert.equal(manifest.filter((item) => item.submitted).length, 18);
+  assert.equal(manifest.filter((item) => item.submitted).length, 20);
   assert.deepEqual(
     [...new Set(manifest.map((item) => item.group))],
     ['TMS', '团委', '学生会', '科协', '媒体中心'],
@@ -74,6 +74,7 @@ test('existing hardware video is included intact, with all submitted pages and a
   const sites = join(root, 'organization-showcase/sites');
   assert.equal(statSync(join(sites, 'hardware/assets/video/hardware-design.mp4')).size, 75480143);
   for (const slug of [
+    'organization',
     'research',
     'creative',
     'audiovisual',

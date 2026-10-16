@@ -440,6 +440,7 @@ describe('AppShell', () => {
   });
 
   it.each([
+    ['/organizations/youth_league/organization', '/organizations/youth_league'],
     ['/organizations/youth_league/sail', '/organizations/youth_league'],
     ['/organizations/youth_league/humanities', '/organizations/youth_league'],
     ['/organizations/media_center/creative', '/organizations/media_center'],

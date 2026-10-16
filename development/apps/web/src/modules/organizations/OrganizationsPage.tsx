@@ -5,6 +5,7 @@ import type { ApiClient } from '../../core/api/client.js';
 import { DepartmentHomepage } from './DepartmentHomepage.js';
 import { findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
+import { OrganizationBreadcrumb } from './OrganizationBreadcrumb.js';
 import {
   CuratedDepartmentShowcase,
   SubmittedDepartmentShowcase,
@@ -98,21 +99,19 @@ export function OrganizationsPage({
   if (curated?.site && usesFullPageShowcase(curated.departmentId))
     return (
       <section ref={page} className="organization-page organization-page--full-page">
+        <OrganizationBreadcrumb
+          organization={organization}
+          departmentLabel={curated.shortName ?? curated.name}
+          compact
+        />
         <SubmittedDepartmentShowcase key={curated.slug} content={curated} fullPage />
       </section>
     );
   const breadcrumb = (
-    <nav className="organization-breadcrumb" aria-label="展厅位置">
-      <Link to="/organizations">风采展示</Link>
-      <span aria-hidden="true">/</span>
-      <Link to={`/organizations/${organization.key}`}>{organization.name}</Link>
-      {department ? (
-        <>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">{curated?.shortName ?? department.name}</span>
-        </>
-      ) : null}
-    </nav>
+    <OrganizationBreadcrumb
+      organization={organization}
+      departmentLabel={department ? (curated?.shortName ?? department.name) : undefined}
+    />
   );
   if (canonicalDepartment || (department && curated))
     return (

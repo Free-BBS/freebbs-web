@@ -18,6 +18,7 @@ import { OrganizationShowcaseHome } from '../modules/organizations/showcase/Orga
 import { findShowcase } from '../modules/organizations/showcase/registry.js';
 import { usesFullPageShowcase } from '../modules/organizations/showcase/presentation.js';
 import { OrganizationMark } from '../modules/organizations/OrganizationMark.js';
+import { OrganizationBreadcrumb } from '../modules/organizations/OrganizationBreadcrumb.js';
 import { DepartmentShowcaseCard } from '../modules/organizations/showcase/DepartmentShowcaseCard.js';
 import '../styles/tokens.css';
 import '../styles/theme.css';
@@ -80,18 +81,12 @@ function ReviewPage() {
         id="main-content"
         className={`review-main organization-page${fullPage ? ' review-main--full-page' : ''}`}
       >
-        {group && !fullPage ? (
-          <nav className="organization-breadcrumb" aria-label="展厅位置">
-            <Link to="/organizations">风采展示</Link>
-            <span>/</span>
-            <Link to={`/organizations/${group.key}`}>{group.name}</Link>
-            {department ? (
-              <>
-                <span>/</span>
-                <span aria-current="page">{title}</span>
-              </>
-            ) : null}
-          </nav>
+        {group && !invalid ? (
+          <OrganizationBreadcrumb
+            organization={group}
+            departmentLabel={department ? title : undefined}
+            compact={fullPage}
+          />
         ) : null}
         {invalid ? (
           <section className="review-empty">
