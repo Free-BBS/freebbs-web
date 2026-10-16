@@ -14,7 +14,7 @@ window.LC_CONTENT = {
   hero: {
     eyebrow: '连接校园内外 · 让协作自然发生',
     titleFirst: '学生联络中心',
-    titleSecond: '让联结，成为更多可能。',
+    titleSecond: '让联结，\n成为更多可能。',
     description: '对内协调组织、服务同学；对外联络企业、拓展合作。我们在一次次沟通与相聚中，把想法变成活动，把资源带给大家。',
     cover: 'assets/破冰合照1.jpg',
     coverAlt: '学生联络中心活动合照',

@@ -931,6 +931,12 @@ html[data-showcase-site='liaison'] {
     }
   }
 }
+@media (max-width: 700px) {
+  html[data-showcase-site='liaison'] .lc-hero h1 em {
+    white-space: pre-line;
+    text-wrap: wrap;
+  }
+}
 /* Keep the submitted photo-paper treatment without hiding faces under other photos. */
 html[data-showcase-site='creative'] {
   & .about-story {
