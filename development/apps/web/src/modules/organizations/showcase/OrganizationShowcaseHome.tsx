@@ -104,7 +104,6 @@ export function OrganizationShowcaseHome() {
             <OrganizationMark variant="science_association" />
           </div>
           <span className="sc-campus-doodle sc-campus-doodle--star">✦</span>
-          <span className="sc-campus-doodle sc-campus-doodle--hello">HELLO!</span>
           <span className="sc-campus-doodle sc-campus-doodle--circle" />
         </div>
       </header>

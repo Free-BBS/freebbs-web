@@ -210,13 +210,6 @@ body.theme-light .organization-page {
   font-size: 2.8125rem;
   transform: rotate(14deg);
 }
-.sc-campus-doodle--hello {
-  top: 10px;
-  left: 0;
-  color: var(--color-text);
-  font: 850 1.0625rem var(--font-latin);
-  transform: rotate(-11deg);
-}
 .sc-campus-doodle--circle {
   right: -25px;
   top: 55%;
@@ -1702,9 +1695,6 @@ body.theme-light .curated-showcase {
   }
   .sc-character-sticker--science {
     right: -2%;
-  }
-  .sc-campus-doodle--hello {
-    top: -1px;
   }
   .sc-campus-doodle--star {
     top: 2px;
