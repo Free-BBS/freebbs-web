@@ -99,7 +99,7 @@ a:focus-visible {
   max-width: 1232px;
   padding: 38px 26px 60px;
   margin: auto;
-  --sc-header-offset: 100px;
+  --sc-header-offset: 85px;
 }
 .review-main .sc-campus-hero {
   margin-top: 0;
@@ -209,7 +209,7 @@ a:focus-visible {
   }
   .review-main {
     padding: 22px 14px 38px;
-    --sc-header-offset: 82px;
+    --sc-header-offset: 63px;
   }
   .review-link-list {
     padding: 20px;

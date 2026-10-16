@@ -25,9 +25,9 @@ export const arts: ShowcaseContent = {
     '在日常策划、排练协作和艺术体验中凝聚伙伴，让每位成员在快乐中成长，收获挚友与归属感。',
   ],
   contacts: [
-    { name: '文艺中心联系邮箱 1', email: 'hzs24@mails.tsinghua.edu.cn' },
-    { name: '文艺中心联系邮箱 2', email: 'frq24@mails.tsinghua.edu.cn' },
-    { name: '文艺中心联系邮箱 3', email: 'zym24@mails.tsinghua.edu.cn' },
+    { name: '文艺中心主任 贺梓朔', email: 'hzs24@mails.tsinghua.edu.cn' },
+    { name: '文艺中心主任 方睿琪', email: 'frq24@mails.tsinghua.edu.cn' },
+    { name: '文艺中心主任 张一鸣', email: 'zym24@mails.tsinghua.edu.cn' },
   ],
   accent: '#b55074',
   darkAccent: '#f5abc6',

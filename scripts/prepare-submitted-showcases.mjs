@@ -99,6 +99,113 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function prepareSubmittedContacts(site, name, source) {
+  // Keep the submitted addresses intact. Labels are tied to a site's actual address,
+  // so a role mentioned elsewhere in a department's article is never rewritten.
+  const labels = {
+    humanities: {
+      'yj-xiao23@mails.tsinghua.edu.cn': '人文组副书记 肖岩钧',
+    },
+    software: {
+      '543329382@qq.com': '软件部副主席 赵禹晋',
+      'lch24@mails.tsinghua.edu.cn': '软件部部长 刘承昊',
+      'zga24@mails.tsinghua.edu.cn': '软件部部长 张国安',
+      'like23@mails.tsinghua.edu.cn': '软件部部长 李科',
+    },
+    hardware: {
+      'lrt24@mails.tsinghua.edu.cn': '硬件部部长 刘若桐',
+      'hu-yh24@mails.tsinghua.edu.cn': '硬件部部长 胡云淏',
+      'lbh24@mails.tsinghua.edu.cn': '硬件部部长 李泊衡',
+      'yk-wang24@mails.tsinghua.edu.cn': '硬件部副部长 王易科',
+    },
+  };
+  if (/\.html?$/i.test(name)) {
+    for (const [email, label] of Object.entries(labels[site] ?? {})) {
+      if (site === 'software') {
+        const contact = new RegExp(
+          `(<a\\b[^>]*\\bhref=["']mailto:${escapeRegExp(email)}["'][^>]*>)([\\s\\S]*?)(</a\\s*>)`,
+          'gi',
+        );
+        source = source.replace(
+          contact,
+          (_, before, body, after) =>
+            `${before}${body.replace(/(<span\b[^>]*>)[\s\S]*?(<\/span\s*>)/i, `$1${label}$2`)}${after}`,
+        );
+      } else if (site === 'hardware') {
+        const contact = new RegExp(
+          `<button\\b(?=[^>]*\\bdata-email=["']${escapeRegExp(email)}["'])[^>]*>[\\s\\S]*?</button\\s*>`,
+          'gi',
+        );
+        source = source.replace(contact, (card) =>
+          card
+            .replace(/\baria-label=["'][^"']*["']/i, `aria-label="复制${label}的邮箱：${email}"`)
+            .replace(
+              /(<span\b[^>]*\bclass=["']contact-name["'][^>]*>)[\s\S]*?(<\/span\s*>)/i,
+              `$1${label}$2`,
+            ),
+        );
+      } else if (site === 'humanities') {
+        source = source.replace(
+          /<ul\b[^>]*\bclass=["']contact-list["'][^>]*>[\s\S]*?<\/ul\s*>/gi,
+          (list) =>
+            list.includes(`mailto:${email}`)
+              ? list.replace(
+                  /(<li><span class="k">联系人<\/span><span class="v">)[\s\S]*?(<\/span><\/li>)/,
+                  `$1${label}$2`,
+                )
+              : list,
+        );
+      }
+    }
+    if (site === 'research') {
+      source = source.replace(
+        /(<a\b[^>]*\bhref=["']mailto:ee_research2026@163\.com["'][^>]*>)[\s\S]*?(<\/a\s*>)/gi,
+        '$1部门公共邮箱：ee_research2026@163.com ↗$2',
+      );
+    } else if (site === 'sail') {
+      source = source.replace(/<footer\b[^>]*>[\s\S]*?<\/footer\s*>/gi, (footer) =>
+        footer.includes('mailto:ee_yangfan@126.com')
+          ? footer.replace(/(<span class="footer-label">)[\s\S]*?(<\/span>)/, '$1部门公共邮箱$2')
+          : footer,
+      );
+    } else if (site === 'creative') {
+      source = source.replace(
+        /(<a\b[^>]*\bhref=["']mailto:thuee_media@163\.com["'][^>]*>)/gi,
+        '<p class="commission-note">部门公共邮箱</p>$1',
+      );
+    } else if (site === 'audiovisual') {
+      source = source.replace(
+        /<div class="contact-fields">[\s\S]*?(?=<div class="contact-actions">)/g,
+        (fields) =>
+          fields.includes('mailto:THUEEMovieAndMusic@163.com')
+            ? fields.replace(
+                /<label\b[^>]*>\s*部门邮箱\s*<\/label\s*>/,
+                '<label>部门公共邮箱</label>',
+              )
+            : fields,
+      );
+    } else if (site === 'liaison' && name === 'index.html') {
+      source = source.replace(
+        '<small>负责人邮箱 / EMAIL</small>',
+        '<small id="lc-contact-label">负责人邮箱 / EMAIL</small>',
+      );
+    }
+  }
+  if (site === 'liaison' && name === 'content.js') {
+    source = source.replace(
+      /(email\s*:\s*['"]chenyu-w24@mails\.tsinghua\.edu\.cn['"]\s*,)/,
+      "$1\n    label:'联络中心主任 王晨羽',",
+    );
+  }
+  if (site === 'liaison' && name === 'page.js') {
+    source = source.replace(
+      'const email = data.contact?.email?.trim();',
+      "const email = data.contact?.email?.trim();\n  text('lc-contact-label',data.contact?.label || '负责人邮箱 / EMAIL');",
+    );
+  }
+  return source;
+}
+
 function prepareResearchPage(source) {
   return source.replace(
     /<details\b([^>]*)>([\s\S]*?)<\/details\s*>/gi,
@@ -474,6 +581,7 @@ for (const [slug, folder, entry] of roots.filter(
       let text = buffer.toString('utf8');
       if (replacementPattern)
         text = text.replace(replacementPattern, (match) => replacements.get(match));
+      text = prepareSubmittedContacts(slug, name, text);
       if (slug === 'liaison') {
         text = text
           .replace(/[ \t]+$/gm, '')

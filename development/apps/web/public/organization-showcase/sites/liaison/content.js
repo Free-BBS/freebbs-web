@@ -131,5 +131,6 @@ window.LC_CONTENT = {
   contact: {
     // 必填：请于提交前替换成真实负责同学邮箱或公共邮箱。
     email:'chenyu-w24@mails.tsinghua.edu.cn',
+    label:'联络中心主任 王晨羽',
   },
 };

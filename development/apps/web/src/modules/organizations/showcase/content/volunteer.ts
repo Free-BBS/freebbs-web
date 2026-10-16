@@ -17,7 +17,7 @@ const content: ShowcaseContent = {
     '策划志愿公益论坛，与兄弟高校及相关院系志愿组开展联络与志愿项目合作。',
     '做好与学校志愿中心的沟通联络，转发和转载学校其他部门组织的志愿服务项目。',
   ],
-  contacts: [{ name: '公共邮箱', email: 'eezijing@163.com' }],
+  contacts: [{ name: '部门公共邮箱', email: 'eezijing@163.com' }],
   accent: '#ed9d76',
   darkAccent: '#ffc7ac',
   layout: 'field',

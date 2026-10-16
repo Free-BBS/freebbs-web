@@ -24,8 +24,8 @@ const content: ShowcaseContent = {
     '宣传工作：在无限之声、电子体育 THU 等平台宣传体育活动，参与设计 FREE BBS 发展端体育相关板块。',
   ],
   contacts: [
-    { name: '负责人', email: 'zhu-zj23@mails.tsinghua.edu.cn' },
-    { name: '部长', email: 'wwy24@mails.tsinghua.edu.cn' },
+    { name: '体育中心负责人 祝子衿', email: 'zhu-zj23@mails.tsinghua.edu.cn' },
+    { name: '体育中心主任（客服） 王惟一', email: 'wwy24@mails.tsinghua.edu.cn' },
   ],
   accent: '#43b58a',
   darkAccent: '#9be6c5',

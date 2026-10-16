@@ -188,6 +188,7 @@
   text('lc-contact-description',data.closing.description);
   (data.closing.benefits || []).forEach(item => $('lc-benefits').append(node('li','',item)));
   const email = data.contact?.email?.trim();
+  text('lc-contact-label',data.contact?.label || '负责人邮箱 / EMAIL');
   text('lc-email-text', email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '邮箱待补充 · 请在 content.js 中填写');
   text('lc-publish-note',data.publishNote);
 

@@ -19,8 +19,8 @@ const content: ShowcaseContent = {
     '跨部门协同支持：在科协其他部门需要时提供人力、创意与执行支持。',
   ],
   contacts: [
-    { name: '黄雅斐', email: 'huangyf24@mails.tsinghua.edu.cn' },
-    { name: '龙灿', email: 'longc24@mails.tsinghua.edu.cn' },
+    { name: '智能策划部部长 黄雅斐', email: 'huangyf24@mails.tsinghua.edu.cn' },
+    { name: '智能策划部部长 龙灿', email: 'longc24@mails.tsinghua.edu.cn' },
   ],
   accent: '#f59b36',
   darkAccent: '#ffd197',

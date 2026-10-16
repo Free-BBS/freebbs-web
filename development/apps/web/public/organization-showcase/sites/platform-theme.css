@@ -1,4 +1,37 @@
-/* Submitted pages keep their typography and artwork; only interface surfaces change. */
+/* Submitted pages keep their typography and artwork; interface surfaces and photo captions follow the platform. */
+html[data-showcase-site] {
+  --showcase-caption-size: 16px;
+}
+@media (max-width: 700px) {
+  html[data-showcase-site] {
+    --showcase-caption-size: 15px;
+  }
+}
+html[data-showcase-site='software']
+  :is(
+    .hero-caption,
+    .image-caption,
+    .training-media figcaption,
+    .training-media figcaption .text-button,
+    .daily-grid figcaption,
+    .group-photo figcaption > span:last-child,
+    #gallery-caption
+  ),
+html[data-showcase-site='hardware'] :is(.project-image.photo-button > span, #lightbox > p),
+html[data-showcase-site='research'] :is(figcaption, #lightbox > p),
+html[data-showcase-site='creative']
+  :is(.work figcaption, .collection-work figcaption, .image-viewer figcaption),
+html[data-showcase-site='humanities']
+  :is(.node__pic figcaption, .photo figcaption, .lightbox figcaption),
+html[data-showcase-site='liaison']
+  :is(.lc-hero-photo-overlay, .lc-work-modal-image > span, .lc-lightbox-stage figcaption),
+html[data-showcase-site='audiovisual']
+  .mm-app
+  :is(.media-caption, .phase-visual figcaption, .story-image figcaption) {
+  font-size: var(--showcase-caption-size);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
 :root[data-platform-theme='dark'] {
   color-scheme: dark;
 }
@@ -182,27 +215,54 @@ html[data-showcase-site='research'] {
     letter-spacing: normal;
   }
   & .practice-photos .gallery {
-    display: block;
-    column-count: 3;
-    column-gap: 24px;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 28px 24px;
+    align-items: start;
   }
   & .practice-photos .gallery:has(> .photo:only-child) {
-    column-count: 1;
     max-width: 760px;
   }
   & .practice-photos .photo {
+    grid-column: span 2;
     min-width: 0;
-    break-inside: avoid;
-    margin: 0 0 28px;
+    margin: 0;
+  }
+  & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+  & .practice-photos .photo:last-child:nth-child(3n + 2) {
+    grid-column: span 3;
+  }
+  & .practice-photos .photo:only-child {
+    grid-column: 1 / -1;
   }
   & .practice-photos .zoom {
+    aspect-ratio: 3 / 2;
     border-radius: 12px;
     cursor: zoom-in;
   }
   & .practice-photos .photo img {
-    height: auto;
+    width: 100%;
+    height: 100%;
     aspect-ratio: auto;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: center 50%;
+  }
+  & .practice-photos img[src*='调研组成员在实践中参加淮安大学座谈'] {
+    object-position: center 25%;
+  }
+  & .practice-photos img[src*='调研组成员在实践中参观航天展览'] {
+    object-position: center 7%;
+  }
+  & .practice-photos img[src*='乐业金陵活动合影'],
+  & .practice-photos img[src*='硅基智能参访合影'],
+  & .practice-photos img[src*='集成电路科普夏令营合影'] {
+    object-position: center 70%;
+  }
+  & .practice-photos img[src*='调研组成员参与科博科普工作坊志愿服务'] {
+    object-position: center top;
+  }
+  & .practice-photos img[src*='支队破冰会合影'] {
+    object-position: center bottom;
   }
   & .practice-photos .zoom:hover img {
     transform: none;
@@ -210,21 +270,32 @@ html[data-showcase-site='research'] {
   & .practice-photos figcaption {
     margin-top: 10px;
     color: #4a6559;
-    font-size: 0.875rem;
+    font-size: var(--showcase-caption-size);
     line-height: 1.7;
     overflow-wrap: anywhere;
   }
   @media (max-width: 1000px) {
     & .practice-photos .gallery {
-      column-count: 2;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    & .practice-photos .photo,
+    & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+    & .practice-photos .photo:last-child:nth-child(3n + 2) {
+      grid-column: auto;
+    }
+    & .practice-photos .photo:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
     }
   }
   @media (max-width: 620px) {
     & .practice-photos .gallery {
-      column-count: 1;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 26px;
     }
-    & .practice-photos .photo {
-      margin-bottom: 26px;
+    & .practice-photos .photo,
+    & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+    & .practice-photos .photo:last-child:nth-child(3n + 2) {
+      grid-column: auto;
     }
   }
 }

@@ -1,6 +1,7 @@
 /* The campus street shares the development platform's five sheep characters. */
 .organization-page {
-  --sc-header-offset: 84px;
+  --sc-header-offset: 100px;
+  --sc-caption-size: 16px;
   --sc-ink: var(--color-text);
   --sc-paper: var(--surface-raised);
   --sc-soft: var(--surface-muted);
@@ -712,7 +713,7 @@ body.theme-light .curated-showcase {
 }
 .sc-hero-photo .sc-photo figcaption {
   padding-bottom: 0;
-  font-size: 0.6875rem;
+  font-size: var(--sc-caption-size);
 }
 .sc-jump-nav {
   position: sticky;
@@ -727,7 +728,10 @@ body.theme-light .curated-showcase {
   border: 1px solid var(--sc-line);
   border-radius: 16px;
   background: var(--sc-paper);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--sc-ink) 5%, transparent);
+  /* Seal the header gap and rounded corners without clipping mobile tab scrolling. */
+  box-shadow:
+    0 4px 12px color-mix(in srgb, var(--sc-ink) 5%, transparent),
+    0 -12px 0 16px var(--color-page);
 }
 .sc-jump-nav a {
   flex-shrink: 0;
@@ -1037,7 +1041,7 @@ body.theme-light .curated-showcase {
 .sc-photo figcaption {
   padding: 10px 3px;
   color: var(--color-muted);
-  font-size: 0.6875rem;
+  font-size: var(--sc-caption-size);
   line-height: 1.75;
 }
 .sc-photo-zoom {
@@ -1411,7 +1415,7 @@ body.theme-light .curated-showcase {
   margin-top: 12px;
   text-align: center;
   color: var(--color-muted);
-  font-size: 0.8125rem;
+  font-size: var(--sc-caption-size);
   line-height: 1.6;
 }
 .sc-lightbox-close {
@@ -1487,6 +1491,11 @@ body.theme-light .curated-showcase {
   box-shadow: var(--sc-shadow);
 }
 
+@media (max-width: 900px) {
+  .organization-page {
+    --sc-header-offset: 161px;
+  }
+}
 @media (min-width: 1600px) {
   .sc-campus-intro h2 span {
     font-size: 3rem;
@@ -1635,6 +1644,9 @@ body.theme-light .curated-showcase {
   }
 }
 @media (max-width: 520px) {
+  .organization-page {
+    --sc-caption-size: 15px;
+  }
   .sc-default-introduction {
     grid-template-columns: 1fr;
     gap: 14px;
@@ -1878,7 +1890,7 @@ body.theme-light .curated-showcase {
     grid-template-columns: 1fr;
   }
   .sc-photo figcaption {
-    font-size: 0.6875rem;
+    font-size: var(--sc-caption-size);
   }
   .sc-items--timeline .sc-item,
   .sc-items--editorial .sc-item {

@@ -50,9 +50,9 @@ const content: ShowcaseContent = {
         '大家在 Free 之夜中看到的辅导员视频和 DV 剧也出自我们之手。所以，如果有创作、表演或者恶搞辅导员的愿望，新生组也是你发挥的天地！',
       ],
       images: [
-        image(3, '辅导员视频', 'contain'),
-        image(4, '辅导员热舞', 'contain'),
-        image(5, 'Free 之夜合影'),
+        { ...image(3, '辅导员视频', 'contain'), aspectRatio: 16 / 9 },
+        { ...image(4, '辅导员热舞'), aspectRatio: 16 / 9, position: 'center center' },
+        { ...image(5, 'Free 之夜合影'), aspectRatio: 16 / 9, position: 'center bottom' },
       ],
     },
     {

@@ -28,7 +28,7 @@ const content: ShowcaseContent = {
     '协同党团班共建：推动党课小组、团支部、班级联合开展活动。',
   ],
   contacts: [
-    { name: '公共邮箱', email: 'ee_tms@163.com' },
+    { name: '部门公共邮箱', email: 'ee_tms@163.com' },
     { name: '分会长 史珍沄', email: 'shizy24@mails.tsinghua.edu.cn' },
     { name: '分会长 乐文韬', email: 'lewt24@mails.tsinghua.edu.cn' },
   ],

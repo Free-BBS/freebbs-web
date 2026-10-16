@@ -29,7 +29,7 @@ export function OrganizationsPage({
     const update = () =>
       page.current?.style.setProperty(
         '--sc-header-offset',
-        `${Math.ceil(header.getBoundingClientRect().height) + 12}px`,
+        `${Math.ceil(header.getBoundingClientRect().height) + 6}px`,
       );
     update();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
