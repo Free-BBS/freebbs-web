@@ -79,6 +79,63 @@ async function createPublishedForm(
 }
 
 describe('collections API', () => {
+  it('exposes remaining native attempts using the same active-response count as submission enforcement', async () => {
+    const { app, store } = fixture();
+    const form = await createPublishedForm(app, {
+      ...schema,
+      formRules: [{ id: 'attempts', kind: 'attempt_limit', value: 2 }],
+    });
+    const catalog = async () =>
+      (
+        await request(app)
+          .get('/api/development/v1/collections/registrations')
+          .set(student)
+          .expect(200)
+      ).body.data.find((item: { id: string }) => item.id === form.id);
+    expect(await catalog()).toMatchObject({ registered: false, attemptsUsed: 0, attemptLimit: 2 });
+    const first = await request(app)
+      .post(`/api/development/v1/collections/forms/${form.id}/responses`)
+      .set(student)
+      .send({ answers: { 'name-note': 'First' } })
+      .expect(201);
+    expect(await catalog()).toMatchObject({ registered: true, attemptsUsed: 1, attemptLimit: 2 });
+    await request(app)
+      .post(`/api/development/v1/collections/forms/${form.id}/responses`)
+      .set(student)
+      .send({ answers: { 'name-note': 'Second' } })
+      .expect(201);
+    expect(await catalog()).toMatchObject({ attemptsUsed: 2, attemptLimit: 2 });
+    await request(app)
+      .post(`/api/development/v1/collections/forms/${form.id}/responses`)
+      .set(student)
+      .send({ answers: { 'name-note': 'Third' } })
+      .expect(409);
+    await store.collectionResponses.update(first.body.data.id, { status: 'cancelled' });
+    expect(await catalog()).toMatchObject({ attemptsUsed: 1, attemptLimit: 2 });
+  });
+  it('preserves cancelled activity registration status in the wallet', async () => {
+    const { app, store } = fixture();
+    await store.activityRegistrations.create({
+      activityId: 'activity-night-run',
+      participantUid: 'demo-student',
+      ownerUid: 'demo-student',
+      scope: { type: 'activity', id: 'activity-night-run' },
+      status: 'cancelled',
+    });
+    const mine = await request(app)
+      .get('/api/development/v1/collections/mine')
+      .set(student)
+      .expect(200);
+    expect(mine.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          formId: 'activity-night-run',
+          source: 'development_activity',
+          status: 'cancelled',
+        }),
+      ]),
+    );
+  });
   it('lists only manageable forms including unpublished drafts without exposing another author drafts', async () => {
     const { app } = fixture();
     const own = await request(app)

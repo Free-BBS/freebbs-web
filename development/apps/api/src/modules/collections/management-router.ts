@@ -1,4 +1,3 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
@@ -6,8 +5,8 @@ import multer from 'multer';
 import { z } from 'zod';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { canManageCollection, canCreateCollection } from './access.js';
-import { DEPARTMENT_DIRECTORY, departmentsForRoles } from '@freebbs-development/contracts';
+import { canManageStoredCollection, canCreateCollection } from './access.js';
+import { departmentsForActor } from '../../core/authorization/role-scope-context.js';
 import { actorOrganizations, resolvePublisher } from './registrations.js';
 import { collectionSchema } from './schemas.js';
 import type { CollectionsRouterOptions } from './router.js';
@@ -58,9 +57,7 @@ export function createCollectionManagementRouter(
       send(response, auth.status, { error: { code: auth.code, message: auth.message } });
       return;
     }
-    const departments = isDevelopmentBusinessAdmin(auth.user)
-      ? [...DEPARTMENT_DIRECTORY]
-      : departmentsForRoles(auth.user.roles);
+    const departments = departmentsForActor(auth.user);
     const namespaces = [
       `personal:${auth.user.uid}`,
       ...departments.map((item) => `department:${item.id}`),
@@ -123,7 +120,7 @@ export function createCollectionManagementRouter(
       return null;
     }
     const form = await options.store.collectionForms.get(String(request.params.formId));
-    if (!form || !canManageCollection(auth.user, form.ownerUid))
+    if (!form || !(await canManageStoredCollection(options.store, auth.user, form)))
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     return form;
   }

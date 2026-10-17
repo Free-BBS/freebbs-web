@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { HttpError } from '../errors/http-error.js';
+import { identifyFeatureLock, recoverFeatureLock } from './feature-lock.js';
 
 const pending = new Map<string, Promise<unknown>>();
 /** Feature data is isolated from learning storage; all filenames derive from a digest. */
@@ -41,20 +42,20 @@ export function featureStorage<T extends { id: string }>(root: string, namespace
       .then(async () => {
         await mkdir(directory, { recursive: true });
         const lock = `${target}.lock`;
-        let acquired = false;
+        let release: (() => Promise<void>) | undefined;
         for (let attempt = 0; attempt < 100; attempt++) {
           try {
             await mkdir(lock);
-            acquired = true;
-            break;
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-            await new Promise((resume) => setTimeout(resume, 20));
+            if (!(await recoverFeatureLock(lock)))
+              await new Promise((resume) => setTimeout(resume, 20));
+            continue;
           }
+          release = await identifyFeatureLock(lock);
+          break;
         }
-        if (!acquired) throw new HttpError(503, 'feature_busy', '资料正在处理，请稍后重试');
-        // Do not steal an expired lock: the worker may still be writing. A crashed
-        // worker requires operator cleanup; failing closed prevents lost records.
+        if (!release) throw new HttpError(503, 'feature_busy', '资料正在处理，请稍后重试');
         try {
           const { record, result } = await operation(await get(id));
           if (record.id !== id) throw new Error('Feature identifier cannot change');
@@ -68,7 +69,7 @@ export function featureStorage<T extends { id: string }>(root: string, namespace
           }
           return result;
         } finally {
-          await rm(lock, { recursive: true, force: true });
+          await release();
         }
       });
     pending.set(target, task);

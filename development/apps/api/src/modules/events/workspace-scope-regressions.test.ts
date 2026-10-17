@@ -32,6 +32,15 @@ const activityPath = `${root}/development_activity/activity-night-run`;
 const nativePath = `${root}/native_collection/collection-autumn-workshop`;
 
 describe('workspace edit scope through production main authentication', () => {
+  it('rejects a former owner whose current department belongs to another organization', async () => {
+    const { app, store, assign } = await fixture();
+    await assign('department.arts_member');
+    await store.activities.update('activity-night-run', { ownerUid: scopedMemberUid });
+    expect(
+      (await request(app).get(activityPath).set(memberHeaders).expect(200)).body.data.canEdit,
+    ).toBe(false);
+    await edit(app, activityPath).expect(403);
+  });
   it.each([
     publicScope,
     { type: 'department', id: 'student_union.sports_center' },
@@ -230,7 +239,16 @@ describe('workspace edit scope through production main authentication', () => {
   it('does not let a different role grant bypass an explicit activity-scoped workspace deny', async () => {
     const { app, store, assign } = await fixture();
     await assign('department.sports_member');
-    await assign('department.sports_director');
+    // A legacy store can contain conflicting positions. Loading it must preserve
+    // the explicit deny, although new assignment writes now reject this pair.
+    await store.roleAssignments.create({
+      subjectUid: scopedMemberUid,
+      roleKey: 'department.sports_director',
+      status: 'active',
+      expiresAt: null,
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    });
     await store.rolePermissions.create({
       roleKey: 'department.sports_director',
       action: 'events.workspace.update',

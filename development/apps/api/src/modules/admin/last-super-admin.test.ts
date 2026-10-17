@@ -117,14 +117,14 @@ describe('last platform super administrator protection', () => {
       .set(adminHeaders)
       .expect(409);
 
-    expect(readOrder).toEqual(['roles', 'assignments']);
+    expect(readOrder).toEqual(['roles', 'roles', 'assignments']);
     expect(await baseStore.roleAssignments.get('assignment-admin')).toMatchObject({
       status: 'active',
     });
     readOrder.length = 0;
     await archiveRoleAssignment(store, 'assignment-admin', { actorUid: 'recovery-admin' });
 
-    expect(readOrder).toEqual(['roles', 'assignments', 'subjects']);
+    expect(readOrder).toEqual(['roles', 'roles', 'assignments', 'subjects']);
     expect(await baseStore.roleAssignments.get('assignment-admin')).toMatchObject({
       status: 'inactive',
     });
@@ -152,7 +152,7 @@ describe('last platform super administrator protection', () => {
 
     await archiveRoleAssignment(store, 'assignment-admin', { actorUid: 'demo-admin' });
 
-    expect(readOrder).toEqual(['roles', 'assignments', 'subjects']);
+    expect(readOrder).toEqual(['roles', 'roles', 'assignments', 'subjects']);
   });
   it('serializes concurrent revocations of different assignments and leaves one effective admin', async () => {
     const store = createMemoryStore();

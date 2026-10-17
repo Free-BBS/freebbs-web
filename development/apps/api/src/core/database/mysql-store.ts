@@ -799,7 +799,14 @@ const definitions = {
       utcDateTimeField('reviewedAt', 'reviewed_at'),
       field('reviewDecision', 'review_decision'),
     ],
-    searchColumns: ['title', 'record_kind'],
+    searchColumns: [
+      'title',
+      'record_kind',
+      'activity_id',
+      'scope_type',
+      'scope_id',
+      'organization_id',
+    ],
   },
 } satisfies Record<string, RepositoryDefinition>;
 function escapeLikeQuery(value: string): string {
@@ -827,12 +834,29 @@ function buildWhere(
 ): { where: string; values: SqlValue[] } {
   const clauses: string[] = [];
   const values: SqlValue[] = [];
-  for (const key of ['category', 'season', 'organizationId', 'standingActivity'] as const) {
+  for (const key of [
+    'subjectUid',
+    'roleKey',
+    'tagKey',
+    'key',
+    'uid',
+    'accessLevel',
+    'category',
+    'season',
+    'organizationId',
+    'standingActivity',
+  ] as const) {
     if (filters[key] === undefined) continue;
     const mapped = definition.fields.find((candidate) => candidate.key === key);
     if (!mapped) {
       clauses.push('1 = 0');
       continue;
+    }
+    // Keep identity predicates indexable before checking exact case. A cast-only
+    // predicate would scan and lock unrelated rows under InnoDB repeatable read.
+    if (['subjectUid', 'roleKey', 'tagKey', 'key', 'uid', 'accessLevel'].includes(key)) {
+      clauses.push(`${mapped.column} = ?`);
+      values.push(filters[key]!);
     }
     // Match the application's exact string equality, independent of table collation.
     clauses.push(
@@ -841,6 +865,50 @@ function buildWhere(
         : `CAST(${mapped.column} AS BINARY) = CAST(? AS BINARY)`,
     );
     values.push(filters[key]!);
+  }
+  for (const [filterKey, fieldKey] of [
+    ['subjectUids', 'subjectUid'],
+    ['uids', 'uid'],
+    ['ids', 'id'],
+  ] as const) {
+    const selected = filters[filterKey];
+    if (selected === undefined) continue;
+    const column =
+      fieldKey === 'id' ? 'id' : definition.fields.find((field) => field.key === fieldKey)?.column;
+    if (!column || selected.length === 0) clauses.push('1 = 0');
+    else {
+      clauses.push(`${column} IN (${selected.map(() => '?').join(', ')})`);
+      values.push(...selected);
+    }
+  }
+  if (filters.identity) {
+    const identity = filters.identity;
+    const matches: string[] = [];
+    for (const [key, value] of [
+      ['subjectUid', identity.uid],
+      ['studentId', identity.studentId],
+      ['username', identity.username],
+    ] as const) {
+      const column = definition.fields.find((field) => field.key === key)?.column;
+      if (!column || !value) continue;
+      matches.push(key === 'username' ? `LOWER(${column}) = LOWER(?)` : `${column} = ?`);
+      values.push(value);
+    }
+    clauses.push(`(${matches.join(' OR ') || '1 = 0'})`);
+  }
+  if (filters.organizationIds !== undefined) {
+    const column = definition.fields.find((field) => field.key === 'organizationId')?.column;
+    const ids = filters.organizationIds.filter((id): id is string => id !== null);
+    if (!column) clauses.push('1 = 0');
+    else {
+      const selected: string[] = [];
+      if (ids.length) {
+        selected.push(`${column} IN (${ids.map(() => '?').join(', ')})`);
+        values.push(...ids);
+      }
+      if (filters.organizationIds.includes(null)) selected.push(`${column} IS NULL`);
+      clauses.push(`(${selected.join(' OR ') || '1 = 0'})`);
+    }
   }
   if (filters.tag !== undefined) {
     if (definition.fields.some(({ key }) => key === 'tags')) {
@@ -872,6 +940,16 @@ function buildWhere(
         `(${textMatch} OR EXISTS (SELECT 1 FROM JSON_TABLE(tags, '$[*]' COLUMNS (tag_value VARCHAR(80) PATH '$')) AS ${tagAlias} WHERE LOCATE(CAST(? AS BINARY), CAST(LOWER(${tagAlias}.tag_value) AS BINARY)) > 0))`,
       );
       values.push(query);
+    } else if (definition.table === 'finance_records') {
+      const matches = [textMatch];
+      if (filters.queryOrganizationIds?.length) {
+        matches.push(
+          `organization_id IN (${filters.queryOrganizationIds.map(() => '?').join(', ')})`,
+        );
+        values.push(...filters.queryOrganizationIds);
+      }
+      if (filters.queryLegacyOrganization) matches.push('organization_id IS NULL');
+      clauses.push(`(${matches.join(' OR ')})`);
     } else clauses.push(textMatch);
   }
   return {
@@ -1009,6 +1087,34 @@ class MySqlRepository<T extends StoredRecord> implements RecordRepository<T> {
       values,
     );
     return rows.map((row) => this.decode(row));
+  }
+
+  async summarize(filters: ListFilters): Promise<import('./types.js').FinanceSummary[]> {
+    if (this.definition.table !== 'finance_records')
+      throw new Error('Finance aggregation requires finance records');
+    const { where, values } = buildWhere(this.definition, filters);
+    const approved =
+      "(status = 'approved' OR (status = 'archived' AND review_decision = 'approved'))";
+    const [rows] = await this.executor.execute<RowDataPacket[]>(
+      `SELECT organization_id, SUM(CASE WHEN record_kind = 'budget' AND ${approved} THEN amount_cents ELSE 0 END) AS approved_budget,
+       SUM(CASE WHEN record_kind = 'settlement' AND ${approved} THEN amount_cents ELSE 0 END) AS spent,
+       SUM(CASE WHEN record_kind = 'settlement' AND status = 'submitted' THEN amount_cents ELSE 0 END) AS pending
+       FROM finance_records${where} GROUP BY organization_id ORDER BY organization_id`,
+      values,
+    );
+    return rows.map((row) => {
+      const approvedBudget = Number(row.approved_budget),
+        spent = Number(row.spent);
+      return {
+        organizationId: row.organization_id == null ? null : String(row.organization_id),
+        approvedBudget,
+        spent,
+        pending: Number(row.pending),
+        remaining: approvedBudget - spent,
+        usagePercent:
+          approvedBudget === 0 ? 0 : Math.min(100, Math.round((spent / approvedBudget) * 100)),
+      };
+    });
   }
 
   async countActiveByProblemIds(problemIds: readonly string[]): Promise<Record<string, number>> {
@@ -1220,7 +1326,9 @@ function buildMySqlStore(executor: Executor, pool: Pool, inTransaction: boolean)
     liaisonTeamMembers: repository<LiaisonTeamMemberRecord>(definitions.liaisonTeamMembers),
     liaisonPosts: repository<LiaisonPostRecord>(definitions.liaisonPosts),
     liaisonOutcomes: repository<LiaisonOutcomeRecord>(definitions.liaisonOutcomes),
-    financeRecords: repository<FinanceRecord>(definitions.financeRecords),
+    financeRecords: repository<FinanceRecord>(
+      definitions.financeRecords,
+    ) as import('./types.js').FinanceRecordRepository,
   };
   return store;
 }

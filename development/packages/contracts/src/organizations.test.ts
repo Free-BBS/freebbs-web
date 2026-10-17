@@ -7,7 +7,7 @@ import {
 } from './organizations.js';
 
 describe('social organization contract', () => {
-  it('defines the seven approved organizations in display order', () => {
+  it('defines the approved organizations including the media center in display order', () => {
     expect(SOCIAL_ORGANIZATION_IDS).toEqual([
       'arts_center',
       'liaison_center',
@@ -16,6 +16,7 @@ describe('social organization contract', () => {
       'tuanwei',
       'sast',
       'tms',
+      'media_center',
     ]);
     expect(SOCIAL_ORGANIZATIONS.map(({ name }) => name)).toEqual([
       '文艺中心',
@@ -25,6 +26,7 @@ describe('social organization contract', () => {
       '团委',
       '科协',
       'TMS',
+      '学生媒体中心',
     ]);
   });
 
@@ -40,6 +42,6 @@ describe('social organization contract', () => {
     expect(organizationForRole('platform.super_admin')).toBeNull();
 
     const roleKeys = SOCIAL_ORGANIZATIONS.flatMap(({ roles }) => Object.values(roles));
-    expect(new Set(roleKeys)).toHaveLength(21);
+    expect(new Set(roleKeys)).toHaveLength(24);
   });
 });

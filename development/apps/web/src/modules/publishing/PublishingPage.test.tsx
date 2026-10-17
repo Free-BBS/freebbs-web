@@ -3,15 +3,55 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { PublishingPage } from './PublishingPage.js';
+import type { RoleKey } from '@freebbs-development/contracts';
 const { request, client } = vi.hoisted(() => {
   const request = vi.fn();
   return { request, client: { request } };
 });
+const actor = vi.hoisted(() => ({ roles: ['department.rights_development_member'] as RoleKey[] }));
 vi.mock('../../core/auth/AuthProvider.js', () => ({
-  useAuth: () => ({ client, user: { roles: ['department.rights_development_member'] } }),
+  useAuth: () => ({ client, user: { roles: actor.roles } }),
 }));
-beforeEach(() => request.mockReset());
+beforeEach(() => {
+  request.mockReset();
+  actor.roles = ['department.rights_development_member'];
+});
 describe('publishing catalog', () => {
+  it('ignores a foreign department supplied in a new-content link', async () => {
+    request.mockImplementation(async (_path: string, init?: RequestInit) => {
+      if (init?.method === 'POST') throw new Error('保存被测试服务拒绝');
+      return { canCreate: true, items: [] };
+    });
+    render(
+      <MemoryRouter initialEntries={['/?create=1&department=student_union.sports_center']}>
+        <PublishingPage />
+      </MemoryRouter>,
+    );
+    const department = await screen.findByLabelText('所属部门');
+    expect(department).toHaveValue('');
+    await userEvent.type(screen.getByLabelText('标题'), '新内容');
+    await userEvent.click(screen.getByRole('button', { name: '保存内容' }));
+    await waitFor(() =>
+      expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+    );
+    const write = request.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(write?.[1]?.body)).departmentId).toBeNull();
+  });
+  it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+    'offers all departments to global supervisor %s',
+    async (role) => {
+      actor.roles = [role];
+      request.mockResolvedValue({ canCreate: true, items: [] });
+      render(
+        <MemoryRouter initialEntries={['/?create=1']}>
+          <PublishingPage />
+        </MemoryRouter>,
+      );
+      expect((await screen.findByLabelText('所属部门')).querySelectorAll('option')).toHaveLength(
+        21,
+      );
+    },
+  );
   it('searches book authors, recommendations and weekly schedule entries', async () => {
     request.mockResolvedValue({
       canCreate: false,

@@ -35,6 +35,13 @@ const reviewerRoles: readonly RoleKey[] = [
   'department.arts_director',
   'domain.arts_lead',
   'affiliation.tuanwei_lead',
+  'counselor.youth_league_secretary',
+  'counselor.youth_league',
+  'counselor.practice',
+  'counselor.innovation',
+  'counselor.student_development',
+  'student_union.executive_president',
+  'student_union.presidium',
 ];
 
 export function canReviewFestival(

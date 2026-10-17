@@ -210,6 +210,51 @@ test -s <备份文件>
 将备份和校验文件复制到加密、访问受控、与应用服务器故障域不同的位置。按学校数据管理要求确定
 保留期限；本文不预设未确认的期限。
 
+### 文件型业务资料也必须备份
+
+SQL 不包含表单、活动动态、协作空间等功能的 JSON 资料和上传附件。完整恢复点必须包含同一维护窗口的
+SQL 与发展端专用存储目录。先停止发展端写入（包括后台任务），再生成 SQL，保持停止状态直到文件快照完成。
+只读页面正常不代表已停止所有写入；不要在不停写的情况下声称 SQL 与附件一致。
+
+在 `development/` 下运行以下命令；把目录替换为当前部署实际使用的独立发展端路径：
+
+```bash
+node scripts/data-snapshot.mjs create \
+  --sql /srv/freebbs-backups/development.sql \
+  --collections /srv/freebbs-development/collections \
+  --festival /srv/freebbs-development/festival \
+  --sports /srv/freebbs-development/sports \
+  --output /srv/freebbs-backups/development-snapshot-<UTC时间> \
+  --confirm DEVELOPMENT_WRITES_STOPPED
+node scripts/data-snapshot.mjs verify --source /srv/freebbs-backups/development-snapshot-<UTC时间>
+```
+
+`collections` 对应 `COLLECTIONS_UPLOAD_DIR`（也包含复用此目录的功能数据）；`festival` 对应
+`FESTIVAL_UPLOAD_DIR`；`sports` 对应 `SPORTS_UPLOAD_DIRECTORY` 或显式的 sports storage 配置。
+后两项仅在部署确实使用独立目录时传入，禁止传学习端上传总目录、数据库目录或环境文件目录。
+若 system settings 配置了独立的 directory override，额外传入 `--settings <实际目录>`。
+脚本只读源文件，目标必须全新且与源目录分离；拒绝软链接、临时锁和已有目标，逐文件记录 SHA-256。
+失败留下的目标不算可用快照，应核实原因后使用新的输出路径重做。快照不含运行密钥，需另走既有密钥恢复流程。
+
+恢复演练先校验快照，再只解包到新的隔离目录：
+
+```bash
+node scripts/data-snapshot.mjs stage \
+  --source /srv/freebbs-backups/development-snapshot-<UTC时间> \
+  --output /srv/freebbs-restore/development-drill-<UTC时间>
+```
+
+`stage` 不导入 SQL、不覆盖在线目录。由部署负责人按下述数据库恢复流程在隔离环境恢复 `database.sql`，
+并将隔离 API 的发展端目录指向 staged 的对应子目录；核对表单、动态、协作记录、附件、权限及操作记录。
+恢复生产前仍需维护窗口和部署审批，不改变学习端配置。
+
+### 文件写入锁故障恢复
+
+文件资料锁记录唯一 owner、PID、主机与 PID namespace。仅当同一运行环境能证明 owner 进程已退出时，
+下一次写入才自动回收该锁；不会仅凭锁的年龄抢占。旧版锁、空锁、权限不足、其他主机或无法验证的锁仍返回
+`feature_busy`，以免损坏正在写入的数据。需人工处理时先停止全部发展端写入进程并备份对应记录，确认没有
+活跃写入者后，仅移除已核实的那个 `.json.lock` 目录。不要批量删除锁或功能资料文件。
+
 ## 安全恢复
 
 不要把备份直接覆盖到正在提供服务的生产库。建议流程：

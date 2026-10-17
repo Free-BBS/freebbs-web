@@ -16,7 +16,7 @@ import type {
 import {
   DEPARTMENT_DIRECTORY,
   departmentsForRoles,
-  isDevelopmentBusinessAdmin,
+  isGlobalOrganizationBusinessSupervisor,
   type UserContext,
 } from '@freebbs-development/contracts';
 import { ApiError, createApiClient, type ApiClient } from '../../../core/api/client.js';
@@ -27,6 +27,7 @@ import { FormCanvas } from './FormCanvas.js';
 import { InspectorPanel } from './InspectorPanel.js';
 import { collectionTemplates, instantiateTemplate, type CollectionTemplate } from './templates.js';
 import '../completion.css';
+import './workbench.css';
 import {
   addField,
   addOutput,
@@ -43,7 +44,8 @@ import {
 } from './model.js';
 
 function canMaintainModuleLibrary(user: UserContext | null | undefined): boolean {
-  if (isDevelopmentBusinessAdmin(user)) return true;
+  if (user?.previewing) return false;
+  if (isGlobalOrganizationBusinessSupervisor(user)) return true;
   return (user?.roles ?? []).some(
     (role) =>
       role.startsWith('counselor.') ||
@@ -59,7 +61,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const api = client ?? fallback;
   const { collectionId } = useParams();
   const roles = auth?.user?.roles ?? [];
-  const publisherDepartments = isDevelopmentBusinessAdmin(auth?.user)
+  const publisherDepartments = isGlobalOrganizationBusinessSupervisor(auth?.user)
     ? [...DEPARTMENT_DIRECTORY]
     : departmentsForRoles(roles);
   const [schema, setSchema] = useState<CollectionSchema>(structuredClone(emptyCollectionSchema));
@@ -79,6 +81,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const [pendingTemplate, setPendingTemplate] = useState<CollectionTemplate | null>(null);
   const [templateName, setTemplateName] = useState('');
   const savedSchema = useRef(JSON.stringify(emptyCollectionSchema));
+  const hydratedFormId = useRef<string | null>(null);
   const live = useRef(true);
   useEffect(() => {
     live.current = true;
@@ -102,7 +105,8 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         setCanCreate(dashboard.canCreate || form?.canManage === true);
         setAllowed(form ? form.canManage : dashboard.canCreate || managesLibrary);
         setCustomModules(modules);
-        if (form?.schema) {
+        if (form?.schema && hydratedFormId.current !== formId) {
+          hydratedFormId.current = formId;
           const loaded = { ...form.schema, outputs: form.schema.outputs ?? [] };
           setSchema(loaded);
           savedSchema.current = JSON.stringify(loaded);
@@ -266,6 +270,8 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         });
         if (!live.current) return;
         activeId = created.id;
+        // This form is already in the editor. Rechecking access must not hydrate over newer edits.
+        hydratedFormId.current = created.id;
         setFormId(created.id);
         window.history.replaceState(null, '', `/development/collections/workbench/${created.id}`);
       } else {
@@ -408,6 +414,29 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
           </section>
         </div>
       )}
+      <nav className="builder-section-nav" aria-label="表单编辑区">
+        {(
+          [
+            ['builder-library', '模块库'],
+            ['builder-canvas', '表单画布'],
+            ['builder-inspector', '属性编辑'],
+          ] as const
+        ).map(([id, label]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            onClick={(event) => {
+              const target = document.getElementById(id);
+              if (!target) return;
+              event.preventDefault();
+              target.scrollIntoView({ block: 'start' });
+              target.focus({ preventScroll: true });
+            }}
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
       <div className="builder-layout">
         <FieldLibrary
           onAddField={(kind, template) => add(kind, undefined, template)}

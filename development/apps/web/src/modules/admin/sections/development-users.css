@@ -1,0 +1,76 @@
+.development-user-settings .development-batch-controls,
+.development-user-settings .development-batch-review {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
+.development-user-settings .development-batch-controls,
+.development-user-settings .development-batch-review > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.development-user-settings .development-batch-controls p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.development-user-settings .development-batch-select-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.development-user-settings .development-batch-user {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.development-user-settings .development-batch-user > input,
+.development-user-settings .development-batch-select-page > input {
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+}
+
+.development-user-settings .development-batch-user .development-user-row {
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.development-user-settings .development-batch-user .development-user-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.development-user-settings .development-batch-user .development-access-badge {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.development-user-settings .development-batch-review ul {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-left: 24px;
+}
+
+@media (max-width: 480px) {
+  .development-user-settings .development-batch-controls > button,
+  .development-user-settings .development-batch-review button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

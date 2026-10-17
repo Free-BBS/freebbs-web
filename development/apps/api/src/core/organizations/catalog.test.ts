@@ -7,7 +7,7 @@ import {
 } from '@freebbs-development/contracts';
 
 describe('social organization catalog', () => {
-  it('defines the seven approved organizations in display order', () => {
+  it('defines the approved organizations including media in display order', () => {
     expect(SOCIAL_ORGANIZATION_IDS).toEqual([
       'arts_center',
       'liaison_center',
@@ -16,6 +16,7 @@ describe('social organization catalog', () => {
       'tuanwei',
       'sast',
       'tms',
+      'media_center',
     ]);
     expect(SOCIAL_ORGANIZATIONS.map(({ name }) => name)).toEqual([
       '文艺中心',
@@ -25,6 +26,7 @@ describe('social organization catalog', () => {
       '团委',
       '科协',
       'TMS',
+      '学生媒体中心',
     ]);
   });
 
@@ -38,8 +40,12 @@ describe('social organization catalog', () => {
       level: 'member',
     });
     expect(organizationForRole('platform.super_admin')).toBeNull();
+    expect(organizationForRole('media_center.creative.member')).toEqual({
+      organizationId: 'media_center',
+      level: 'member',
+    });
 
     const roleKeys = SOCIAL_ORGANIZATIONS.flatMap(({ roles }) => Object.values(roles));
-    expect(new Set(roleKeys)).toHaveLength(21);
+    expect(new Set(roleKeys)).toHaveLength(24);
   });
 });

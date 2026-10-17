@@ -44,6 +44,8 @@ export function CollaborationPage() {
   const [teamFilter, setTeamFilter] = useState('all');
   const [confirmClose, setConfirmClose] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [versionRefresh, setVersionRefresh] = useState(0);
+  const [versionEntries, setVersionEntries] = useState<CollaborationSpace['entries']>();
   const [filter, setFilter] = useState('all');
   const identityGeneration = useRef(0);
   const loadGeneration = useRef(0);
@@ -65,6 +67,7 @@ export function CollaborationPage() {
           setSpace((current) =>
             current?.id === result.id && current.revision > result.revision ? current : result,
           );
+          return result;
         }
       } else {
         const result = await api.request<{ items: CollaborationSpace[]; canCreate: boolean }>(
@@ -96,7 +99,7 @@ export function CollaborationPage() {
     return () => {
       identityGeneration.current++;
     };
-  }, [api, spaceId]);
+  }, [api, spaceId, auth.user?.uid]);
   async function mutate(path: string, body: unknown, method = 'POST') {
     const identity = identityGeneration.current;
     const mutation = ++mutationGeneration.current;
@@ -117,10 +120,28 @@ export function CollaborationPage() {
           current?.id === next.id && current.revision > next.revision ? current : next,
         );
       else navigate(`/collections/tools/${next.id}`);
+      setVersionEntries(next.entries);
+      setVersionRefresh((current) => current + 1);
       setFeedback('更改已保存');
       return true;
     } catch (cause) {
-      if (isCurrent()) setError(cause instanceof Error ? cause.message : '保存失败');
+      if (isCurrent()) {
+        const conflict =
+          typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409;
+        if (conflict && spaceId) {
+          try {
+            const refreshed = await reload(true);
+            if (isCurrent()) {
+              setVersionEntries(refreshed?.entries);
+              setVersionRefresh((current) => current + 1);
+              setError('记录或填写要求已更新，已保留输入。请核对最新记录后再次提交。');
+            }
+          } catch {
+            if (isCurrent())
+              setError('保存冲突，输入已保留，但最新记录加载失败。请重新加载后再提交。');
+          }
+        } else setError(cause instanceof Error ? cause.message : '保存失败');
+      }
       return false;
     } finally {
       // Same-space reads must not invalidate ownership of the mutation's busy state.
@@ -333,13 +354,16 @@ export function CollaborationPage() {
           >
             {space.status === 'published' ? (
               <EntryEditor
-                key={space.id}
+                key={`${auth.user?.uid}:${space.id}`}
                 space={space}
+                versionRefresh={versionRefresh}
+                versionEntries={versionEntries}
                 busy={busy}
                 onSubmit={(value) =>
                   mutate(`/collaboration/${space.id}/entries`, {
                     ...value,
                     revision: space.revision,
+                    definitionRevision: space.definitionRevision ?? 1,
                   })
                 }
               />
@@ -363,7 +387,9 @@ export function CollaborationPage() {
               space={space}
               busy={busy}
               mutate={mutate}
-              reload={() => reload(true)}
+              reload={async () => {
+                await reload(true);
+              }}
             />
           </section>
           {space.canManage && (

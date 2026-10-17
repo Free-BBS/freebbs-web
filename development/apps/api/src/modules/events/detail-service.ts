@@ -1,8 +1,7 @@
 import { canReadPublishedActivity } from '../collections/registrations.js';
-import type { ScopeRef } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
-import { authorize } from '../../core/authorization/authorize.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type {
   ActivityMilestoneRecord,
@@ -11,7 +10,12 @@ import type {
   DevelopmentStore,
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { canUpdateOrganization } from './organization-access.js';
+import {
+  canActOnOrganizationActivity,
+  canProvideActivityTechnicalSupport,
+  canCreateForOrganization,
+  canUpdateOrganization,
+} from './organization-access.js';
 import { activityWithWorkspaceSchedule } from './workspace-schedule.js';
 
 export interface ActivityMilestoneInput {
@@ -43,21 +47,13 @@ export interface ActivityDetail extends ActivityRecord {
   registrationCount: number;
 }
 
-function allowed(
-  actor: AuthorizationContext,
-  action: string,
-  resource: string,
-  scope: ScopeRef,
-): boolean {
-  return authorize(actor, { action, resource, scope }).allowed;
-}
-
 function canManage(actor: AuthorizationContext, record: ActivityRecord): boolean {
   return (
-    (allowed(actor, 'events.update', 'activity', record.scope) &&
+    (canActOnOrganizationActivity(actor, 'events.update', record.scope, record.organizationId) &&
       canUpdateOrganization(actor, record)) ||
     (record.ownerUid === actor.uid &&
-      allowed(actor, 'events.create', 'activity', record.scope) &&
+      canCreateForOrganization(actor, record.organizationId) &&
+      canActOnOrganizationActivity(actor, 'events.create', record.scope, record.organizationId) &&
       (record.status === 'draft' || record.status === 'rejected'))
   );
 }
@@ -66,9 +62,11 @@ function canView(actor: AuthorizationContext, record: ActivityRecord): boolean {
   return (
     canReadPublishedActivity(actor, record) ||
     canManage(actor, record) ||
-    (record.status === 'pending' && allowed(actor, 'events.approve', 'activity', record.scope)) ||
+    (record.status === 'pending' &&
+      canUpdateOrganization(actor, record) &&
+      canActOnOrganizationActivity(actor, 'events.approve', record.scope, record.organizationId)) ||
     (record.technicalSupportStatus === 'requested' &&
-      allowed(actor, 'events.technical_support', 'activity', record.scope))
+      canProvideActivityTechnicalSupport(actor, record))
   );
 }
 
@@ -132,6 +130,7 @@ export class ActivityDetailService {
   ): Promise<ActivityMilestoneRecord> {
     return this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const created = await store.activityMilestones.create({
         ...input,
@@ -159,6 +158,7 @@ export class ActivityDetailService {
   ): Promise<ActivityMilestoneRecord> {
     return this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const current = await store.activityMilestones.getForUpdate(milestoneId);
       if (current === null || current.activityId !== activityId) throw milestoneNotFound();
@@ -182,6 +182,7 @@ export class ActivityDetailService {
   ): Promise<void> {
     await this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const current = await store.activityMilestones.getForUpdate(milestoneId);
       if (current === null || current.activityId !== activityId) throw milestoneNotFound();
@@ -203,6 +204,7 @@ export class ActivityDetailService {
   ): Promise<CompetitionFixtureRecord> {
     return this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const created = await store.competitionFixtures.create({
         ...input,
@@ -230,6 +232,7 @@ export class ActivityDetailService {
   ): Promise<CompetitionFixtureRecord> {
     return this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const current = await store.competitionFixtures.getForUpdate(fixtureId);
       if (current === null || current.activityId !== activityId) throw fixtureNotFound();
@@ -253,6 +256,7 @@ export class ActivityDetailService {
   ): Promise<void> {
     await this.store.transaction(async (store) => {
       const activity = await store.activities.getForUpdate(activityId);
+      actor = await loadAuthorizationContext(store, actor, new Date());
       if (activity === null || !canManage(actor, activity)) throw activityNotFound();
       const current = await store.competitionFixtures.getForUpdate(fixtureId);
       if (current === null || current.activityId !== activityId) throw fixtureNotFound();

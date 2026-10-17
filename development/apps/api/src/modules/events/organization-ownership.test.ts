@@ -85,6 +85,33 @@ describe('organization-owned activities', () => {
       .set('X-Demo-User', 'sports-member')
       .send({ to: 'pending' })
       .expect(200);
+    await store.activities.update(created.body.data.id, { status: 'draft' });
+    for (const assignment of await store.roleAssignments.list({ query: 'sports-member' }))
+      if (assignment.subjectUid === 'sports-member')
+        await store.roleAssignments.update(assignment.id, { status: 'inactive' });
+    await setOrganizationMembership(
+      store,
+      { subjectUid: 'sports-member', organizationId: 'arts_center', level: 'member' },
+      { actorUid: 'demo-admin' },
+    );
+    await request(app)
+      .post(`/api/development/v1/events/activities/${created.body.data.id}/transitions`)
+      .set('X-Demo-User', 'sports-member')
+      .send({ to: 'pending' })
+      .expect(404);
+    await request(app)
+      .post(`/api/development/v1/events/activities/${created.body.data.id}/milestones`)
+      .set('X-Demo-User', 'sports-member')
+      .send({
+        occursAt: '2026-10-01T00:00:00.000Z',
+        title: 'Unauthorized',
+        type: 'other',
+        description: 'Unauthorized milestone',
+        completed: false,
+        displayOrder: 0,
+      })
+      .expect(404);
+    await store.activities.update(created.body.data.id, { status: 'pending' });
     await request(app)
       .patch('/api/development/v1/events/activities')
       .set('X-Demo-User', 'sports-member')

@@ -1,11 +1,13 @@
 import {
-  isDevelopmentBusinessAdmin,
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
   type SportsMatch,
   type SportsMatchStatus,
 } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { authorize } from '../../core/authorization/authorize.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type {
   DevelopmentStore,
@@ -42,13 +44,39 @@ function allowed(
   resource: string,
   scope = { type: 'public', id: '*' },
 ) {
-  return authorize(actor, { action, resource, scope }).allowed;
+  if (actor.previewing) return false;
+  const decisions = [
+    scope,
+    { type: 'social_organization', id: 'sports_center' },
+    { type: 'department', id: 'student_union.sports_center' },
+  ].map((candidate) => authorize(actor, { action, resource, scope: candidate }));
+  return (
+    !decisions.some(({ reason }) => reason === 'explicit-deny' || reason === 'invalid-scope') &&
+    decisions.some(({ allowed }) => allowed)
+  );
+}
+
+async function currentSportsActor(
+  store: DevelopmentStore,
+  actor: AuthorizationContext,
+): Promise<AuthorizationContext> {
+  const current = await loadAuthorizationContext(store, actor, new Date());
+  return {
+    ...current,
+    policies: [
+      ...(current.policies ?? []),
+      ...(actor.policies ?? []).filter(({ effect }) => effect === 'deny'),
+    ],
+  };
 }
 
 function managesAllSports(actor: AuthorizationContext): boolean {
   return (
-    isDevelopmentBusinessAdmin(actor) ||
-    actor.roles.some((role) => ['domain.sports_lead', 'department.sports_director'].includes(role))
+    isGlobalOrganizationBusinessSupervisor(actor) ||
+    organizationMembershipsForRoles(actor.roles).some(
+      ({ organizationId, level }) =>
+        organizationId === 'sports_center' && (level === 'lead' || level === 'director'),
+    )
   );
 }
 
@@ -60,6 +88,7 @@ export class WuSportsService {
     from?: string,
     to?: string,
   ): Promise<SportsMatch[]> {
+    actor = await currentSportsActor(this.store, actor);
     if (!allowed(actor, 'sports.match.read', 'sports_match'))
       throw new HttpError(403, 'forbidden', 'Sports match read permission is required');
     const records = await this.store.sportsMatches.list({ status: 'active' });
@@ -70,6 +99,7 @@ export class WuSportsService {
   }
 
   async createMatch(actor: AuthorizationContext, input: MatchInput): Promise<SportsMatch> {
+    actor = await currentSportsActor(this.store, actor);
     if (!allowed(actor, 'sports.match.create', 'sports_match'))
       throw new HttpError(403, 'forbidden', 'Sports match create permission is required');
     const created = await this.store.sportsMatches.create({
@@ -93,13 +123,17 @@ export class WuSportsService {
     id: string,
     patch: Partial<MatchInput>,
   ): Promise<SportsMatch> {
+    actor = await currentSportsActor(this.store, actor);
     const current = await this.store.sportsMatches.get(id);
     if (!current) throw new HttpError(404, 'sports_match_not_found', 'Sports match not found');
     if (
-      !allowed(actor, 'sports.match.update', 'sports_match') ||
+      !allowed(actor, 'sports.match.update', 'sports_match', current.scope) ||
       (current.ownerUid !== actor.uid && !managesAllSports(actor))
     )
       throw new HttpError(403, 'forbidden', 'Sports match update permission is required');
+    const target = { ...current, ...patch };
+    if (!(Date.parse(target.startsAt) < Date.parse(target.endsAt)))
+      throw new HttpError(400, 'invalid_match_dates', 'Match start must precede its end');
     const updated = await this.store.sportsMatches.update(id, patch);
     if (!updated) throw new HttpError(404, 'sports_match_not_found', 'Sports match not found');
     await recordAuditEvent(this.store, {
@@ -113,10 +147,11 @@ export class WuSportsService {
   }
 
   async deleteMatch(actor: AuthorizationContext, id: string): Promise<void> {
+    actor = await currentSportsActor(this.store, actor);
     const current = await this.store.sportsMatches.get(id);
     if (!current) throw new HttpError(404, 'sports_match_not_found', 'Sports match not found');
     if (
-      !allowed(actor, 'sports.match.delete', 'sports_match') ||
+      !allowed(actor, 'sports.match.delete', 'sports_match', current.scope) ||
       (current.ownerUid !== actor.uid && !managesAllSports(actor))
     )
       throw new HttpError(403, 'forbidden', 'Sports match delete permission is required');
@@ -134,6 +169,7 @@ export class WuSportsService {
     actor: AuthorizationContext,
     teamId: string,
   ): Promise<SportsTeamShowcaseRecord | null> {
+    actor = await currentSportsActor(this.store, actor);
     if (
       !allowed(actor, 'sports.showcase.read', 'sports_showcase', {
         type: 'sports_team',

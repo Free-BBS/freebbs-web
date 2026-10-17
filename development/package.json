@@ -16,7 +16,7 @@
     "build:contracts": "npm run build -w @freebbs-development/contracts",
     "build": "npm run build:contracts && npm run build -w @freebbs-development/api && npm run build -w @freebbs-development/web",
     "test": "vitest run",
-    "test:operations": "node --test tests/scripts/operational-scripts.test.mjs",
+    "test:operations": "node --test tests/scripts/operational-scripts.test.mjs tests/scripts/data-snapshot.test.mjs",
     "test:workflows": "node --test tests/workflows/release-workflows.test.mjs",
     "test:e2e:production": "playwright test --config playwright.production.config.ts",
     "db:migrate": "node scripts/migrate.mjs",

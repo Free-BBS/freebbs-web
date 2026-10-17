@@ -71,12 +71,8 @@ function RuleSlot({
         if (compatible && armedRule) onAttach(armedRule);
       }}
       onDragOver={(event) => {
-        const [type, kind] = payload(event).split(':');
-        if (
-          type === 'rule' &&
-          kind &&
-          acceptsRule(field?.kind ?? 'form', kind as CollectionRuleKind)
-        ) {
+        // Drag payloads are protected until drop; only the advertised format is readable here.
+        if (event.dataTransfer.types.includes('text/plain')) {
           event.preventDefault();
           event.currentTarget.dataset.magnet = 'true';
         }
@@ -88,7 +84,13 @@ function RuleSlot({
         event.preventDefault();
         delete event.currentTarget.dataset.magnet;
         const [type, kind] = payload(event).split(':');
-        if (type === 'rule' && kind) onAttach(kind as CollectionRuleKind);
+        if (
+          type === 'rule' &&
+          kind &&
+          acceptsRule(field?.kind ?? 'form', kind as CollectionRuleKind) &&
+          !existingKinds.includes(kind as CollectionRuleKind)
+        )
+          onAttach(kind as CollectionRuleKind);
       }}
     >
       <span>◇</span>
@@ -174,7 +176,7 @@ export function FormCanvas({
   armedRule,
 }: FormCanvasProps) {
   return (
-    <section className="builder-canvas" aria-label="表单仿真画布">
+    <section id="builder-canvas" tabIndex={-1} className="builder-canvas" aria-label="表单仿真画布">
       <header>
         <span>02</span>
         <div>

@@ -1,0 +1,109 @@
+.development-user-settings .development-settings-intro {
+  align-items: start;
+  flex-wrap: wrap;
+}
+
+.development-user-settings .development-settings-intro > div {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.development-user-settings .development-settings-intro form[role='search'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(100%, 620px);
+  min-width: 0;
+  flex: 1 1 440px;
+  align-items: end;
+  gap: 12px 10px;
+}
+
+.development-user-settings .development-settings-intro form[role='search'] input {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-directory-filters {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 12px;
+}
+
+.settings-directory-filters label {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-directory-filters select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.settings-directory-pagination {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-directory-pagination > span {
+  margin-right: auto;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.settings-directory-pagination button {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-directory-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (max-width: 760px) {
+  .development-user-settings .development-settings-intro > div {
+    flex: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .development-user-settings .development-settings-intro form[role='search'] {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .settings-directory-filters {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .settings-directory-pagination > span {
+    flex-basis: 100%;
+  }
+}

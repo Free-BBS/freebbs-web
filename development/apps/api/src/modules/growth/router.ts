@@ -15,6 +15,7 @@ import { GROWTH_DOMAINS, growthAchievements } from './achievement-catalog.js';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import type { ImportedExperience } from '../connectors/router.js';
 import { readActivityWorkspace } from '../events/workspace-storage.js';
+import { activityWithWorkspaceSchedule } from '../events/workspace-schedule.js';
 
 import type { Response } from 'express';
 
@@ -63,8 +64,9 @@ export function createGrowthRouter({
     const completed = (
       await Promise.all(
         [...new Set(registrations.map((record) => record.activityId))].map(async (activityId) => {
-          const activity = await store.activities.get(activityId);
-          if (activity === null) return null;
+          const source = await store.activities.get(activityId);
+          if (source === null) return null;
+          const activity = await activityWithWorkspaceSchedule(source, uploadDirectory);
           const hasEnded = activity.endsAt && Date.parse(activity.endsAt) <= now().getTime();
           if (
             activity.status !== 'finished' &&

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   DEPARTMENT_DIRECTORY,
-  isDevelopmentBusinessAdmin,
+  isGlobalOrganizationBusinessSupervisor,
   departmentsForRoles,
   PUBLISHING_CATEGORIES,
   type PublishingContent,
@@ -163,7 +163,7 @@ export function PublishingPage({ book }: { book?: 'notices' | 'experience' }) {
           item={contentId ? item : undefined}
           categories={categories}
           departments={
-            isDevelopmentBusinessAdmin(user)
+            isGlobalOrganizationBusinessSupervisor(user)
               ? [...DEPARTMENT_DIRECTORY]
               : departmentsForRoles(user?.roles ?? [])
           }
@@ -375,7 +375,10 @@ function PublishingEditor({
   );
   const [title, setTitle] = useState(item?.title ?? '');
   const [text, setText] = useState(item?.text ?? '');
-  const [department, setDepartment] = useState(item?.departmentId ?? departmentDefault);
+  const [department, setDepartment] = useState(
+    item?.departmentId ??
+      (departments.some(({ id }) => id === departmentDefault) ? departmentDefault : ''),
+  );
   const [audience, setAudience] = useState(item?.audience ?? 'all');
   const [links, setLinks] = useState(
     item?.links.map((row) => `${row.label} | ${row.url}`).join('\n') ?? '',

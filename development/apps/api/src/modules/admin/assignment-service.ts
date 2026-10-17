@@ -1,4 +1,5 @@
 import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
+import { validateIdentitySelection } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { RecordConflictError } from '../../core/database/record-conflict-error.js';
@@ -103,8 +104,8 @@ export async function createRoleAssignment(
   return store.transaction(async (transactionStore) => {
     const definitions =
       input.roleKey === 'platform.admin'
-        ? await transactionStore.roles.listForUpdate({ query: input.roleKey })
-        : await transactionStore.roles.list({ query: input.roleKey });
+        ? await transactionStore.roles.listForUpdate({ key: input.roleKey })
+        : await transactionStore.roles.list({ key: input.roleKey });
     await requireActiveSubject(transactionStore, input.subjectUid);
     const role = exact(definitions, (candidate) => candidate.key === input.roleKey);
     if (role === undefined) {
@@ -114,9 +115,22 @@ export async function createRoleAssignment(
       throw new HttpError(409, 'role_definition_inactive', 'Role definition is not active');
     }
 
-    const existing = (
-      await transactionStore.roleAssignments.listForUpdate({ query: input.subjectUid })
-    ).find(
+    const assignments = await transactionStore.roleAssignments.listForUpdate({
+      subjectUid: input.subjectUid,
+    });
+    const validation = validateIdentitySelection([
+      ...assignments
+        .filter(
+          (candidate) =>
+            candidate.subjectUid === input.subjectUid &&
+            candidate.status === 'active' &&
+            (candidate.expiresAt === null || Date.parse(candidate.expiresAt) > now.getTime()),
+        )
+        .map(({ roleKey }) => roleKey),
+      input.roleKey,
+    ]);
+    if (!validation.ok) throw new HttpError(400, 'invalid_identity_selection', validation.message);
+    const existing = assignments.find(
       (candidate) =>
         candidate.subjectUid === input.subjectUid &&
         candidate.roleKey === input.roleKey &&
@@ -206,7 +220,7 @@ export async function createTagAssignment(
     validateScope(scope);
 
     const existing = (
-      await transactionStore.tagAssignments.listForUpdate({ query: input.subjectUid })
+      await transactionStore.tagAssignments.listForUpdate({ subjectUid: input.subjectUid })
     ).find(
       (candidate) =>
         candidate.subjectUid === input.subjectUid &&
@@ -293,14 +307,26 @@ export async function archiveRoleAssignment(
   context: AssignmentMutationContext,
 ): Promise<RoleAssignmentRecord> {
   const now = context.now ?? new Date();
+  const initial = await store.roleAssignments.get(assignmentId);
   return store.transaction(async (transactionStore) => {
-    const roleDefinitions = await transactionStore.roles.listForUpdate();
+    if (initial?.roleKey === 'platform.admin' || initial?.roleKey === SUPER_ADMIN_ROLE_KEY) {
+      await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
+      await transactionStore.roles.listForUpdate({ key: SUPER_ADMIN_ROLE_KEY });
+    }
+    const roleDefinitions = await transactionStore.roles.list();
     const canonicalSuperAdminRole = roleDefinitions.find(({ key }) => key === SUPER_ADMIN_ROLE_KEY);
     if (canonicalSuperAdminRole === undefined) {
       throw new Error('Canonical platform super administrator role is missing');
     }
 
-    const assignments = await transactionStore.roleAssignments.listForUpdate();
+    const assignments = initial
+      ? await transactionStore.roleAssignments.listForUpdate({
+          roleKey: initial.roleKey,
+          ...(initial.roleKey !== 'platform.admin' && initial.roleKey !== SUPER_ADMIN_ROLE_KEY
+            ? { ids: [assignmentId] }
+            : {}),
+        })
+      : [];
     const assignment = assignments.find(({ id }) => id === assignmentId);
     if (assignment === undefined) {
       throw new HttpError(404, 'assignment_not_found', 'Role assignment not found');
@@ -322,8 +348,11 @@ export async function archiveRoleAssignment(
       isCurrent(assignment.expiresAt, now)
     ) {
       const [subjects, access] = await Promise.all([
-        transactionStore.subjects.listForUpdate({ status: 'active' }),
-        transactionStore.developmentAccess.listForUpdate(),
+        transactionStore.subjects.listForUpdate({
+          status: 'active',
+          uids: [...new Set(assignments.map((row) => row.subjectUid))],
+        }),
+        transactionStore.developmentAccess.list(),
       ]);
       const identities = await businessAdminIdentities(assignments, context.directory);
       const admins = effectiveGlobalBusinessAdmins(
@@ -355,7 +384,10 @@ export async function archiveRoleAssignment(
       assignment.scope.id === '*' &&
       isCurrent(assignment.expiresAt, now)
     ) {
-      const activeSubjects = await transactionStore.subjects.listForUpdate({ status: 'active' });
+      const activeSubjects = await transactionStore.subjects.listForUpdate({
+        status: 'active',
+        uids: [...new Set(assignments.map((row) => row.subjectUid))],
+      });
       const activeSubjectUids = new Set(activeSubjects.map(({ uid }) => uid));
       const effectiveCount = countEffectiveSuperAdmins(assignments, activeSubjectUids, now);
       if (activeSubjectUids.has(assignment.subjectUid) && effectiveCount <= 1) {

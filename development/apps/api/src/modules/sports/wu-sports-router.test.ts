@@ -15,6 +15,42 @@ function fixture() {
 }
 
 describe('無体育 API', () => {
+  it('rejects invalid merged match dates for partial updates without changing persisted dates', async () => {
+    const app = fixture();
+    const created = await request(app)
+      .post('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-sports-member')
+      .send({
+        title: 'Dates',
+        startsAt: '2026-10-08T05:00:00.000Z',
+        endsAt: '2026-10-08T07:00:00.000Z',
+        location: 'Gym',
+      })
+      .expect(201);
+    const path = `/api/development/v1/sports/matches/${created.body.data.id}`;
+    for (const patch of [
+      { startsAt: '2026-10-08T08:00:00.000Z' },
+      { endsAt: '2026-10-08T04:00:00.000Z' },
+      { startsAt: '2026-10-08T07:00:00.000Z' },
+    ])
+      await request(app)
+        .patch(path)
+        .set('X-Demo-User', 'demo-sports-member')
+        .send(patch)
+        .expect(400);
+    const list = await request(app)
+      .get('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-student')
+      .expect(200);
+    expect(
+      list.body.data.find((item: { id: string }) => item.id === created.body.data.id),
+    ).toMatchObject({ startsAt: created.body.data.startsAt, endsAt: created.body.data.endsAt });
+    await request(app)
+      .patch(path)
+      .set('X-Demo-User', 'demo-sports-member')
+      .send({ startsAt: '2026-10-08T06:00:00.000Z' })
+      .expect(200);
+  });
   it('lets every sports member publish a match and derives its timeline status', async () => {
     const app = fixture();
     const created = await request(app)

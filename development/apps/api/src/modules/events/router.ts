@@ -1,9 +1,8 @@
-import type { ApiEnvelope, ScopeRef } from '@freebbs-development/contracts';
+import { SOCIAL_ORGANIZATION_IDS, type ApiEnvelope } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import { z } from 'zod';
 
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
-import { authorize } from '../../core/authorization/authorize.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
@@ -34,15 +33,7 @@ const status = z.enum([
   'finished',
   'archived',
 ]);
-const organizationId = z.enum([
-  'arts_center',
-  'liaison_center',
-  'sports_center',
-  'rights_development_center',
-  'tuanwei',
-  'sast',
-  'tms',
-]);
+const organizationId = z.enum(SOCIAL_ORGANIZATION_IDS);
 const nullableDateTime = z.string().datetime({ offset: true }).nullable();
 const querySchema = z
   .object({
@@ -167,15 +158,6 @@ async function requireActor(
   }
   return result.user;
 }
-function allowed(actor: AuthorizationContext, action: string, scopeRef?: ScopeRef): boolean {
-  return authorize(actor, { action, resource: 'activity', scope: scopeRef }).allowed;
-}
-function forbid(response: Response): void {
-  send<ErrorData>(response, 403, {
-    error: { code: 'forbidden', message: 'Event permission is required' },
-  });
-}
-
 export function createEventsRouter(options: EventsRouterOptions): Router {
   const router = Router();
   const service = new EventsService(options.store, undefined, options.uploadDirectory);
@@ -208,7 +190,6 @@ export function createEventsRouter(options: EventsRouterOptions): Router {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
     const input = parse(createSchema, request.body);
-    if (!allowed(actor, 'events.create', input.scope)) return forbid(response);
     send(response, 201, await service.create(actor, input));
   });
 

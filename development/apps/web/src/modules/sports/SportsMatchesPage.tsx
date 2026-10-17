@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { isDevelopmentBusinessAdmin, type SportsMatch } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
+  type ScopeRef,
+  type SportsMatch,
+} from '@freebbs-development/contracts';
 import type { DevelopmentApi, SportsUser } from './SportsPage.js';
 import { permitted } from './SportsPage.js';
 
@@ -13,6 +18,31 @@ interface Props {
 const dayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const labels = { upcoming: '即将开始', live: '正在进行', ended: '已结束' } as const;
+function matchPermission(
+  user: SportsUser | null,
+  action: string,
+  scope: ScopeRef = { type: 'public', id: '*' },
+): boolean {
+  if (!user || user.previewing) return false;
+  const scopes = [
+    scope,
+    { type: 'social_organization', id: 'sports_center' },
+    { type: 'department', id: 'student_union.sports_center' },
+  ];
+  const policies = (user.policies ?? [])
+    .filter(
+      (policy) =>
+        !policy.scope ||
+        scopes.some(
+          (candidate) =>
+            policy.scope!.type === candidate.type &&
+            (policy.scope!.id === '*' || policy.scope!.id === candidate.id),
+        ),
+    )
+    .map((policy) => ({ ...policy, scope: undefined }));
+  // Resolve all applicable scopes together so a source or organization deny always wins.
+  return permitted({ ...user, policies }, action, 'sports_match');
+}
 
 export function SportsMatchesPage({ client, user }: Props) {
   const [selected, setSelected] = useState(dayKey(new Date()));
@@ -47,14 +77,13 @@ export function SportsMatchesPage({ client, user }: Props) {
     return [...dates.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, date]) => date);
   }, [matches, todayKey]);
   const selectedRef = useRef<HTMLButtonElement>(null);
-  const mayCreate = permitted(user, 'sports.match.create', 'sports_match');
-  const mayUpdate = permitted(user, 'sports.match.update', 'sports_match');
+  const mayCreate = matchPermission(user, 'sports.match.create');
   const managesAllMatches =
-    isDevelopmentBusinessAdmin(user) ||
-    (user?.roles.some((role) =>
-      ['domain.sports_lead', 'department.sports_director'].includes(role),
-    ) ??
-      false);
+    isGlobalOrganizationBusinessSupervisor(user) ||
+    organizationMembershipsForRoles(user?.roles ?? []).some(
+      ({ organizationId, level }) =>
+        organizationId === 'sports_center' && (level === 'lead' || level === 'director'),
+    );
   const selectedMatches = useMemo(
     () =>
       matches
@@ -411,7 +440,9 @@ export function SportsMatchesPage({ client, user }: Props) {
           <li className="timeline-empty">这一天还没有比赛，去看看相邻日期吧。</li>
         )}
         {selectedMatches.map((match) => {
-          const canEditResult = mayUpdate && (match.ownerUid === user?.uid || managesAllMatches);
+          const canEditResult =
+            matchPermission(user, 'sports.match.update', match.scope) &&
+            (match.ownerUid === user?.uid || managesAllMatches);
           return (
             <li className="match-score-entry" key={match.id}>
               <article

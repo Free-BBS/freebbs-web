@@ -31,7 +31,7 @@ export function FieldLibrary({
   onCreateModule,
 }: FieldLibraryProps) {
   return (
-    <aside className="builder-library" aria-label="模块库">
+    <aside id="builder-library" tabIndex={-1} className="builder-library" aria-label="模块库">
       <header>
         <span>01</span>
         <div>

@@ -22,6 +22,53 @@ const maintainer = {
 };
 
 describe('ActivityDetailPage', () => {
+  it.each(['counselor.youth_league', 'student_union.presidium'] as const)(
+    'lets %s maintain public records through matching organization policies',
+    async (role) => {
+      const request = vi.fn().mockResolvedValue({
+        id: 'activity-scoped',
+        title: '组织活动',
+        description: '',
+        status: 'published',
+        startsAt: null,
+        endsAt: null,
+        location: '',
+        registrationDeadline: null,
+        capacity: null,
+        registrationCount: 0,
+        contact: '',
+        organizationId: 'sports_center',
+        standingActivity: false,
+        clubId: null,
+        ownerUid: 'another',
+        scope: { type: 'public', id: '*' },
+        milestones: [],
+        fixtures: [],
+        progress: null,
+      });
+      render(
+        <MemoryRouter>
+          <ActivityDetailPage
+            activityId="activity-scoped"
+            client={{ request }}
+            user={{
+              ...maintainer,
+              roles: [role],
+              policies: [
+                {
+                  action: 'events.update',
+                  resource: 'activity',
+                  effect: 'allow',
+                  scope: { type: 'social_organization', id: 'sports_center' },
+                },
+              ],
+            }}
+          />
+        </MemoryRouter>,
+      );
+      expect(await screen.findByRole('button', { name: '维护活动流程' })).toBeInTheDocument();
+    },
+  );
   it.each(['deadline', 'end'])(
     'explains and disables registration after the %s boundary',
     async (boundary) => {

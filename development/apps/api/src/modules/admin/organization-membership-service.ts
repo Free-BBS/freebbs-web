@@ -1,6 +1,7 @@
 import {
   organizationById,
   organizationForRole,
+  validateIdentitySelection,
   type OrganizationLevel,
   type SocialOrganizationId,
 } from '@freebbs-development/contracts';
@@ -161,6 +162,19 @@ export async function setOrganizationMembership(
       }
     }
 
+    const now = Date.now();
+    const validation = validateIdentitySelection([
+      ...(await transactionStore.roleAssignments.listForUpdate({ subjectUid: input.subjectUid }))
+        .filter(
+          (row) =>
+            row.subjectUid === input.subjectUid &&
+            row.status === 'active' &&
+            (row.expiresAt === null || Date.parse(row.expiresAt) > now),
+        )
+        .map(({ roleKey }) => roleKey),
+      targetRoleKey,
+    ]);
+    if (!validation.ok) throw new HttpError(400, 'invalid_identity_selection', validation.message);
     const role = await ensureRole(
       transactionStore,
       input.subjectUid,

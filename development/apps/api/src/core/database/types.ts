@@ -57,10 +57,23 @@ export type NewRecord<T extends StoredRecord> = Pick<
 export type RecordPatch<T extends StoredRecord> = Partial<NewRecord<T>>;
 
 export interface ListFilters {
+  key?: string;
+  uid?: string;
+  subjectUid?: string;
+  roleKey?: string;
+  tagKey?: string;
+  accessLevel?: string;
+  subjectUids?: readonly string[];
+  uids?: readonly string[];
+  ids?: readonly string[];
+  identity?: { uid: string; studentId?: string | null; username?: string | null };
   category?: string;
   tag?: string;
   season?: string;
   organizationId?: string;
+  organizationIds?: readonly (string | null)[];
+  queryOrganizationIds?: readonly string[];
+  queryLegacyOrganization?: boolean;
   standingActivity?: boolean;
   status?: string;
   scopeType?: string;
@@ -100,6 +113,17 @@ export interface RecordRepository<T extends StoredRecord> {
   delete(id: string): Promise<boolean>;
 }
 
+export interface FinanceSummary {
+  organizationId: string | null;
+  approvedBudget: number;
+  spent: number;
+  pending: number;
+  remaining: number;
+  usagePercent: number;
+}
+export interface FinanceRecordRepository extends RecordRepository<FinanceRecord> {
+  summarize(filters: ListFilters): Promise<FinanceSummary[]>;
+}
 export interface ScopedRecordAccess {
   all: boolean;
   ids: string[];
@@ -624,5 +648,5 @@ export interface DevelopmentStore {
   liaisonTeamMembers: RecordRepository<LiaisonTeamMemberRecord>;
   liaisonPosts: RecordRepository<LiaisonPostRecord>;
   liaisonOutcomes: RecordRepository<LiaisonOutcomeRecord>;
-  financeRecords: RecordRepository<FinanceRecord>;
+  financeRecords: FinanceRecordRepository;
 }

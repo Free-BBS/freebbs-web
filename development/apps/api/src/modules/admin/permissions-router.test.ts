@@ -77,7 +77,8 @@ describe('role permission governance', () => {
       await store.rolePermissions.list({ query: 'domain.arts_lead' })
     ).filter(({ roleKey }) => roleKey === 'domain.arts_lead');
     const desired = previousBindings.find(
-      ({ action, resource }) => action === 'knowledge.*' && resource === '*',
+      ({ action, resource, scope }) =>
+        action === 'knowledge.*' && resource === '*' && scope.type === 'public' && scope.id === '*',
     );
     if (desired === undefined) throw new Error('expected the built-in arts knowledge binding');
     await store.rolePermissions.update(desired.id, { status: 'inactive' });

@@ -34,8 +34,13 @@ export function SystemSettingsPage({
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [tab, setTab] = useState(0);
+  const [visitedTabs, setVisitedTabs] = useState([0]);
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const id = useId();
+  function selectTab(index: number) {
+    setVisitedTabs((current) => (current.includes(index) ? current : [...current, index]));
+    setTab(index);
+  }
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -61,9 +66,9 @@ export function SystemSettingsPage({
       current
         ? {
             ...current,
-            users: [
-              ...new Map([...current.users, ...users].map((user) => [user.uid, user])).values(),
-            ],
+            users: current.users.map(
+              (user) => users.find((updated) => updated.uid === user.uid) ?? user,
+            ),
           }
         : current,
     );
@@ -114,7 +119,7 @@ export function SystemSettingsPage({
                   aria-selected={tab === index}
                   aria-controls={`${id}-panel-${index}`}
                   tabIndex={tab === index ? 0 : -1}
-                  onClick={() => setTab(index)}
+                  onClick={() => selectTab(index)}
                   onKeyDown={(event) => {
                     let next = index;
                     if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
@@ -124,7 +129,7 @@ export function SystemSettingsPage({
                     else if (event.key === 'End') next = tabs.length - 1;
                     else return;
                     event.preventDefault();
-                    setTab(next);
+                    selectTab(next);
                     tabButtons.current[next]?.focus();
                   }}
                 >
@@ -140,12 +145,14 @@ export function SystemSettingsPage({
             aria-labelledby={`${id}-tab-0`}
             hidden={tab !== 0}
           >
-            <IdentitySettings
-              client={client}
-              initial={data}
-              onUsersChange={updateUsers}
-              readonly={readonly}
-            />
+            {visitedTabs.includes(0) ? (
+              <IdentitySettings
+                client={client}
+                initial={data}
+                onUsersChange={updateUsers}
+                readonly={readonly}
+              />
+            ) : null}
           </div>
           <div
             className="settings-panel"
@@ -154,13 +161,15 @@ export function SystemSettingsPage({
             aria-labelledby={`${id}-tab-1`}
             hidden={tab !== 1}
           >
-            <ReadonlyPreview active={readonly}>
-              <OrganizationSettings
-                client={client}
-                initial={data}
-                onOrganizationsChange={updateOrganizations}
-              />
-            </ReadonlyPreview>
+            {visitedTabs.includes(1) ? (
+              <ReadonlyPreview active={readonly}>
+                <OrganizationSettings
+                  client={client}
+                  initial={data}
+                  onOrganizationsChange={updateOrganizations}
+                />
+              </ReadonlyPreview>
+            ) : null}
           </div>
           <div
             className="settings-panel"
@@ -169,9 +178,11 @@ export function SystemSettingsPage({
             aria-labelledby={`${id}-tab-2`}
             hidden={tab !== 2}
           >
-            <ReadonlyPreview active={readonly}>
-              <BatchSettings kind="notification" client={client} initial={data} />
-            </ReadonlyPreview>
+            {visitedTabs.includes(2) ? (
+              <ReadonlyPreview active={readonly}>
+                <BatchSettings kind="notification" client={client} initial={data} />
+              </ReadonlyPreview>
+            ) : null}
           </div>
           <div
             className="settings-panel"
@@ -180,9 +191,11 @@ export function SystemSettingsPage({
             aria-labelledby={`${id}-tab-3`}
             hidden={tab !== 3}
           >
-            <ReadonlyPreview active={readonly}>
-              <BatchSettings kind="reward" client={client} initial={data} />
-            </ReadonlyPreview>
+            {visitedTabs.includes(3) ? (
+              <ReadonlyPreview active={readonly}>
+                <BatchSettings kind="reward" client={client} initial={data} />
+              </ReadonlyPreview>
+            ) : null}
           </div>
           <div
             className="settings-panel"
@@ -191,12 +204,14 @@ export function SystemSettingsPage({
             aria-labelledby={`${id}-tab-4`}
             hidden={tab !== 4}
           >
-            <SettingsAudit
-              client={client}
-              initial={data.audits}
-              active={tab === 4}
-              users={data.users}
-            />
+            {visitedTabs.includes(4) ? (
+              <SettingsAudit
+                client={client}
+                initial={data.audits}
+                active={tab === 4}
+                users={data.users}
+              />
+            ) : null}
           </div>
         </>
       ) : null}
