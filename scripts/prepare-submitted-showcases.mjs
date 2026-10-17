@@ -1,4 +1,8 @@
 import { createRequire } from 'node:module';
+import {
+  prepareAudiovisualPlayer,
+  prepareAudiovisualMedia,
+} from './showcase/audiovisual-player.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -204,101 +208,6 @@ function prepareSubmittedContacts(site, name, source) {
     );
   }
   return source;
-}
-
-function prepareCreativeGalleryLayout(source) {
-  if (!source.includes('function arrangeOrdered(') || !source.includes('function arrangeGallery('))
-    throw new Error('The submitted creative gallery layout changed; review its row layout first.');
-  // A justified row keeps the submitted sequence and the complete artwork ratio.
-  // The cap also keeps a final portrait or a short row from growing without limit.
-  return String.raw`function arrangeOrdered(ratios, width) {
-  width = Number(width);
-  if (!Number.isFinite(width) || width <= 0 || !ratios.length)
-    return { items: [], height: 0 };
-  const inset = Math.min(10, width * .04);
-  const available = width - inset * 2;
-  const gap = Math.min(width <= 520 ? 12 : 16, available * .04);
-  const maxHeight = width <= 520 ? 320 : 360;
-  const targetHeight = Math.min(width <= 520 ? 220 : 260, available * .72);
-  const maxPerRow = width <= 520 ? 2 : 4;
-  const safeRatios = ratios.map(ratio =>
-    Number.isFinite(ratio) && ratio > 0 ? ratio : 1);
-  const result = [];
-  let start = 0, y = inset;
-  while (start < safeRatios.length) {
-    let end = start, sum = 0;
-    do {
-      sum += safeRatios[end++];
-    } while (
-      end < safeRatios.length &&
-      end - start < maxPerRow &&
-      (available - gap * (end - start - 1)) / sum > targetHeight
-    );
-    const count = end - start;
-    const height = Math.min(maxHeight, (available - gap * (count - 1)) / sum);
-    const rowWidth = sum * height + gap * (count - 1);
-    let x = (width - rowWidth) / 2;
-    for (let index = start; index < end; index++) {
-      const imageWidth = safeRatios[index] * height;
-      result.push({ x, y, width: imageWidth, height, angle: 0 });
-      x += imageWidth + gap;
-    }
-    y += height + gap;
-    start = end;
-  }
-  return { items: result, height: y - gap + inset };
-}
-if (typeof module !== 'undefined') module.exports = arrangeOrdered;
-
-if (typeof document !== 'undefined')
-  document.querySelectorAll('.year-gallery,.free-gallery').forEach(gallery => {
-    const items = Array.from(gallery.children);
-    let pending = false;
-    const layout = () => {
-      pending = false;
-      const width = gallery.clientWidth;
-      if (!width) return;
-      const ratios = items.map(item => {
-        const image = item.querySelector('img');
-        return image?.naturalWidth && image.naturalHeight
-          ? image.naturalWidth / image.naturalHeight : 1;
-      });
-      const arranged = arrangeOrdered(ratios, width);
-      gallery.classList.remove('layout-scattered');
-      gallery.classList.add('layout-ordered');
-      gallery.style.height = arranged.height + 'px';
-      arranged.items.forEach((position, index) => {
-        const item = items[index];
-        item.style.width = position.width + 'px';
-        item.style.height = position.height + 'px';
-        item.style.left = position.x + 'px';
-        item.style.top = position.y + 'px';
-        item.style.setProperty('--scatter-angle', '0deg');
-        item.style.zIndex = '1';
-      });
-    };
-    const schedule = () => {
-      if (!pending) {
-        pending = true;
-        requestAnimationFrame(layout);
-      }
-    };
-    items.forEach(item => {
-      const image = item.querySelector('img');
-      image?.addEventListener('load', schedule);
-      image?.addEventListener('error', schedule);
-    });
-    let lastWidth = 0;
-    new ResizeObserver(entries => {
-      const width = entries[0].contentRect.width;
-      if (Math.abs(width - lastWidth) > .5) {
-        lastWidth = width;
-        schedule();
-      }
-    }).observe(gallery);
-    schedule();
-  });
-`;
 }
 
 function prepareResearchPage(source) {
@@ -677,16 +586,6 @@ for (const [slug, folder, entry] of roots.filter(
       if (replacementPattern)
         text = text.replace(replacementPattern, (match) => replacements.get(match));
       text = prepareSubmittedContacts(slug, name, text);
-      if (slug === 'creative' && name === 'gallery-layout.js')
-        text = prepareCreativeGalleryLayout(text);
-      if (slug === 'creative' && name === 'style.css')
-        text += `
-/* Ordered, equal-height artwork rows preserve every submitted image in full. */
-.year-gallery.layout-ordered,.free-gallery.layout-ordered{display:block;position:relative;padding:0}
-.year-gallery.layout-ordered .collection-work:nth-child(n),.free-gallery.layout-ordered .collection-work:nth-child(n){position:absolute;margin:0;transform:none!important;transform-origin:center}
-.layout-ordered .collection-work a,.layout-ordered .collection-work a:hover,.layout-ordered .collection-work a:focus-visible{transform:none!important}
-.layout-ordered .collection-work img{display:block;width:100%;height:100%;max-height:none;object-fit:contain}
-`;
       if (slug === 'liaison') {
         text = text
           .replace(/[ \t]+$/gm, '')
@@ -735,60 +634,7 @@ for (const [slug, folder, entry] of roots.filter(
           'const path = `${screen.scopeFrame}-${mode.value}.png`;',
           `const originalPath = \`\${screen.scopeFrame}-\${mode.value}.png\`;\n    const path = (${JSON.stringify(scopeAssets)})[originalPath] ?? originalPath;`,
         );
-        // Motion remains independent of explicit, informed consent to background audio.
-        text = text.replace(
-          'let failed = false, videoFailed = false, waiting = false, destroyed = false;',
-          `let failed = false, videoFailed = false, waiting = false, destroyed = false;
-  let audioAuthorized = false, openingAuthorized = false;
-  const musicButton = document.createElement('button');
-  musicButton.type = 'button';
-  musicButton.textContent = '♫ 播放音乐';
-  musicButton.setAttribute('aria-pressed', 'false');
-  musicButton.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:2147483000;padding:9px 13px;border:1px solid #acd1c6;border-radius:999px;background:#f3fff9ed;color:#174a42;font:600 12px/1.4 system-ui,sans-serif;cursor:pointer';
-  ctx.root.append(musicButton);
-  ctx.listen(musicButton, 'click', () => {
-    audioAuthorized = !audioAuthorized;
-    musicButton.textContent = audioAuthorized ? '♫ 暂停音乐' : '♫ 播放音乐';
-    musicButton.setAttribute('aria-pressed', String(audioAuthorized));
-    if (audioAuthorized) { blocked = false; ctx.setMotion(true); }
-    syncPlayback(); update();
-  });
-  ctx.cleanup(() => musicButton.remove());`,
-        );
-        text = text.replace(
-          'const shouldPlay = ctx.state.screen === 0 && ctx.state.motion && !document.hidden;',
-          'const shouldPlay = openingAuthorized && ctx.state.screen === 0 && ctx.state.motion && !document.hidden;',
-        );
-        text = text.replace(
-          'ctx.cleanup(() => musicButton.remove());',
-          `ctx.cleanup(() => musicButton.remove());
-  const openingButton = document.createElement('button');
-  openingButton.type = 'button';
-  openingButton.textContent = '▶ 播放开场';
-  openingButton.setAttribute('aria-pressed', 'false');
-  openingButton.style.cssText = 'display:inline-flex;align-items:center;margin-top:18px;padding:10px 17px;border:1px solid #b3d5ce;border-radius:999px;background:#f3fff9ed;color:#174a42;font:600 13px/1.5 system-ui,sans-serif;cursor:pointer';
-  ctx.find('.opening-copy').append(openingButton);
-  ctx.listen(openingButton, 'click', () => {
-    openingAuthorized = !openingAuthorized;
-    openingButton.textContent = openingAuthorized ? 'Ⅱ 暂停开场' : '▶ 播放开场';
-    openingButton.setAttribute('aria-pressed', String(openingAuthorized));
-    if (openingAuthorized) { videoBlocked = false; ctx.setMotion(true); }
-    syncVideo();
-  });
-  ctx.cleanup(() => openingButton.remove());`,
-        );
-        text = text.replace(
-          'if (!configured || failed || blocked || !ctx.state.motion || document.hidden) {',
-          'if (!audioAuthorized || !configured || failed || blocked || !ctx.state.motion || document.hidden) {',
-        );
-        text = text.replace(
-          'ctx.listen(ctx.root, "click", retryAutoplay);',
-          '/* Background audio authorization is controlled by the visible music button. */',
-        );
-        text = text.replace(
-          'ctx.listen(ctx.root, "keydown", retryAutoplay);',
-          '/* Background audio starts only from an explicit player button. */',
-        );
+        text = prepareAudiovisualPlayer(text);
         text = text.replace('player.autoplay = true;', 'player.autoplay = false;');
         text = text.replace('player.preload = "metadata";', 'player.preload = "none";');
         text = text.replace(
@@ -800,10 +646,6 @@ for (const [slug, folder, entry] of roots.filter(
           'iframe.allow = "autoplay; fullscreen; picture-in-picture";',
           'iframe.allow = "fullscreen; picture-in-picture";',
         );
-        text = text.replace(
-          'const text = !configured ?',
-          'const text = !audioAuthorized ? "点击播放音乐开启" : !configured ?',
-        );
       }
       if (slug === 'research' && /\.html?$/i.test(name)) {
         text = prepareResearchPage(text);
@@ -813,6 +655,7 @@ for (const [slug, folder, entry] of roots.filter(
       }
       if (/\.html?$/i.test(name)) {
         if (slug === 'audiovisual') {
+          text = prepareAudiovisualMedia(text);
           const poster =
             openingPoster ??
             renamed.get('assets/works/mv/xunying.jpg') ??

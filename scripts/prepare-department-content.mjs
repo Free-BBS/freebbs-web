@@ -48,6 +48,7 @@ const departments = {
     folder: '电子系TMS分会',
     files: [
       'cover.jpg',
+      '00_toutu.webp',
       '01_jingsai.jpg',
       '02_jingsai.jpg',
       '02_guben.jpg',
@@ -138,23 +139,31 @@ for (const [departmentId, entry] of Object.entries(departments)) {
     const stem =
       departmentId === 'tms' ? path.parse(filename).name : `${String(index + 1).padStart(2, '0')}`;
     const target = ensureChild(outputDir, path.join(outputDir, `${stem}.webp`));
-    const info = await sharp(source)
-      .rotate()
-      .resize({
-        width: ['arts', 'project'].includes(departmentId) ? 2000 : 1600,
-        height: 1800,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({
-        quality: ['arts', 'project'].includes(departmentId)
-          ? 86
-          : departmentId === 'new-media' && index < 6
-            ? 88
-            : 84,
-        effort: 5,
-      })
-      .toFile(target);
+    const submittedWebp = departmentId === 'tms' && filename === '00_toutu.webp';
+    const info = submittedWebp
+      ? await (async () => {
+          await fs.copyFile(source, target);
+          const metadata = await sharp(target).metadata();
+          const stat = await fs.stat(target);
+          return { width: metadata.width, height: metadata.height, size: stat.size };
+        })()
+      : await sharp(source)
+          .rotate()
+          .resize({
+            width: ['arts', 'project'].includes(departmentId) ? 2000 : 1600,
+            height: 1800,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({
+            quality: ['arts', 'project'].includes(departmentId)
+              ? 86
+              : departmentId === 'new-media' && index < 6
+                ? 88
+                : 84,
+            effort: 5,
+          })
+          .toFile(target);
     prepared.push({
       filename,
       url: `/development/organization-showcase/content/${departmentId}/${stem}.webp`,

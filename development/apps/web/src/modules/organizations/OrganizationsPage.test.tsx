@@ -3,6 +3,7 @@ import { Link, MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../core/api/client.js';
 import { OrganizationsPage } from './OrganizationsPage.js';
+import { OrganizationShowcaseHeader } from './OrganizationShowcaseHeader.js';
 import { ORGANIZATION_GALLERY, organizationRegistrationPath } from './catalog.js';
 import { findShowcase } from './showcase/registry.js';
 import { usesFullPageShowcase } from './showcase/presentation.js';
@@ -23,7 +24,12 @@ function show(organizationKey?: string, departmentKey?: string, enabled = true) 
   return {
     request,
     ...render(
-      <MemoryRouter>
+      <MemoryRouter
+        initialEntries={[
+          `/organizations${organizationKey ? `/${organizationKey}` : ''}${departmentKey ? `/${departmentKey}` : ''}`,
+        ]}
+      >
+        <OrganizationShowcaseHeader />
         <OrganizationsPage
           organizationKey={organizationKey}
           departmentKey={departmentKey}
@@ -36,9 +42,29 @@ function show(organizationKey?: string, departmentKey?: string, enabled = true) 
 }
 
 describe('organization exhibition', () => {
+  it.each([undefined, 'youth_league', 'student_union', 'science_association', 'media_center'])(
+    'keeps the %s index trail outside its reading scroll region',
+    (organizationKey) => {
+      show(organizationKey);
+      const organization = ORGANIZATION_GALLERY.find((item) => item.key === organizationKey);
+      const label = organization?.name ?? '风采展示';
+      const reading = screen.getByRole('region', { name: `${label}页面内容` });
+      expect(reading).toContainElement(screen.getByRole('contentinfo'));
+      expect(screen.getByRole('heading', { name: '风采展示', level: 1 })).toBeInTheDocument();
+      if (organization) {
+        const trail = screen.getByRole('navigation', { name: '展厅位置' });
+        expect(reading).not.toContainElement(trail);
+        expect(within(trail).getByText(label)).toHaveAttribute('aria-current', 'page');
+        expect(within(trail).queryByRole('link', { name: label })).not.toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('navigation', { name: '展厅位置' })).not.toBeInTheDocument();
+      }
+    },
+  );
+
   it('keeps five organization entrances and makes every department directly discoverable', () => {
     const { request } = show();
-    expect(screen.getByRole('heading', { name: /^风采展示/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^风采展示/, level: 2 })).toBeInTheDocument();
     expect(screen.getByText('同在电子，亲如一家')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /^走进电子系/ })).toHaveLength(5);
     for (const organization of ORGANIZATION_GALLERY) {
@@ -47,7 +73,12 @@ describe('organization exhibition', () => {
       expect(entrance).toHaveAccessibleDescription(expect.stringContaining(organization.motto));
       expect(within(entrance).queryByRole('link')).not.toBeInTheDocument();
       for (const department of organization.departments) {
-        expect(within(entrance).getByText(department.name, { exact: true })).toBeInTheDocument();
+        expect(
+          within(entrance).getByText(
+            department.key === 'rights_development_center' ? '权益发展中心' : department.name,
+            { exact: true },
+          ),
+        ).toBeInTheDocument();
         const content = findShowcase(`${organization.key}.${department.key}`);
         expect(
           screen.getByRole('link', {
@@ -166,7 +197,7 @@ describe('organization exhibition', () => {
     );
     expect(window.scrollTo).toHaveBeenCalledTimes(3);
     expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'instant' });
-    expect(screen.getByRole('heading', { name: '调研组', level: 2 })).toBeInTheDocument();
+    expect(screen.getByTitle('调研组特色展区')).toBeInTheDocument();
   });
 
   it('honors an initial department fragment instead of resetting a deep link to the entrance', async () => {
@@ -306,9 +337,7 @@ describe('organization exhibition', () => {
   it.each(
     ORGANIZATION_GALLERY.flatMap((organization) =>
       organization.departments
-        .filter(
-          ({ key }) => key !== 'research' && !usesFullPageShowcase(`${organization.key}.${key}`),
-        )
+        .filter(({ key }) => !usesFullPageShowcase(`${organization.key}.${key}`))
         .map((department) => ({ organization, department })),
     ),
   )(
@@ -363,20 +392,18 @@ describe('organization exhibition', () => {
         screen.getByRole('heading', { name: '电子系 TMS 分会', level: 2 }),
       ).toBeInTheDocument();
       const trail = screen.getByRole('navigation', { name: '展厅位置' });
-      expect(trail).toHaveTextContent(/^风采展示\s*\/\s*TMS$/);
-      expect(within(trail).getAllByRole('link')).toHaveLength(1);
-      expect(within(trail).getByRole('link', { name: '风采展示' })).toHaveAttribute(
-        'href',
-        '/organizations',
-      );
-      expect(within(trail).getByText('TMS')).toHaveAttribute('aria-current', 'page');
+      expect(trail).toHaveTextContent(/^电子系 TMS 分会$/);
+      expect(within(trail).queryAllByRole('link')).toHaveLength(0);
+      expect(within(trail).getByText('电子系 TMS 分会')).toHaveAttribute('aria-current', 'page');
       expect(screen.queryByRole('heading', { name: '没有找到这个展区' })).not.toBeInTheDocument();
     },
   );
 
   it('opens research as an independent read-only exhibition without practice APIs or editing actions', () => {
     const { request } = show('youth_league', 'research');
-    expect(screen.getByRole('heading', { name: '调研组', level: 2 })).toBeInTheDocument();
+    expect(screen.getByTitle('调研组特色展区').parentElement).toHaveClass(
+      'sc-submitted-shell--full-page',
+    );
     expect(screen.getByTitle('调研组特色展区')).toHaveAttribute(
       'src',
       '/development/organization-showcase/sites/research/index.html',
@@ -389,6 +416,7 @@ describe('organization exhibition', () => {
 
   it.each([
     ['youth_league', 'organization'],
+    ['youth_league', 'research'],
     ['youth_league', 'sail'],
     ['youth_league', 'humanities'],
     ['media_center', 'creative'],
@@ -404,11 +432,8 @@ describe('organization exhibition', () => {
       expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
       expect(frame.parentElement).toHaveClass('sc-submitted-shell--full-page');
       const breadcrumb = screen.getByRole('navigation', { name: '展厅位置' });
-      expect(breadcrumb).toHaveClass('organization-breadcrumb--compact');
-      expect(within(breadcrumb).getByRole('link', { name: '风采展示' })).toHaveAttribute(
-        'href',
-        '/organizations',
-      );
+      expect(breadcrumb).toHaveClass('organization-breadcrumb--header');
+      expect(within(breadcrumb).queryAllByRole('link')).toHaveLength(1);
       expect(
         within(breadcrumb).getByRole('link', {
           name: ORGANIZATION_GALLERY.find(({ key }) => key === organization)!.name,
@@ -429,7 +454,6 @@ describe('organization exhibition', () => {
     ['student_union', 'liaison_center'],
     ['science_association', 'software'],
     ['science_association', 'hardware'],
-    ['youth_league', 'research'],
   ])('keeps the introduction and window layout for %s/%s', async (organization, department) => {
     const content = findShowcase(`${organization}.${department}`)!;
     show(organization, department);
@@ -438,7 +462,7 @@ describe('organization exhibition', () => {
     expect(document.querySelector('.sc-hero')).toHaveTextContent(content.shortName ?? content.name);
     expect(document.querySelector('.sc-window-bar')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: '展厅位置' })).toHaveClass(
-      'organization-breadcrumb--compact',
+      'organization-breadcrumb--header',
     );
   });
 

@@ -5,7 +5,6 @@ import type { ApiClient } from '../../core/api/client.js';
 import { DepartmentHomepage } from './DepartmentHomepage.js';
 import { findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
-import { OrganizationBreadcrumb } from './OrganizationBreadcrumb.js';
 import { OrganizationDepartmentViewport } from './OrganizationDepartmentViewport.js';
 import { MainSiteFooter } from '../../app/MainSiteFooter.js';
 import {
@@ -93,9 +92,10 @@ export function OrganizationsPage({
     );
   if (!organization)
     return (
-      <section ref={page} className="module-page organization-page">
+      <OrganizationDepartmentViewport ref={page}>
         <OrganizationShowcaseHome />
-      </section>
+        <MainSiteFooter />
+      </OrganizationDepartmentViewport>
     );
   const canonicalDepartment =
     department || organization.key === 'tms'
@@ -103,12 +103,6 @@ export function OrganizationsPage({
       : undefined;
   const curated = findShowcase(`${organization.key}.${department?.key ?? 'position'}`);
   const fullPage = Boolean(curated?.site && usesFullPageShowcase(curated.departmentId));
-  const breadcrumb = (
-    <OrganizationBreadcrumb
-      organization={organization}
-      departmentLabel={department ? (curated?.shortName ?? department.name) : undefined}
-    />
-  );
   if (canonicalDepartment || (department && curated))
     return (
       <OrganizationDepartmentViewport
@@ -136,11 +130,7 @@ export function OrganizationsPage({
       </OrganizationDepartmentViewport>
     );
   return (
-    <section
-      ref={page}
-      className={`module-page organization-page organization-page--${organization.key}`}
-    >
-      {breadcrumb}
+    <OrganizationDepartmentViewport ref={page} organization={organization}>
       <header className="organization-profile-hero sc-group-hero">
         <div className="organization-profile-mark">
           <OrganizationMark variant={organization.key} />
@@ -183,6 +173,7 @@ export function OrganizationsPage({
           ))}
         </div>
       </section>
-    </section>
+      <MainSiteFooter />
+    </OrganizationDepartmentViewport>
   );
 }

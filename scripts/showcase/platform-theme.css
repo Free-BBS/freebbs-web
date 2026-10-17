@@ -349,6 +349,71 @@ html[data-showcase-site='hardware'][data-platform-theme='dark'] {
     color: #17261f;
   }
 }
+/* Retain the submitted emblem and red/gold palette with a clearer type hierarchy. */
+html[data-showcase-site='organization'] {
+  & body {
+    --home-serif: var(--home-sans);
+    font-family: var(--home-sans);
+  }
+  & .introduction {
+    padding-block: clamp(32px, 4vw, 52px);
+  }
+  & .league-emblem {
+    width: clamp(104px, 11vw, 154px);
+    margin-bottom: 26px;
+  }
+  & h1 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+  }
+  & h1 span:first-child {
+    font-size: clamp(19px, 2.2vw, 28px);
+    font-weight: 500;
+  }
+  & h1 wbr {
+    display: none;
+  }
+  & h1 span:last-child {
+    font-size: clamp(36px, 4.4vw, 62px);
+    font-weight: 700;
+  }
+  & .intro-section {
+    margin-top: 30px;
+  }
+  & .intro-section::before {
+    width: 80px;
+    margin-bottom: 20px;
+  }
+  & .intro-section h2 {
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+  }
+  & .intro-section p {
+    font-size: clamp(22px, 2.7vw, 34px);
+    font-weight: 600;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+  & .contact-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    font-size: 17px;
+  }
+  & .contact-section h2 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  @media (max-width: 700px) {
+    & .contact-section {
+      font-size: 16px;
+    }
+  }
+}
 html[data-showcase-site='research'] {
   & :is(body, button, input, textarea, select) {
     font-family: var(
@@ -365,6 +430,63 @@ html[data-showcase-site='research'] {
   & :is(h1, h2, h3, h4) {
     font-weight: 600;
     letter-spacing: normal;
+  }
+  & body {
+    font-size: 17px;
+  }
+  & :is(p, .lead, .practice-intro p, .story-text p) {
+    font-size: 17px;
+    line-height: 1.95;
+  }
+  & .hero h1 {
+    font-size: clamp(42px, 5vw, 70px);
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 0;
+  }
+  & .hero {
+    min-height: 0;
+    padding-block: 48px;
+    gap: clamp(24px, 4vw, 50px);
+    align-items: center;
+  }
+  & .hero-image {
+    align-self: center;
+  }
+  & .hero-image img {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+  & nav {
+    font-size: 15px;
+    gap: 22px;
+  }
+  & :is(.button, .report-actions a, .activity-pushes a) {
+    font-size: 16px;
+  }
+  & .message p:not(.eyebrow) {
+    font-size: 16px;
+    line-height: 1.95;
+  }
+  & .brand small {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  & .reader {
+    max-width: 900px;
+  }
+  @media (max-width: 620px) {
+    & :is(p, .lead, .practice-intro p, .story-text p) {
+      font-size: 16px;
+    }
+    & nav {
+      font-size: 14px;
+      gap: 12px 18px;
+    }
+    & .hero h1 {
+      font-size: clamp(38px, 9vw, 48px);
+    }
   }
   & .practice-photos .gallery {
     display: grid;
@@ -935,44 +1057,6 @@ html[data-showcase-site='liaison'] {
   html[data-showcase-site='liaison'] .lc-hero h1 em {
     white-space: pre-line;
     text-wrap: wrap;
-  }
-}
-/* Keep the submitted photo-paper treatment without hiding faces under other photos. */
-html[data-showcase-site='creative'] {
-  & .about-story {
-    align-self: start;
-  }
-  & .photo-collage {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    align-items: start;
-    width: 100%;
-    height: auto;
-    min-height: 0;
-    aspect-ratio: auto;
-    margin: 12px 0 0;
-  }
-  & .scattered-photo {
-    position: relative;
-    inset: auto;
-    width: 100%;
-    z-index: auto;
-    transform: none;
-  }
-  & .scattered-photo img {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1.6;
-    object-fit: contain;
-  }
-  & .scattered-photo:is(:hover, :focus-visible) {
-    transform: translateY(-3px);
-  }
-  @media (max-width: 600px) {
-    & .photo-collage {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 }
 /* These two submitted visual worlds already use a dark canvas. Keep media,

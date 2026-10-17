@@ -21,6 +21,16 @@
   overflow-wrap: anywhere;
 }
 
+.main-site-header-title-slot {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 0;
+}
+
+.main-site-header-title-slot > * {
+  max-width: 100%;
+}
+
 .main-site-account,
 .main-site-user {
   display: flex;
@@ -423,6 +433,17 @@ body.theme-dark .main-site-tool-button img {
   .main-site-settings,
   .main-site-desktop-theme {
     display: none;
+  }
+
+  .main-site-header--custom-title {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .main-site-header-title-slot {
+    width: 100%;
+    flex: 0 0 auto;
   }
 
   .main-site-account {

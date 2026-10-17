@@ -1399,32 +1399,6 @@ body.theme-light .curated-showcase {
   margin: 0;
   overflow: hidden;
 }
-.organization-breadcrumb.organization-breadcrumb--compact {
-  min-height: 42px;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-page);
-  font-family: var(--font-ui);
-  font-size: 15px;
-  line-height: 1.5;
-}
-.organization-breadcrumb--compact a {
-  display: inline-flex;
-  min-height: 26px;
-  align-items: center;
-}
-@media (max-width: 600px) {
-  .organization-breadcrumb.organization-breadcrumb--compact {
-    min-height: 40px;
-    gap: 6px;
-    padding: 6px 14px;
-    font-size: 14px;
-  }
-}
 .sc-submitted-shell--full-page {
   position: relative;
   flex: 1;
@@ -1439,6 +1413,57 @@ body.theme-light .curated-showcase {
 .sc-submitted-shell--full-page > .sc-submitted-frame {
   height: 100%;
   min-height: 0;
+}
+.sc-submitted-shell--full-page:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  background: var(--surface-page);
+}
+.sc-fullscreen-toggle {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--sc-line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-text) 12%, transparent);
+  font: 650 14px/1.3 var(--font-body);
+  cursor: pointer;
+}
+.sc-fullscreen-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+.sc-fullscreen-toggle:hover {
+  background: var(--surface-muted);
+}
+.sc-fullscreen-toggle:disabled {
+  cursor: progress;
+}
+.sc-fullscreen-feedback {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 52px);
+  z-index: 3;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sc-line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.6;
 }
 .sc-submitted-shell--full-page > .sc-frame-loading {
   position: absolute;

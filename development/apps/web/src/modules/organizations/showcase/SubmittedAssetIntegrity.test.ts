@@ -244,10 +244,12 @@ describe('reviewed submitted-site artifacts', () => {
     }
   });
 
-  it('publishes browser assets and font licenses without internal submission/tool archives', () => {
+  it('publishes browser assets, attribution and font licenses without internal submission/tool archives', () => {
     const forbidden = files
       .map((file) => relative(sitesRoot, file))
       .filter((file) => {
+        // This submitted attribution accompanies the standard Youth League emblem.
+        if (file.replaceAll('\\', '/') === 'organization/assets/SOURCES.md') return false;
         const segments = file.split(/[\\/]/);
         return (
           segments.some((segment) =>

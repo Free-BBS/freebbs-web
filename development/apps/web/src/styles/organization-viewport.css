@@ -9,12 +9,6 @@
   overflow: hidden;
 }
 
-.organization-department-viewport > .organization-breadcrumb {
-  position: relative;
-  z-index: 8;
-  flex-shrink: 0;
-}
-
 .organization-department-scroll {
   --sc-header-offset: 6px;
   min-height: 0;

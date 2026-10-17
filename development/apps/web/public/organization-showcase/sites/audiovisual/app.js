@@ -684,45 +684,19 @@ MM.register("player", (ctx) => {
   const hasSource = (media) => Boolean(media.getAttribute("src") || media.querySelector("source[src]")?.getAttribute("src"));
   const configured = hasSource(audio), videoConfigured = hasSource(video);
   let failed = false, videoFailed = false, waiting = false, destroyed = false;
-  let audioAuthorized = false, openingAuthorized = false;
-  const musicButton = document.createElement('button');
-  musicButton.type = 'button';
-  musicButton.textContent = '♫ 播放音乐';
-  musicButton.setAttribute('aria-pressed', 'false');
-  musicButton.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:2147483000;padding:9px 13px;border:1px solid #acd1c6;border-radius:999px;background:#f3fff9ed;color:#174a42;font:600 12px/1.4 system-ui,sans-serif;cursor:pointer';
-  ctx.root.append(musicButton);
-  ctx.listen(musicButton, 'click', () => {
-    audioAuthorized = !audioAuthorized;
-    musicButton.textContent = audioAuthorized ? '♫ 暂停音乐' : '♫ 播放音乐';
-    musicButton.setAttribute('aria-pressed', String(audioAuthorized));
-    if (audioAuthorized) { blocked = false; ctx.setMotion(true); }
-    syncPlayback(); update();
-  });
-  ctx.cleanup(() => musicButton.remove());
-  const openingButton = document.createElement('button');
-  openingButton.type = 'button';
-  openingButton.textContent = '▶ 播放开场';
-  openingButton.setAttribute('aria-pressed', 'false');
-  openingButton.style.cssText = 'display:inline-flex;align-items:center;margin-top:18px;padding:10px 17px;border:1px solid #b3d5ce;border-radius:999px;background:#f3fff9ed;color:#174a42;font:600 13px/1.5 system-ui,sans-serif;cursor:pointer';
-  ctx.find('.opening-copy').append(openingButton);
-  ctx.listen(openingButton, 'click', () => {
-    openingAuthorized = !openingAuthorized;
-    openingButton.textContent = openingAuthorized ? 'Ⅱ 暂停开场' : '▶ 播放开场';
-    openingButton.setAttribute('aria-pressed', String(openingAuthorized));
-    if (openingAuthorized) { videoBlocked = false; ctx.setMotion(true); }
-    syncVideo();
-  });
-  ctx.cleanup(() => openingButton.remove());
   let blocked = false, videoBlocked = false, audioPending = false, videoPending = false;
   let failureText = "", playRequest = 0;
-  audio.volume = Number(volumes[0].value);
+  let lastAudibleVolume = Number(volumes[0].value) || 0.7;
+  audio.volume = lastAudibleVolume;
+  audio.defaultMuted = true;
+  audio.muted = true;
   video.muted = true;
   panel.querySelector("[data-player-track-title]").textContent = audio.dataset.title;
 
   function syncVideo() {
     if (!videoConfigured || videoFailed) return;
     // 视频使用自己的时间轴，保留素材开头和循环结尾的淡入淡出。
-    const shouldPlay = openingAuthorized && ctx.state.screen === 0 && ctx.state.motion && !document.hidden;
+    const shouldPlay = ctx.state.screen === 0 && ctx.state.motion && !document.hidden;
     if (shouldPlay && video.paused && !videoPending && !videoBlocked) {
       videoPending = true;
       video.play().then(() => {
@@ -738,8 +712,8 @@ MM.register("player", (ctx) => {
   function update() {
     volumes.forEach((volume) => {
       volume.disabled = !configured || failed;
-      volume.value = audio.volume;
-      volume.setAttribute("aria-valuetext", `${Math.round(audio.volume * 100)}%`);
+      volume.value = audio.muted ? 0 : audio.volume;
+      volume.setAttribute("aria-valuetext", audio.muted ? "静音" : `${Math.round(audio.volume * 100)}%`);
     });
     muteButtons.forEach((button) => {
       button.disabled = !configured || failed;
@@ -749,13 +723,13 @@ MM.register("player", (ctx) => {
       icon.classList.toggle("icon-muted", audio.muted);
       icon.classList.toggle("icon-volume", !audio.muted);
     });
-    const text = !audioAuthorized ? "点击播放音乐开启" : !configured ? "尚未配置音频" : failed ? failureText : blocked && ctx.state.motion ? "点击页面开启音乐" : waiting ? "正在缓冲" : !audio.paused ? "正在播放" : "已暂停";
+    const text = !configured ? "尚未配置音频" : failed ? failureText : blocked && ctx.state.motion ? "点击页面开启音乐" : waiting ? "正在缓冲" : !audio.paused ? audio.muted ? "静音播放" : "正在播放" : "已暂停";
     if (status.textContent !== text) status.textContent = text;
     syncVideo();
   }
   function syncPlayback() {
     // 后台暂停不改变用户的播放选择，返回页面时恢复。
-    if (!audioAuthorized || !configured || failed || blocked || !ctx.state.motion || document.hidden) {
+    if (!configured || failed || blocked || !ctx.state.motion || document.hidden) {
       audio.pause();
       syncVideo();
       return;
@@ -788,10 +762,17 @@ MM.register("player", (ctx) => {
   }
   volumes.forEach((volume) => ctx.listen(volume, "input", () => {
     audio.volume = Number(volume.value);
+    audio.muted = audio.volume === 0;
+    if (audio.volume > 0) lastAudibleVolume = audio.volume;
+    blocked = false;
+    syncPlayback();
     update();
   }));
   muteButtons.forEach((button) => ctx.listen(button, "click", () => {
     audio.muted = !audio.muted;
+    if (!audio.muted && audio.volume === 0) audio.volume = lastAudibleVolume;
+    blocked = false;
+    syncPlayback();
     update();
   }));
   // pause 也可能来自后台切换或尚未完成的 play；不反向覆盖用户的 motion 选择。
@@ -814,15 +795,15 @@ MM.register("player", (ctx) => {
     if (blocked) { blocked = false; syncPlayback(); }
     if (videoBlocked) { videoBlocked = false; syncVideo(); }
   }
-  /* Background audio authorization is controlled by the visible music button. */
-  /* Background audio starts only from an explicit player button. */
+  ctx.listen(ctx.root, "click", retryAutoplay);
+  ctx.listen(ctx.root, "keydown", retryAutoplay);
   ctx.listen(window, "resize", layout);
   ctx.listen(document, "visibilitychange", syncPlayback);
   ctx.subscribe(({ changes }) => {
     if (changes.includes("screen")) layout();
     if (changes.includes("motion")) syncPlayback();
   });
-  // 默认尝试有声播放；受策略限制时等待交互，静音视频继续自动播放。
+  // 音乐默认静音播放，由原播放器音量控件开启声音；静音视频按原逻辑播放。
   syncPlayback();
   ctx.animate((elapsed) => {
     if (ctx.state.screen !== 0 && innerWidth <= 1360) return;

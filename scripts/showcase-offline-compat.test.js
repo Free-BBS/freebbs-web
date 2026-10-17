@@ -161,7 +161,25 @@ test('twenty department entries execute the classic viewer under file URLs witho
         assert.equal(window.location.hash, `#${department.route}`);
         assert.ok(window.document.title.includes(department.name));
         assert.ok(window.document.querySelector('.organization-department-viewport'));
-        assert.ok(window.document.querySelector('.organization-breadcrumb--compact'));
+        const header = window.document.querySelector('.review-header');
+        const trail = header.querySelector('.organization-breadcrumb--header');
+        assert.ok(trail);
+        assert.equal(header.querySelector('h1 a').getAttribute('href'), '#/organizations');
+        assert.equal(trail.querySelector('[aria-current="page"]').textContent, department.name);
+        assert.equal(
+          window.document.querySelector('.organization-department-viewport > .organization-breadcrumb'),
+          null,
+        );
+        const parentLinks = trail.querySelectorAll('a');
+        if (department.route === '/organizations/tms') {
+          assert.equal(parentLinks.length, 0);
+        } else {
+          assert.equal(parentLinks.length, 1);
+          assert.equal(
+            parentLinks[0].getAttribute('href'),
+            `#${department.route.split('/').slice(0, 3).join('/')}`,
+          );
+        }
         assert.equal(
           [...window.document.querySelectorAll('a,button')].filter((element) =>
             /^←?\s*返回上一级$/.test(element.textContent.trim()),

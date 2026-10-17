@@ -1,5 +1,6 @@
 const fullPageDepartments = new Set([
   'youth_league.organization',
+  'youth_league.research',
   'youth_league.sail',
   'youth_league.humanities',
   'media_center.creative',
@@ -36,4 +37,14 @@ const departmentPaths = new Set(
 
 export function isDepartmentShowcasePath(pathname: string): boolean {
   return departmentPaths.has(pathname.replace(/^\/development(?=\/)/, '').replace(/\/+$/, ''));
+}
+
+const showcasePaths = new Set([
+  '/organizations',
+  ...ORGANIZATION_GALLERY.map((organization) => `/organizations/${organization.key}`),
+  ...departmentPaths,
+]);
+
+export function isOrganizationShowcasePath(pathname: string): boolean {
+  return showcasePaths.has(pathname.replace(/^\/development(?=\/)/, '').replace(/\/+$/, ''));
 }

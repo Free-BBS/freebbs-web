@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
@@ -32,6 +32,7 @@ interface MainSiteHeaderProps {
   themeMode: ThemeMode;
   onToggleTheme: () => void;
   client?: Pick<ApiClient, 'request'>;
+  titleContent?: ReactNode;
 }
 
 function beijingToday(): string {
@@ -207,6 +208,7 @@ export function MainSiteHeader({
   themeMode,
   onToggleTheme,
   client,
+  titleContent,
 }: MainSiteHeaderProps) {
   const location = useLocation();
   const savedLocation =
@@ -296,8 +298,15 @@ export function MainSiteHeader({
 
   return (
     <>
-      <header className="main-site-header" style={mainSiteTypography()}>
-        <h1 className="main-site-header-title">{developmentTitle(location.pathname)}</h1>
+      <header
+        className={`main-site-header${titleContent !== undefined ? ' main-site-header--custom-title' : ''}`}
+        style={mainSiteTypography()}
+      >
+        {titleContent !== undefined ? (
+          <div className="main-site-header-title-slot">{titleContent}</div>
+        ) : (
+          <h1 className="main-site-header-title">{developmentTitle(location.pathname)}</h1>
+        )}
         <div className="main-site-account">
           <a
             className="main-site-search main-site-tool-button"

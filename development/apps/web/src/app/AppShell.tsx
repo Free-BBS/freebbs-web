@@ -4,7 +4,8 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
-import { isDepartmentShowcasePath } from '../modules/organizations/showcase/presentation.js';
+import { isOrganizationShowcasePath } from '../modules/organizations/showcase/presentation.js';
+import { OrganizationShowcaseHeader } from '../modules/organizations/OrganizationShowcaseHeader.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import {
   canViewSystemSettings,
@@ -158,7 +159,7 @@ function PreviewDenied() {
 export function AppShell({ children, moduleStates }: AppShellProps) {
   const auth = useAuth();
   const location = useLocation();
-  const fullPageShowcase = isDepartmentShowcasePath(location.pathname);
+  const fullPageShowcase = isOrganizationShowcasePath(location.pathname);
 
   const theme = useMainSiteTheme();
   const typography = useMainSiteTypography();
@@ -257,6 +258,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
             authMode={auth.authMode}
             themeMode={theme.mode}
             onToggleTheme={theme.toggle}
+            titleContent={fullPageShowcase ? <OrganizationShowcaseHeader /> : undefined}
           />
           {auth.user.previewing ? (
             <div className="development-preview-banner" role="status">

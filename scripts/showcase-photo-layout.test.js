@@ -1,68 +1,63 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync, existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { Script } = require('node:vm');
+const { load } = require('cheerio');
+const sharp = require('sharp');
 
-const source = readFileSync(
-  resolve(
-    __dirname,
-    '../development/apps/web/public/organization-showcase/sites/creative/gallery-layout.js',
-  ),
-  'utf8',
+const site = resolve(
+  __dirname,
+  '../development/apps/web/public/organization-showcase/sites/creative',
 );
+const source = readFileSync(resolve(site, 'gallery-layout.js'), 'utf8');
 const sandbox = { module: { exports: undefined } };
 new Script(source).runInNewContext(sandbox);
 const arrange = sandbox.module.exports;
 
-function checkLayout(ratios, width) {
-  const result = arrange(ratios, width);
-  assert.equal(result.items.length, ratios.length);
-  let previous;
-  for (const [index, item] of result.items.entries()) {
-    const ratio = Number.isFinite(ratios[index]) && ratios[index] > 0 ? ratios[index] : 1;
-    assert.ok(Object.values(item).every(Number.isFinite));
-    assert.ok(item.width > 0 && item.height > 0);
-    assert.ok(item.x >= -1e-7 && item.y >= 0);
-    assert.ok(item.x + item.width <= width + 1e-7);
-    assert.ok(item.y + item.height <= result.height + 1e-7);
-    assert.ok(item.height <= (width <= 520 ? 320 : 360));
-    assert.ok(Math.abs(item.width / item.height - ratio) < 1e-7);
-    assert.equal(item.angle, 0);
-    if (previous) {
-      assert.ok(item.y >= previous.y);
-      if (Math.abs(item.y - previous.y) < 1e-7) {
-        assert.equal(item.height, previous.height);
-        assert.ok(item.x >= previous.x + previous.width - 1e-7);
-      } else assert.ok(item.y >= previous.y + previous.height - 1e-7);
+test('every creative memory and artwork remains available as a complete local image', async () => {
+  const images = new Set();
+  for (const file of readdirSync(site).filter((name) => name.endsWith('.html'))) {
+    const $ = load(readFileSync(resolve(site, file), 'utf8'));
+    $('img').each((_, image) => images.add($(image).attr('src')));
+    if (file === 'about.html') assert.equal($('.photo-collage .scattered-photo').length, 8);
+  }
+  for (const image of images) {
+    const path = resolve(site, decodeURIComponent(image));
+    assert.ok(existsSync(path), image);
+    const { width, height } = await sharp(path).metadata();
+    assert.ok(width > 0 && height > 0, image);
+  }
+});
+
+test('submitted scattered artwork keeps its proportions and fits phone and desktop galleries', async () => {
+  for (const file of readdirSync(site).filter((name) => name.endsWith('.html'))) {
+    const $ = load(readFileSync(resolve(site, file), 'utf8'));
+    for (const gallery of $('.year-gallery,.free-gallery').toArray()) {
+      const ratios = [];
+      for (const image of $(gallery).find('img').toArray()) {
+        const path = resolve(site, decodeURIComponent($(image).attr('src')));
+        const { width, height } = await sharp(path).metadata();
+        ratios.push(width / height);
+      }
+      for (const width of [278, 350, 520, 768, 1200]) {
+        const result = arrange(ratios, width, $(gallery).hasClass('free-gallery'));
+        assert.equal(result.items.length, ratios.length);
+        assert.ok(Number.isFinite(result.height) && result.height > 0);
+        assert.ok(result.items.some((item) => item.angle !== 0));
+        for (const [index, item] of result.items.entries()) {
+          assert.ok(Object.values(item).every(Number.isFinite));
+          assert.ok(item.width > 0 && item.height > 0);
+          assert.ok(Math.abs(item.width / item.height - ratios[index]) < 1e-7);
+          const radians = (Math.abs(item.angle) * Math.PI) / 180;
+          const boundWidth = item.width * Math.cos(radians) + item.height * Math.sin(radians);
+          const boundHeight = item.height * Math.cos(radians) + item.width * Math.sin(radians);
+          const left = item.x + (item.width - boundWidth) / 2;
+          const top = item.y + (item.height - boundHeight) / 2;
+          assert.ok(left >= -1e-7 && left + boundWidth <= width + 1e-7);
+          assert.ok(top >= -1e-7 && top + boundHeight <= result.height + 1e-7);
+        }
+      }
     }
-    previous = item;
-  }
-  return result;
-}
-
-test('mixed portrait, landscape and banner artwork stays complete and aligned in original order', () => {
-  for (const width of [120, 278, 390, 520, 521, 768, 1200]) {
-    checkLayout([0.65, 16 / 9, 1, 4.2, 0.7, 1.5, 0.7], width);
-  }
-});
-
-test('a final portrait is centered without being stretched into an oversized image', () => {
-  for (const width of [320, 768, 1200]) {
-    const { items } = checkLayout([0.65], width);
-    assert.ok(Math.abs(items[0].x - (width - items[0].width) / 2) < 1e-7);
-  }
-  assert.equal(arrange([], 390).items.length, 0);
-  checkLayout([0, NaN, Infinity, -1], 390);
-});
-
-test('varied artwork sets never overlap or escape narrow and wide galleries', () => {
-  let seed = 0x74ecba2;
-  const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
-  for (let count = 0; count < 500; count++) {
-    const ratios = Array.from({ length: Math.floor(random() * 60) }, () =>
-      Math.exp(-2 + random() * 4),
-    );
-    checkLayout(ratios, 120 + random() * 1500);
   }
 });

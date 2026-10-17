@@ -5,31 +5,41 @@ export function OrganizationBreadcrumb({
   organization,
   departmentLabel,
   compact = false,
+  header = false,
 }: {
-  organization: OrganizationExhibit;
+  organization?: OrganizationExhibit;
   departmentLabel?: string;
   compact?: boolean;
+  header?: boolean;
 }) {
+  const currentDepartmentLabel = organization?.key === 'tms' ? undefined : departmentLabel;
+
   return (
     <nav
-      className={`organization-breadcrumb${compact ? ' organization-breadcrumb--compact' : ''}`}
+      className={`organization-breadcrumb${compact ? ' organization-breadcrumb--compact' : ''}${header ? ' organization-breadcrumb--header' : ''}`}
       aria-label="展厅位置"
     >
-      <Link to="/organizations">风采展示</Link>
-      <span aria-hidden="true">/</span>
-      {organization.key === 'tms' && !departmentLabel ? (
-        <span aria-current="page">{compact ? organization.shortName : organization.name}</span>
-      ) : (
-        <Link to={`/organizations/${organization.key}`} aria-label={organization.name}>
-          {compact ? organization.shortName : organization.name}
-        </Link>
-      )}
-      {departmentLabel ? (
+      {organization ? (
         <>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">{departmentLabel}</span>
+          {!header ? (
+            <>
+              <Link to="/organizations">风采展示</Link>
+              <span aria-hidden="true">/</span>
+            </>
+          ) : null}
+          {currentDepartmentLabel ? (
+            <>
+              <Link to={`/organizations/${organization.key}`}>{organization.name}</Link>
+              <span aria-hidden="true">{header ? '·' : '/'}</span>
+              <span aria-current="page">{currentDepartmentLabel}</span>
+            </>
+          ) : (
+            <span aria-current="page">{organization.name}</span>
+          )}
         </>
-      ) : null}
+      ) : (
+        <span aria-current="page">风采展示</span>
+      )}
     </nav>
   );
 }

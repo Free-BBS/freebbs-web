@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fullPageShowcaseParent,
   isDepartmentShowcasePath,
+  isOrganizationShowcasePath,
   isFullPageShowcasePath,
   usesFullPageShowcase,
 } from './presentation.js';
@@ -31,6 +32,7 @@ const departmentRoutes = [
 
 const fullDocumentIds = [
   'youth_league.organization',
+  'youth_league.research',
   'youth_league.humanities',
   'youth_league.sail',
   'media_center.creative',
@@ -38,6 +40,34 @@ const fullDocumentIds = [
 ];
 
 describe('organization presentation route boundaries', () => {
+  it.each([
+    '/organizations',
+    '/organizations/tms',
+    '/organizations/youth_league',
+    '/organizations/student_union',
+    '/organizations/science_association',
+    '/organizations/media_center',
+    ...departmentRoutes.map(
+      ([organization, department]) => `/organizations/${organization}/${department}`,
+    ),
+  ])('uses a fixed reading surface for the complete exhibition route %s', (pathname) => {
+    for (const base of ['', '/development'])
+      for (const suffix of ['', '/'])
+        expect(isOrganizationShowcasePath(`${base}${pathname}${suffix}`)).toBe(true);
+  });
+
+  it.each([
+    '/organizations/unknown',
+    '/organizations/youth_league/unknown',
+    '/organizations/youth_league/organization/ledger',
+    '/organizations/media_center/creative/edit',
+    '/community',
+    '/admin',
+  ])('keeps management and unknown routes outside the exhibition viewport: %s', (pathname) => {
+    expect(isOrganizationShowcasePath(pathname)).toBe(false);
+    expect(isOrganizationShowcasePath(`/development${pathname}`)).toBe(false);
+  });
+
   it.each(departmentRoutes)(
     'keeps the navigation fixed for the %s/%s exhibition with either router base',
     (organization, department) => {
@@ -73,12 +103,11 @@ describe('organization presentation route boundaries', () => {
       }
   });
 
-  it('preserves the introduction and embedded window for the four retained departments', () => {
+  it('preserves the introduction and embedded window for the three retained departments', () => {
     for (const id of [
       'student_union.liaison_center',
       'science_association.software',
       'science_association.hardware',
-      'youth_league.research',
     ]) {
       const pathname = `/organizations/${id.replace('.', '/')}`;
       expect(isDepartmentShowcasePath(pathname)).toBe(true);

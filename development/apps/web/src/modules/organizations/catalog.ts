@@ -113,7 +113,7 @@ const exhibitionDefinitions: Array<
     key: 'student_union',
     name: '电子系学生会',
     shortName: '学生会',
-    motto: '让校园生活，多一种可能。',
+    motto: '让校园生活，多一种可能',
     introduction:
       '从舞台到赛场，从资源连接到校园生活，学生会的四个中心一起回应同学的需求，让每个人都能找到参与的入口。',
     focus: ['文艺', '体育', '联络', '权益与发展'],
@@ -128,7 +128,7 @@ const exhibitionDefinitions: Array<
     key: 'youth_league',
     name: '电子系团委',
     shortName: '团委',
-    motto: '一起出发，也彼此陪伴。',
+    motto: '一起出发，呼唤人文的回归',
     introduction:
       '组织、新生、志愿、实践、调研、人文与扬帆计划，连接大学生活中不同的探索路径，让参与、交流与成长持续发生。',
     focus: ['组织建设', '志愿实践', '人文交流', '新生成长'],
@@ -136,19 +136,19 @@ const exhibitionDefinitions: Array<
   },
   {
     key: 'tms',
-    name: '电子系TMS分会',
+    name: '电子系 TMS 分会',
     shortName: 'TMS',
-    motto: '在思考与行动之间，相互启发。',
+    motto: '在思考与行动之间，相互启发',
     introduction:
       '以理论学习、主题交流和共同参与为纽带，为同学提供学习讨论、活动报名与经历分享的空间。',
-    focus: ['理论学习', '主题交流', '活动参与'],
+    focus: ['理论学习', '主题交流', '红色实践'],
     organizationIds: ['tms'],
   },
   {
     key: 'science_association',
     name: '电子系科协',
     shortName: '科协',
-    motto: '把好奇，变成亲手做出的答案。',
+    motto: '把好奇，变成亲手做出的答案',
     introduction:
       '连接软件、硬件、学习培训与项目实践，为想动手、想探索的同学提供技术交流和一起创造的机会。',
     focus: ['软件硬件', '学习培训', '项目实践', '活动策划'],
@@ -158,7 +158,7 @@ const exhibitionDefinitions: Array<
     key: 'media_center',
     name: '电子系学生媒体中心',
     shortName: '媒体中心',
-    motto: '把校园故事，装进镜头与文字。',
+    motto: '把校园故事，装进镜头与文字',
     introduction:
       '从创意设计到影音策划，从采访记录到新媒体分享，媒体中心用镜头、文字与设计留下校园生活的每一个鲜活瞬间。',
     focus: ['创意设计', '影音策划', '校园记录', '新媒体传播'],

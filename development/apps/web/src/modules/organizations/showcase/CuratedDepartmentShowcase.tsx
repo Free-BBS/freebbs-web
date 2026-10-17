@@ -214,22 +214,47 @@ export function SubmittedDepartmentShowcase({
   offline?: boolean;
   fullPage?: boolean;
 }) {
+  const shell = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const [fullscreenError, setFullscreenError] = useState(false);
-  async function enterFullscreen() {
-    if (!frame.current?.requestFullscreen) {
-      setFullscreenError(true);
-      return;
-    }
+  const [fullscreen, setFullscreen] = useState(false);
+  const [changingFullscreen, setChangingFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState<'enter' | 'exit' | null>(null);
+  async function toggleFullscreen() {
+    const exiting = fullPage && document.fullscreenElement === shell.current;
+    const target = fullPage ? shell.current : frame.current;
+    setFullscreenError(null);
+    setChangingFullscreen(true);
     try {
-      await frame.current.requestFullscreen();
-      setFullscreenError(false);
+      if (exiting) await document.exitFullscreen();
+      else {
+        if (!target?.requestFullscreen) throw new Error('Fullscreen unavailable');
+        await target.requestFullscreen();
+      }
     } catch {
-      setFullscreenError(true);
+      setFullscreenError(exiting ? 'exit' : 'enter');
+    } finally {
+      setChangingFullscreen(false);
     }
   }
+  useEffect(() => {
+    const syncFullscreen = () => {
+      setFullscreen(document.fullscreenElement === shell.current);
+      setFullscreenError(null);
+    };
+    const exitWithEscape = (event: KeyboardEvent) => {
+      if (fullPage && event.key === 'Escape' && document.fullscreenElement === shell.current) {
+        void document.exitFullscreen().catch(() => setFullscreenError('exit'));
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('keydown', exitWithEscape);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('keydown', exitWithEscape);
+    };
+  }, [fullPage]);
   useEffect(() => {
     const resize = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
@@ -262,10 +287,37 @@ export function SubmittedDepartmentShowcase({
   if (!content.site) return null;
   return (
     <section
+      ref={shell}
       className={`sc-submitted-shell${fullPage ? ' sc-submitted-shell--full-page' : ''}`}
       aria-label={content.site.title}
     >
-      {!fullPage ? (
+      {fullPage ? (
+        <button
+          type="button"
+          className="sc-fullscreen-toggle"
+          disabled={changingFullscreen}
+          onClick={() => void toggleFullscreen()}
+          aria-label={`${fullscreen ? '退出' : '全屏浏览'}${content.name}展区${fullscreen ? '全屏' : ''}`}
+          title={fullscreen ? '退出全屏' : '全屏浏览'}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path
+              d={
+                fullscreen
+                  ? 'M9 3v6H3m18 0h-6V3M3 15h6v6m6 0v-6h6'
+                  : 'M9 3H3v6m12-6h6v6M3 15v6h6m6 0h6v-6'
+              }
+            />
+          </svg>
+          <span>{fullscreen ? '退出' : '全屏'}</span>
+        </button>
+      ) : (
         <div className="sc-window-bar">
           <span className="sc-window-dots" aria-hidden="true">
             <i />
@@ -286,17 +338,21 @@ export function SubmittedDepartmentShowcase({
           <button
             type="button"
             onClick={() => {
-              void enterFullscreen();
+              void toggleFullscreen();
             }}
             aria-label={`全屏浏览${content.name}展区`}
           >
             全屏浏览 ⛶
           </button>
         </div>
-      ) : null}
-      {!fullPage && fullscreenError ? (
-        <p className="sc-window-tip" role="status">
-          当前浏览器未能进入全屏，可继续在小窗中浏览。
+      )}
+      {fullscreenError ? (
+        <p className={fullPage ? 'sc-fullscreen-feedback' : 'sc-window-tip'} role="status">
+          {fullPage
+            ? fullscreenError === 'exit'
+              ? '未能退出全屏，请按 Esc 退出。'
+              : '当前浏览器未能进入全屏。'
+            : '当前浏览器未能进入全屏，可继续在小窗中浏览。'}
         </p>
       ) : null}
       {!loaded ? (

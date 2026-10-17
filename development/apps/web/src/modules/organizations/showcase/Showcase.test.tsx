@@ -3,10 +3,14 @@ import path from 'node:path';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CuratedDepartmentShowcase } from './CuratedDepartmentShowcase.js';
+import {
+  CuratedDepartmentShowcase,
+  SubmittedDepartmentShowcase,
+} from './CuratedDepartmentShowcase.js';
 import { SHOWCASES, findShowcase } from './registry.js';
 import type { ShowcaseContent, ShowcaseImage } from './types.js';
 import { submittedFrameSandbox } from './submitted-frame.js';
+import { usesFullPageShowcase } from './presentation.js';
 
 const native = SHOWCASES.filter((content) => !content.site);
 const submitted = SHOWCASES.filter((content) => content.site);
@@ -109,7 +113,7 @@ describe('curated organization exhibitions', () => {
       if (content.site)
         expect(existsSync(localAsset(content.site.entry)), content.site.entry).toBe(true);
     }
-    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(71);
+    expect(new Set(native.flatMap(contentImages).map(({ src }) => src)).size).toBe(72);
   });
 
   it('retains the practice documents and the contact supplied by the organizer', () => {
@@ -365,5 +369,87 @@ describe('curated organization exhibitions', () => {
       await screen.findByText(/当前浏览器未能进入全屏，可继续在小窗中浏览/),
     ).toBeInTheDocument();
     expect(frame).toBeInTheDocument();
+  });
+
+  it.each(submitted.filter((content) => usesFullPageShowcase(content.departmentId)))(
+    'offers a compact fullscreen control on the $name full-page exhibition',
+    (content) => {
+      render(<SubmittedDepartmentShowcase content={content} fullPage />);
+      expect(
+        screen.getByRole('button', { name: `全屏浏览${content.name}展区` }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(`${content.name}的小天地`)).not.toBeInTheDocument();
+      expect(screen.getByTitle(content.site!.title)).toHaveAttribute('allow', 'fullscreen');
+    },
+  );
+
+  it('keeps the exit control in fullscreen and reflects browser-initiated exits', async () => {
+    const content = findShowcase('media_center.creative')!;
+    render(<SubmittedDepartmentShowcase content={content} fullPage />);
+    const shell = screen.getByRole('region', { name: content.site!.title });
+    const fullscreenDescriptor = Object.getOwnPropertyDescriptor(document, 'fullscreenElement');
+    const exitDescriptor = Object.getOwnPropertyDescriptor(document, 'exitFullscreen');
+    let fullscreenElement: Element | null = null;
+    const updateFullscreen = (element: Element | null) => {
+      fullscreenElement = element;
+      fireEvent(document, new Event('fullscreenchange'));
+    };
+    const requestFullscreen = vi.fn(async () => updateFullscreen(shell));
+    const exitFullscreen = vi.fn(async () => updateFullscreen(null));
+    Object.defineProperty(shell, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: `全屏浏览${content.name}展区` }));
+      const exitButton = await screen.findByRole('button', {
+        name: `退出${content.name}展区全屏`,
+      });
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      fireEvent.click(exitButton);
+      expect(exitFullscreen).toHaveBeenCalledTimes(1);
+      const enterButton = await screen.findByRole('button', {
+        name: `全屏浏览${content.name}展区`,
+      });
+      fireEvent.click(enterButton);
+      expect(
+        await screen.findByRole('button', { name: `退出${content.name}展区全屏` }),
+      ).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(exitFullscreen).toHaveBeenCalledTimes(2);
+      fireEvent.click(await screen.findByRole('button', { name: `全屏浏览${content.name}展区` }));
+      updateFullscreen(null);
+      expect(
+        screen.getByRole('button', { name: `全屏浏览${content.name}展区` }),
+      ).toBeInTheDocument();
+    } finally {
+      if (fullscreenDescriptor)
+        Object.defineProperty(document, 'fullscreenElement', fullscreenDescriptor);
+      else Reflect.deleteProperty(document, 'fullscreenElement');
+      if (exitDescriptor) Object.defineProperty(document, 'exitFullscreen', exitDescriptor);
+      else Reflect.deleteProperty(document, 'exitFullscreen');
+    }
+  });
+
+  it('leaves the full-page exhibition available when fullscreen cannot be entered', async () => {
+    const content = findShowcase('media_center.creative')!;
+    render(<SubmittedDepartmentShowcase content={content} fullPage />);
+    const shell = screen.getByRole('region', { name: content.site!.title });
+    Object.defineProperty(shell, 'requestFullscreen', {
+      configurable: true,
+      value: vi.fn().mockRejectedValue(new Error('Fullscreen denied')),
+    });
+    fireEvent.click(screen.getByRole('button', { name: `全屏浏览${content.name}展区` }));
+    expect(await screen.findByText('当前浏览器未能进入全屏。')).toBeInTheDocument();
+    expect(screen.getByTitle(content.site!.title)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `全屏浏览${content.name}展区` })).toBeEnabled();
   });
 });

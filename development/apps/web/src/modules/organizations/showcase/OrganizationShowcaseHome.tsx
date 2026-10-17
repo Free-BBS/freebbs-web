@@ -136,7 +136,11 @@ export function OrganizationShowcaseHome() {
                 >
                   {organization.departments.length ? (
                     organization.departments.map((department) => (
-                      <span key={department.key}>{department.name}</span>
+                      <span key={department.key}>
+                        {department.key === 'rights_development_center'
+                          ? '权益发展中心'
+                          : department.name}
+                      </span>
                     ))
                   ) : (
                     <span>理论学习 · 交流与实践</span>
@@ -238,11 +242,6 @@ export function OrganizationShowcaseHome() {
           </div>
         )}
       </section>
-      <footer className="sc-campus-footer">
-        <span aria-hidden="true">✳</span>
-        <p>下一段校园故事，也许就从一次相识开始。</p>
-        <a href="#showcase-neighborhoods-title">回到小街入口 ↑</a>
-      </footer>
     </>
   );
 }

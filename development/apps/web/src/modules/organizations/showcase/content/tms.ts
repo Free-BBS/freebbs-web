@@ -37,7 +37,7 @@ const content: ShowcaseContent = {
   darkAccent: '#ffabb2',
   layout: 'community',
   hero: {
-    ...image('01_jingsai', '新生理论知识竞赛“忆往無前”现场'),
+    ...image('00_toutu', '电子系 TMS 分会合影'),
     aspectRatio: 1.85,
     position: 'center bottom',
   },
