@@ -1,4 +1,91 @@
 ((root) => {
+  const privateImages = new Map();
+  let imageSession = 0;
+  const token = () => {
+    try {
+      return root.localStorage?.getItem('free_bbs_auth_token') || '';
+    } catch {
+      return '';
+    }
+  };
+  function imageApiRoot() {
+    return String(
+      root.FREEBBS_API_BASE ||
+        (root.location?.protocol === 'file:'
+          ? 'http://127.0.0.1:3001/api'
+          : `${root.location?.origin || 'https://free-bbs.cn'}/api`),
+    ).replace(/\/api\/?$/, '');
+  }
+  function generatedSource(source) {
+    try {
+      const url = new URL(source, root.location?.origin || 'https://free-bbs.cn');
+      if (
+        ![new URL(imageApiRoot()).origin, root.location?.origin || 'https://free-bbs.cn'].includes(
+          url.origin,
+        )
+      )
+        return '';
+      return /^\/(?:uploads|api\/ai\/images)\/max-image-[1-9]\d*-\d{10,16}-[a-f0-9]{16}\.webp$/.test(
+        url.pathname,
+      )
+        ? url.pathname
+        : '';
+    } catch {
+      return '';
+    }
+  }
+  function releaseImage(image) {
+    const current = privateImages.get(image);
+    if (!current) return;
+    current.controller.abort();
+    if (current.url) root.URL.revokeObjectURL(current.url);
+    image.removeAttribute('src');
+    current.clear();
+    privateImages.delete(image);
+  }
+  function clearPrivateImages() {
+    imageSession += 1;
+    for (const image of privateImages.keys()) releaseImage(image);
+  }
+  async function fetchGeneratedImage(image, source, { ready, failed, clear }) {
+    for (const existing of privateImages.keys()) {
+      if (!existing.isConnected || existing === image) releaseImage(existing);
+    }
+    const session = imageSession;
+    const authToken = token();
+    const current = { controller: new AbortController(), url: '', clear };
+    privateImages.set(image, current);
+    try {
+      const response = await root.fetch(`${imageApiRoot()}${source}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        credentials: 'omit',
+        cache: 'no-store',
+        redirect: 'error',
+        signal: current.controller.signal,
+      });
+      if (!response.ok || !/^image\/webp(?:;|$)/i.test(response.headers.get('Content-Type') || ''))
+        throw new Error('image_unavailable');
+      const blob = await response.blob();
+      if (!blob.size || blob.size > 6 * 1024 * 1024) throw new Error('image_unavailable');
+      if (
+        session !== imageSession ||
+        authToken !== token() ||
+        !image.isConnected ||
+        current.controller.signal.aborted
+      )
+        return;
+      current.url = root.URL.createObjectURL(blob);
+      image.src = current.url;
+      ready(current.url);
+    } catch {
+      if (session === imageSession && !current.controller.signal.aborted) failed();
+    }
+  }
+  root.addEventListener?.('freebbs:session-change', clearPrivateImages);
+  root.addEventListener?.('storage', (event) => {
+    if (!event.key || event.key === 'free_bbs_auth_token') clearPrivateImages();
+  });
+  root.addEventListener?.('pagehide', clearPrivateImages);
   const imageRequestPattern =
     /(?:生成|画|绘制|创作|设计|做)(?:一|1)?(?:张|幅|个)?[\s\S]{0,80}(?:图片|图像|插画|海报|封面|头像|壁纸|卡通|漫画)|(?:generate|draw|create|design)[\s\S]{0,80}(?:image|picture|illustration|poster|wallpaper)/i;
   const negatedPattern =
@@ -72,7 +159,7 @@
         <div class="max-tetris-game" hidden>
           <div class="max-tetris-heading">
             <span>等待画面的小游戏</span>
-            <span>得分 <b data-tetris-score>0</b>　消行 <b data-tetris-lines>0</b></span>
+            <span>得分 <b data-tetris-score>0</b> · 消行 <b data-tetris-lines>0</b></span>
           </div>
           <div class="max-tetris-layout">
             <canvas width="240" height="384" role="img" aria-label="俄罗斯方块游戏区域"></canvas>
@@ -122,7 +209,8 @@
     retry.type = 'button';
     retry.className = 'max-generated-image-retry';
     retry.textContent = '重新加载';
-    const originalSource = image.currentSrc || image.src;
+    const originalSource = image.dataset.maxImageSource || image.currentSrc || image.src;
+    const protectedSource = generatedSource(originalSource);
     let automaticallyRetried = false;
 
     const markReady = () => {
@@ -150,6 +238,25 @@
       state.dataset.state = 'loading';
       state.textContent = '正在重新加载';
       actions.replaceChildren();
+      if (protectedSource) {
+        image.dataset.maxImageSource = protectedSource;
+        image.removeAttribute('src');
+        fetchGeneratedImage(image, protectedSource, {
+          ready: (url) => {
+            open.href = url;
+            download.href = url;
+          },
+          failed: markUnavailable,
+          clear: () => {
+            open.removeAttribute('href');
+            download.removeAttribute('href');
+            actions.replaceChildren(retry);
+            state.dataset.state = 'error';
+            state.textContent = '请登录后重新加载图片';
+          },
+        });
+        return;
+      }
       const url = new URL(originalSource, root.location?.origin || 'https://free-bbs.cn');
       url.searchParams.set('reload', String(Date.now()));
       image.src = url.href;
@@ -166,26 +273,22 @@
     image.decoding = 'async';
     figure.append(image, error, caption);
     // An image may already have completed before its Markdown is decorated.
-    if (image.complete) {
+    if (protectedSource) {
+      reload();
+    } else if (image.complete) {
       if (image.naturalWidth > 0) markReady();
       else markUnavailable();
     }
     return figure;
   }
 
-  function decorate(article) {
-    if (!article) return 0;
-    root.FreeBbsMaxTetris?.dispose(article);
-    article.classList.remove('is-image-generation');
-    article.removeAttribute('aria-busy');
-    const bubble = article.querySelector?.('.aichat-bubble, .discussion-markdown-body');
+  function enhanceImages(bubble) {
     if (!bubble) return 0;
     const images = [...bubble.querySelectorAll('img')].filter((image) => {
       try {
-        return new URL(
-          image.getAttribute('src') || '',
-          root.location?.origin || 'https://free-bbs.cn',
-        ).pathname.startsWith('/uploads/max-image-');
+        return Boolean(
+          generatedSource(image.dataset.maxImageSource || image.getAttribute('src') || ''),
+        );
       } catch {
         return false;
       }
@@ -209,6 +312,14 @@
     return images.length;
   }
 
+  function decorate(article) {
+    if (!article) return 0;
+    root.FreeBbsMaxTetris?.dispose(article);
+    article.classList.remove('is-image-generation');
+    article.removeAttribute('aria-busy');
+    return enhanceImages(article.querySelector?.('.aichat-bubble, .discussion-markdown-body'));
+  }
+
   function finish(article, result = {}) {
     const count = decorate(article);
     if (result.image_generation?.status === 'completed' && count === 0) {
@@ -221,7 +332,16 @@
     return count;
   }
 
-  const api = { decorate, finish, isGenerationPhase, isRequest, showProgress, statusCopy };
+  const api = {
+    decorate,
+    finish,
+    isGenerationPhase,
+    isRequest,
+    showProgress,
+    statusCopy,
+    enhanceImages,
+    generatedSource,
+  };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FreeBbsMaxImageResults = api;
 })(typeof window === 'object' ? window : globalThis);

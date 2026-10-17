@@ -294,9 +294,11 @@
     persist();
   });
   form.addEventListener('submit', persist);
-  form.addEventListener('discussion:published', () => {
+  function finishSubmittedHandoff() {
     if (state.applied) finish();
-  });
+  }
+  form.addEventListener('discussion:published', finishSubmittedHandoff);
+  form.addEventListener('discussion:submitted', finishSubmittedHandoff);
   window.addEventListener('beforeunload', (event) => {
     if (!persist()) event.preventDefault();
   });

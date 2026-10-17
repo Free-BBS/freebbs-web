@@ -119,6 +119,7 @@ export async function loadAuthorizationContext(
     businessAdmin: false,
     tags: [],
     policies: [],
+    roleScopes: [],
   };
   const subject = subjects.find(({ uid }) => uid === identityContext.uid);
   if (subject?.status !== 'active') return context;
@@ -196,6 +197,12 @@ export async function loadAuthorizationContext(
       activeRoles.has(assignment.roleKey) &&
       isCurrent(assignment.expiresAt, now),
   );
+  context.roleScopes = currentRoleAssignments.map(({ subjectUid, roleKey, scope, expiresAt }) => ({
+    subjectUid,
+    roleKey,
+    scope: { ...scope },
+    expiresAt,
+  }));
   context.roles = [
     ...new Set(
       currentRoleAssignments

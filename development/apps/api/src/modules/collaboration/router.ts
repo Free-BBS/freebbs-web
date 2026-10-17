@@ -5,7 +5,6 @@ import { Router, type Response } from 'express';
 import { z } from 'zod';
 import {
   ROLE_KEYS,
-  canEditDepartment,
   departmentById,
   type CollaborationSpace,
   type CollaborationEntry,
@@ -18,6 +17,10 @@ import { canCreateCollection } from '../collections/access.js';
 import { canonicalSportsTeam, loadSportsCardAuthorizer } from '../sports/card-authorization.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
+import {
+  generalRoleContext,
+  canEditActorDepartment as canEditDepartment,
+} from '../../core/authorization/role-scope-context.js';
 import { allocatePreferences, assertBookingAvailable, validateTableRow } from './domain.js';
 
 export interface CollaborationOptions {
@@ -133,7 +136,9 @@ export async function currentCollaborationActor(
   actor: UserContext,
   store?: DevelopmentStore,
 ): Promise<UserContext> {
-  return store ? loadAuthorizationContext(store, actor, new Date()) : actor;
+  return generalRoleContext(
+    store ? await loadAuthorizationContext(store, actor, new Date()) : actor,
+  );
 }
 export async function manages(
   space: CollaborationSpace,
@@ -157,6 +162,7 @@ export async function canReviewEntry(
   actor: UserContext,
   store?: DevelopmentStore,
 ) {
+  actor = generalRoleContext(actor);
   return (
     entry.reviewStatus === 'pending' &&
     (space.kind === 'attendance'
@@ -240,10 +246,13 @@ export function createCollaborationRouter(options: CollaborationOptions) {
       (!options.uploadDirectory || !isAbsolute(options.uploadDirectory))
     )
       throw new HttpError(503, 'storage_not_configured', '协作资料存储尚未配置');
-    response.locals.actor = { ...identity.user };
+    response.locals.actor =
+      options.store && 'roleScopes' in identity.user
+        ? await currentCollaborationActor(identity.user, options.store)
+        : { ...identity.user };
     next();
   });
-  const actor = (response: Response) => response.locals.actor as UserContext;
+  const actor = (response: Response) => generalRoleContext(response.locals.actor as UserContext);
   const send = (response: Response, data: unknown, status = 200) =>
     response.status(status).json({ data, requestId: response.locals.requestId });
   async function load(id: string, user: UserContext) {

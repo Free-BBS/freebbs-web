@@ -89,6 +89,7 @@ envs.sh
 
 # Database runtime files
 database/uploads/
+database/moderation-private/
 database/backups/
 database/local-rag/
 *.sqlite
@@ -164,9 +165,17 @@ vite.config.ts.timestamp-*
 
 # Local testbench outputs
 test/
+!/test/
+/test/*
+!/test/fixtures/
+/test/fixtures/*
+!/test/fixtures/moderation-policy-v3.json
+!/test/fixtures/moderation-policy-v3-manifest.json
+!/test/fixtures/moderation-images/
 !development/apps/web/src/test/
 !development/apps/web/src/test/setup.ts
 # Browser verification artifacts
 **/.preview/
 /.playwright-cli/
 /output/playwright/
+**/dist-review/

@@ -8,6 +8,14 @@ const page = fs.readFileSync(path.join(root, 'public', 'adminusers.html'), 'utf8
 const controller = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'public', 'adminusers.css'), 'utf8');
 const backend = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+const exportRouter = fs.readFileSync(
+  path.join(root, 'backend', 'ai-dialog-export-router.js'),
+  'utf8',
+);
+const exportController = fs.readFileSync(
+  path.join(root, 'public', 'admin-ai-dialog-export.js'),
+  'utf8',
+);
 
 test('user management page exposes the responsive directory controls', () => {
   const sharedStyleIndex = page.indexOf('/ui-polish.css');
@@ -33,15 +41,19 @@ test('user management page exposes the responsive directory controls', () => {
   assert.doesNotMatch(page, /class="admin-users-head"/);
 });
 
-test('AI chat export downloads the admin-only JSON attachment', () => {
-  assert.match(
-    backend,
-    /app\.get\('\/api\/admin\/ai-dialogs\/export'[\s\S]*requireAdmin\(request, response\)[\s\S]*Content-Disposition/,
-  );
-  assert.match(controller, /\/admin\/ai-dialogs\/export/);
-  assert.match(controller, /Authorization: `Bearer \$\{userState\.token\}`/);
-  assert.match(controller, /URL\.createObjectURL\(await response\.blob\(\)\)/);
-  assert.match(controller, /downloadLink\.download = fileName/);
+test('AI chat export opens explicit scope controls and downloads an audited admin-only attachment', () => {
+  assert.match(backend, /mountAiDialogExportRoutes\(app,/);
+  assert.match(exportRouter, /requireAdmin\(request, response\)/);
+  assert.match(exportRouter, /Content-Disposition/);
+  assert.match(controller, /window\.FreeBbsAiExport\.open\(\)/);
+  assert.match(page, /src="\/admin-ai-dialog-export\.js"/);
+  assert.match(exportController, /Authorization: `Bearer \$\{app\.userState\.token\}`/);
+  assert.match(exportController, /URL\.createObjectURL\(blob\)/);
+  assert.match(exportController, /link\.download = fileName/);
+  assert.match(exportController, /userIds/);
+  assert.match(exportController, /dialogIds/);
+  assert.match(exportController, /reason/);
+  assert.doesNotMatch(controller, /正在导出全部用户的 AI/);
   assert.match(styles, /\.admin-export-button/);
 });
 

@@ -46,6 +46,8 @@
     learningNodeRevealed: false,
     readerLayout: params.get('layout') === 'directory' ? 'directory' : 'structure',
     structureController: null,
+    directoryQuery: '',
+    directoryPage: 0,
   };
 
   const canvas = document.getElementById('course-map-canvas');
@@ -585,6 +587,22 @@
     const remainingNodes = primaryNode
       ? activeChapter.nodes.filter((node) => node.id !== primaryNode.id)
       : activeChapter.nodes;
+    const directoryReady = Boolean(window.FreeBbsCourseDirectory?.page);
+    const query = directoryReady ? String(state.directoryQuery || '') : '';
+    const directoryNodes = query.trim() ? activeChapter.nodes : remainingNodes;
+    const directoryPage = window.FreeBbsCourseDirectory?.page(
+      directoryNodes,
+      query,
+      state.directoryPage,
+    ) || {
+      nodes: directoryNodes,
+      page: 0,
+      pageCount: 1,
+      total: directoryNodes.length,
+      start: directoryNodes.length ? 1 : 0,
+      end: directoryNodes.length,
+    };
+    state.directoryPage = directoryPage.page;
     const primaryRelationCount = primaryNode ? viewModel.nodeDegrees.get(primaryNode.id) || 0 : 0;
     return `
       <div class="course-map-directory-layout">
@@ -601,14 +619,14 @@
           </header>
 
           ${
-            primaryNode
+            primaryNode && !query.trim()
               ? `<div class="course-map-directory-current${learningNode ? ' is-learning' : ''}">
             ${renderDirectoryNodeTags(primaryNode.id)}
             <div class="course-map-directory-current-copy">
               <small>${learningNode ? '继续学习' : '从这里开始'}</small>
               <span>${escapeHtml(primaryNode.id)}</span>
               <h2>${escapeHtml(primaryNode.title)}</h2>
-              <p>${escapeHtml(primaryNode.summary || '先了解这个知识点，再进入学习。')}</p>
+              ${primaryNode.summary ? `<p>${escapeHtml(primaryNode.summary)}</p>` : ''}
               <div><b>${primaryRelationCount}</b> 条直接关联
                 ${learningNode ? '<i>已为你定位到上次学习位置</i>' : ''}
               </div>
@@ -620,14 +638,33 @@
               : ''
           }
           ${
-            remainingNodes.length
+            directoryNodes.length || query.trim()
               ? `
             <div class="course-map-directory-section-heading">
-              <span><strong>本章其他知识点</strong></span><i>${remainingNodes.length} 项</i>
+              <span><strong>${query.trim() ? '本章知识点' : '本章其他知识点'}</strong></span>
             </div>
-            <div class="course-map-directory-nodes">
-              ${remainingNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
-            </div>`
+            <label class="course-directory-search">
+              <span>查找知识点</span>
+              <input type="search" data-course-directory-search value="${escapeHtml(query)}"
+                placeholder="名称或编号" autocomplete="off" ${directoryReady ? '' : 'disabled'} />
+            </label>
+            ${directoryReady ? '' : '<p class="course-directory-count" role="status">筛选暂不可用，已显示本章全部知识点。可刷新后重试。</p>'}
+            <p class="course-directory-count" role="status">${directoryPage.total ? `${directoryPage.start}–${directoryPage.end} / ${directoryPage.total} 项` : '未找到知识点'}</p>
+            <div class="course-map-directory-nodes" id="course-directory-results">
+              ${directoryPage.nodes.map((node) => renderReaderNode(node, viewModel)).join('')}
+            </div>
+            ${
+              directoryPage.pageCount > 1
+                ? `
+              <nav class="course-directory-pagination" aria-label="知识点分页">
+                <button type="button" data-directory-page="${directoryPage.page - 1}"
+                  ${directoryPage.page === 0 ? 'disabled' : ''} aria-controls="course-directory-results">上一页</button>
+                <span>${directoryPage.page + 1} / ${directoryPage.pageCount}</span>
+                <button type="button" data-directory-page="${directoryPage.page + 1}"
+                  ${directoryPage.page + 1 === directoryPage.pageCount ? 'disabled' : ''} aria-controls="course-directory-results">下一页</button>
+              </nav>`
+                : ''
+            }`
               : ''
           }
         </section>
@@ -933,12 +970,15 @@
         nodes: state.nodes,
         edges: state.edges,
         course: state.course,
+        resumeNodeId: state.learningNodeId,
         onOpenOverview: (node) =>
           overviewDrawer?.open(node, state.course, null, () =>
             state.structureController?.focusNode(node.id),
           ),
       });
       if (state.focusedNodeId) state.structureController.focusNode(state.focusedNodeId);
+      else if (courseChapters().some((chapter) => chapter.id === state.activeChapterId))
+        state.structureController.selectChapter(state.activeChapterId);
       renderReaderHeader();
       return;
     }
@@ -1905,6 +1945,10 @@
     };
 
     const toggleChapter = (chapterId) => {
+      if (chapterId !== state.activeChapterId) {
+        state.directoryQuery = '';
+        state.directoryPage = 0;
+      }
       const viewModel = readerViewModel();
       if (!state.focusedNodeId) {
         state.activeChapterId = chapterId;
@@ -1938,6 +1982,8 @@
     };
 
     const resetReaderView = () => {
+      state.directoryQuery = '';
+      state.directoryPage = 0;
       state.focusedNodeId = '';
       state.activeChapterId =
         chapterIdForNodeId(state.learningNodeId) || courseChapters()[0]?.id || '';
@@ -1954,6 +2000,20 @@
         canvas.querySelector('[data-course-reader-chapter]')?.focus({ preventScroll: true });
       }
     });
+
+    const filterDirectory = (event) => {
+      const input = event.target;
+      if (event.isComposing || !input.matches?.('[data-course-directory-search]')) return;
+      state.directoryQuery = input.value;
+      state.directoryPage = 0;
+      const cursor = input.selectionStart;
+      renderMap();
+      const replacement = canvas.querySelector('[data-course-directory-search]');
+      replacement?.focus({ preventScroll: true });
+      if (typeof cursor === 'number') replacement?.setSelectionRange(cursor, cursor);
+    };
+    canvas.addEventListener('input', filterDirectory);
+    canvas.addEventListener('compositionend', filterDirectory);
 
     canvas.addEventListener('pointermove', (event) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -1974,6 +2034,16 @@
         return;
       }
       if (target?.closest('.course-map-edge-hit')) {
+        return;
+      }
+      if (target?.closest('[data-course-directory-search]')) return;
+      const pageButton = target?.closest('[data-directory-page]');
+      if (pageButton) {
+        if (pageButton.disabled) return;
+        state.directoryPage = Number(pageButton.dataset.directoryPage);
+        renderMap();
+        canvas.querySelector('[data-course-directory-search]')?.focus({ preventScroll: true });
+        canvas.querySelector('.course-directory-search')?.scrollIntoView({ block: 'nearest' });
         return;
       }
       const chapterButton = target?.closest('[data-chapter-toggle]');
@@ -2033,6 +2103,16 @@
     });
 
     document.getElementById('course-layout-toggle')?.addEventListener('click', (event) => {
+      if (state.readerLayout === 'structure') {
+        const selectedChapter = state.structureController?.getState?.()?.selectedChapterId;
+        if (courseChapters().some((chapter) => chapter.id === selectedChapter)) {
+          if (selectedChapter !== state.activeChapterId) {
+            state.directoryQuery = '';
+            state.directoryPage = 0;
+          }
+          state.activeChapterId = selectedChapter;
+        }
+      }
       state.readerLayout = state.readerLayout === 'structure' ? 'directory' : 'structure';
       event.currentTarget.textContent = state.readerLayout === 'structure' ? '目录视图' : '知识图';
       state.focusedNodeId = '';

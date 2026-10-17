@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Humanities Group mark">
+  <title>人文组 · 叠印</title>
+  <!-- C · 叠印：印刷套色没对准。陶土与紫各印一次、各自错开，墨色正版压在最上面。
+       字形同 A：一撇一捺同源起笔，只在上方交汇。 -->
+  <defs>
+    <clipPath id="c-frame"><rect x="0" y="0" width="120" height="120" rx="17"/></clipPath>
+    <g id="c-glyph" fill="none" stroke-width="12" stroke-linecap="round">
+      <path d="M50 24 Q40 60 24 86"/>
+      <path d="M40 18 Q62 48 96 84"/>
+    </g>
+  </defs>
+
+  <g clip-path="url(#c-frame)">
+    <rect width="120" height="120" fill="#f4f3ee"/>
+
+    <!-- 第一版：陶土色，左上错位 -->
+    <g transform="translate(-3.4 -2.6)">
+      <use href="#c-glyph" stroke="#c9694a" opacity=".7"/>
+    </g>
+    <!-- 第二版：清华紫，右下错位 -->
+    <g transform="translate(3 1.8)">
+      <use href="#c-glyph" stroke="#8a4fa8" opacity=".6"/>
+    </g>
+    <!-- 正版：墨色 -->
+    <use href="#c-glyph" stroke="#191817"/>
+  </g>
+</svg>

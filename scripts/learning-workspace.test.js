@@ -13,6 +13,20 @@ test('six tools preserve existing names with readable collapsed labels', () => {
   Object.values(labels).forEach((value) => assert.ok(value[1].length >= 2));
 });
 
+test('path time labels describe suggested effort and a pause honestly belongs to this page', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.js'), 'utf8');
+  const render = source.slice(
+    source.indexOf('  function renderPlan('),
+    source.indexOf('  async function savePlan('),
+  );
+  assert.match(render, /本页已暂停，准备好时可继续这条路径/);
+  assert.match(render, /建议投入 \$\{step\.minutes\} 分钟/);
+  assert.match(render, /待做步骤建议投入/);
+  assert.doesNotMatch(render, /剩余约|想继续时再回来/);
+  assert.match(render, /filter\(\(step\) => !step\.completed && !step\.skipped\)/);
+  assert.match(render, /reduce\(\(sum, step\) => sum \+ step\.minutes, 0\)/);
+});
+
 test('the read-only temporary goal stays on this page and clears for an unready or different session', () => {
   const source = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.js'), 'utf8');
   const start = source.indexOf('  function currentPlanGoal() {');

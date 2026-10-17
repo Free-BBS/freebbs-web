@@ -1,0 +1,100 @@
+/* One quiet entry, a private-free public outline, no extra column in the textbook. */
+.knowledge-page .learning-outline-floating {
+  position: fixed;
+  z-index: 260;
+  bottom: calc(var(--mobile-nav-space, 0px) + 16px);
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--learning-line);
+  border-radius: 24px;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+  font: 600 1rem/1.5 var(--font-ui);
+  overflow-wrap: anywhere;
+  box-shadow: var(--ui-shadow);
+  transform: none;
+}
+.knowledge-page .learning-outline-floating[hidden],
+.knowledge-page #learning-outline-open[hidden] {
+  display: none;
+}
+.knowledge-page .learning-outline-dialog {
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  height: min(660px, calc(100dvh - 24px));
+  border: 1px solid var(--learning-line);
+  border-radius: 16px;
+  padding: 0;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+  box-shadow: var(--ui-shadow);
+  overflow: hidden;
+}
+.knowledge-page .learning-outline-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.learning-outline-dialog::backdrop {
+  background: #071e2938;
+}
+.learning-outline-dialog header,
+.learning-outline-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+.learning-outline-dialog header {
+  border-bottom: 1px solid var(--learning-line);
+}
+.learning-outline-dialog h2 {
+  margin: 0;
+  font: 650 1.125rem/1.5 var(--font-ui);
+}
+.learning-outline-dialog nav {
+  padding: 12px;
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+.knowledge-page .learning-outline-dialog button {
+  min-height: 44px;
+  border: 1px solid var(--learning-line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--learning-surface);
+  color: var(--learning-ink);
+  font: inherit;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  transform: none;
+}
+.learning-outline-dialog nav button {
+  display: block;
+  width: 100%;
+  margin-block: 4px;
+  padding-inline-start: calc(12px + var(--outline-depth, 0) * 12px);
+  text-align: start;
+}
+.learning-outline-dialog header button {
+  min-width: 44px;
+  font-size: 1.4rem;
+}
+.learning-outline-dialog footer {
+  border-top: 1px solid var(--learning-line);
+}
+.learning-outline-dialog footer button {
+  flex: 1;
+}
+.knowledge-page .learning-outline-dialog button:hover,
+.knowledge-page .learning-outline-floating:hover {
+  background: var(--learning-soft);
+}
+.knowledge-page :is(.learning-outline-dialog button, .learning-outline-floating):focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

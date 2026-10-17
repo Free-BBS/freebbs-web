@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import {
   validateIdentitySelection,
-  organizationForRole,
+  organizationMembershipsForRole,
   ROLE_KEYS,
   SOCIAL_ORGANIZATION_IDS,
   type DevelopmentDirectoryFilters,
@@ -189,7 +189,9 @@ export async function listDirectoryRows(
     filters.roleKey ? (row: RoleAssignmentRecord) => row.roleKey === filters.roleKey : undefined,
     filters.organizationId
       ? (row: RoleAssignmentRecord) =>
-          organizationForRole(row.roleKey)?.organizationId === filters.organizationId
+          organizationMembershipsForRole(row.roleKey).some(
+            ({ organizationId }) => organizationId === filters.organizationId,
+          )
       : undefined,
   ]) {
     if (!predicate) continue;

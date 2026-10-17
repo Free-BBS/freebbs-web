@@ -5,6 +5,7 @@ const { sendStatic } = require('./static-response');
 const { preparePageShell } = require('./page-shell');
 const { clientIpForBackend } = require('./proxy-client-ip');
 const { servePausedCodeLab } = require('./code-lab-availability');
+const { serveOrganizationShowcase } = require('./organization-showcase-static');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -31,6 +32,8 @@ const pageRoutes = new Map([
   ['/circuit-challenge', '/circuit-challenge.html'],
   ['/development', '/development.html'],
   ['/discussion', '/discussion.html'],
+  ['/moderation', '/moderation.html'],
+  ['/privacy', '/privacy.html'],
   ['/publish', '/publish.html'],
   ['/electromagnetic', '/electromagnetic.html'],
   ['/inventory', '/inventory.html'],
@@ -51,6 +54,7 @@ const pageRoutes = new Map([
   ['/system-settings/rewards', '/system-settings-rewards.html'],
   ['/system-settings/course-materials', '/system-settings-course-materials.html'],
   ['/system-settings/model', '/system-settings-model.html'],
+  ['/system-settings/data-retention', '/system-settings-data-retention.html'],
   ['/workbench', '/workbench.html'],
   ['/world', '/world.html'],
 ]);
@@ -70,6 +74,8 @@ const htmlRedirects = new Map([
   ['/circuit-challenge.html', '/circuit-challenge'],
   ['/development.html', '/development'],
   ['/discussion.html', '/discussion'],
+  ['/moderation.html', '/moderation'],
+  ['/privacy.html', '/privacy'],
   ['/publish.html', '/publish'],
   ['/electromagnetic.html', '/electromagnetic'],
   ['/inventory.html', '/inventory'],
@@ -90,6 +96,7 @@ const htmlRedirects = new Map([
   ['/system-settings-rewards.html', '/system-settings/rewards'],
   ['/system-settings-course-materials.html', '/system-settings/course-materials'],
   ['/system-settings-model.html', '/system-settings/model'],
+  ['/system-settings-data-retention.html', '/system-settings/data-retention'],
   ['/system-settings.html', '/system-settings'],
   ['/workbench.html', '/workbench'],
   ['/world.html', '/world'],
@@ -226,6 +233,8 @@ const server = http.createServer((request, response) => {
     request.pipe(upstream);
     return;
   }
+
+  if (serveOrganizationShowcase(request, response)) return;
 
   if (requestUrl.pathname.startsWith('/development/')) {
     const relativeUrlPath = requestUrl.pathname.slice('/development/'.length);

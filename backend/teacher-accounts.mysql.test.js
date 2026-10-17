@@ -31,6 +31,12 @@ const {
   ensureUserCertificationTables,
   readApprovedCertifications,
 } = require('./user-certifications');
+const {
+  policy: privacyPolicy,
+  ensurePrivacyPolicySchema,
+  createPrivacyPolicyService,
+} = require('./privacy-policy');
+const { privacyAcknowledgement, acceptCurrentPrivacy } = require('./test-helpers/auth');
 
 test(
   'isolated MySQL verifies teacher accounts, identity ownership, retries and concurrent binding over HTTP',
@@ -90,6 +96,8 @@ test(
     await ensureTeacherAccountTables(pool);
     await ensureTeacherAccountTables(pool);
     await ensureUsernameChangeTables(pool);
+    await ensurePrivacyPolicySchema(pool);
+    const privacyPolicyService = createPrivacyPolicyService({ pool });
     await ensureUserCertificationTables(pool);
     const adminPassword = 'admin-proof-password';
     await pool.execute(
@@ -171,6 +179,8 @@ test(
         app,
         pool,
         crypto,
+        privacyPolicy,
+        privacyPolicyService,
         requireAdmin,
         requireAuth,
         normalizeAdminAccount,
@@ -206,6 +216,7 @@ test(
       });
     }
     registerActualRoute("app.post('/api/admin/users',", "app.patch('/api/admin/users/:id',");
+    registerActualRoute("app.get('/api/privacy-policy',", 'async function getOptionalAuthUser(');
     registerActualRoute(
       "app.post('/api/auth/send-reset-code',",
       "app.post('/api/auth/login-challenge',",
@@ -236,15 +247,23 @@ test(
     );
     const base = `http://127.0.0.1:${server.address().port}/api`;
     async function call(route, userId, body, method = body ? 'POST' : 'GET') {
+      const requestBody = route === '/auth/login' ? { ...privacyAcknowledgement(), ...body } : body;
       const response = await fetch(base + route, {
         method,
         headers: {
           'Content-Type': 'application/json',
           ...(userId ? { Authorization: `Bearer ${userId}` } : {}),
         },
-        ...(body ? { body: JSON.stringify(body) } : {}),
+        ...(requestBody ? { body: JSON.stringify(requestBody) } : {}),
       });
-      return { status: response.status, body: await response.json() };
+      const result = await response.json();
+      if (
+        response.ok &&
+        result.token &&
+        ['/auth/login', '/auth/register', '/auth/reset-password'].includes(route)
+      )
+        result.privacyPolicy = await acceptCurrentPrivacy(base, result.user.id);
+      return { status: response.status, body: result };
     }
     const teacherBody = (username) => ({
       username,
@@ -252,6 +271,33 @@ test(
       role: 'teacher',
       password: 'initial-teacher-password',
     });
+    await t.test(
+      'actual login rejects missing privacy agreement and records full acceptance through the real endpoint',
+      async () => {
+        const denied = await call('/auth/login', null, {
+          identifier: 'admin_teacher_test',
+          password: adminPassword,
+          privacyAccepted: false,
+        });
+        assert.equal(denied.status, 428);
+        assert.equal(denied.body.code, 'privacy_policy_required');
+        const [before] = await pool.execute(
+          'SELECT * FROM privacy_policy_acceptances WHERE user_id = 1',
+        );
+        assert.equal(before.length, 0);
+        const accepted = await call('/auth/login', null, {
+          identifier: 'admin_teacher_test',
+          password: adminPassword,
+        });
+        assert.equal(accepted.status, 200);
+        assert.equal(accepted.body.privacyPolicy.accepted, true);
+        const [after] = await pool.execute(
+          'SELECT * FROM privacy_policy_acceptances WHERE user_id = 1',
+        );
+        assert.equal(after.length, 1);
+        assert.equal(after[0].content_sha256, privacyPolicy.contentHash);
+      },
+    );
     await t.test(
       'actual admin route creates multiple NULL teachers and denies students or forged roles',
       async () => {

@@ -22,8 +22,17 @@ body.publish-page {
   min-width: 44px !important;
 }
 #publish-draft-status {
-  font-size: 13px !important;
-  color: var(--ui-muted) !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 16px !important;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  color: var(--ui-text) !important;
+}
+.publish-header .publish-back,
+.publish-header .publish-submit {
+  flex-shrink: 0;
 }
 .publish-submit {
   background: var(--action-fill, var(--ui-accent, #087f8c)) !important;
@@ -206,4 +215,35 @@ body.publish-page.theme-light .publish-header {
 .publish-options {
   border-top: 0 !important;
   padding-top: 0 !important;
+}
+
+body.publish-page #discussion-compose-message:not(:empty) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid var(--ui-accent, #087f8c);
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text) !important;
+  font-size: 17px !important;
+  font-weight: 500;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+body.publish-page #discussion-compose-message a[href^='/moderation'] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  margin-inline-start: 8px;
+  padding-inline: 2px;
+  color: var(--ui-accent, #087f8c) !important;
+  font-size: 17px !important;
+  font-weight: 700;
+  line-height: 1.75;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }

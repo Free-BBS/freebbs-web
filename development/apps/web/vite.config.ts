@@ -8,7 +8,21 @@ export default defineConfig(({ mode }) => {
     loadEnv(mode, process.cwd(), 'VITE_').VITE_MAIN_SITE_ORIGIN || 'http://127.0.0.1:3000';
   return {
     base: '/development/',
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: 'organization-showcase-public-assets',
+        configureServer(server) {
+          server.middlewares.use((request, response, next) => {
+            if (request.url?.startsWith('/development/organization-showcase/')) {
+              response.setHeader('Access-Control-Allow-Origin', '*');
+              response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+            }
+            next();
+          });
+        },
+      },
+    ],
     server: {
       fs: {
         allow: [

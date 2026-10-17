@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="人文组">
+  <title>人文组 · 徽标（透明底）</title>
+  <!-- 由 tools/make-logo-variants.js 从 mark-b.svg 自动派生，不要手改。
+       与 mark-b.svg 的唯一区别：去掉了奶油色底块，让徽标能直接坐在深色或浅色的
+       背景上（页面顶栏的底色与徽标底色几乎相同，带底块会糊成一块看不见的浅方块）。 -->
+  <g fill="none" stroke-linecap="butt">
+    <path d="M50 24 Q43 48 38 60" stroke="#191817" stroke-width="13"/>
+    <path d="M38 61 Q32 72 24 86" stroke="#3a352f" stroke-width="13"/>
+    <path d="M40 18 Q55 39 68 53" stroke="#b1502f" stroke-width="13"/>
+    <path d="M68 54 Q80 66 96 84" stroke="#8f4025" stroke-width="13"/>
+  </g>
+  <g transform="rotate(-52 44 26)">
+    <rect x="30" y="20" width="30" height="12" fill="#d9c9a3" opacity=".72"/>
+  </g>
+</svg>

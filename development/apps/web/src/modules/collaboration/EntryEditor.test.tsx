@@ -45,6 +45,79 @@ const space: CollaborationSpace = {
 
 beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'student', roles: [] } }));
 
+describe('restricted column supervision', () => {
+  const restrictedSpace: CollaborationSpace = {
+    ...space,
+    kind: 'shared_table',
+    canManage: true,
+    columns: [
+      {
+        id: 'note',
+        label: '受限文字',
+        kind: 'text',
+        required: false,
+        editRoleKeys: ['department.sports_member'],
+      },
+      {
+        id: 'choice',
+        label: '受限选择',
+        kind: 'choice',
+        required: false,
+        editRoleKeys: ['department.sports_member'],
+        options: ['确认'],
+      },
+    ],
+  };
+
+  describe.each(['shared_table', 'materials'] as const)('%s', (kind) => {
+    it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+      'allows global supervisor %s to submit restricted text and choice fields',
+      async (role) => {
+        mockAuth.mockReturnValue({ user: { uid: 'supervisor', roles: [role] } });
+        const onSubmit = vi.fn().mockResolvedValue(true);
+        render(
+          <EntryEditor space={{ ...restrictedSpace, kind }} busy={false} onSubmit={onSubmit} />,
+        );
+
+        const note = screen.getByRole('textbox', { name: /^受限文字/ });
+        const choice = screen.getByRole('combobox', { name: /^受限选择/ });
+        expect(note).toBeEnabled();
+        expect(choice).toBeEnabled();
+        fireEvent.change(note, { target: { value: '督导补充' } });
+        fireEvent.change(choice, { target: { value: '确认' } });
+        if (kind === 'materials') {
+          fireEvent.change(screen.getByLabelText('内容与说明'), { target: { value: '材料说明' } });
+        }
+        fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+        expect(onSubmit.mock.calls[0]![0].values).toEqual({ note: '督导补充', choice: '确认' });
+      },
+    );
+
+    it('keeps restricted fields locked for an ordinary manager without the column role', () => {
+      render(<EntryEditor space={{ ...restrictedSpace, kind }} busy={false} onSubmit={vi.fn()} />);
+      expect(screen.getByRole('textbox', { name: /^受限文字/ })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: /^受限选择/ })).toBeDisabled();
+    });
+
+    it('requires effective space management for the global supervisor bypass', () => {
+      mockAuth.mockReturnValue({
+        user: { uid: 'supervisor', roles: ['counselor.youth_league'] },
+      });
+      render(
+        <EntryEditor
+          space={{ ...restrictedSpace, kind, canManage: false }}
+          busy={false}
+          onSubmit={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole('textbox', { name: /^受限文字/ })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: /^受限选择/ })).toBeDisabled();
+    });
+  });
+});
+
 describe('editing target refresh', () => {
   it('retains the original edit version during unrelated refreshes', async () => {
     const onSubmit = vi.fn().mockResolvedValue(false);

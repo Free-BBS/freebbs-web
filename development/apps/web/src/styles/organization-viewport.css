@@ -1,0 +1,62 @@
+.organization-page.organization-department-viewport {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  margin: 0;
+  overflow: hidden;
+}
+
+.organization-department-scroll {
+  --sc-header-offset: 6px;
+  min-height: 0;
+  flex: 1;
+  padding: 0 0 40px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-top: 10px;
+  isolation: isolate;
+}
+
+.organization-department-scroll:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+.organization-department-body {
+  width: 100%;
+  max-width: 1328px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 30px clamp(24px, 3vw, 44px) 0;
+}
+
+.organization-department-viewport--html > .sc-submitted-shell--full-page {
+  min-height: 0;
+  flex: 1;
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  .organization-department-scroll {
+    padding-bottom: 32px;
+  }
+
+  .organization-department-body {
+    padding: 24px 20px 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .organization-department-scroll {
+    padding-bottom: 26px;
+  }
+
+  .organization-department-body {
+    padding: 20px 14px 0;
+  }
+}

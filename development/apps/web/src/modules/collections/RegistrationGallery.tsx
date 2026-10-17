@@ -181,6 +181,7 @@ export function RegistrationGallery({
   const [learningUnavailable, setLearningUnavailable] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(search.get('focus'));
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [attachmentResetVersion, setAttachmentResetVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const organizationIds = parseRegistrationOrganizations(search.get('organization'));
@@ -275,6 +276,7 @@ export function RegistrationGallery({
       );
       setFeedback('报名已经收好，可以在“我的报名”中查看。');
       setAnswers({});
+      setAttachmentResetVersion((current) => current + 1);
     } catch (error) {
       setFeedback(error instanceof ApiError ? error.message : '提交失败，请稍后重试。');
     } finally {
@@ -409,6 +411,11 @@ export function RegistrationGallery({
                               <small>{field.helpText}</small>
                             ) : null}
                             <FieldControl
+                              key={
+                                ['file', 'image', 'video', 'audio'].includes(field.kind)
+                                  ? `${field.id}:${attachmentResetVersion}`
+                                  : field.id
+                              }
                               field={field}
                               value={answers[field.id]}
                               onChange={(value) =>

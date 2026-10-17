@@ -215,6 +215,17 @@ function harness(mode = 'register', next = '', options = {}) {
       return callback;
     },
     clearInterval: (callback) => intervals.delete(callback),
+    freeBbsPrivacy: {
+      loginAcknowledgement: async () => ({
+        privacyAccepted: true,
+        privacyPolicyVersion: 'test-policy',
+        privacyPolicyHash: 'test-hash',
+      }),
+      ensureAccepted: async () => {
+        if (options.privacyFailure) throw options.privacyFailure;
+      },
+      clearDeclinedSession: () => storage.delete(tokenKey),
+    },
   };
   const context = vm.createContext({
     URL,
@@ -600,6 +611,9 @@ test('login submits credentials directly without loading a challenge', async () 
   assert.deepEqual(h.requests[0].body, {
     identifier: 'reader',
     password: 'password for tests',
+    privacyAccepted: true,
+    privacyPolicyVersion: 'test-policy',
+    privacyPolicyHash: 'test-hash',
   });
   assert.equal(h.storage.get(tokenKey), 'login-token');
   assert.equal(h.window.location.href, '/');
@@ -619,6 +633,34 @@ test('failed login keeps credentials and allows retry without a quiz', async () 
   assert.equal(h.requests.length, 2);
   assert.equal(h.storage.get(tokenKey), 'retry-token');
 });
+
+for (const mode of ['login', 'remake']) {
+  for (const concurrentChange of ['another-account', 'logout']) {
+    test(`${mode}: delayed authentication cannot overwrite a concurrent ${concurrentChange}`, async () => {
+      const h = harness(mode, '', {
+        privacyFailure: new Error('privacy flow must not run for a stale response'),
+      });
+      const response = deferred();
+      h.responses.push(response.promise);
+      h.session.set('freebbs_activity_receipts_v2', 'new-session-receipts');
+      const pending = h.submit();
+      await flush();
+      assert.equal(h.requests.length, 1);
+      if (concurrentChange === 'logout') h.storage.delete(tokenKey);
+      else h.storage.set(tokenKey, 'another-account-token');
+      response.resolve({ body: { token: 'late-auth-token', user: {} } });
+      await pending;
+      assert.equal(
+        h.storage.get(tokenKey),
+        concurrentChange === 'logout' ? undefined : 'another-account-token',
+      );
+      assert.equal(h.session.get('freebbs_activity_receipts_v2'), 'new-session-receipts');
+      assert.equal(h.window.location.href, `/${mode}`);
+      assert.match(h.element('auth-message').textContent, /登录状态已在其他页面更改/);
+      assert.equal(h.element('auth-submit').disabled, false);
+    });
+  }
+}
 
 test('password reset still submits directly without registration consent or captcha', async () => {
   const h = harness('remake');

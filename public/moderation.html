@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>内容详情 | FREE BBS</title>
+    <link rel="stylesheet" href="/moderation.css" />
+    <script src="/moderation.js" defer></script>
+  </head>
+  <body>
+    <header class="moderation-header">
+      <a class="moderation-brand" href="/">FREE BBS</a>
+      <nav aria-label="页面导航">
+        <a class="moderation-back-link" href="/discussion">
+          <span aria-hidden="true">←</span>返回讨论区
+        </a>
+        <a id="moderation-login" href="/login">登录</a>
+      </nav>
+    </header>
+    <main id="moderation-app">
+      <header class="moderation-intro" id="moderation-intro" hidden>
+        <p class="moderation-eyebrow">讨论区内容管理</p>
+        <h1 id="moderation-title">内容审核</h1>
+        <p>查看待审内容，处理风险提醒，并记录审核决定。</p>
+        <div class="moderation-context">
+          <span>测试环境</span><span>帖子与评论</span><span>文字与图片审核</span>
+        </div>
+        <p class="moderation-note">审核相关数据保存90天；正常发布的帖子和评论不在此清理范围内。</p>
+      </header>
+      <h1 id="moderation-mine-title" hidden>内容处理详情</h1>
+      <p id="moderation-message" role="status" aria-live="polite"></p>
+      <section
+        id="moderation-automation"
+        class="moderation-automation"
+        hidden
+        aria-labelledby="moderation-automation-title"
+      >
+        <h2 id="moderation-automation-title">自动审核</h2>
+        <p id="moderation-automation-summary"></p>
+        <p>
+          请优先处理待审核内容，并在“图片待复核”中检查已发布的图片。涉及政治话题或心理问题的内容，须经负责人审核后发布。
+        </p>
+        <p class="moderation-note">暂停后，新提交的内容将等待审核；你仍可进行人工审核。</p>
+        <details class="moderation-disclosure">
+          <summary>运行信息</summary>
+          <p id="moderation-automation-models"></p>
+          <p class="moderation-note">当前为测试环境，请使用虚构内容进行验证。</p>
+        </details>
+        <button type="button" id="moderation-automation-toggle" hidden>暂停自动审核</button>
+        <p id="moderation-automation-message" role="status" aria-live="polite"></p>
+      </section>
+      <a href="/moderation" id="moderation-review-link" hidden>返回审核工作台</a>
+      <section id="moderation-workspace" hidden>
+        <div class="moderation-layout" id="moderation-layout">
+          <aside class="moderation-queue" id="moderation-queue" aria-label="审核队列">
+            <div class="moderation-section-heading">
+              <span class="moderation-eyebrow" id="moderation-queue-eyebrow">待处理内容</span>
+              <h2>提交队列</h2>
+            </div>
+            <div class="moderation-toolbar">
+              <label for="moderation-status" id="moderation-status-label">状态</label>
+              <select id="moderation-status">
+                <option value="image_review">图片待复核（已自动发布）</option>
+                <option value="pending" selected>待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">未通过</option>
+                <option value="expired">已到期</option>
+              </select>
+              <button type="button" id="moderation-refresh">刷新列表</button>
+              <button type="button" id="moderation-image-queue" hidden>图片待复核</button>
+            </div>
+            <section aria-label="提交列表">
+              <p id="moderation-list-status" role="status"></p>
+              <div id="moderation-list"></div>
+              <button type="button" id="moderation-more" hidden>加载更多</button>
+            </section>
+            <p id="moderation-queue-note" class="moderation-note moderation-queue-note">
+              请先查看自动审核状态，再核对完整正文与图片；已自动发布的内容仍可复核和撤回。
+            </p>
+          </aside>
+          <section id="moderation-detail" aria-label="提交详情" tabindex="-1">
+            <p class="moderation-empty">选择一条提交，查看正文和图片。</p>
+          </section>
+        </div>
+      </section>
+      <section
+        id="moderation-policy-library"
+        class="moderation-policy-library"
+        hidden
+        aria-labelledby="moderation-policy-title"
+      >
+        <div class="moderation-section-heading">
+          <p class="moderation-eyebrow">禁止内容 · 依据与边界</p>
+          <h2 id="moderation-policy-title">禁止内容清单</h2>
+          <p class="moderation-note">
+            下列清单统一说明禁止发布的内容。疑似符合时须结合原文、语境和例外核实，由负责人作出最终决定；命中词语或检索到条款不会自动禁止发布。
+          </p>
+        </div>
+        <details class="moderation-disclosure">
+          <summary>规则编号是什么意思？</summary>
+          <p>
+            编号由中文主题和组内序号组成。例如“隐私-001”表示隐私类第 1 条，“骚扰-001”表示骚扰类第 1
+            条。
+          </p>
+          <p>
+            编号用于查找条目、记录依据和追踪修改，不是法律条号、风险等级或处罚编号。法律依据请看条目中的来源和条款。
+          </p>
+        </details>
+        <div class="moderation-toolbar">
+          <label for="moderation-policy-query">搜索禁止条目</label
+          ><input
+            id="moderation-policy-query"
+            type="search"
+            placeholder="例如：隐私-001、骚扰、政治内容"
+            maxlength="120"
+          /><label for="moderation-policy-category">风险类别</label
+          ><select id="moderation-policy-category">
+            <option value="">全部类别</option></select
+          ><button type="button" id="moderation-policy-refresh">刷新规则</button
+          ><button type="button" id="moderation-regression-export">导出回归样例</button>
+        </div>
+        <p id="moderation-policy-status" role="status"></p>
+        <p id="moderation-export-status" role="status"></p>
+        <div id="moderation-policy-list" class="moderation-policy-grid"></div>
+        <details id="moderation-policy-support" class="moderation-support-library">
+          <summary>关怀提示（不属于违规）</summary>
+          <p>
+            正常表达情绪、心理求助和康复分享不属于禁止内容。以下提示只用于判断是否需要关注或紧急关怀，不用于处罚求助者。
+          </p>
+          <div id="moderation-policy-support-list" class="moderation-policy-grid"></div>
+        </details>
+        <details class="moderation-disclosure">
+          <summary>审核时共同遵守的原则</summary>
+          <div id="moderation-policy-principles"></div>
+        </details>
+      </section>
+      <section id="moderation-reviewers" hidden aria-labelledby="moderation-reviewers-title">
+        <h2 id="moderation-reviewers-title">审核负责人</h2>
+        <p>管理员可以添加或移除负责人。只有负责人可以查看和处理审核队列。</p>
+        <div id="moderation-reviewer-list"></div>
+        <form id="moderation-reviewer-search">
+          <label for="moderation-reviewer-query">查找用户</label>
+          <input id="moderation-reviewer-query" type="search" maxlength="80" required />
+          <button type="submit">查找</button>
+        </form>
+        <p id="moderation-reviewer-message" role="status"></p>
+        <div id="moderation-candidates"></div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -26,8 +26,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/registration-whitelist.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
   </head>
-  <body class="adminusers-page">
+  <body class="adminusers-page admin-settings-detail-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -154,12 +155,26 @@
         data-admin-content
         data-page-title="用户管理"
       >
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
         <section class="settings-shell admin-directory-shell" aria-label="用户管理">
           <header class="admin-page-header">
             <div class="admin-page-heading">
               <p>USER DIRECTORY</p>
             </div>
             <div class="admin-header-actions">
+              <a
+                class="admin-button admin-button-secondary bbs-action"
+                data-action-tone="secondary"
+                href="#registration-whitelist-panel"
+                >注册白名单</a
+              >
               <button
                 class="admin-button admin-button-secondary admin-export-button bbs-action"
                 data-action-tone="secondary"
@@ -185,6 +200,111 @@
             </div>
           </header>
 
+          <section
+            class="settings-shell registration-whitelist-panel"
+            id="registration-whitelist-panel"
+            aria-label="注册白名单管理"
+          >
+            <details class="whitelist-details" open>
+              <summary>
+                <span>注册白名单</span>
+                <span class="whitelist-count" data-whitelist-count>等待加载</span>
+              </summary>
+              <div class="whitelist-content">
+                <p class="whitelist-help">
+                  仅允许白名单内的身份注册。同一行填写的字段必须全部匹配，留空的字段不限制，每行至少填写一项。每条身份仅可注册一次。
+                </p>
+                <form class="whitelist-upload-form">
+                  <label class="whitelist-file-label"
+                    >Excel 白名单
+                    <input
+                      type="file"
+                      name="file"
+                      accept=".xlsx"
+                      required
+                      disabled
+                      aria-label="选择 Excel 注册白名单"
+                    />
+                  </label>
+                  <label
+                    >导入方式
+                    <select name="mode" aria-label="白名单导入方式" disabled>
+                      <option value="append">追加到现有白名单</option>
+                      <option value="replace">替换当前全部白名单</option>
+                    </select>
+                  </label>
+                  <button type="submit" class="admin-button" disabled>上传白名单</button>
+                  <button
+                    type="button"
+                    class="admin-button admin-button-secondary"
+                    data-whitelist-template
+                    disabled
+                  >
+                    下载 Excel 模板
+                  </button>
+                </form>
+                <p class="whitelist-help" data-whitelist-mode-help>
+                  支持 .xlsx 文件，最多 10,000 行、5 MB。导入错误时整份文件均不会生效。
+                </p>
+                <p class="whitelist-message" role="status" aria-live="polite">
+                  白名单工具正在加载。若长时间没有响应，请刷新页面。
+                </p>
+                <button
+                  type="button"
+                  class="admin-button admin-button-secondary"
+                  data-whitelist-retry
+                  disabled
+                >
+                  重新加载
+                </button>
+                <form class="whitelist-search-form" role="search">
+                  <input
+                    type="search"
+                    name="search"
+                    placeholder="搜索学号、姓名或邮箱"
+                    aria-label="搜索白名单"
+                    disabled
+                  />
+                  <button class="admin-button admin-button-secondary" type="submit" disabled>
+                    搜索
+                  </button>
+                </form>
+                <div class="whitelist-table-scroll" tabindex="0" aria-label="白名单记录">
+                  <table class="whitelist-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">学号</th>
+                        <th scope="col">姓名</th>
+                        <th scope="col">邮箱</th>
+                        <th scope="col">状态</th>
+                        <th scope="col">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="whitelist-pagination">
+                  <button
+                    type="button"
+                    class="admin-button admin-button-secondary"
+                    data-whitelist-prev
+                    disabled
+                  >
+                    上一页
+                  </button>
+                  <span data-whitelist-page></span>
+                  <button
+                    type="button"
+                    class="admin-button admin-button-secondary"
+                    data-whitelist-next
+                    disabled
+                  >
+                    下一页
+                  </button>
+                </div>
+              </div>
+            </details>
+          </section>
           <section
             id="admin-learning-data"
             class="learning-data-panel"
@@ -372,10 +492,11 @@
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
-    <script src="/registration-whitelist.js"></script>
     <script src="/request-runtime.js"></script>
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
+    <script src="/registration-whitelist.js?v=20261017-entry-1"></script>
+    <script src="/admin-ai-dialog-export.js"></script>
     <script src="/admin-account-credentials.js"></script>
     <script src="/admin-certifications.js"></script>
     <script src="/learning-analytics.js?v=20261011-records-4"></script>

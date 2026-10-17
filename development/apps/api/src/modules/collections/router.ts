@@ -872,7 +872,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       const publisher =
         input.organizationId === undefined && schema.publisherDepartmentId === undefined
           ? { schema, organizationId: form.organizationId }
-          : resolvePublisher(actor, schema, input.organizationId);
+          : resolvePublisher(actor, schema, input.organizationId, form.id);
       input.schema = publisher.schema;
       const organizationId = publisher.organizationId;
       let draft = form.currentDraftVersionId
@@ -928,7 +928,8 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
       const version = await store.collectionVersions.getForUpdate(form.currentDraftVersionId);
       if (!version) throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
-      if (version.schema.publisherDepartmentId) resolvePublisher(actor, version.schema, undefined);
+      if (version.schema.publisherDepartmentId)
+        resolvePublisher(actor, version.schema, undefined, form.id);
       if (version.schema.publicRegistration && !isPublicSchema(version.schema))
         throw new HttpError(
           400,

@@ -988,6 +988,38 @@
   display: none;
 }
 
+.development-shell-root--full-page {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-shell--full-page {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.app-shell--full-page .sidebar {
+  height: 100%;
+}
+.app-shell--full-page .app-shell-main {
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 0;
+}
+.app-shell--full-page .main-site-header,
+.app-shell--full-page .development-preview-banner {
+  flex-shrink: 0;
+}
+.app-shell--full-page .page-content {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     display: block;
@@ -1032,6 +1064,11 @@
     box-shadow: 0 -1px 4px rgba(6, 54, 65, 0.06);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
+  }
+
+  .development-shell-root--full-page > .mobile-nav {
+    position: static;
+    flex-shrink: 0;
   }
 
   .mobile-nav .module-link {

@@ -203,6 +203,8 @@ function readerHarness(search = '') {
   const records = { '["signals","SS-02-01"]': bookmark('原来的一段') };
   const frameQueue = [];
   const moves = [];
+  const entryMoves = [];
+  reading.scrollIntoView = (value) => entryMoves.push(value);
   let finishFonts;
   doc.fonts = {
     ready: new Promise((resolve) => {
@@ -229,10 +231,12 @@ function readerHarness(search = '') {
     write: () => true,
   };
   const block = {
+    tagName: 'H2',
     textContent: '原来的一段',
     getBoundingClientRect: () => ({ top: 500, bottom: 600 }),
   };
   body.querySelectorAll = (selector) => (selector === 'table' ? [] : [block]);
+  body.contains = (target) => target === block;
   const app = { userState: { isLoggedIn: true, uid: 'student-a', token: 'session-a' } };
   const controller = reader.install(browser, doc, app);
   const loaded = () =>
@@ -244,8 +248,107 @@ function readerHarness(search = '') {
   const frames = () => {
     while (frameQueue.length) frameQueue.shift()();
   };
-  return { page, doc, browser, app, moves, loaded, frames, finishFonts, controller };
+  return {
+    page,
+    doc,
+    browser,
+    app,
+    moves,
+    entryMoves,
+    records,
+    reading,
+    body,
+    block,
+    loaded,
+    frames,
+    finishFonts,
+    controller,
+  };
 }
+
+test('an explicit fresh reading entry lands at the reading surface, but never steals intent or a real bookmark', () => {
+  const fresh = readerHarness('?view=reading');
+  delete fresh.records['["signals","SS-02-01"]'];
+  fresh.loaded();
+  fresh.frames();
+  assert.equal(fresh.entryMoves.length, 1);
+  const resumed = readerHarness('?view=reading');
+  resumed.loaded();
+  resumed.frames();
+  assert.equal(resumed.moves.length, 1);
+  assert.equal(resumed.entryMoves.length, 0);
+  for (const query of [
+    '?view=reading&focus=origin',
+    '?view=reading&quiz=practice',
+    '?view=reading&question=Q1',
+  ]) {
+    const targeted = readerHarness(query);
+    delete targeted.records['["signals","SS-02-01"]'];
+    targeted.loaded();
+    targeted.frames();
+    assert.equal(targeted.entryMoves.length, 0);
+  }
+  const acting = readerHarness('?view=reading');
+  delete acting.records['["signals","SS-02-01"]'];
+  acting.loaded();
+  acting.doc.dispatchEvent(new Event('keydown'));
+  acting.frames();
+  assert.equal(acting.entryMoves.length, 0);
+});
+
+test('reading entry works for public visitors and does not replay on a document refresh or identity change', () => {
+  const h = readerHarness('?view=reading');
+  delete h.records['["signals","SS-02-01"]'];
+  h.browser.FreeBbsLearningProgress.scopedKey = () => null;
+  h.loaded();
+  h.frames();
+  assert.equal(h.entryMoves.length, 1);
+  assert.equal(h.controller.capture(), false);
+  h.page.dispatchEvent(
+    new CustomEvent('knowledge:document-saved', {
+      detail: { node: { id: 'SS-02-01', documentVersion: VERSION } },
+    }),
+  );
+  h.frames();
+  assert.equal(h.entryMoves.length, 1);
+  h.browser.dispatchEvent(new Event('freebbs:session-change'));
+  h.frames();
+  assert.equal(h.entryMoves.length, 1);
+});
+
+test('outline navigation uses the actual reading inset and refuses hidden, foreign or stale targets', () => {
+  const h = readerHarness();
+  h.loaded();
+  h.frames();
+  assert.equal(h.controller.scrollToHeading(h.block), true);
+  assert.equal(h.moves.at(-1), 484);
+  assert.equal(h.controller.scrollToHeading({ tagName: 'H2' }), false);
+  h.block.closest = () => ({ hidden: true });
+  assert.equal(h.controller.scrollToHeading(h.block), false);
+  h.block.closest = () => null;
+  h.app.userState.token = 'another-session';
+  assert.equal(h.controller.scrollToHeading(h.block), false);
+});
+
+test('heading navigation leaves space for actual fixed controls without changing bookmark restoration', () => {
+  const h = readerHarness();
+  const control = {
+    getBoundingClientRect: () => ({ left: 16, right: 60, top: 16, bottom: 58, width: 44 }),
+  };
+  const oldLookup = h.doc.getElementById;
+  h.doc.getElementById = (id) => (id === 'knowledge-course-link' ? control : oldLookup(id));
+  h.browser.getComputedStyle = (element) => ({
+    overflowY: 'visible',
+    top: '0px',
+    position: element === control ? 'fixed' : 'static',
+  });
+  h.block.getBoundingClientRect = () => ({ left: 16, right: 310, top: 500, bottom: 600 });
+  h.loaded();
+  h.frames();
+  assert.equal(h.moves.at(-1), 492, 'Existing bookmark geometry is unchanged');
+  assert.equal(h.controller.scrollToHeading(h.block), true);
+  assert.equal(h.moves.at(-1), 426, 'Chosen heading clears the actual back control plus margin');
+});
 
 test('initial and late-font resume never override a learner who has already started acting', async () => {
   const fixture = readerHarness();

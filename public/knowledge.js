@@ -792,6 +792,31 @@
     }
   }
 
+  function prepareChatPrompt(rawPrompt) {
+    const prompt = String(rawPrompt || '')
+      .trim()
+      .slice(0, 4000);
+    if (!prompt) return false;
+    setChatTab('max');
+    setChatOpen(true);
+    const input = document.getElementById('knowledge-chat-input');
+    if (!input) return false;
+    if (state.chatSending) {
+      setChatDraftNotice('正在等待回答，你的下一条问题草稿仍保留。');
+      return false;
+    }
+    if (input.value.trim()) {
+      setChatDraftNotice('已保留你的问题草稿，可先编辑或发送。');
+      input.focus({ preventScroll: true });
+      return false;
+    }
+    input.value = prompt;
+    persistChatDraft();
+    setChatDraftNotice('已准备问题，可修改后点击“发送”。');
+    input.focus({ preventScroll: true });
+    return true;
+  }
+
   async function submitChatPrompt(rawPrompt) {
     const prompt = String(rawPrompt || '').trim();
     if (!prompt || state.chatSending) {
@@ -882,8 +907,7 @@
     }
   });
   page.addEventListener('knowledge:ask', (event) => {
-    setChatTab('max');
-    submitChatPrompt(event.detail?.prompt);
+    prepareChatPrompt(event.detail?.prompt);
   });
   page.addEventListener('knowledge:show-content', () => setKnowledgeView('reading'));
   let pendingQuestionNavigation = null;
@@ -2012,10 +2036,7 @@
       }
     });
     document.querySelectorAll('[data-chat-prompt]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        await submitChatPrompt(button.dataset.chatPrompt);
-        input?.focus();
-      });
+      button.addEventListener('click', () => prepareChatPrompt(button.dataset.chatPrompt));
     });
     tabs.forEach((button, index) => {
       button.addEventListener('click', () => setChatTab(button.dataset.knowledgeChatTab));
@@ -2061,8 +2082,13 @@
     });
   }
 
-  function renderKnowledgeContent(node) {
+  function renderKnowledgeOrigin(node) {
     const origin = window.FreeBbsLearningContent?.originMarkdown(node.sections) || '';
+    // Only authored origin content earns a reading surface. An application
+    // summary or an empty-state message must not become a sticky document.
+    document
+      .getElementById('knowledge-history')
+      ?.setAttribute('data-learning-origin-state', origin ? 'available' : 'empty');
     const history = document.getElementById('knowledge-history-prose');
     if (history) {
       history.toggleAttribute('data-learning-document-empty', !origin);
@@ -2074,6 +2100,10 @@
       historyEmpty.textContent = '本知识点尚未提供起源说明。';
       historyEmpty.toggleAttribute('hidden', Boolean(origin));
     }
+  }
+
+  function renderKnowledgeContent(node) {
+    renderKnowledgeOrigin(node);
     if (window.FreeBbsLearningContent?.isChapterNode(node))
       document
         .getElementById('knowledge-body')

@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const nodemailer = require('nodemailer');
 const config = require('./config');
+const { moderationNotificationPreview } = require('./moderation-notifications');
 
 const SCHEMA = ['026_notifications.sql', '047_notification_email_preferences.sql']
   .flatMap((fileName) =>
@@ -804,7 +805,7 @@ function createNotificationsRouter({ pool, requireAuth, requireAdmin, service })
       const before = positiveId(request.query.before);
       const limit = Math.min(50, positiveId(request.query.limit) || 20);
       const [rows] = await pool.execute(
-        `SELECT id, kind, title, body, link, read_at, created_at FROM community_notifications
+        `SELECT id, kind, title, body, link, read_at, created_at, event_key FROM community_notifications
        WHERE recipient_id = ?${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ${limit + 1}`,
         before ? [user.id, before] : [user.id],
       );
@@ -812,8 +813,7 @@ function createNotificationsRouter({ pool, requireAuth, requireAdmin, service })
       const items = rows.slice(0, limit).map((row) => ({
         id: String(row.id),
         kind: row.kind,
-        title: row.title,
-        body: row.body,
+        ...moderationNotificationPreview(row),
         link: row.link,
         readAt: row.read_at,
         createdAt: row.created_at,

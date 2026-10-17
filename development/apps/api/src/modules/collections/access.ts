@@ -8,6 +8,11 @@ import {
 import type { CollectionFormRecord, DevelopmentStore } from '../../core/database/types.js';
 
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
+import {
+  generalRoleContext,
+  roleContextForScopes,
+} from '../../core/authorization/role-scope-context.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 
 const SOCIAL_ROLE_PREFIXES = [
   'counselor.',
@@ -18,6 +23,7 @@ const SOCIAL_ROLE_PREFIXES = [
 ] as const;
 
 export function canCreateCollection(actor: AuthorizationContext): boolean {
+  actor = generalRoleContext(actor);
   if (isGlobalOrganizationBusinessSupervisor(actor)) return true;
   return actor.roles.some(
     (role) =>
@@ -28,9 +34,18 @@ export function canCreateCollection(actor: AuthorizationContext): boolean {
 
 export function canManageCollection(
   actor: AuthorizationContext,
-  form: Pick<CollectionFormRecord, 'ownerUid' | 'organizationId'>,
+  form: Pick<CollectionFormRecord, 'ownerUid' | 'organizationId'> &
+    Partial<Pick<CollectionFormRecord, 'id'>>,
   schema?: Pick<CollectionSchema, 'publisherDepartmentId'>,
 ): boolean {
+  const department = schema?.publisherDepartmentId
+    ? departmentById(schema.publisherDepartmentId)
+    : undefined;
+  actor = roleContextForScopes(actor, [
+    ...(form.id ? [{ type: 'collection_form', id: form.id }] : []),
+    ...(department ? [{ type: 'department', id: department.id }] : []),
+    ...(form.organizationId ? [{ type: 'social_organization', id: form.organizationId }] : []),
+  ]);
   if (isGlobalOrganizationBusinessSupervisor(actor)) return true;
   const supervised = actor.roles.some(
     (role) =>
@@ -79,6 +94,7 @@ export async function canManageStoredCollection(
   actor: AuthorizationContext,
   form: CollectionFormRecord,
 ): Promise<boolean> {
+  actor = await loadAuthorizationContext(store, actor, new Date());
   const versionIds = [...new Set([form.currentDraftVersionId, form.publishedVersionId])].filter(
     (id): id is string => id !== null,
   );
@@ -93,6 +109,7 @@ export async function canManageStoredCollection(
 }
 
 export function canManageCollectionModuleLibrary(actor: AuthorizationContext): boolean {
+  actor = generalRoleContext(actor);
   return (
     isGlobalOrganizationBusinessSupervisor(actor) ||
     actor.roles.some(

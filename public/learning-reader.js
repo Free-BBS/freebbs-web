@@ -104,11 +104,8 @@
       !reading.hidden &&
       !reading.classList.contains('hidden') &&
       ['content', 'notes'].includes(page.dataset.learningTool || 'content');
-    const valid = () =>
-      context &&
-      !stale &&
-      identity === signature() &&
-      Boolean(progress.scopedKey(BASE, app?.userState));
+    const layoutCurrent = () => context && !stale && identity === signature();
+    const valid = () => layoutCurrent() && Boolean(progress.scopedKey(BASE, app?.userState));
     const entryKey = () => JSON.stringify([context?.course?.slug, context?.node?.id]);
     const memoryKey = () => `${progress.scopedKey(BASE, app?.userState)}:${entryKey()}`;
     const inset = () => {
@@ -129,6 +126,28 @@
       );
     };
     const top = () => (host === browser ? 0 : host.getBoundingClientRect().top);
+    function navigationInset(block) {
+      let margin = inset();
+      const bounds = block.getBoundingClientRect();
+      for (const control of [
+        dom.getElementById('knowledge-course-link'),
+        dom.querySelector('.topbar'),
+      ]) {
+        if (!control || control.hidden || control.closest?.('[hidden],.hidden')) continue;
+        const style = browser.getComputedStyle(control);
+        const rect = control.getBoundingClientRect();
+        if (
+          ['fixed', 'sticky'].includes(style.position) &&
+          rect.width > 0 &&
+          rect.top < top() + 100 &&
+          rect.bottom > top() &&
+          rect.right > bounds.left &&
+          rect.left < bounds.right
+        )
+          margin = Math.max(margin, rect.bottom - top() + 16);
+      }
+      return margin;
+    }
     function capture() {
       if (!valid() || restoring || !readingVisible()) return false;
       const version = context.node.documentVersion;
@@ -167,6 +186,20 @@
       host.scrollBy({ top: delta, behavior: 'instant' });
       return true;
     }
+    function scrollToHeading(block) {
+      if (
+        !layoutCurrent() ||
+        !readingVisible() ||
+        !body.contains?.(block) ||
+        !/^H[1-6]$/.test(block.tagName || '') ||
+        block.closest?.('details:not([open]),[hidden],.hidden')
+      )
+        return false;
+      bindHost();
+      const delta = block.getBoundingClientRect().top - (top() + navigationInset(block));
+      host.scrollBy({ top: delta, behavior: 'instant' });
+      return true;
+    }
     const resume = dom.createElement('button');
     resume.id = 'learning-reader-resume';
     resume.type = 'button';
@@ -198,7 +231,7 @@
       host = scrollHost(body, browser);
       host.addEventListener('scroll', onScroll, { passive: true });
     }
-    function reset(detail) {
+    function reset(detail, { entry = false } = {}) {
       generation += 1;
       browser.clearTimeout(timer);
       context = detail || context;
@@ -233,8 +266,16 @@
         (params.has('tool') && !['content', 'notes'].includes(params.get('tool')));
       browser.requestAnimationFrame(() =>
         browser.requestAnimationFrame(() => {
-          if (request !== generation || !valid()) return;
-          if (!targeted && interaction === userInteraction) restore(savedPosition);
+          if (request !== generation || !layoutCurrent()) return;
+          if (!targeted && interaction === userInteraction) {
+            const resumed = restore(savedPosition);
+            // Opening Reading is a destination, not a request to stay above it.
+            // A real bookmark or an explicit question/origin link still wins.
+            if (entry && !resumed && params.get('view') === 'reading' && readingVisible()) {
+              reading.style?.setProperty('scroll-margin-top', `${navigationInset(reading)}px`);
+              reading.scrollIntoView({ block: 'start', behavior: 'instant' });
+            }
+          }
           restoring = false;
         }),
       );
@@ -257,7 +298,7 @@
         { capture: true, passive: true },
       ),
     );
-    page.addEventListener('knowledge:loaded', (event) => reset(event.detail));
+    page.addEventListener('knowledge:loaded', (event) => reset(event.detail, { entry: true }));
     page.addEventListener('knowledge:document-saved', (event) => {
       if (event.detail?.node && context) reset({ ...context, node: event.detail.node });
     });
@@ -285,7 +326,11 @@
     dom.addEventListener('visibilitychange', () => {
       if (dom.hidden) capture();
     });
-    return { capture, restore, getScrollHost: () => scrollHost(body, browser) };
+    // Public GETs can finish before this deferred reader script arrives.
+    const existing = browser.freeBbsKnowledge?.getLearningContext?.();
+    if (existing?.node && existing?.course && page.getAttribute?.('aria-busy') === 'false')
+      reset(existing, { entry: true });
+    return { capture, restore, scrollToHeading, getScrollHost: () => scrollHost(body, browser) };
   }
   const api = {
     BASE,

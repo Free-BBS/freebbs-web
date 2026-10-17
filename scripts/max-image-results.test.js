@@ -15,6 +15,16 @@ test('explicit image requests enter the dedicated generation state', () => {
   assert.equal(results.isRequest('不要生成图片，只解释原理'), false);
 });
 
+test('generated image hydration only accepts canonical paths on the site origin', () => {
+  const name = 'max-image-42-1791900000000-1234567890abcdef.webp';
+  assert.equal(results.generatedSource(`/api/ai/images/${name}`), `/api/ai/images/${name}`);
+  assert.equal(results.generatedSource(`/uploads/${name}`), `/uploads/${name}`);
+  assert.equal(results.generatedSource(`https://other.example/uploads/${name}`), '');
+  assert.equal(results.generatedSource(`//other.example/api/ai/images/${name}`), '');
+  assert.equal(results.generatedSource('/api/admin/ai-dialogs/export'), '');
+  assert.equal(results.generatedSource(`/uploads/${name}:stream`), '');
+});
+
 test('image generation status uses clear progressive copy', () => {
   assert.deepEqual(results.statusCopy('Max 正在后台思考…'), {
     title: 'Max 正在构思',
@@ -36,6 +46,7 @@ test('Ask Max and discussions load and use the image result UI', () => {
   assert.match(discussion, /max-image-results\.js/);
   assert.match(app, /FreeBbsMaxImageResults\.showProgress/);
   assert.match(app, /FreeBbsMaxImageResults\?\.finish/);
+  assert.match(app, /FreeBbsMaxImageResults\?\.enhanceImages\?\.\(root\)/);
   assert.match(app, /Max 正在思考…/);
   assert.match(resultsSource(), /图片未能加载/);
   assert.match(resultsSource(), /image\.addEventListener\('error', markUnavailable\)/);

@@ -52,7 +52,7 @@ function commentsFixture() {
   let clock = 0;
   let tick;
   let stopped = false;
-  const message = { textContent: '' };
+  const message = { textContent: '', dataset: {} };
   const context = {
     discussionState: state,
     Date: { now: () => clock },
@@ -72,6 +72,7 @@ function commentsFixture() {
         stopped = true;
       },
       FreeBbsMaxImageResults: { isGenerationPhase: () => false },
+      FreeBbsModerationNotice: { confirm: async () => 'test-current-policy' },
     },
   };
   vm.createContext(context);
@@ -186,6 +187,8 @@ function submitFixture(status = 'ready') {
   };
   Object.assign(f.context, {
     userState: user,
+    moderationSubmissionRequestId: () => 'test-comment-request',
+    completeModerationSubmission: () => {},
     rememberDiscussionCommentDraft: () => {},
     clearDiscussionCommentComposer: () => {
       clears += 1;
@@ -220,6 +223,7 @@ for (const status of ['error', 'loading']) {
   test(`a successful comment posted from ${status} reloads the full list instead of hiding the new comment`, async () => {
     const f = submitFixture(status);
     const pending = f.submit();
+    await flush();
     assert.equal(f.requests[0].options.method, 'POST');
     assert.equal(f.requests[0].path, '/discussion/posts/P1/comments');
     f.requests[0].resolve({ comment: { id: 3, contentMarkdown: '已发表' } });
@@ -239,6 +243,7 @@ for (const status of ['error', 'loading']) {
 test('a successful post to a ready comment list appends without another request', async () => {
   const f = submitFixture();
   const pending = f.submit();
+  await flush();
   f.requests[0].resolve({ comment: { id: 3 } });
   await pending;
   assert.equal(f.requests.length, 1);
@@ -252,6 +257,7 @@ for (const change of ['uid', 'session', 'post', 'detail']) {
     test(`a late comment POST ${outcome} after ${change} change cannot mutate current comments or messages`, async () => {
       const f = submitFixture('error');
       const pending = f.submit();
+      await flush();
       if (change === 'uid') f.user.uid = 'user-b';
       else if (change === 'session') f.state.sessionVersion += 1;
       else if (change === 'detail') f.state.postRequestId += 1;

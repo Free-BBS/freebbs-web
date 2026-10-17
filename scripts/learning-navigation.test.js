@@ -145,7 +145,7 @@ function loadingFixture({ point = 'SS-02-01' } = {}) {
   const ranges = [
     ['  function setKnowledgeView(', '  function toggleKnowledgeTag('],
     ['  function setKnowledgeLoading(', '  function bindTagControls('],
-    ['  function renderKnowledgeContent(', "  page.addEventListener('knowledge:document-saved'"],
+    ['  function renderKnowledgeOrigin(', "  page.addEventListener('knowledge:document-saved'"],
     ['  async function initialize()', '  initialize();'],
   ];
   const code = ranges

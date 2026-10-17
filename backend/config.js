@@ -41,6 +41,36 @@ module.exports = {
   sandboxOutputDir:
     process.env.SANDBOX_OUTPUT_DIR || path.join(__dirname, '..', '..', 'sandbox', 'outputs'),
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', 'database', 'uploads'),
+  discussionModerationEnabled: readBooleanEnvironmentVariable('DISCUSSION_MODERATION_ENABLED'),
+  discussionModerationEnvironment: process.env.DISCUSSION_MODERATION_ENVIRONMENT || 'test',
+  discussionModerationAutoEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_ENABLED',
+  ),
+  discussionModerationProviderReviewed: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_PROVIDER_REVIEWED',
+  ),
+  discussionModerationNoticeTestEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_NOTICE_TEST_ENABLED',
+  ),
+  discussionModerationAiTestEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AI_TEST_ENABLED',
+  ),
+  discussionModerationAiModel: process.env.DISCUSSION_MODERATION_AI_MODEL || '',
+  discussionModerationAutoTestEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_TEST_ENABLED',
+  ),
+  discussionModerationAutoModel: process.env.DISCUSSION_MODERATION_AUTO_MODEL || 'qwen3.6-27b',
+  discussionModerationBackupModel: process.env.DISCUSSION_MODERATION_BACKUP_MODEL || 'glm-5.1',
+  discussionModerationAutoImagesEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_IMAGES_ENABLED',
+  ),
+  discussionModerationImageModel: process.env.DISCUSSION_MODERATION_IMAGE_MODEL || 'kimi-k2.6',
+  discussionModerationDir:
+    process.env.DISCUSSION_MODERATION_DIR ||
+    path.join(
+      path.dirname(process.env.UPLOAD_DIR || path.join(__dirname, '..', 'database', 'uploads')),
+      'moderation-private',
+    ),
   mail: {
     host: process.env.BOTMAIL_SMTP || '',
     port: Number(process.env.BOTMAIL_SMTP_PORT || 465),

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 190" width="300" height="190" role="img" aria-label="电子系团委 · 人文组">
+  <title>组合标 · 竖版</title>
+  <!-- 竖版组合标：适合海报、推文抬头、导出图落款。
+       宽度按中文估宽：12 字 × 21px ≈ 252px，viewBox 取 300，两侧各留约 24px。 -->
+  <defs>
+    <clipPath id="lv-frame"><rect x="0" y="0" width="96" height="96" rx="13"/></clipPath>
+  </defs>
+
+  <g transform="translate(102 6)">
+    <g clip-path="url(#lv-frame)">
+      <rect width="96" height="96" fill="#191817"/>
+      <g stroke="#f4f3ee" stroke-width="9.6" stroke-linecap="round" fill="none">
+        <path d="M40 19.2 Q32 48 19.2 68.8"/>
+        <path d="M32 14.4 Q49.6 38.4 76.8 67.2"/>
+      </g>
+      <rect x="19.2" y="78.4" width="57.6" height="3.2" rx="1.6" fill="#b1502f"/>
+    </g>
+  </g>
+
+  <text x="150" y="136" text-anchor="middle" xml:space="preserve"
+        font-family="Songti SC, Noto Serif SC, Source Han Serif SC, STSong, Georgia, serif"
+        font-size="21" font-weight="700" fill="#191817">电子系团委 · 人文组</text>
+  <text x="150" y="160" text-anchor="middle" xml:space="preserve"
+        font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+        font-size="9.5" fill="#8a847a" letter-spacing="2.8">TSINGHUA EE · HUMANITIES</text>
+</svg>

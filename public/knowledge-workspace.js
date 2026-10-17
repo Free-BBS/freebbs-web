@@ -868,7 +868,7 @@
     if (!state.plan) return;
     el('plan-title').textContent = state.plan.label;
     el('plan-reason').textContent = state.planPaused
-      ? '已暂停，想继续时再回来。'
+      ? '本页已暂停，准备好时可继续这条路径。'
       : state.plan.reason;
     el('plan-tip').textContent = state.plan.tip;
     const list = el('plan-steps');
@@ -899,7 +899,7 @@
         text('small', state.planPaused ? '暂存的下一步' : '下一步'),
         text('h3', step.title),
         text('p', step.description),
-        text('small', `约 ${step.minutes} 分钟`),
+        text('small', `建议投入 ${step.minutes} 分钟`),
       );
       const start = text('button', '开始', 'learning-primary');
       start.type = 'button';
@@ -963,7 +963,7 @@
       copy.append(
         text('strong', step.title),
         text('p', step.description || ''),
-        text('small', `约 ${step.minutes} 分钟`),
+        text('small', `建议投入 ${step.minutes} 分钟`),
       );
       const actions = text('div', '', 'learning-plan-step-actions');
       const button = (label, handler, disabled = false) => {
@@ -1043,8 +1043,8 @@
       list.append(item);
     });
     el('plan-total').textContent = state.planPaused
-      ? '暂停中'
-      : `剩余约 ${state.plan.steps.filter((step) => !step.completed && !step.skipped).reduce((sum, step) => sum + step.minutes, 0)} 分钟`;
+      ? '本页暂停中'
+      : `待做步骤建议投入 ${state.plan.steps.filter((step) => !step.completed && !step.skipped).reduce((sum, step) => sum + step.minutes, 0)} 分钟`;
     let pause = el('plan-pause');
     if (!pause && el('plan-reset')) {
       pause = text('button', '先停一下');
