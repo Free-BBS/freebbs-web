@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 96" width="400" height="96" role="img" aria-label="电子系团委 · 人文组">
+  <title>组合标 · 横版</title>
+  <!-- 横版组合标：徽标 + 双行字。
+       宽度按实际排版量过：中文 12 字 × 25px ≈ 312px，起点 x=104 → 需要到 416，
+       所以 viewBox 取 400 并把字号降到 23（≈288px），右边留 8px 余量。
+       第一版 viewBox 只有 300，"人文组"三个字被裁掉了 —— 中文按字号估宽时
+       单字约等于 1.0em（拉丁字母只有 0.5em 左右），很容易估少。 -->
+  <defs>
+    <clipPath id="lk-frame"><rect x="0" y="0" width="80" height="80" rx="11"/></clipPath>
+  </defs>
+
+  <g transform="translate(8 8)">
+    <g clip-path="url(#lk-frame)">
+      <rect width="80" height="80" fill="#191817"/>
+      <g stroke="#f4f3ee" stroke-width="8" stroke-linecap="round" fill="none">
+        <path d="M33.3 16 Q26.7 40 16 57.3"/>
+        <path d="M26.7 12 Q41.3 32 64 56"/>
+      </g>
+      <rect x="16" y="65.3" width="48" height="2.7" rx="1.35" fill="#b1502f"/>
+    </g>
+  </g>
+
+  <text x="104" y="41" xml:space="preserve"
+        font-family="Songti SC, Noto Serif SC, Source Han Serif SC, STSong, Georgia, serif"
+        font-size="23" font-weight="700" fill="#191817">电子系团委 · 人文组</text>
+  <text x="105" y="63" xml:space="preserve"
+        font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+        font-size="10" fill="#8a847a" letter-spacing="2.4">TSINGHUA EE · HUMANITIES</text>
+</svg>

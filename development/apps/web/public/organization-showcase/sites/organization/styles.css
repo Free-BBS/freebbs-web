@@ -1,0 +1,253 @@
+:root {
+  color-scheme: light;
+  --home-red: #c81020;
+  --home-gold: #ffde83;
+  --home-rule: rgb(255 222 131 / 24%);
+  --home-serif: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', serif;
+  --home-sans: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--home-red);
+}
+body {
+  margin: 0;
+  min-width: 280px;
+  min-height: 100svh;
+  background: var(--home-red);
+  color: var(--home-gold);
+  font-family: var(--home-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+a:focus-visible {
+  outline: 2px solid var(--home-gold);
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 2;
+  transform: translateY(-200%);
+  background: var(--home-gold);
+  color: var(--home-red);
+  padding: 8px 12px;
+}
+.skip-link:focus {
+  transform: none;
+}
+.site-header {
+  min-height: 60px;
+  padding: 0 clamp(20px, 3.4vw, 56px);
+  border-bottom: 1px solid var(--home-rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.brand {
+  font-size: 23px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.main-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(20px, 2.8vw, 46px);
+}
+.main-nav a {
+  position: relative;
+  display: inline-block;
+  padding: 17px 0;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.main-nav a[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: -6px;
+  right: -6px;
+  height: 2px;
+  background: var(--home-gold);
+}
+.main-nav a:hover {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+.introduction {
+  width: min(100%, 1600px);
+  margin: 0 auto;
+  padding: clamp(44px, 6vw, 82px) clamp(20px, 4vw, 64px) clamp(60px, 7vw, 104px);
+  text-align: center;
+}
+.league-emblem {
+  display: block;
+  width: clamp(132px, 14.6vw, 224px);
+  height: auto;
+  margin: 0 auto 34px;
+  object-fit: contain;
+}
+h1 {
+  margin: 0;
+  font-family: var(--home-serif);
+  font-size: clamp(36px, 5.18vw, 80px);
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.015em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+h1 span {
+  display: inline-block;
+  white-space: nowrap;
+}
+.intro-section {
+  margin-top: clamp(30px, 3vw, 44px);
+}
+.intro-section::before {
+  content: '';
+  display: block;
+  width: clamp(112px, 13.3vw, 204px);
+  height: 2px;
+  margin: 0 auto clamp(22px, 2.7vw, 40px);
+  background: var(--home-gold);
+}
+.intro-section h2 {
+  margin: 0 0 8px;
+  font-family: var(--home-serif);
+  font-size: clamp(22px, 2.04vw, 32px);
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.14em;
+}
+.intro-section p {
+  margin: 0;
+  font-family: var(--home-serif);
+  font-size: clamp(25px, 2.8vw, 44px);
+  font-weight: 600;
+  line-height: 1.8;
+  letter-spacing: 0.06em;
+  text-wrap: balance;
+}
+.philosophy {
+  margin-top: clamp(30px, 3vw, 46px);
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    padding: 16px 20px 7px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  .brand {
+    font-size: 20px;
+  }
+  .main-nav {
+    width: 100%;
+    gap: 22px;
+  }
+  .main-nav a {
+    padding: 10px 0;
+    font-size: 14px;
+  }
+  .main-nav a[aria-current='page']::after {
+    bottom: 2px;
+    left: 0;
+    right: 0;
+  }
+  .introduction {
+    padding-top: 42px;
+  }
+  .league-emblem {
+    width: 136px;
+    margin-bottom: 28px;
+  }
+  h1 {
+    font-size: clamp(30px, 6.4vw, 44px);
+    line-height: 1.55;
+    letter-spacing: 0.035em;
+  }
+  .intro-section p {
+    font-size: clamp(22px, 4.2vw, 28px);
+    letter-spacing: 0.025em;
+  }
+}
+
+@media (max-width: 360px) {
+  .main-nav {
+    gap: 16px;
+  }
+  .main-nav a {
+    font-size: 13px;
+  }
+  .introduction {
+    padding-inline: 16px;
+  }
+  h1 {
+    font-size: 26px;
+  }
+}
+
+/* Keep the submitted red-and-gold identity while matching the platform theme. */
+:root[data-platform-theme='dark'] {
+  color-scheme: dark;
+  --home-red: #861923;
+  --home-gold: #ffe6a8;
+}
+
+/* Platform breadcrumbs provide the outer navigation; the introduction remains uninterrupted. */
+.introduction {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.introduction > * {
+  max-width: 100%;
+}
+.contact-section {
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid var(--home-rule);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.contact-section h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.contact-section p {
+  margin: 0 0 2px;
+}
+.contact-section a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  h1 span {
+    display: block;
+    white-space: normal;
+  }
+  .introduction {
+    padding-block: 36px 52px;
+  }
+}
+@media (max-width: 360px) {
+  h1 {
+    font-size: 24px;
+  }
+}

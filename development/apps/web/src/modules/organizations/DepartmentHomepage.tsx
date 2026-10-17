@@ -9,6 +9,10 @@ import {
 import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { IsolatedDepartmentDocument } from './IsolatedDepartmentDocument.js';
+import { OrganizationMark } from './OrganizationMark.js';
+import { findOrganization } from './catalog.js';
+import { findShowcase } from './showcase/registry.js';
+import { CuratedDepartmentShowcase } from './showcase/CuratedDepartmentShowcase.js';
 
 export function DepartmentHomepage({
   department,
@@ -19,6 +23,10 @@ export function DepartmentHomepage({
   introduction: string;
   client?: Pick<ApiClient, 'request'>;
 }) {
+  const displayName =
+    findOrganization(department.organizationKey)?.departments.find(
+      (entry) => entry.key === department.departmentKey,
+    )?.name ?? department.name;
   const fallback = useMemo(createApiClient, []);
   const api = client ?? fallback;
   const auth = useOptionalAuth();
@@ -132,21 +140,24 @@ export function DepartmentHomepage({
     }
   }
   const entries = activities ? (past ? activities.past : activities.active) : [];
+  const showcase = findShowcase(department.id);
   return (
     <>
-      <header className="department-heading">
-        <div>
-          <p className="organization-eyebrow">{department.organizationName}</p>
-          <h2>{department.name}</h2>
-        </div>
-        {department.id === 'tms.position' ? (
-          <Link to="/collections/registrations?organization=tms">
-            查看相关活动 <span aria-hidden="true">↗</span>
-          </Link>
-        ) : (
-          <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
-        )}
-      </header>
+      {!showcase || home?.html ? (
+        <header className="department-heading">
+          <div>
+            <p className="organization-eyebrow">{department.organizationName}</p>
+            <h2>{displayName}</h2>
+          </div>
+          {department.id === 'tms.position' ? (
+            <Link to="/collections/registrations?organization=tms">
+              查看相关活动 <span aria-hidden="true">↗</span>
+            </Link>
+          ) : (
+            <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
+          )}
+        </header>
+      ) : null}
       {department.id === 'youth_league.organization' ? (
         <Link className="og-department-entry" to="/organizations/youth_league/organization/ledger">
           <span>
@@ -232,16 +243,26 @@ export function DepartmentHomepage({
           html={home.html}
           title={`${department.name}主页`}
         />
+      ) : showcase ? (
+        <CuratedDepartmentShowcase key={department.id} content={showcase} />
       ) : home ? (
-        <div className="department-introduction">
-          <p>{introduction}</p>
-          <p>部门主页正在准备中。</p>
+        <div className="department-introduction sc-default-introduction">
+          <OrganizationMark variant={department.organizationKey} />
+          <div>
+            <span className="sc-sticker">认识一下</span>
+            <h3>校园里，又一个可以相遇的地方。</h3>
+            <p>{introduction}</p>
+            <p className="sc-default-introduction-note">部门主页正在准备中。</p>
+          </div>
         </div>
       ) : !homeError ? (
         <p role="status">正在加载部门主页…</p>
       ) : null}
       <section className="department-activities" aria-label="相关活动">
         <nav className="activity-authoring-actions" aria-label="部门协作">
+          {showcase && !home?.html && department.id === 'tms.position' ? (
+            <Link to="/collections/registrations?organization=tms">查看相关活动 ↗</Link>
+          ) : null}
           <Link to={`/collections/tools?department=${encodeURIComponent(department.id)}`}>
             时间与资料协作
           </Link>

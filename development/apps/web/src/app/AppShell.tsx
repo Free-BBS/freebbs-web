@@ -4,7 +4,8 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
-import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
+import { isOrganizationShowcasePath } from '../modules/organizations/showcase/presentation.js';
+import { OrganizationShowcaseHeader } from '../modules/organizations/OrganizationShowcaseHeader.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import {
   canViewSystemSettings,
@@ -158,6 +159,7 @@ function PreviewDenied() {
 export function AppShell({ children, moduleStates }: AppShellProps) {
   const auth = useAuth();
   const location = useLocation();
+  const fullPageShowcase = isOrganizationShowcasePath(location.pathname);
 
   const theme = useMainSiteTheme();
   const typography = useMainSiteTypography();
@@ -212,11 +214,14 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   }
 
   return (
-    <div className="development-shell-root" style={typography}>
+    <div
+      className={`development-shell-root${fullPageShowcase ? ' development-shell-root--full-page' : ''}`}
+      style={typography}
+    >
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
-      <div className="app-shell">
+      <div className={`app-shell${fullPageShowcase ? ' app-shell--full-page' : ''}`}>
         <aside className="sidebar" aria-label="发展平台侧栏">
           <NavLink className="brand" to="/community" aria-label="FREE BBS">
             <img className="brand-mark" src={freeBbsEmblem} alt="FREE BBS" />
@@ -253,6 +258,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
             authMode={auth.authMode}
             themeMode={theme.mode}
             onToggleTheme={theme.toggle}
+            titleContent={fullPageShowcase ? <OrganizationShowcaseHeader /> : undefined}
           />
           {auth.user.previewing ? (
             <div className="development-preview-banner" role="status">
@@ -264,16 +270,11 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
               </button>
             </div>
           ) : null}
-          {auth.authMode === 'demo' ? (
-            <div className="demo-preview-toolbar">
-              <DemoUserSwitcher />
-            </div>
-          ) : null}
 
           <main className="page-content" id="main-content">
             {children ?? <Outlet />}
           </main>
-          <MainSiteFooter />
+          {!fullPageShowcase ? <MainSiteFooter /> : null}
         </div>
       </div>
 

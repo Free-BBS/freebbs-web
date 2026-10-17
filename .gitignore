@@ -178,3 +178,4 @@ test/
 **/.preview/
 /.playwright-cli/
 /output/playwright/
+**/dist-review/

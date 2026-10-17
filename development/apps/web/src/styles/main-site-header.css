@@ -21,6 +21,16 @@
   overflow-wrap: anywhere;
 }
 
+.main-site-header-title-slot {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 0;
+}
+
+.main-site-header-title-slot > * {
+  max-width: 100%;
+}
+
 .main-site-account,
 .main-site-user {
   display: flex;
@@ -254,15 +264,6 @@ body.theme-dark .main-site-tool-button img {
   filter: brightness(0) invert(1);
 }
 
-.demo-preview-toolbar {
-  display: flex;
-  min-height: 46px;
-  justify-content: flex-end;
-  padding: 3px clamp(20px, 3vw, 44px);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-page);
-}
-
 .main-site-notifications {
   position: relative;
   flex: 0 0 auto;
@@ -434,6 +435,17 @@ body.theme-dark .main-site-tool-button img {
     display: none;
   }
 
+  .main-site-header--custom-title {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .main-site-header-title-slot {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
   .main-site-account {
     display: grid;
     width: 100%;
@@ -540,11 +552,6 @@ body.theme-dark .main-site-tool-button img {
 
   body.theme-dark .main-site-mobile-theme img {
     filter: brightness(0) invert(1);
-  }
-
-  .demo-preview-toolbar {
-    min-height: 44px;
-    padding: 3px 14px;
   }
 }
 

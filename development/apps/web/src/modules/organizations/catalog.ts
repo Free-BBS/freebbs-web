@@ -54,8 +54,8 @@ const departmentIntroductions: Record<string, { introduction: string; focus: str
     focus: ['志愿服务', '项目招募', '服务交流'],
   },
   practice: {
-    introduction: '从支队筹备到行程分享，关注社会实践、支队交流与实践资源。',
-    focus: ['社会实践', '支队交流', '实践资源'],
+    introduction: '从实践动员、行前培训到总结评比与报销，陪同学把想法变成一次出发。',
+    focus: ['社会实践', '实践培训', '支队交流'],
   },
   humanities: {
     introduction: '在阅读、对话与文化活动中，发现专业之外更宽广的校园生活。',
@@ -113,7 +113,7 @@ const exhibitionDefinitions: Array<
     key: 'student_union',
     name: '电子系学生会',
     shortName: '学生会',
-    motto: '让校园生活，多一种可能。',
+    motto: '让校园生活，多一种可能',
     introduction:
       '从舞台到赛场，从资源连接到校园生活，学生会的四个中心一起回应同学的需求，让每个人都能找到参与的入口。',
     focus: ['文艺', '体育', '联络', '权益与发展'],
@@ -128,27 +128,27 @@ const exhibitionDefinitions: Array<
     key: 'youth_league',
     name: '电子系团委',
     shortName: '团委',
-    motto: '一起出发，也彼此陪伴。',
+    motto: '一起出发，呼唤人文的回归',
     introduction:
-      '组织、新生、志愿、实践、人文与扬帆计划，连接大学生活中不同的探索路径，让参与、交流与成长持续发生。',
+      '组织、新生、志愿、实践、调研、人文与扬帆计划，连接大学生活中不同的探索路径，让参与、交流与成长持续发生。',
     focus: ['组织建设', '志愿实践', '人文交流', '新生成长'],
     organizationIds: ['tuanwei'],
   },
   {
     key: 'tms',
-    name: '电子系TMS分会',
+    name: '电子系 TMS 分会',
     shortName: 'TMS',
-    motto: '在思考与行动之间，相互启发。',
+    motto: '在思考与行动之间，相互启发',
     introduction:
       '以理论学习、主题交流和共同参与为纽带，为同学提供学习讨论、活动报名与经历分享的空间。',
-    focus: ['理论学习', '主题交流', '活动参与'],
+    focus: ['理论学习', '主题交流', '红色实践'],
     organizationIds: ['tms'],
   },
   {
     key: 'science_association',
     name: '电子系科协',
     shortName: '科协',
-    motto: '把好奇，变成亲手做出的答案。',
+    motto: '把好奇，变成亲手做出的答案',
     introduction:
       '连接软件、硬件、学习培训与项目实践，为想动手、想探索的同学提供技术交流和一起创造的机会。',
     focus: ['软件硬件', '学习培训', '项目实践', '活动策划'],
@@ -157,8 +157,8 @@ const exhibitionDefinitions: Array<
   {
     key: 'media_center',
     name: '电子系学生媒体中心',
-    shortName: '媒中',
-    motto: '把校园故事，装进镜头与文字。',
+    shortName: '媒体中心',
+    motto: '把校园故事，装进镜头与文字',
     introduction:
       '从创意设计到影音策划，从采访记录到新媒体分享，媒体中心用镜头、文字与设计留下校园生活的每一个鲜活瞬间。',
     focus: ['创意设计', '影音策划', '校园记录', '新媒体传播'],
@@ -166,19 +166,49 @@ const exhibitionDefinitions: Array<
   },
 ];
 
-export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDefinitions.map(
-  (definition) => {
+const galleryOrder = [
+  'tms',
+  'youth_league',
+  'student_union',
+  'science_association',
+  'media_center',
+];
+const youthLeagueOrder = [
+  'organization',
+  'freshman',
+  'volunteer',
+  'practice',
+  'research',
+  'humanities',
+  'sail',
+];
+
+export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibitionDefinitions]
+  .sort((a, b) => galleryOrder.indexOf(a.key) - galleryOrder.indexOf(b.key))
+  .map((definition) => {
     const section = DEVELOPMENT_IDENTITY_SECTIONS.find(({ id }) => id === definition.key)!;
     return {
       ...definition,
       departments: section.groups
-        .filter(({ id }) => !/\.(executive|chair|position|finance)$/.test(id))
+        .filter(
+          ({ id }) =>
+            !/\.(executive|chair|position|finance)$/.test(id) &&
+            id !== 'science_association.office',
+        )
         .map((group) => {
           const key = group.id.split('.').at(-1)!;
           const details = departmentIntroductions[key];
           return {
             key,
-            name: group.label,
+            name:
+              (
+                {
+                  planning: '智能策划部',
+                  training: '学习培养部',
+                  freshman: '办公室·新生组',
+                  rights_development_center: '学生权益发展中心',
+                } as Record<string, string>
+              )[key] ?? group.label,
             introduction: details?.introduction ?? '了解部门工作，发现可以一起参与的活动。',
             focus: details?.focus ?? [],
             organizationIds:
@@ -187,10 +217,28 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDe
                 : [...definition.organizationIds],
             sharedActivityScope: definition.key !== 'student_union',
           };
-        }),
+        })
+        .concat(
+          definition.key === 'youth_league'
+            ? [
+                {
+                  key: 'research',
+                  name: '调研组',
+                  introduction: '认真倾听，扎实求证。从品牌项目到同学需求，让每一种声音都有回响。',
+                  focus: ['品牌项目调研', '访谈与分析', '同学声音'],
+                  organizationIds: ['tuanwei' as const],
+                  sharedActivityScope: false,
+                },
+              ]
+            : [],
+        )
+        .sort((a, b) =>
+          definition.key === 'youth_league'
+            ? youthLeagueOrder.indexOf(a.key) - youthLeagueOrder.indexOf(b.key)
+            : 0,
+        ),
     };
-  },
-);
+  });
 
 export function findOrganization(key: string): OrganizationExhibit | undefined {
   return ORGANIZATION_GALLERY.find((item) => item.key === key);

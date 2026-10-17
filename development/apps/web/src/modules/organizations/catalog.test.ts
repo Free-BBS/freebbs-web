@@ -1,59 +1,104 @@
+import { departmentForRoute } from '@freebbs-development/contracts';
 import { describe, expect, it } from 'vitest';
 import { ORGANIZATION_GALLERY, organizationRegistrationPath, findOrganization } from './catalog.js';
+import { SHOWCASES, showcaseRoute } from './showcase/registry.js';
 
 describe('organization exhibition catalog', () => {
-  it('shows all five organizations and uses the existing department hierarchy', () => {
-    expect(ORGANIZATION_GALLERY.map((item) => item.name)).toEqual([
-      '电子系学生会',
-      '电子系团委',
-      '电子系TMS分会',
-      '电子系科协',
-      '电子系学生媒体中心',
+  it('keeps the five existing organizations and their department hierarchy with an independent research exhibition', () => {
+    expect(ORGANIZATION_GALLERY.map(({ key }) => key)).toEqual([
+      'tms',
+      'youth_league',
+      'student_union',
+      'science_association',
+      'media_center',
     ]);
-    expect(findOrganization('student_union')?.departments.map((item) => item.name)).toEqual([
-      '文艺中心',
-      '体育中心',
-      '联络中心',
-      '权益发展中心',
+    expect(findOrganization('student_union')?.departments.map(({ key }) => key)).toEqual([
+      'arts_center',
+      'sports_center',
+      'liaison_center',
+      'rights_development_center',
     ]);
-    expect(findOrganization('youth_league')?.departments).toHaveLength(6);
-    expect(findOrganization('science_association')?.departments).toHaveLength(6);
+    expect(findOrganization('youth_league')?.departments.map(({ key }) => key)).toEqual([
+      'organization',
+      'freshman',
+      'volunteer',
+      'practice',
+      'research',
+      'humanities',
+      'sail',
+    ]);
+    expect(findOrganization('science_association')?.departments).toHaveLength(5);
+    expect(
+      findOrganization('science_association')?.departments.some(({ key }) => key === 'office'),
+    ).toBe(false);
+    expect(
+      findOrganization('science_association')?.departments.find(({ key }) => key === 'training')
+        ?.name,
+    ).toBe('学习培养部');
+    expect(
+      findOrganization('youth_league')?.departments.find(({ key }) => key === 'freshman')?.name,
+    ).toBe('办公室·新生组');
     expect(findOrganization('tms')?.departments).toHaveLength(0);
+    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(19);
     for (const organization of ORGANIZATION_GALLERY) {
       expect(organization).not.toHaveProperty('leadership');
       expect(organization).not.toHaveProperty('supportingPositions');
       for (const department of organization.departments) {
         expect(department).not.toHaveProperty('positions');
+        expect(department.focus.length).toBeGreaterThan(0);
       }
     }
   });
-  it('exhibits the three media departments with an honest unscoped activity destination', () => {
-    const media = findOrganization('media_center');
-    expect(media).toBeDefined();
-    expect(media?.departments.map(({ name }) => name)).toEqual([
-      '创意设计部',
-      '影音策划部',
-      '新媒体与记者团部',
+  it('keeps media activity links honestly unscoped and other scopes explicit', () => {
+    const media = findOrganization('media_center')!;
+    expect(media.departments.map(({ key }) => key)).toEqual([
+      'creative',
+      'audiovisual',
+      'new_media_reporters',
     ]);
-    expect(media?.organizationIds).toEqual([]);
-    for (const department of media?.departments ?? []) {
-      expect(department.organizationIds).toEqual([]);
-      expect(department.focus.length).toBeGreaterThan(0);
-    }
-    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(19);
+    expect(media.organizationIds).toEqual([]);
+    for (const department of media.departments) expect(department.organizationIds).toEqual([]);
     expect(organizationRegistrationPath([])).toBe('/collections/registrations');
-  });
-  it('links using explicit activity organization identifiers without inventing department scopes', () => {
     const union = findOrganization('student_union')!;
-    const arts = union.departments.find((item) => item.key === 'arts_center')!;
+    const arts = union.departments.find(({ key }) => key === 'arts_center')!;
     expect(organizationRegistrationPath(arts.organizationIds)).toBe(
       '/collections/registrations?organization=arts_center',
     );
     const freshman = findOrganization('youth_league')!.departments.find(
-      (item) => item.key === 'freshman',
+      ({ key }) => key === 'freshman',
     )!;
     expect(freshman.organizationIds).toEqual(['tuanwei']);
     expect(freshman.sharedActivityScope).toBe(true);
+    expect(organizationRegistrationPath(['arts_center', 'sports_center'])).toBe(
+      '/collections/registrations?organization=arts_center%2Csports_center',
+    );
     expect(findOrganization('invalid')).toBeUndefined();
+  });
+  it('registers all twenty submitted exhibitions at valid, unique browse routes', () => {
+    expect(SHOWCASES).toHaveLength(20);
+    expect(new Set(SHOWCASES.map(({ departmentId }) => departmentId)).size).toBe(20);
+    expect(new Set(SHOWCASES.map(showcaseRoute)).size).toBe(20);
+    for (const content of SHOWCASES) {
+      const [organizationKey, departmentKey] = content.departmentId.split('.');
+      const organization = findOrganization(organizationKey)!;
+      expect(organization).toBeDefined();
+      if (organizationKey === 'tms') expect(showcaseRoute(content)).toBe('/organizations/tms');
+      else expect(organization.departments.some(({ key }) => key === departmentKey)).toBe(true);
+      expect(content.summary).not.toBe('');
+      expect(content.duties.length).toBeGreaterThan(0);
+      if (!content.site) expect(content.sections.length).toBeGreaterThan(0);
+    }
+  });
+  it('does not turn the research exhibition into a practice permission identity', () => {
+    const research = findOrganization('youth_league')!.departments.find(
+      ({ key }) => key === 'research',
+    )!;
+    expect(research.name).toBe('调研组');
+    expect(research.sharedActivityScope).toBe(false);
+    expect(departmentForRoute('youth_league', 'research')).toBeUndefined();
+    expect(departmentForRoute('youth_league', 'practice')?.id).toBe('youth_league.practice');
+    expect(SHOWCASES.find(({ slug }) => slug === 'research')?.departmentId).toBe(
+      'youth_league.research',
+    );
   });
 });

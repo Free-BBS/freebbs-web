@@ -198,11 +198,51 @@ test('publisher selection roundtrips through public associated native and histor
     'true',
   );
   await page.getByRole('link', { name: /校园夜跑/ }).click();
-  await expect(page).toHaveURL(/events\/activity-night-run$/);
+  await expect(page).toHaveURL(
+    /collections\/activities\/development_activity\/activity-night-run$/,
+  );
   await expect(page.getByRole('heading', { name: '校园夜跑', exact: true })).toBeVisible();
-  await expect(page.getByLabel('报名状态')).toContainText('报名已截止');
-  await expect(page.getByRole('button', { name: '报名活动', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '报名已截止', exact: true })).toBeDisabled();
 });
+
+async function waitForUploadedLayout(frame: import('@playwright/test').Locator) {
+  const document = frame.contentFrame();
+  await document.locator('body').evaluate(async () => {
+    await window.document.fonts.ready;
+  });
+  let previous = '';
+  let changedAt = Date.now();
+  // Visibility can precede the existing viewport feedback guard and width settling.
+  // Sample actual layout stability before measuring drift or targeting a control.
+  await expect
+    .poll(
+      async () => {
+        const [outer, inner] = await Promise.all([
+          frame.evaluate((element) => {
+            const box = element.getBoundingClientRect();
+            return [box.width, box.height, box.top + scrollY];
+          }),
+          document
+            .locator('body')
+            .evaluate((body) => [
+              innerWidth,
+              innerHeight,
+              body.getBoundingClientRect().width,
+              body.getBoundingClientRect().height,
+              window.document.documentElement.scrollHeight,
+            ]),
+        ]);
+        const layout = JSON.stringify([outer, inner]);
+        if (layout !== previous) {
+          previous = layout;
+          changedAt = Date.now();
+        }
+        return Date.now() - changedAt >= 200;
+      },
+      { intervals: [50, 100, 150], message: 'the newly uploaded document layout settles' },
+    )
+    .toBe(true);
+}
 
 for (const width of [390, 768, 1440])
   test(`full documents stay responsive and viewport-height templates stop growing at ${width}px`, async ({
@@ -230,9 +270,15 @@ for (const width of [390, 768, 1440])
       await expect(frame).toBeVisible();
       await expect(
         page
+          .getByRole('region', { name: '主页预览' })
+          .getByText(`vh-${theme}.html`, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
           .frameLocator('iframe[title="体育中心主页预览"]')
           .getByRole('heading', { name: 'Viewport height template' }),
       ).toBeVisible();
+      await waitForUploadedLayout(frame);
       await expect
         .poll(async () => await frame.evaluate((el) => el.getBoundingClientRect().height))
         .toBeGreaterThan(400);
@@ -278,7 +324,13 @@ for (const width of [390, 1440]) {
     const outer = page.locator('iframe[title="体育中心主页预览"]');
     const inner = page.frameLocator('iframe[title="体育中心主页预览"]');
     await expect(inner.getByRole('heading', { name: '可收起的完整文档' })).toBeVisible();
+    await waitForUploadedLayout(outer);
+    // Keep the mouse target clear of fixed mobile navigation without racing smooth scroll.
+    await outer.evaluate((element) =>
+      element.scrollIntoView({ block: 'center', behavior: 'instant' }),
+    );
     await inner.getByRole('button', { name: '展开或收起' }).click();
+    await expect(inner.locator('#panel')).toBeVisible();
     await expect.poll(() => outer.evaluate((el) => el.clientHeight)).toBeGreaterThan(1400);
     await inner.getByRole('button', { name: '展开或收起' }).press('Enter');
     await expect(inner.locator('#panel')).toBeHidden();
@@ -297,6 +349,7 @@ for (const width of [390, 1440]) {
       buffer: Buffer.from(settleHtml),
     });
     await expect(inner.getByRole('heading', { name: '布局稳定后收缩' })).toBeVisible();
+    await waitForUploadedLayout(outer);
     await expect.poll(() => outer.evaluate((el) => el.clientHeight)).toBeGreaterThan(1800);
     await inner.getByRole('button', { name: '放宽文档' }).click();
     await expect
