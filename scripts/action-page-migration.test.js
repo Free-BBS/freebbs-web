@@ -11,7 +11,7 @@ const pages = {
   'register.html': 2,
   'remake.html': 2,
   'settings.html': 12,
-  'adminusers.html': 3,
+  'adminusers.html': 4,
   'aichat.html': 3,
   'discussion.html': 2,
   'guide.html': 4,
