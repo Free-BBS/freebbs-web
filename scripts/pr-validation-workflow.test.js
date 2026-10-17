@@ -7,7 +7,9 @@ const yaml = require('js-yaml');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, '.github/workflows/pr-validate.yml'), 'utf8');
 const workflow = yaml.load(source);
-const ci = fs.readFileSync(path.join(root, 'scripts/ci-validate.sh'), 'utf8');
+const ci = fs
+  .readFileSync(path.join(root, 'scripts/ci-validate.sh'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 test('PR validation runs for main pull requests and manual dispatch with read-only permissions', () => {
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'workflow_dispatch']);
@@ -84,6 +86,29 @@ test('the validation job uses repository Node, Python 3 and the shared complete 
       commands['test:ui-page-migration:browser'].includes(`scripts/check-${file}-browser.js`),
     );
   }
+});
+
+test('CI builds and checks the portable organization showcase using repository assets', () => {
+  const build = ci.indexOf('\nnode scripts/build-showcase-review.mjs\n');
+  assert.ok(build > ci.indexOf('\nnpm ci --prefix development\n'));
+  assert.ok(build > ci.indexOf('\nnpm run check --prefix development\n'));
+  for (const file of [
+    'showcase-review',
+    'showcase-offline-compat',
+    'showcase-photo-layout',
+    'showcase-audiovisual-player',
+    'organization-showcase-static',
+  ]) {
+    const command = ci.match(
+      new RegExp(`^node --test[^\\n]* scripts/${file}\\.test\\.js(?:\\s|$)`, 'm'),
+    );
+    assert.ok(command, `CI must run ${file}`);
+    assert.ok(command.index > build, `${file} must use the freshly built offline package`);
+  }
+  assert.doesNotMatch(
+    ci,
+    /^node scripts\/prepare-(?:submitted-showcases|department-content)\.mjs/m,
+  );
 });
 
 test('the MySQL job installs dependencies before running a local socket-only disposable server', () => {

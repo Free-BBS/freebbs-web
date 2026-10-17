@@ -1,49 +1,11 @@
 (() => {
+  let controller = null;
+  let activeSession = '';
+  let sessionBlocked = false;
+
   function initRegistrationWhitelist({ apiBaseUrl, getToken }) {
-    const host = document.getElementById('admin-users-content');
-    if (!host || document.getElementById('registration-whitelist-panel')) return;
-    const section = document.createElement('section');
-    section.className = 'settings-shell registration-whitelist-panel';
-    section.id = 'registration-whitelist-panel';
-    section.setAttribute('aria-label', '注册白名单管理');
-    section.innerHTML = `
-      <details class="whitelist-details">
-        <summary><span>注册白名单</span><span class="whitelist-count" data-whitelist-count>正在加载</span></summary>
-        <div class="whitelist-content">
-          <p class="whitelist-help">仅允许白名单内的身份注册。同一行填写的字段必须全部匹配，留空的字段不限制，每行至少填写一项。每条身份仅可注册一次。</p>
-          <form class="whitelist-upload-form">
-            <label class="whitelist-file-label">Excel 白名单
-              <input type="file" name="file" accept=".xlsx" required aria-label="选择 Excel 注册白名单" />
-            </label>
-            <label>导入方式
-              <select name="mode" aria-label="白名单导入方式">
-                <option value="append">追加到现有白名单</option>
-                <option value="replace">替换当前全部白名单</option>
-              </select>
-            </label>
-            <button type="submit" class="admin-button">上传白名单</button>
-            <button type="button" class="admin-button admin-button-secondary" data-whitelist-template>下载 Excel 模板</button>
-          </form>
-          <p class="whitelist-help" data-whitelist-mode-help>支持 .xlsx 文件，最多 10,000 行、5 MB。导入错误时整份文件均不会生效。</p>
-          <p class="whitelist-message" role="status" aria-live="polite"></p>
-          <form class="whitelist-search-form" role="search">
-            <input type="search" name="search" placeholder="搜索学号、姓名或邮箱" aria-label="搜索白名单" />
-            <button class="admin-button admin-button-secondary" type="submit">搜索</button>
-          </form>
-          <div class="whitelist-table-scroll" tabindex="0" aria-label="白名单记录">
-            <table class="whitelist-table">
-              <thead><tr><th scope="col">学号</th><th scope="col">姓名</th><th scope="col">邮箱</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="whitelist-pagination">
-            <button type="button" class="admin-button admin-button-secondary" data-whitelist-prev>上一页</button>
-            <span data-whitelist-page></span>
-            <button type="button" class="admin-button admin-button-secondary" data-whitelist-next>下一页</button>
-          </div>
-        </div>
-      </details>`;
-    host.prepend(section);
+    const section = document.getElementById('registration-whitelist-panel');
+    if (!section || controller) return controller;
     const message = section.querySelector('.whitelist-message');
     const uploadForm = section.querySelector('.whitelist-upload-form');
     const searchForm = section.querySelector('.whitelist-search-form');
@@ -58,10 +20,15 @@
     }
 
     async function request(suffix = '', options = {}) {
+      const token = getToken();
+      if (sessionBlocked || !token || !window.freeBbsApp?.userState?.isAdmin)
+        throw new Error('请使用管理员账号登录后重试。');
       const response = await fetch(`${endpoint}${suffix}`, {
         ...options,
-        headers: { Authorization: `Bearer ${getToken()}`, ...options.headers },
+        headers: { Authorization: `Bearer ${token}`, ...options.headers },
       });
+      if (sessionBlocked || token !== getToken() || !window.freeBbsApp?.userState?.isAdmin)
+        throw new Error('登录状态已变化，请重新操作。');
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         const errors = (payload.errors || []).map(
@@ -72,17 +39,19 @@
       return response;
     }
 
-    async function load() {
+    async function load({ preserveMessage = false } = {}) {
       loadGeneration += 1;
       const generation = loadGeneration;
+      if (!preserveMessage) showMessage('正在加载白名单…');
       try {
         const response = await request(`?page=${page}&search=${encodeURIComponent(query)}`);
         const payload = await response.json();
         if (generation !== loadGeneration) return;
+        if (!preserveMessage) showMessage('');
         const totalPages = Math.max(1, Math.ceil(payload.total / payload.pageSize));
         if (page > totalPages) {
           page = totalPages;
-          await load();
+          await load({ preserveMessage });
           return;
         }
         section.querySelector('[data-whitelist-count]').textContent =
@@ -119,7 +88,7 @@
             try {
               await request(`/${entry.id}`, { method: 'DELETE' });
               showMessage('白名单记录已移除，已有账户不受影响。');
-              await load();
+              await load({ preserveMessage: true });
             } catch (error) {
               showMessage(error.message, true);
               button.disabled = false;
@@ -141,6 +110,8 @@
           body.append(row);
         }
       } catch (error) {
+        if (generation !== loadGeneration) return;
+        section.querySelector('[data-whitelist-count]').textContent = '加载失败';
         showMessage(error.message, true);
       }
     }
@@ -175,7 +146,7 @@
         );
         uploadForm.elements.file.value = '';
         page = 1;
-        await load();
+        await load({ preserveMessage: true });
       } catch (error) {
         showMessage(error.message, true);
       } finally {
@@ -215,7 +186,62 @@
       page += 1;
       load();
     });
-    load();
+    section.querySelector('[data-whitelist-retry]').addEventListener('click', () => load());
+    controller = {
+      refresh() {
+        section.querySelectorAll('input, select, button').forEach((element) => {
+          element.removeAttribute('disabled');
+        });
+        return load();
+      },
+      reset() {
+        loadGeneration += 1;
+        page = 1;
+        query = '';
+        searchForm.reset();
+        uploadForm.reset();
+        section.querySelector('tbody').replaceChildren();
+        section.querySelector('[data-whitelist-count]').textContent = '等待加载';
+        section.querySelector('[data-whitelist-page]').textContent = '';
+        showMessage('');
+        section.querySelectorAll('input, select, button').forEach((element) => {
+          element.setAttribute('disabled', '');
+        });
+      },
+    };
+    controller.refresh();
+    return controller;
   }
   window.initRegistrationWhitelist = initRegistrationWhitelist;
+
+  function syncSession() {
+    if (sessionBlocked) return;
+    const app = window.freeBbsApp;
+    const user = app?.userState;
+    const session =
+      user?.isLoggedIn && user.isAdmin && user.token ? `${user.uid || ''}:${user.token}` : '';
+    if (session === activeSession) return;
+    activeSession = session;
+    const previous = controller;
+    previous?.reset();
+    if (!session) return;
+    const current = initRegistrationWhitelist({
+      apiBaseUrl: app.apiBaseUrl,
+      getToken: () => app.userState.token,
+    });
+    if (previous) current.refresh();
+  }
+
+  window.addEventListener('freebbs:session-change', () => {
+    sessionBlocked = false;
+    syncSession();
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'free_bbs_auth_token' || event.key === null) {
+      sessionBlocked = true;
+      activeSession = '';
+      controller?.reset();
+    }
+  });
+  Promise.resolve(window.freeBbsApp?.sessionReady).then(syncSession);
 })();

@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { UserContext } from '@freebbs-development/contracts';
 
+import { ORGANIZATION_GALLERY } from '../modules/organizations/catalog.js';
+import { findShowcase } from '../modules/organizations/showcase/registry.js';
 import { AppShell } from './AppShell.js';
 import { mainSiteHref } from './main-site-api.js';
 import { loadModuleStates } from './router.js';
@@ -191,7 +193,7 @@ describe('AppShell', () => {
   });
   it('places one learning-site footer after main content with the shared support links', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
-    renderShell('/organizations', { children: <p>展厅内容</p> });
+    renderShell('/community', { children: <p>社区内容</p> });
     const footer = screen.getByRole('contentinfo');
     const main = screen.getByRole('main');
     expect(screen.getAllByRole('contentinfo')).toHaveLength(1);
@@ -421,7 +423,7 @@ describe('AppShell', () => {
     expect(window.localStorage.getItem('free_bbs_theme_mode')).toBe('light');
   });
 
-  it('renders the main-site placeholder avatar and the demo identity switcher', () => {
+  it('renders the main-site placeholder avatar without exposing demo identity selection', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({
         authMode: 'demo',
@@ -435,7 +437,94 @@ describe('AppShell', () => {
       'src',
       expect.stringContaining('avatar_placeholder.webp'),
     );
-    expect(screen.getByTestId('demo-user-switcher')).toBeInTheDocument();
+    expect(screen.queryByTestId('demo-user-switcher')).not.toBeInTheDocument();
+    expect(document.querySelector('.demo-preview-toolbar')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    '/organizations',
+    ...ORGANIZATION_GALLERY.map((organization) => `/organizations/${organization.key}`),
+    '/organizations/tms',
+    '/organizations/tms/position',
+    ...ORGANIZATION_GALLERY.flatMap((organization) =>
+      organization.departments.map(
+        (department) => `/organizations/${organization.key}/${department.key}`,
+      ),
+    ),
+  ])(
+    'keeps the exhibition title and corresponding location in the fixed top header for %s',
+    (route) => {
+      mockUseAuth.mockReturnValue(authenticatedAuth());
+      renderShell(route, { children: <iframe title="部门网页" /> });
+      expect(document.querySelector('.development-shell-root')).toHaveClass(
+        'development-shell-root--full-page',
+      );
+      expect(screen.getByRole('complementary', { name: '发展平台侧栏' })).toBeInTheDocument();
+      const header = document.querySelector<HTMLElement>('.main-site-header')!;
+      expect(header).toBeInTheDocument();
+      expect(header).toHaveClass('main-site-header--custom-title');
+      expect(
+        within(header).getByRole('heading', { name: '风采展示', level: 1 }),
+      ).toBeInTheDocument();
+      expect(within(header).getByRole('link', { name: '风采展示' })).toHaveAttribute(
+        'href',
+        '/organizations',
+      );
+      const [, , organizationKey, departmentKey] = route.split('/');
+      const organization = ORGANIZATION_GALLERY.find(({ key }) => key === organizationKey);
+      if (organization) {
+        const trail = within(header).getByRole('navigation', { name: '展厅位置' });
+        expect(header.querySelector('.main-site-header-title-slot')).toContainElement(trail);
+        const department =
+          organization.key !== 'tms' && departmentKey
+            ? organization.departments.find(({ key }) => key === departmentKey)
+            : undefined;
+        const content = department
+          ? findShowcase(`${organization.key}.${departmentKey}`)
+          : undefined;
+        expect(
+          within(trail).getByText(
+            content?.shortName ?? content?.name ?? department?.name ?? organization.name,
+          ),
+        ).toHaveAttribute('aria-current', 'page');
+        expect(within(trail).queryByRole('link', { name: '风采展示' })).not.toBeInTheDocument();
+        if (department) {
+          expect(within(trail).getByRole('link', { name: organization.name })).toHaveAttribute(
+            'href',
+            `/organizations/${organization.key}`,
+          );
+          expect(within(trail).getAllByRole('link')).toHaveLength(1);
+        } else {
+          expect(within(trail).queryByRole('link')).not.toBeInTheDocument();
+        }
+      }
+      expect(screen.queryByRole('link', { name: '返回上一级' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '返回上一级' })).not.toBeInTheDocument();
+      expect(document.querySelector('.main-site-back')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '打开我的个人主页' })).toHaveAttribute(
+        'href',
+        '/profile',
+      );
+      expect(document.querySelector('.main-site-mobile-theme')).toBeInTheDocument();
+      expect(screen.getByTitle('部门网页')).toBeInTheDocument();
+      expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    '/organizations/unknown',
+    '/organizations/youth_league/unknown',
+    '/organizations/media_center/creative/edit',
+  ])('retains the normal shell outside department showcase routes: %s', (route) => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell(route);
+    expect(document.querySelector('.development-shell-root')).not.toHaveClass(
+      'development-shell-root--full-page',
+    );
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument();
+    expect(document.querySelector('.main-site-header-title-slot')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '展厅位置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回上一级' })).not.toBeInTheDocument();
   });
 
   it('shows a safe main-site login action for an unauthenticated user', () => {

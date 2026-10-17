@@ -8,6 +8,10 @@
   },
   "scripts": {
     "test:mysql:isolated": "node scripts/test-mysql-isolated.js",
+    "test:moderation-policy": "node --test backend/moderation-retention.test.js backend/moderation-notifications.test.js scripts/notification-status-refresh.test.js scripts/moderation-topic-evaluation.test.js backend/moderation-review-focus.test.js backend/moderation-review-topics.test.js backend/moderation-auto-images.test.js backend/moderation-automation-result.test.js backend/moderation-image-safety.test.js backend/discussion-moderation.test.js backend/moderation-ai-client.test.js backend/moderation-ai-diagnostics.test.js backend/moderation-ai-test.test.js backend/moderation-audit.test.js backend/moderation-attachments.test.js backend/moderation-integration.test.js backend/moderation-automation.test.js backend/moderation-automation.integration.test.js backend/moderation-privacy.test.js backend/moderation-privacy.integration.test.js backend/moderation-policy.test.js backend/moderation-policy-decision.test.js scripts/moderation-page.test.js scripts/moderation-policy-regression.test.js scripts/moderation-evaluation-fixtures.test.js scripts/moderation-model-evaluation.test.js scripts/moderation-evaluation-report.test.js scripts/moderation-evaluation-quality.test.js scripts/mysql-isolation.test.js backend/ai-models.test.js",
+    "test:moderation-automation": "node --test backend/moderation-retention.test.js backend/moderation-notifications.test.js scripts/notification-status-refresh.test.js backend/moderation-review-focus.test.js backend/moderation-review-topics.test.js backend/moderation-auto-images.test.js backend/moderation-automation-result.test.js backend/moderation-image-safety.test.js backend/moderation-automation.test.js backend/moderation-automation.integration.test.js scripts/moderation-page.test.js",
+    "test:moderation-evaluation": "node --test scripts/moderation-evaluation-fixtures.test.js scripts/moderation-model-evaluation.test.js scripts/moderation-evaluation-report.test.js scripts/moderation-evaluation-quality.test.js",
+    "moderation:evaluate": "node scripts/moderation-model-evaluation.js",
     "test:wallet-reasons": "node --test backend/wallet-ledger.test.js backend/legacy-wallet-reasons.test.js backend/onboarding-reward.test.js backend/onboarding-reward.mysql.test.js backend/economy-shop.test.js backend/economy-policy.test.js backend/economy-checkin.test.js backend/economy-rewards.mysql.test.js backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js backend/username-changes.test.js backend/discussion-interactions.test.js backend/profile-extras.test.js backend/ranch-wool.test.js backend/economy-sales.test.js backend/economy-sales.mysql.test.js",
     "start": "node server.js",
     "start:local": "bash scripts/start-local.sh",
@@ -15,7 +19,7 @@
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
-    "test:admin-users": "node --test backend/ai-dialog-export.test.js scripts/admin-users-page.test.js",
+    "test:admin-users": "node --test backend/ai-dialog-export.test.js backend/ai-dialog-export-controls.test.js scripts/admin-users-page.test.js",
     "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-image-results.test.js scripts/max-tetris.test.js scripts/max-images.test.js scripts/max-files.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js backend/max-background-stream.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js backend/agent-circuits.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-layout.test.js scripts/discussion-threads.test.js scripts/discussion-markdown.test.js scripts/discussion-previews.test.js scripts/tool-embeds.test.js backend/discussion-preview.test.js backend/discussion-visibility.test.js scripts/discussion-visibility.test.js",
@@ -167,6 +171,8 @@
     "preview:staff-teacher-calendar": "node scripts/preview-staff-teacher-calendar.js",
     "test:schedule-series:browser": "node scripts/check-schedule-series-browser.js",
     "test:staff-teacher-calendar:browser": "node scripts/check-staff-teacher-calendar-browser.js",
+    "test:moderation-images": "node --test backend/moderation-image-safety.test.js scripts/moderation-image-client.test.js scripts/moderation-image-fixtures.test.js scripts/moderation-image-quality.test.js scripts/moderation-image-evaluation.test.js",
+    "test:privacy-policy": "node --test backend/privacy-policy.test.js backend/privacy-policy-access.test.js backend/data-retention.test.js scripts/data-retention-page.test.js scripts/privacy-production-preflight.test.js scripts/moderation-notice.test.js scripts/registration-page.test.js scripts/privacy-consent.test.js",
     "preview:identity-usability": "node scripts/preview-identity-usability.js",
     "test:identity-usability": "node --test backend/user-certifications.test.js backend/user-certifications.mysql.test.js scripts/identity-badges.test.js scripts/user-certifications-page.test.js scripts/staff-photo-assets.test.js scripts/workbench-companion.test.js scripts/settings-username.test.js",
     "test:identity-usability:browser": "node scripts/check-user-certifications-browser.js"

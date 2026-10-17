@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   OrganizationGroupWorkspace,
   OrganizationGroupEntry,
@@ -9,6 +9,14 @@ import { ApiError, type ApiClient, type RequestOptions } from '../../core/api/cl
 import { OrganizationGroupPage } from './OrganizationGroupPage.js';
 import { OrganizationsPage } from '../organizations/OrganizationsPage.js';
 import { parseRoster, shanghaiInput, shanghaiTimestamp, validateEntry } from './model.js';
+
+beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const photo = {
   id: 'photo',

@@ -1,0 +1,294 @@
+{
+  "/development/organization-showcase/content/volunteer/01.webp": {
+    "width": 1600,
+    "height": 1067
+  },
+  "/development/organization-showcase/content/arts/01.webp": {
+    "width": 2000,
+    "height": 1125
+  },
+  "/development/organization-showcase/content/arts/02.webp": {
+    "width": 1920,
+    "height": 1280
+  },
+  "/development/organization-showcase/content/arts/03.webp": {
+    "width": 2000,
+    "height": 1333
+  },
+  "/development/organization-showcase/content/arts/04.webp": {
+    "width": 2000,
+    "height": 1333
+  },
+  "/development/organization-showcase/content/project/01.webp": {
+    "width": 509,
+    "height": 382
+  },
+  "/development/organization-showcase/content/project/02.webp": {
+    "width": 1080,
+    "height": 810
+  },
+  "/development/organization-showcase/content/project/03.webp": {
+    "width": 1080,
+    "height": 810
+  },
+  "/development/organization-showcase/content/project/04.webp": {
+    "width": 556,
+    "height": 333
+  },
+  "/development/organization-showcase/content/project/05.webp": {
+    "width": 1269,
+    "height": 952
+  },
+  "/development/organization-showcase/content/tms/cover.webp": {
+    "width": 708,
+    "height": 287
+  },
+  "/development/organization-showcase/content/tms/01_jingsai.webp": {
+    "width": 1600,
+    "height": 1060
+  },
+  "/development/organization-showcase/content/tms/02_jingsai.webp": {
+    "width": 519,
+    "height": 344
+  },
+  "/development/organization-showcase/content/tms/02_guben.webp": {
+    "width": 398,
+    "height": 298
+  },
+  "/development/organization-showcase/content/tms/03_shengen.webp": {
+    "width": 1080,
+    "height": 810
+  },
+  "/development/organization-showcase/content/tms/04_wusheng.webp": {
+    "width": 460,
+    "height": 346
+  },
+  "/development/organization-showcase/content/tms/05_lecture.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/tms/06_shijian.webp": {
+    "width": 1279,
+    "height": 1490
+  },
+  "/development/organization-showcase/content/sports/01.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/02.webp": {
+    "width": 1600,
+    "height": 900
+  },
+  "/development/organization-showcase/content/sports/03.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/04.webp": {
+    "width": 1600,
+    "height": 1150
+  },
+  "/development/organization-showcase/content/sports/05.webp": {
+    "width": 1440,
+    "height": 1080
+  },
+  "/development/organization-showcase/content/sports/06.webp": {
+    "width": 1600,
+    "height": 1065
+  },
+  "/development/organization-showcase/content/sports/07.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/08.webp": {
+    "width": 1600,
+    "height": 1065
+  },
+  "/development/organization-showcase/content/sports/09.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/10.webp": {
+    "width": 1440,
+    "height": 1080
+  },
+  "/development/organization-showcase/content/sports/11.webp": {
+    "width": 1600,
+    "height": 1067
+  },
+  "/development/organization-showcase/content/sports/12.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/13.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/14.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/15.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/sports/16.webp": {
+    "width": 1440,
+    "height": 1080
+  },
+  "/development/organization-showcase/content/freshman/01.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/freshman/02.webp": {
+    "width": 1600,
+    "height": 1067
+  },
+  "/development/organization-showcase/content/freshman/03.webp": {
+    "width": 1600,
+    "height": 900
+  },
+  "/development/organization-showcase/content/freshman/04.webp": {
+    "width": 1600,
+    "height": 719
+  },
+  "/development/organization-showcase/content/freshman/05.webp": {
+    "width": 1600,
+    "height": 1067
+  },
+  "/development/organization-showcase/content/freshman/06.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/freshman/07.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/rights/01.webp": {
+    "width": 1279,
+    "height": 1706
+  },
+  "/development/organization-showcase/content/rights/02.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/rights/03.webp": {
+    "width": 1080,
+    "height": 720
+  },
+  "/development/organization-showcase/content/rights/04.webp": {
+    "width": 1600,
+    "height": 1200
+  },
+  "/development/organization-showcase/content/rights/05.webp": {
+    "width": 691,
+    "height": 1198
+  },
+  "/development/organization-showcase/content/new-media/01.webp": {
+    "width": 653,
+    "height": 364
+  },
+  "/development/organization-showcase/content/new-media/02.webp": {
+    "width": 653,
+    "height": 364
+  },
+  "/development/organization-showcase/content/new-media/03.webp": {
+    "width": 653,
+    "height": 370
+  },
+  "/development/organization-showcase/content/new-media/04.webp": {
+    "width": 397,
+    "height": 166
+  },
+  "/development/organization-showcase/content/new-media/05.webp": {
+    "width": 362,
+    "height": 224
+  },
+  "/development/organization-showcase/content/new-media/06.webp": {
+    "width": 371,
+    "height": 155
+  },
+  "/development/organization-showcase/content/new-media/07.webp": {
+    "width": 502,
+    "height": 377
+  },
+  "/development/organization-showcase/content/new-media/08.webp": {
+    "width": 514,
+    "height": 385
+  },
+  "/development/organization-showcase/content/practice/01.webp": {
+    "width": 634,
+    "height": 476
+  },
+  "/development/organization-showcase/content/practice/02.webp": {
+    "width": 665,
+    "height": 374
+  },
+  "/development/organization-showcase/content/practice/03.webp": {
+    "width": 573,
+    "height": 357
+  },
+  "/development/organization-showcase/content/practice/04.webp": {
+    "width": 653,
+    "height": 436
+  },
+  "/development/organization-showcase/content/practice/05.webp": {
+    "width": 586,
+    "height": 438
+  },
+  "/development/organization-showcase/content/practice/06.webp": {
+    "width": 629,
+    "height": 419
+  },
+  "/development/organization-showcase/content/practice/07.webp": {
+    "width": 632,
+    "height": 522
+  },
+  "/development/organization-showcase/content/practice/08.webp": {
+    "width": 667,
+    "height": 500
+  },
+  "/development/organization-showcase/content/practice/09.webp": {
+    "width": 562,
+    "height": 375
+  },
+  "/development/organization-showcase/content/practice/10.webp": {
+    "width": 566,
+    "height": 424
+  },
+  "/development/organization-showcase/content/practice/11.webp": {
+    "width": 1266,
+    "height": 844
+  },
+  "/development/organization-showcase/images/training-01.webp": {
+    "width": 1706,
+    "height": 1279
+  },
+  "/development/organization-showcase/images/training-02.webp": {
+    "width": 2400,
+    "height": 1800
+  },
+  "/development/organization-showcase/images/training-03.webp": {
+    "width": 714,
+    "height": 644
+  },
+  "/development/organization-showcase/images/training-04.webp": {
+    "width": 1702,
+    "height": 1276
+  },
+  "/development/organization-showcase/images/training-05.webp": {
+    "width": 2400,
+    "height": 1800
+  },
+  "/development/organization-showcase/images/training-06.webp": {
+    "width": 1800,
+    "height": 2400
+  },
+  "/development/organization-showcase/sites/organization/assets/cover.svg": {
+    "width": 1200,
+    "height": 600
+  },
+  "/development/organization-showcase/content/tms/00_toutu.webp": {
+    "width": 1706,
+    "height": 1279
+  }
+}

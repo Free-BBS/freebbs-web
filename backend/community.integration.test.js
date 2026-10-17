@@ -17,7 +17,11 @@ const {
   generateBandChallenge,
   generateWienChallenge,
 } = require('./registration-guard');
-const { solveAuthChallenge: solveChallenge } = require('./test-helpers/auth');
+const {
+  solveAuthChallenge: solveChallenge,
+  privacyAcknowledgement,
+  acceptCurrentPrivacy,
+} = require('./test-helpers/auth');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 
 const runProgram = promisify(execFile);
@@ -37,7 +41,7 @@ test(
   'community features work together against the full existing MySQL schema',
   {
     skip: process.env.RUN_COMMUNITY_INTEGRATION !== '1',
-    timeout: 120000,
+    timeout: process.platform === 'win32' ? 240000 : 120000,
   },
   async (t) => {
     const database = `freebbs_community_test_${crypto.randomBytes(6).toString('hex')}`;
@@ -86,39 +90,41 @@ test(
       const source = await fs.readFile(path.join(root, 'database', file), 'utf8');
       await db.query(source.replaceAll('free_bbs', database));
     }
-    // The Windows mysql CLI does not infer PIPE from --socket and may fall back to
-    // a real TCP server. The verified mysql2 connection stays on this QA pipe.
-    const migrateWithNode = isolated && process.platform === 'win32';
-    if (migrateWithNode) {
+    const migrationEnv = {
+      ...process.env,
+      NODE_BINARY: process.execPath,
+      NODE_ENV: 'test',
+      BACKEND_IP: backendMysqlOptions.host,
+      MYSQL_PORT: String(backendMysqlOptions.port),
+      MYSQL_USER: mysqlOptions.user,
+      MYSQL_PASSWORD: mysqlOptions.password,
+      MYSQL_DATABASE: database,
+      DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
+      ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
+    };
+    if (process.platform === 'win32' && isolated) {
+      // The production Bash migration remains covered on Linux. Windows' mysql
+      // CLI does not infer PIPE from --socket, so use the same compiled migrator
+      // over the runner's verified, networking-disabled disposable instance.
+      await assertIsolatedMysql(db);
       assert.match(developmentDatabase, /^freebbs_community_test_[a-f0-9]{12}_development$/);
       await db.query(
-        `CREATE DATABASE \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
+        `CREATE DATABASE IF NOT EXISTS \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
       );
-    }
-    await runProgram(
-      migrateWithNode ? process.execPath : 'bash',
-      migrateWithNode
-        ? ['development/apps/api/dist/core/database/migrate.js']
-        : ['scripts/migrate-development.sh'],
-      {
+      await runProgram(process.execPath, ['development/apps/api/dist/core/database/migrate.js'], {
         cwd: root,
         env: {
-          ...process.env,
-          NODE_BINARY: process.execPath,
-          NODE_ENV: 'test',
-          BACKEND_IP: backendMysqlOptions.host,
-          MYSQL_PORT: String(backendMysqlOptions.port),
-          MYSQL_USER: mysqlOptions.user,
-          MYSQL_PASSWORD: mysqlOptions.password,
-          MYSQL_DATABASE: database,
-          ...(migrateWithNode
-            ? { MYSQL_DATABASE: developmentDatabase, MYSQL_HOST: backendMysqlOptions.host }
-            : {}),
-          DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
-          ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
+          ...migrationEnv,
+          MYSQL_HOST: backendMysqlOptions.host,
+          MYSQL_DATABASE: developmentDatabase,
         },
-      },
-    );
+      });
+    } else {
+      await runProgram('bash', ['scripts/migrate-development.sh'], {
+        cwd: root,
+        env: migrationEnv,
+      });
+    }
     const port = await reservePort();
     backend = spawn(process.execPath, ['backend/server.js'], {
       cwd: root,
@@ -155,7 +161,8 @@ test(
     });
     const base = `http://127.0.0.1:${port}/api`;
     let ready = false;
-    for (let attempt = 0; attempt < 150; attempt += 1) {
+    for (let attempt = 0; attempt < (process.platform === 'win32' ? 600 : 150); attempt += 1) {
+      if (backend.exitCode !== null) break;
       try {
         if ((await fetch(`${base}/health`)).ok) {
           ready = true;
@@ -168,7 +175,7 @@ test(
         setTimeout(resolve, 100);
       });
     }
-    assert.ok(ready, logs);
+    assert.ok(ready, `backend not ready (exitCode=${backend.exitCode}): ${logs}`);
 
     async function challengeFor(purpose, identity, type) {
       const challenge = await api(
@@ -231,7 +238,11 @@ test(
       { token, method = 'GET', body, expected = 200, rawRegistration = false } = {},
     ) {
       const requestBody =
-        route === '/auth/register' && !rawRegistration ? await registrationPayload(body) : body;
+        route === '/auth/register' && !rawRegistration
+          ? await registrationPayload(body)
+          : route === '/auth/login'
+            ? { ...privacyAcknowledgement(), ...body }
+            : body;
       const response = await fetch(`${base}${route}`, {
         method,
         headers: {
@@ -242,6 +253,12 @@ test(
       });
       const result = await response.json();
       assert.equal(response.status, expected, `${method} ${route}: ${JSON.stringify(result)}`);
+      if (
+        response.ok &&
+        result.token &&
+        ['/auth/login', '/auth/register', '/auth/reset-password'].includes(route)
+      )
+        result.privacyPolicy = await acceptCurrentPrivacy(base, result.token);
       return result;
     }
     async function login(identifier) {

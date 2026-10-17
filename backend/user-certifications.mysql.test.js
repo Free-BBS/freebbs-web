@@ -20,6 +20,8 @@ const {
   ensureUsernameChangeTables,
 } = require('./username-policy');
 const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
+const { ensurePrivacyPolicySchema, createPrivacyPolicyService } = require('./privacy-policy');
+const { privacyAcknowledgement } = require('./test-helpers/auth');
 const {
   ensureWalletLedger,
   walletLedgerCheckpoint,
@@ -65,6 +67,8 @@ test(
     await ensureTeacherAccountTables(pool);
     await ensureNotificationTables(pool);
     await ensureUsernameChangeTables(pool);
+    await ensurePrivacyPolicySchema(pool);
+    const privacyPolicyService = createPrivacyPolicyService({ pool });
     await pool.query(
       'CREATE TABLE user_golden_names (user_id BIGINT PRIMARY KEY, expires_at_ms BIGINT DEFAULT 0)',
     );
@@ -199,7 +203,7 @@ test(
     const mapStart = source.indexOf('async function addUserResponsibilities(');
     const mapEnd = source.indexOf('function normalizeResponsibilitySlugs(', mapStart);
     const listStart = source.indexOf("app.get('/api/admin/users',");
-    const listEnd = source.indexOf("app.get('/api/admin/ai-dialogs/export',", listStart);
+    const listEnd = source.indexOf('mountAiDialogExportRoutes(app,', listStart);
     assert.ok(mapStart >= 0 && mapEnd > mapStart && listStart >= 0 && listEnd > listStart);
     vm.runInContext(source.slice(mapStart, mapEnd), routeContext);
     vm.runInContext(source.slice(listStart, listEnd), routeContext);
@@ -210,6 +214,7 @@ test(
       app,
       pool,
       verifyPasswordAsync,
+      privacyPolicyService,
       loginRateLimiter: {
         consumeIp: async () => ({ allowed: true }),
         consumeAccount: async () => ({ allowed: true }),
@@ -250,9 +255,17 @@ test(
     await t.test(
       'legacy Chinese accounts still log in and recover through verified email',
       async () => {
+        const unconfirmed = await request('/auth/login', null, 'POST', {
+          identifier: '中文用户',
+          password: adminPassword,
+        });
+        assert.equal(unconfirmed.status, 428);
+        assert.equal(unconfirmed.data.code, 'privacy_policy_required');
+        assert.equal(unconfirmed.data.token, undefined);
         assert.equal(
           (
             await request('/auth/login', null, 'POST', {
+              ...privacyAcknowledgement(),
               identifier: ' 中文用户 ',
               password: adminPassword,
             })
@@ -288,6 +301,7 @@ test(
         assert.equal(
           (
             await request('/auth/login', null, 'POST', {
+              ...privacyAcknowledgement(),
               identifier: '中文用户',
               password: 'updated-qa-only',
             })
@@ -297,6 +311,7 @@ test(
         assert.equal(
           (
             await request('/auth/login', null, 'POST', {
+              ...privacyAcknowledgement(),
               identifier: '中文用户',
               password: adminPassword,
             })

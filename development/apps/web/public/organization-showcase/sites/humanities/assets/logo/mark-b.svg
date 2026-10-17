@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Humanities Group mark">
+  <title>人文组 · 拼贴</title>
+  <!-- B · 拼贴
+       几何与 A 完全一致（保证三套字形统一），只换材质：
+       每一笔拆成两段纸条，中间留一道接缝，颜色一深一浅，像剪下来拼的。
+       第一版把纸条做成横向长条，结果整体读成箭头，已改为垂直纸条。 -->
+  <defs>
+    <clipPath id="b-frame"><rect x="0" y="0" width="120" height="120" rx="17"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#b-frame)">
+    <rect width="120" height="120" fill="#f4f3ee"/>
+
+    <g stroke-linecap="butt" fill="none">
+      <!-- 一撇：上半段墨色，下半段更深一点，接缝处错开 1px -->
+      <path d="M50 24 Q43 48 38 60" stroke="#191817" stroke-width="13"/>
+      <path d="M38 61 Q32 72 24 86"   stroke="#3a352f" stroke-width="13"/>
+
+      <!-- 一捺：上半段陶土色，下半段更深，接缝错开 -->
+      <path d="M40 18 Q55 39 68 53"   stroke="#b1502f" stroke-width="13"/>
+      <path d="M68 54 Q80 66 96 84"   stroke="#8f4025" stroke-width="13"/>
+    </g>
+
+    <!-- 胶带：压在捺的起笔处，半透明 -->
+    <g transform="rotate(-52 44 26)">
+      <rect x="30" y="20" width="30" height="12" fill="#d9c9a3" opacity=".72"/>
+    </g>
+  </g>
+</svg>

@@ -9,13 +9,13 @@ const POLICY =
 export function IsolatedDepartmentDocument({ html, title }: { html: string; title: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(360);
-  const token = useMemo(() => crypto.randomUUID(), []);
+  const token = useMemo(() => crypto.randomUUID(), [html]);
   const srcDoc = useMemo(() => {
     // Keep measurement inside the opaque document. Root scrollHeight is floored
     // to its viewport, so use rendered boxes and body overflow for shrinking.
     const bridge = `(() => {
       const token=${JSON.stringify(token)};
-      let pending = false, last = 0;
+      let pending = false, last = '', revision = 0, width = innerWidth;
       const pixels = value => Number.parseFloat(value) || 0;
       const measure = () => {
         const root = document.documentElement;
@@ -38,54 +38,95 @@ export function IsolatedDepartmentDocument({ html, title }: { html: string; titl
         pending = true;
         requestAnimationFrame(() => {
           pending = false;
+          if (document.readyState === 'loading' || !document.body) return;
+          if (innerWidth !== width) { width = innerWidth; revision += 1; }
+          const viewportWidth = innerWidth, viewportHeight = innerHeight;
           const height = measure();
-          if (height !== last) { last = height; parent.postMessage({type:'department-height',token,height}, '*'); }
+          const signature = [revision, viewportWidth, viewportHeight, height].join(':');
+          if (signature !== last) {
+            last = signature;
+            parent.postMessage({type:'department-height',token,height,viewportWidth,viewportHeight,revision}, '*');
+          }
         });
       };
+      const contentChanged = () => { revision += 1; send(); };
       addEventListener('DOMContentLoaded', () => {
-        send();
+        contentChanged();
         const observer = new ResizeObserver(send);
         observer.observe(document.documentElement);
         if (document.body) {
           observer.observe(document.body);
-          new MutationObserver(send).observe(document.body, {childList:true,subtree:true,attributes:true,characterData:true});
         }
-        document.fonts?.ready.then(send);
+        new MutationObserver(contentChanged).observe(document.documentElement, {childList:true,subtree:true,attributes:true,characterData:true});
+        document.fonts?.ready.then(contentChanged);
       });
-      addEventListener('load', send, true);
+      addEventListener('load', contentChanged, true);
       addEventListener('resize', send);
     })();`;
     return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${POLICY}"><meta name="referrer" content="no-referrer"><script>${bridge}</script>${html}`;
   }, [html, token]);
   useEffect(() => {
-    let previous = 360;
-    let lastAt = 0;
     let growing = 0;
+    let revision = -1;
+    let width = 0;
+    setHeight(360);
     const resize = (event: MessageEvent) => {
-      const data = event.data as { type?: unknown; token?: unknown; height?: unknown } | null;
+      const data = event.data as {
+        type?: unknown;
+        token?: unknown;
+        height?: unknown;
+        viewportHeight?: unknown;
+        viewportWidth?: unknown;
+        revision?: unknown;
+      } | null;
+      const element = frame.current;
       if (
-        event.source !== frame.current?.contentWindow ||
+        !element ||
+        event.source !== element.contentWindow ||
         !data ||
         data.type !== 'department-height' ||
         data.token !== token ||
         typeof data.height !== 'number' ||
-        !Number.isFinite(data.height)
+        !Number.isFinite(data.height) ||
+        typeof data.viewportHeight !== 'number' ||
+        !Number.isFinite(data.viewportHeight) ||
+        data.viewportHeight <= 0 ||
+        typeof data.viewportWidth !== 'number' ||
+        !Number.isFinite(data.viewportWidth) ||
+        data.viewportWidth <= 0 ||
+        typeof data.revision !== 'number' ||
+        !Number.isSafeInteger(data.revision) ||
+        data.revision < 0
       )
         return;
-      const frameStyle = frame.current ? getComputedStyle(frame.current) : null;
-      const borders = frameStyle
-        ? (Number.parseFloat(frameStyle.borderTopWidth) || 0) +
-          (Number.parseFloat(frameStyle.borderBottomWidth) || 0)
-        : 0;
+      const frameStyle = getComputedStyle(element);
+      const pixels = (value: string) => Number.parseFloat(value) || 0;
+      const borders = pixels(frameStyle.borderTopWidth) + pixels(frameStyle.borderBottomWidth);
+      const viewportHeight =
+        element.clientHeight - pixels(frameStyle.paddingTop) - pixels(frameStyle.paddingBottom);
+      const viewportWidth =
+        element.clientWidth - pixels(frameStyle.paddingLeft) - pixels(frameStyle.paddingRight);
+      // A queued report may describe the viewport before a more recent resize.
+      // Applying it creates two interleaved feedback chains that can evade a guard.
+      if (
+        Math.abs(data.viewportHeight - viewportHeight) > 1 ||
+        Math.abs(data.viewportWidth - viewportWidth) > 1 ||
+        data.revision < revision
+      )
+        return;
+      if (data.revision !== revision || data.viewportWidth !== width) {
+        growing = 0;
+        revision = data.revision;
+        width = data.viewportWidth;
+      }
       const next = Math.ceil(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, data.height + borders)));
-      const now = Date.now();
       // A 100vh root with padding grows with its own viewport. Freeze this loop and
-      // let the frame scroll, while still accepting later genuine layout changes.
-      if (next > previous && next - previous < 160 && now - lastAt < 500) growing += 1;
-      else if (next < previous || now - lastAt >= 500 || next - previous >= 160) growing = 0;
-      lastAt = now;
-      previous = next;
-      if (growing > 6) return;
+      // let the frame scroll. Only authored content or a width change starts a new
+      // budget, so slow frames and old small/large oscillations cannot reset it.
+      if (next > element.clientHeight + borders) {
+        growing += 1;
+        if (growing > 6) return;
+      }
       setHeight(next);
     };
     window.addEventListener('message', resize);

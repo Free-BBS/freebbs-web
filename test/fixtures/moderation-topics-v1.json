@@ -1,0 +1,18 @@
+[
+  {"id":"词库-01","content":"新闻阅读笔记提到了习近平。","expected":{"political":true,"psychological":false},"note":"关键词强制人工，不判断立场。"},
+  {"id":"词库-02","content":"准备去台湾旅行，想整理行程。","expected":{"political":true,"psychological":false},"note":"用户确认保留的宽泛词，正常旅行也走人工。"},
+  {"id":"词库-03","content":"心理咨询课程介绍。","expected":{"political":false,"psychological":true},"note":"正常课程仍因关键词转人工。"},
+  {"id":"词库-04","content":"今天读到政治制度和心理健康两方面的教材。","expected":{"political":true,"psychological":true},"note":"两类同时提示。"},
+  {"id":"语义政治-01","content":"想讨论我国最高权力交接的安排及其制约机制。","expected":{"political":true,"psychological":false},"note":"不依赖姓名关键词，按政治权力语境复核。"},
+  {"id":"语义政治-02","content":"我国由谁掌握国家最高权力，应当通过什么程序产生？","expected":{"political":true,"psychological":false},"note":"制度语义，正常讨论不等于违规。"},
+  {"id":"语义政治-03","content":"这篇文章比较我国执政集团与普通公民之间的权力关系。","expected":{"political":true,"psychological":false},"note":"政治组织与权力关系语义。"},
+  {"id":"语义政治-04","content":"课程正在分析海峡两岸归属于同一个国家还是分立的争论。","expected":{"political":true,"psychological":false},"note":"主权争议语义，课程也人工复核。"},
+  {"id":"语义心理-01","content":"最近几个星期什么都不想做，连以前最喜欢的活动也提不起兴趣，想找人聊聊。","expected":{"political":false,"psychological":true},"note":"持续痛苦与求助，不要求自伤或疾病关键词。"},
+  {"id":"语义心理-02","content":"每到夜里就躲在被子里哭，这样已经一个月了，我不知道该找谁说。","expected":{"political":false,"psychological":true},"note":"持续情绪困扰，不作疾病诊断。"},
+  {"id":"语义心理-03","content":"每天都觉得自己毫无价值，这种感受越来越重，我需要有人帮帮我。","expected":{"political":false,"psychological":true},"note":"自我否定与求助。"},
+  {"id":"语义心理-04","content":"我连续好几周整晚睡不着，一想到见人就怕得发抖，已经不敢去上课了。","expected":{"political":false,"psychological":true},"note":"影响日常生活的持续困扰，需负责人关怀。"},
+  {"id":"对照-01","content":"程序崩溃了，重启后就恢复正常。","expected":{"political":false,"psychological":false},"note":"技术描述，不能因为崩溃转心理复核。"},
+  {"id":"对照-02","content":"希望学校改进食堂排队安排，并公开处理进度。","expected":{"political":false,"psychological":false},"note":"正常校园批评，不牵强推断政治影射。"},
+  {"id":"对照-03","content":"明天考试有点紧张，今晚复习完就早点睡。","expected":{"political":false,"psychological":false},"note":"普通短暂紧张，没有心理问题线索。"},
+  {"id":"对照-04","content":"建议自习室增加几个插座，方便大家使用电脑。","expected":{"political":false,"psychological":false},"note":"正常建议对照。"}
+]

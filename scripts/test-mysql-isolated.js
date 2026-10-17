@@ -11,7 +11,41 @@ const {
   assertIsolatedMysql,
 } = require('../backend/test-helpers/isolated-mysql');
 
+const MODERATION_TEST_FILE = 'backend/discussion-moderation.mysql.test.js';
+const MODERATION_TEST_TITLE =
+  'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic';
+const PRIVACY_TEST_FILE = 'backend/moderation-privacy.mysql.test.js';
+const PRIVACY_TEST_TITLE =
+  'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence';
+const AUDIT_TEST_FILE = 'backend/moderation-audit.mysql.test.js';
+const AUDIT_TEST_TITLE =
+  'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts';
+const AUTOMATION_TEST_FILE = 'backend/moderation-automation-store.mysql.test.js';
+const AUTOMATION_TEST_TITLE =
+  'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic';
+const RETENTION_TEST_FILE = 'backend/moderation-retention.mysql.test.js';
+const RETENTION_TEST_TITLE =
+  'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically';
+
+const CONSENT_TEST_FILE = 'backend/privacy-policy.mysql.test.js';
+const CONSENT_TEST_TITLE =
+  'isolated MySQL: privacy consent persists across restarts and concurrent confirmations without first-login bypass';
+const EXPORT_TEST_FILE = 'backend/ai-dialog-export.mysql.test.js';
+const EXPORT_TEST_TITLE =
+  'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations';
+const RETENTION_INSPECTION_TEST_FILE = 'backend/data-retention.mysql.test.js';
+const RETENTION_INSPECTION_TEST_TITLE =
+  'isolated MySQL: read-only retention uses calendar anniversaries and preserves newer, undated and active AI records';
+
 const TEST_FILES = [
+  MODERATION_TEST_FILE,
+  PRIVACY_TEST_FILE,
+  AUDIT_TEST_FILE,
+  AUTOMATION_TEST_FILE,
+  RETENTION_TEST_FILE,
+  CONSENT_TEST_FILE,
+  EXPORT_TEST_FILE,
+  RETENTION_INSPECTION_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -48,6 +82,7 @@ function testEnvironment(socketPath, original = process.env) {
   return {
     ...env,
     NODE_ENV: 'test',
+    RUN_MODERATION_MYSQL: '1',
     FREEBBS_TEST_MYSQL_SOCKET: socketPath,
     RUN_ADMIN_REWARDS_MYSQL: '1',
     RUN_ECONOMY_MYSQL: '1',
@@ -76,6 +111,14 @@ function testEnvironment(socketPath, original = process.env) {
 }
 
 const REQUIRED_MYSQL_TESTS = [
+  MODERATION_TEST_TITLE,
+  PRIVACY_TEST_TITLE,
+  AUDIT_TEST_TITLE,
+  AUTOMATION_TEST_TITLE,
+  RETENTION_TEST_TITLE,
+  CONSENT_TEST_TITLE,
+  EXPORT_TEST_TITLE,
+  RETENTION_INSPECTION_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -98,6 +141,52 @@ const REQUIRED_MYSQL_TESTS = [
   'isolated MySQL: series ownership, rules, exceptions, concurrency, rollback and imported resync',
   'isolated MySQL: learning research migration, owner isolation and concurrent idempotent writes',
 ];
+
+function selectMysqlTests(args = []) {
+  const workbenchOnly = args.includes('--workbench-only');
+  const moderationOnly = args.includes('--moderation-only');
+  const researchOnly = args.includes('--research-only');
+  assert.ok(
+    [workbenchOnly, moderationOnly, researchOnly].filter(Boolean).length <= 1,
+    'choose only one isolated MySQL test subset',
+  );
+  if (moderationOnly)
+    return {
+      testFiles: [
+        MODERATION_TEST_FILE,
+        PRIVACY_TEST_FILE,
+        AUDIT_TEST_FILE,
+        AUTOMATION_TEST_FILE,
+        RETENTION_TEST_FILE,
+        CONSENT_TEST_FILE,
+        EXPORT_TEST_FILE,
+        RETENTION_INSPECTION_TEST_FILE,
+      ],
+      requiredTests: [
+        MODERATION_TEST_TITLE,
+        PRIVACY_TEST_TITLE,
+        AUDIT_TEST_TITLE,
+        AUTOMATION_TEST_TITLE,
+        RETENTION_TEST_TITLE,
+        CONSENT_TEST_TITLE,
+        EXPORT_TEST_TITLE,
+        RETENTION_INSPECTION_TEST_TITLE,
+      ],
+    };
+  if (workbenchOnly)
+    return {
+      testFiles: TEST_FILES.filter((file) =>
+        /(?:workbench|course-schedule|schedule-series)/.test(file),
+      ),
+      requiredTests: null,
+    };
+  if (researchOnly)
+    return {
+      testFiles: TEST_FILES.filter((file) => /learning-research/.test(file)),
+      requiredTests: REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name)),
+    };
+  return { testFiles: [...TEST_FILES], requiredTests: [...REQUIRED_MYSQL_TESTS] };
+}
 
 function validateMysqlTestOutput(output, requiredTests = REQUIRED_MYSQL_TESTS) {
   assert.match(output, /^# skipped 0\s*$/m, 'the isolated suite must not skip any test');
@@ -185,13 +274,7 @@ function run(command, args, options = {}, requiredTests = null) {
 }
 
 async function main() {
-  const workbenchOnly = process.argv.includes('--workbench-only');
-  const researchOnly = process.argv.includes('--research-only');
-  const testFiles = researchOnly
-    ? TEST_FILES.filter((file) => /learning-research/.test(file))
-    : workbenchOnly
-      ? TEST_FILES.filter((file) => /(?:workbench|course-schedule|schedule-series)/.test(file))
-      : TEST_FILES;
+  const { testFiles, requiredTests } = selectMysqlTests(process.argv.slice(2));
   const root = path.resolve(__dirname, '..');
   // Linux uses a deliberately short fixed parent so the Unix socket fits its length limit.
   const parent = process.platform === 'win32' ? os.tmpdir() : '/tmp';
@@ -269,11 +352,7 @@ async function main() {
         env,
         signal: controller.signal,
       },
-      researchOnly
-        ? REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name))
-        : workbenchOnly
-          ? null
-          : REQUIRED_MYSQL_TESTS,
+      requiredTests,
     );
     success = true;
   } finally {
@@ -313,4 +392,10 @@ if (require.main === module)
     console.error(error.message);
     process.exitCode = 1;
   });
-module.exports = { TEST_FILES, testEnvironment, REQUIRED_MYSQL_TESTS, validateMysqlTestOutput };
+module.exports = {
+  TEST_FILES,
+  testEnvironment,
+  REQUIRED_MYSQL_TESTS,
+  selectMysqlTests,
+  validateMysqlTestOutput,
+};

@@ -2,9 +2,9 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { createLearningAchievementProvider } = require('./achievement-source');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
+const { createLearningAchievementProvider } = require('./achievement-source');
 const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
 const { createLanguageLabRouter } = require('./language-lab');
@@ -43,12 +43,28 @@ const {
 } = require('./discussion-interactions');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
+const {
+  policy: privacyPolicy,
+  PRIVACY_POLICY_VERSION,
+  ensurePrivacyPolicySchema,
+  createPrivacyPolicyService,
+} = require('./privacy-policy');
+
+const privacyPolicyService = createPrivacyPolicyService({ pool });
+const { createPrivacyPolicyAccess } = require('./privacy-policy-access');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const { createFrontendToolsRouter } = require('./frontend-tools');
 const { createFrontendToolGenerator } = require('./frontend-tool-generation');
 const { createMaxCreationIntentRouter } = require('./max-creation-intent');
 const { loadProfileActivity } = require('./profile-activity');
 const config = require('./config');
+const {
+  assertProductionConfiguration,
+  requiredNoticeVersion,
+  noticeFor,
+} = require('./moderation-production');
+
+assertProductionConfiguration(config);
 const {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
@@ -74,7 +90,11 @@ const {
   createAvatarUploadService,
   createMysqlAvatarStore,
 } = require('./avatar-upload');
-const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
+const {
+  mountAiDialogExportRoutes,
+  ensureAiDialogExportAudit,
+} = require('./ai-dialog-export-router');
+const { mountDataRetentionRoutes } = require('./data-retention');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { maxAgentRoute } = require('./agent-routing');
@@ -95,12 +115,35 @@ const {
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
 const {
+  ensureSchema: ensureDiscussionModerationSchema,
+  createDiscussionModeration,
+} = require('./discussion-moderation');
+const {
+  createModerationAttachmentStore,
+  validateModerationMarkdown,
+} = require('./moderation-attachments');
+const { createModerationPublisher } = require('./moderation-publisher');
+const { createModerationRouter } = require('./moderation-router');
+const { createModerationAiClient } = require('./moderation-ai-client');
+const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
+const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
+const { ensureModerationRetention } = require('./moderation-retention');
+const { createModerationAutomationStore } = require('./moderation-automation-store');
+const { createAutomaticImageReader } = require('./moderation-auto-images');
+const { createModerationImageClient } = require('./moderation-image-client');
+const {
+  createModerationAutomation,
+  automationEnvironmentEnabled,
+  imageAutomationEnabled,
+} = require('./moderation-automation');
+const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
   createImageGenerationGate,
   persistGeneratedImages,
   persistGeneratedSsePayload,
   stripGeneratedImages,
 } = require('./max-images');
+const { createMaxImageAccess } = require('./max-image-access');
 const { readMaxBackgroundStream } = require('./max-background-stream');
 const {
   canReadPost,
@@ -308,10 +351,85 @@ const systemSettingsStore = createSystemSettingsStore({
 });
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
+const moderationPublisher = createModerationPublisher({
+  createPostPid: createUniqueDiscussionPostPid,
+  awardMagnetic,
+  notifications,
+});
+const moderationAutomaticEnabled = automationEnvironmentEnabled(config);
+const moderationAutomationStore = createModerationAutomationStore({
+  requiredNoticeVersion: requiredNoticeVersion(config),
+  pool,
+  withDatabaseTransaction,
+  publishSubmission: moderationPublisher,
+  notifications,
+  isEnabled: () => moderationAutomaticEnabled,
+  readImages: createAutomaticImageReader({ privateDir: config.discussionModerationDir }),
+});
+const moderationAutomation = createModerationAutomation({
+  config,
+  store: moderationAutomationStore,
+  isEnabled: async () =>
+    moderationAutomaticEnabled && !(await moderationAutomationStore.control()).paused,
+  client: createModerationAiClient({
+    readSettings: (options) => systemSettingsStore.readSettings(options),
+    modelOverride: config.discussionModerationAutoModel,
+  }),
+  imageClient: {
+    async assess(input) {
+      const settings = await systemSettingsStore.readSettings({ includeSecret: true });
+      return createModerationImageClient({ settings }).assess(input);
+    },
+  },
+});
+const moderationAutomatic = {
+  enabled: moderationAutomaticEnabled,
+  store: moderationAutomationStore,
+  status: async () => ({
+    enabled: moderationAutomaticEnabled,
+    environment: config.discussionModerationEnvironment,
+    paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
+    model: config.discussionModerationAutoModel,
+    backupModel: config.discussionModerationBackupModel,
+    imagesEnabled: imageAutomationEnabled(config),
+    imageModel: config.discussionModerationImageModel,
+    imageReviewRequired: true,
+  }),
+};
+const discussionModeration = createDiscussionModeration({
+  requiredNoticeVersion: requiredNoticeVersion(config),
+  pool,
+  withDatabaseTransaction,
+  privateDir: config.discussionModerationDir,
+  publishSubmission: moderationPublisher,
+  automation: moderationAutomaticEnabled ? moderationAutomationStore : null,
+});
+const moderationAttachments = createModerationAttachmentStore({
+  uploadDir: config.uploadDir,
+  privateDir: config.discussionModerationDir,
+  publicDirs: [
+    path.join(__dirname, '..', 'public'),
+    path.join(__dirname, '..', 'development', 'apps', 'web', 'dist'),
+    path.join(__dirname, '..', 'node_modules'),
+  ],
+  service: discussionModeration,
+});
+const moderationAudit = createModerationAudit({ pool });
+const moderationAiTest = createModerationAiTest({
+  service: discussionModeration,
+  audit: moderationAudit,
+  enabled: aiTestEnvironmentEnabled(config),
+  client: createModerationAiClient({
+    readSettings: (options) => systemSettingsStore.readSettings(options),
+    modelOverride: moderationAutomaticEnabled
+      ? config.discussionModerationAutoModel
+      : config.discussionModerationAiModel,
+  }),
+});
 const certificationService = createUserCertificationService({ pool, notifications });
 const backgroundTasks = createBackgroundTaskService({
   pool,
-  getUser: getUserById,
+  getUser: getPrivacyAcceptedUser,
   notifyCompletion: (event) => notifications.notifyBackgroundTask(event),
 });
 let maxDocumentStore = null;
@@ -421,6 +539,14 @@ app.use((request, response, next) => {
 });
 
 app.use(
+  createPrivacyPolicyAccess({
+    verifyToken: verify,
+    requireAccepted: (userId) => privacyPolicyService.requireAccepted(userId),
+    getUserById,
+  }),
+);
+
+app.use(
   '/api/workbench/connectors/tsinghua/homework',
   createHomeworkRouter({
     service: createHomeworkService({
@@ -464,9 +590,17 @@ app.use((error, _request, response, next) => {
   next(error);
 });
 
+const maxImageAccess = createMaxImageAccess({
+  uploadDir: config.uploadDir,
+  requireAuth,
+  getOptionalAuthUser,
+  pool,
+});
+
 // Apply the same decoding and normalization as the static server before guarding documents.
 app.use(
   '/uploads',
+  maxImageAccess.guardUploads,
   (request, response, next) => {
     try {
       const uploadPath = path.posix.normalize(decodeURIComponent(request.path).replace(/\\/g, '/'));
@@ -645,10 +779,10 @@ async function createUniqueUserUid(database = pool) {
   throw new Error('无法生成唯一 UID');
 }
 
-async function createUniqueDiscussionPostPid() {
+async function createUniqueDiscussionPostPid(database = pool) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const pid = generateDiscussionPostPid();
-    const [rows] = await pool.execute(`SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`, [
+    const [rows] = await database.execute(`SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`, [
       pid,
     ]);
 
@@ -2332,6 +2466,9 @@ async function postSandboxRun(payload, timeoutSeconds) {
 }
 
 async function createMaxDiscussionReply(postId, triggerComment) {
+  // Manual rollout has no approved privacy/model pipeline yet. Never send a
+  // pending discussion to the ordinary chat client or publish an unreviewed bot reply.
+  if (config.discussionModerationEnabled) return null;
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
@@ -2380,6 +2517,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     `discussion-user:${triggerComment.author.id}`,
   );
   let generatedImageCount = 0;
+  let generatedImageFiles = [];
   let agentPayload;
   try {
     const agentResponse = await postAgentChat({
@@ -2426,9 +2564,11 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       const persisted = await persistGeneratedImages(agentPayload, {
         ownerId: triggerComment.author.id,
         uploadDir: config.uploadDir,
+        visibility: 'discussion',
       });
       agentPayload = persisted.payload;
       generatedImageCount = persisted.generatedCount;
+      generatedImageFiles = persisted.files;
     } catch (error) {
       console.error('Failed to persist Max discussion image', error.message);
       agentPayload = stripGeneratedImages(agentPayload);
@@ -2473,6 +2613,18 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     return inserted;
   });
 
+  if (result && generatedImageFiles.length) {
+    try {
+      await maxImageAccess.publishDiscussionImages(generatedImageFiles, {
+        ownerId: triggerComment.author.id,
+        postId,
+        commentId: result.insertId,
+      });
+    } catch {
+      // Failure stays private; a text reference must never confer access by itself.
+      console.error('Max discussion image publication could not be recorded');
+    }
+  }
   return result ? getDiscussionCommentById(result.insertId) : null;
 }
 
@@ -2765,7 +2917,17 @@ async function getUserByIdFromUsername(username) {
   return rows[0] || null;
 }
 
-async function requireAuth(request, response, { allowInvalidUsername = false } = {}) {
+async function getPrivacyAcceptedUser(id) {
+  const user = await getUserById(id);
+  if (user) await privacyPolicyService.requireAccepted(user.id);
+  return user;
+}
+
+async function requireAuth(
+  request,
+  response,
+  { allowInvalidUsername = false, allowPrivacyPending = false } = {},
+) {
   const authorization = request.headers.authorization || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   const payload = verify(token);
@@ -2784,7 +2946,49 @@ async function requireAuth(request, response, { allowInvalidUsername = false } =
 
   if (!allowInvalidUsername && !enforceUsername(user, response)) return null;
 
+  if (!allowPrivacyPending) {
+    try {
+      if (String(request.privacyPolicyUserId) !== String(user.id))
+        request.privacyPolicy = await privacyPolicyService.requireAccepted(user.id);
+    } catch (error) {
+      response.status(error.status || 503).json({
+        message: error.status ? error.message : '暂时无法确认隐私政策状态，请稍后重试',
+        code: error.status ? error.code : 'privacy_policy_unavailable',
+      });
+      return null;
+    }
+  }
+
   return user;
+}
+
+app.get('/api/privacy-policy', (_request, response) => {
+  response.set('Cache-Control', 'no-store').json(privacyPolicy);
+});
+for (const [method, route, operation] of [
+  ['get', '/api/privacy-policy/status', (userId) => privacyPolicyService.status(userId)],
+  [
+    'post',
+    '/api/privacy-policy/accept',
+    (userId, body) => privacyPolicyService.accept(userId, body),
+  ],
+]) {
+  app[method](route, async (request, response) => {
+    response.set('Cache-Control', 'no-store');
+    try {
+      const user = await requireAuth(request, response, {
+        allowInvalidUsername: true,
+        allowPrivacyPending: true,
+      });
+      if (!user) return;
+      response.json(await operation(user.id, request.body));
+    } catch (error) {
+      response.status(error.status || 503).json({
+        message: error.status ? error.message : '暂时无法处理隐私政策确认，请稍后重试',
+        code: error.status ? error.code : 'privacy_policy_unavailable',
+      });
+    }
+  });
 }
 
 async function getOptionalAuthUser(request) {
@@ -3072,6 +3276,7 @@ app.get('/api/health', async (_request, response) => {
       ...health.body,
       dbHost: config.db.host,
       database: config.db.database,
+      moderationAutomation: await moderationAutomatic.status(),
     });
   } catch (error) {
     response.status(500).json({
@@ -3096,6 +3301,7 @@ backgroundTasks.register('max', runMaxBackgroundTask);
 backgroundTasks.register('circuit_suggest', runCircuitSuggestBackgroundTask);
 backgroundTasks.register('circuit_agent', runCircuitAgentBackgroundTask);
 app.use('/api/ai', createBackgroundTaskRouter({ requireAuth, service: backgroundTasks }));
+app.use('/api/ai/images', maxImageAccess.router);
 
 maxDocumentStore = require('./max-files').registerMaxFiles(app, requireAuth, {
   directory: path.join(config.uploadDir, '.max-documents'),
@@ -4264,9 +4470,10 @@ app.patch('/api/discussion/boards/:slug/moderators/:userId', async (request, res
   }
 });
 
-app.post(
-  ['/api/discussion/uploads/images', '/api/circuit-report/uploads/images'],
-  async (request, response) => {
+function createImageUploadHandler(contentType) {
+  // Route registration fixes the content type. Express accepts case and trailing
+  // slash variants, so request.path must never decide whether an image is private.
+  return async (request, response) => {
     try {
       const user = await requireAuth(request, response);
 
@@ -4291,7 +4498,11 @@ app.post(
         return;
       }
 
-      const outputBuffer = await sharp(fileBuffer, { animated: false })
+      const outputBuffer = await sharp(fileBuffer, {
+        animated: false,
+        limitInputPixels: 36 * 1000 * 1000,
+        failOn: 'warning',
+      })
         .rotate()
         .resize({
           width: 1600,
@@ -4307,6 +4518,18 @@ app.post(
         return;
       }
 
+      if (config.discussionModerationEnabled && contentType === 'discussion') {
+        const attachment = await moderationAttachments.store({
+          ownerId: user.id,
+          buffer: outputBuffer,
+        });
+        response.status(201).json({
+          ...attachment,
+          previewDataUrl: `data:image/webp;base64,${outputBuffer.toString('base64')}`,
+        });
+        return;
+      }
+
       const fileName = buildDiscussionImageFileName(user.id);
       await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
 
@@ -4314,9 +4537,29 @@ app.post(
         url: `/uploads/${fileName}`,
       });
     } catch (error) {
-      response.status(500).json({ message: '上传图片失败', detail: error.message });
+      response
+        .status(error.status || 500)
+        .json({ message: error.status ? error.message : '上传图片失败' });
     }
-  },
+  };
+}
+
+app.post('/api/discussion/uploads/images', createImageUploadHandler('discussion'));
+app.post('/api/circuit-report/uploads/images', createImageUploadHandler('circuit-report'));
+
+app.use(
+  '/api/moderation',
+  createModerationRouter({
+    service: discussionModeration,
+    attachmentStore: moderationAttachments,
+    requireAuth,
+    getOptionalAuthUser,
+    enabled: config.discussionModerationEnabled,
+    aiTest: moderationAiTest,
+    audit: moderationAudit,
+    automation: moderationAutomatic,
+    notice: noticeFor(config),
+  }),
 );
 
 registerDiscussionInteractions(app, {
@@ -4735,6 +4978,29 @@ app.post('/api/discussion/posts', async (request, response) => {
       return;
     }
 
+    if (config.discussionModerationEnabled) {
+      const attachmentIds = validateModerationMarkdown(contentMarkdown);
+      const submission = await withDatabaseTransaction((connection) =>
+        discussionModeration.submit(connection, {
+          kind: 'post',
+          authorId: user.id,
+          payload: {
+            boardId: board.id,
+            boardSlug: board.slug,
+            title,
+            content: contentMarkdown,
+            anonymous: isAnonymous,
+            loginRequired,
+          },
+          attachmentIds,
+          requestId: request.body.requestId,
+          moderationNoticeVersion: PRIVACY_POLICY_VERSION,
+        }),
+      );
+      response.status(202).json({ ok: true, message: '已提交审核', moderation: submission });
+      return;
+    }
+
     const canFeatureCreatedPost = await canModerateBoard(user, board.id);
 
     const postPid = await createUniqueDiscussionPostPid();
@@ -4805,7 +5071,9 @@ app.post('/api/discussion/posts', async (request, response) => {
       post: toDiscussionPostDetail((await economyShop.decoratePosts([rows[0]]))[0], user.id),
     });
   } catch (error) {
-    response.status(500).json({ message: '发布帖子失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '发布帖子失败' });
   }
 });
 
@@ -5164,6 +5432,36 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
+    if (config.discussionModerationEnabled) {
+      const attachmentIds = validateModerationMarkdown(contentMarkdown);
+      const submission = await withDatabaseTransaction(async (connection) => {
+        await lockPublicPost(connection, post.id);
+        if (parentCommentId) {
+          const [[parent]] = await connection.execute(
+            'SELECT id FROM discussion_comments WHERE id = ? AND post_id = ? AND is_deleted = 0 FOR UPDATE',
+            [parentCommentId, post.id],
+          );
+          if (!parent) throw Object.assign(new Error('被回复的评论不存在'), { status: 404 });
+        }
+        return discussionModeration.submit(connection, {
+          kind: 'comment',
+          authorId: user.id,
+          payload: {
+            postId: post.id,
+            parentCommentId: parentCommentId || null,
+            content: contentMarkdown,
+          },
+          attachmentIds,
+          requestId: request.body.requestId,
+          moderationNoticeVersion: PRIVACY_POLICY_VERSION,
+        });
+      });
+      response
+        .status(202)
+        .json({ ok: true, message: '已提交审核', moderation: submission, maxPending: false });
+      return;
+    }
+
     const result = await withDatabaseTransaction(async (connection) => {
       await lockPublicPost(connection, post.id);
       let parentAuthorId = null;
@@ -5409,6 +5707,7 @@ app.post('/api/auth/register', async (request, response) => {
     response.status(201).json({
       token: issueToken(user),
       user,
+      privacyPolicy: await privacyPolicyService.status(user.id),
     });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
@@ -5609,12 +5908,14 @@ app.post('/api/auth/login', async (request, response) => {
       return;
     }
 
+    const privacyStatus = await privacyPolicyService.confirmLogin(row.id, request.body);
     await loginRateLimiter.resetAccount(row);
     const user = toUserProfile(row);
 
     response.json({
       token: issueToken(user),
       user,
+      privacyPolicy: privacyStatus,
     });
   } catch (error) {
     response.status(error.status || 500).json({
@@ -5712,6 +6013,7 @@ app.post('/api/auth/reset-password', async (request, response) => {
       message: '密码已重设',
       token: issueToken(user),
       user,
+      privacyPolicy: await privacyPolicyService.status(user.id),
     });
   } catch (error) {
     response.status(500).json({ message: '重设密码失败', detail: error.message });
@@ -5720,7 +6022,10 @@ app.post('/api/auth/reset-password', async (request, response) => {
 
 app.get('/api/auth/me', async (request, response) => {
   try {
-    const user = await requireAuth(request, response, { allowInvalidUsername: true });
+    const user = await requireAuth(request, response, {
+      allowInvalidUsername: true,
+      allowPrivacyPending: true,
+    });
 
     if (!user) {
       return;
@@ -6069,46 +6374,8 @@ app.get('/api/admin/users', async (request, response) => {
   }
 });
 
-app.get('/api/admin/ai-dialogs/export', async (request, response) => {
-  try {
-    const adminUser = await requireAdmin(request, response);
-
-    if (!adminUser) {
-      return;
-    }
-
-    await ensureAiDialogTables();
-    const exportedAt = new Date();
-    const [[users], [dialogs]] = await Promise.all([
-      pool.execute(
-        `SELECT id, uid, username, full_name, student_id, role
-         FROM users
-         ORDER BY id ASC`,
-      ),
-      pool.execute(
-        `SELECT id, did, user_id, title, messages_json, created_at, updated_at
-         FROM ai_dialogs
-         ORDER BY user_id ASC, created_at ASC, id ASC`,
-      ),
-    ]);
-    const payload = buildAiDialogExport({
-      users,
-      dialogs,
-      exportedBy: adminUser,
-      exportedAt,
-    });
-
-    response.set({
-      'Cache-Control': 'no-store',
-      'Content-Disposition': `attachment; filename="${buildAiDialogExportFileName(exportedAt)}"`,
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-Content-Type-Options': 'nosniff',
-    });
-    response.send(JSON.stringify(payload, null, 2));
-  } catch (error) {
-    response.status(500).json({ message: '导出 AI 聊天记录失败', detail: error.message });
-  }
-});
+mountAiDialogExportRoutes(app, { pool, requireAdmin, ensureAiDialogTables });
+mountDataRetentionRoutes(app, { pool, requireAdmin });
 
 app.get('/api/admin/system-settings/model', async (request, response) => {
   try {
@@ -6609,6 +6876,8 @@ async function start() {
   await ensureWorkbenchTables(pool);
   await ensureCampusConnectorTables(pool);
   await ensureAiDialogTables();
+  await ensureAiDialogExportAudit(pool);
+  await ensurePrivacyPolicySchema(pool);
   await ensureBackgroundTaskTables(pool);
   await ensureFortuneTables();
   await ensureEconomyTables();
@@ -6623,6 +6892,10 @@ async function start() {
   await ensureSurveyTables(pool);
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);
+  await ensureDiscussionModerationSchema(pool);
+  await ensureModerationAuditSchema(pool);
+  await moderationAutomationStore.ensureSchema();
+  await ensureModerationRetention(pool);
   const bicycleRefunds = await refundRanchBicyclePurchases(pool);
   if (bicycleRefunds.refunded) {
     console.log(
@@ -6643,7 +6916,7 @@ async function start() {
     repositoryRoot: path.join(__dirname, '..'),
     authClient: createDevelopmentAuthClient({
       verifyToken: verify,
-      getUserById,
+      getUserById: getPrivacyAcceptedUser,
       toUserProfile,
     }),
     userDirectory: createDevelopmentUserDirectory(pool),
@@ -6675,6 +6948,23 @@ async function start() {
   notifications.startWeeklyDigestWorker();
   await backgroundTasks.start();
   surveyService.startWorker();
+  moderationAutomation.start();
+  let moderationCleanupRunning = false;
+  const cleanupModeration = async () => {
+    if (moderationCleanupRunning) return;
+    moderationCleanupRunning = true;
+    try {
+      await discussionModeration.expireAndPurge();
+      await moderationAudit.purge();
+      await moderationAutomationStore.purge();
+    } catch {
+      console.error('审核证据清理暂时失败，将在下次定时检查重试');
+    } finally {
+      moderationCleanupRunning = false;
+    }
+  };
+  cleanupModeration();
+  setInterval(cleanupModeration, 60 * 1000).unref();
   console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }
 

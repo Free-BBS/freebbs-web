@@ -10,6 +10,7 @@ const {
   TEST_FILES,
   testEnvironment,
   REQUIRED_MYSQL_TESTS,
+  selectMysqlTests,
   validateMysqlTestOutput,
 } = require('./test-mysql-isolated');
 
@@ -155,8 +156,16 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its twenty-one named test files with matching database opt-ins', () => {
+test('the isolated runner enables its named test files with matching database opt-ins', () => {
   const expected = [
+    'backend/discussion-moderation.mysql.test.js',
+    'backend/moderation-privacy.mysql.test.js',
+    'backend/moderation-audit.mysql.test.js',
+    'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-retention.mysql.test.js',
+    'backend/privacy-policy.mysql.test.js',
+    'backend/ai-dialog-export.mysql.test.js',
+    'backend/data-retention.mysql.test.js',
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
     'backend/circuit-progress.test.js',
@@ -180,11 +189,12 @@ test('the isolated runner enables its twenty-one named test files with matching 
     'backend/learning-research.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 21);
+  assert.equal(new Set(TEST_FILES).size, 29);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
   for (const key of [
+    'RUN_MODERATION_MYSQL',
     'RUN_ADMIN_REWARDS_MYSQL',
     'RUN_ECONOMY_MYSQL',
     'RUN_BONE_SALES_MYSQL',
@@ -203,8 +213,8 @@ test('the isolated runner enables its twenty-one named test files with matching 
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all twenty-one live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 21);
+test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 29);
   assert.ok(
     REQUIRED_MYSQL_TESTS.includes(
       'isolated MySQL: verified identities, notices, privacy, concurrent review and enterprise provisioning',
@@ -248,6 +258,76 @@ test('the isolated runner requires successful top-level evidence for all twenty-
     () => validateMysqlTestOutput(`${fileOnly}\n${summary}`),
     /required MySQL test did not run/,
   );
+});
+
+test('moderation-only requires publication, privacy and policy audit suite results', () => {
+  const selected = selectMysqlTests(['--moderation-only']);
+  assert.deepEqual(selected.testFiles, [
+    'backend/discussion-moderation.mysql.test.js',
+    'backend/moderation-privacy.mysql.test.js',
+    'backend/moderation-audit.mysql.test.js',
+    'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-retention.mysql.test.js',
+    'backend/privacy-policy.mysql.test.js',
+    'backend/ai-dialog-export.mysql.test.js',
+    'backend/data-retention.mysql.test.js',
+  ]);
+  assert.deepEqual(selected.requiredTests, [
+    'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic',
+    'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence',
+    'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts',
+    'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic',
+    'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically',
+    'isolated MySQL: privacy consent persists across restarts and concurrent confirmations without first-login bypass',
+    'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations',
+    'isolated MySQL: read-only retention uses calendar anniversaries and preserves newer, undated and active AI records',
+  ]);
+  const success = selected.requiredTests
+    .map((name, index) => `ok ${index + 1} - ${name}`)
+    .join('\n');
+  const summary = '# fail 0\n# skipped 0\n';
+  const complete = `${success}\n${summary}`;
+  const validate = (output) => validateMysqlTestOutput(output, selected.requiredTests);
+  assert.doesNotThrow(() => validate(complete));
+  assert.throws(
+    () => validate(`ok 1 - ${selected.requiredTests[0]}\n${summary}`),
+    /required MySQL test did not run/,
+  );
+  assert.throws(() => validate(summary), /required MySQL test did not run/);
+  assert.throws(() => validate(`    ${success}\n${summary}`), /required MySQL test did not run/);
+  assert.throws(
+    () => validate(`ok 1 - backend/discussion-moderation.mysql.test.js\n${summary}`),
+    /required MySQL test did not run/,
+  );
+  assert.throws(
+    () => validate(complete.replace('# skipped 0', '# skipped 1')),
+    /must not skip any test/,
+  );
+  assert.throws(() => validate(complete.replace('# fail 0', '# fail 1')), /must not fail any test/);
+});
+
+test('isolated suite selection preserves the default and rejects ambiguous subset flags', () => {
+  const selected = selectMysqlTests();
+  assert.deepEqual(selected.testFiles, TEST_FILES);
+  assert.deepEqual(selected.requiredTests, REQUIRED_MYSQL_TESTS);
+  assert.notEqual(selected.testFiles, TEST_FILES);
+  const workbench = selectMysqlTests(['--workbench-only']);
+  assert.equal(workbench.testFiles.length, 3);
+  assert.ok(
+    workbench.testFiles.every((file) => /workbench|course-schedule|schedule-series/.test(file)),
+  );
+  const research = selectMysqlTests(['--research-only']);
+  assert.deepEqual(research.testFiles, ['backend/learning-research.mysql.test.js']);
+  assert.deepEqual(research.requiredTests, [
+    'isolated MySQL: learning research migration, owner isolation and concurrent idempotent writes',
+  ]);
+  for (const flags of [
+    ['--moderation-only', '--workbench-only'],
+    ['--moderation-only', '--research-only'],
+    ['--workbench-only', '--research-only'],
+    ['--moderation-only', '--workbench-only', '--research-only'],
+  ])
+    assert.throws(() => selectMysqlTests(flags), /choose only one isolated MySQL test subset/);
 });
 
 test('complete CI retains identity and learning suites alongside the mandatory full MySQL runner', () => {

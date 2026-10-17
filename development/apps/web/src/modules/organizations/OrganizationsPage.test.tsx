@@ -1,135 +1,488 @@
-import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../core/api/client.js';
 import { OrganizationsPage } from './OrganizationsPage.js';
+import { OrganizationShowcaseHeader } from './OrganizationShowcaseHeader.js';
 import { ORGANIZATION_GALLERY, organizationRegistrationPath } from './catalog.js';
+import { findShowcase } from './showcase/registry.js';
+import { usesFullPageShowcase } from './showcase/presentation.js';
 
-const positionLabels = /部长|部员|主席|书记|组长|组员|顾问|会长|会员|小导|学员|财务负责人|岗位层级/;
+beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-const request = vi.fn(async (path: string) =>
-  path.endsWith('/activities')
-    ? { active: [], past: [] }
-    : { html: null, canEdit: false, revision: 0 },
-);
-function show(organizationKey?: string, departmentKey?: string) {
-  return render(
-    <MemoryRouter>
-      <OrganizationsPage
-        organizationKey={organizationKey}
-        departmentKey={departmentKey}
-        client={{ request: request as ApiClient['request'] }}
-      />
-    </MemoryRouter>,
+function show(organizationKey?: string, departmentKey?: string, enabled = true) {
+  const request = vi.fn(async (path: string) =>
+    path.endsWith('/activities')
+      ? { active: [], past: [] }
+      : { html: null, canEdit: false, revision: 0 },
   );
+  return {
+    request,
+    ...render(
+      <MemoryRouter
+        initialEntries={[
+          `/organizations${organizationKey ? `/${organizationKey}` : ''}${departmentKey ? `/${departmentKey}` : ''}`,
+        ]}
+      >
+        <OrganizationShowcaseHeader />
+        <OrganizationsPage
+          organizationKey={organizationKey}
+          departmentKey={departmentKey}
+          enabled={enabled}
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    ),
+  };
 }
+
 describe('organization exhibition', () => {
-  it('keeps five entrances and shows all nineteen department names inside their organization cards', () => {
-    show();
-    expect(screen.getByRole('heading', { name: '风采展示' })).toBeInTheDocument();
+  it.each([undefined, 'youth_league', 'student_union', 'science_association', 'media_center'])(
+    'keeps the %s index trail outside its reading scroll region',
+    (organizationKey) => {
+      show(organizationKey);
+      const organization = ORGANIZATION_GALLERY.find((item) => item.key === organizationKey);
+      const label = organization?.name ?? '风采展示';
+      const reading = screen.getByRole('region', { name: `${label}页面内容` });
+      expect(reading).toContainElement(screen.getByRole('contentinfo'));
+      expect(screen.getByRole('heading', { name: '风采展示', level: 1 })).toBeInTheDocument();
+      if (organization) {
+        const trail = screen.getByRole('navigation', { name: '展厅位置' });
+        expect(reading).not.toContainElement(trail);
+        expect(within(trail).getByText(label)).toHaveAttribute('aria-current', 'page');
+        expect(within(trail).queryByRole('link', { name: label })).not.toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('navigation', { name: '展厅位置' })).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('keeps five organization entrances and makes every department directly discoverable', () => {
+    const { request } = show();
+    expect(screen.getByRole('heading', { name: /^风采展示/, level: 2 })).toBeInTheDocument();
     expect(screen.getByText('同在电子，亲如一家')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /^走进电子系/ })).toHaveLength(5);
     for (const organization of ORGANIZATION_GALLERY) {
       const entrance = screen.getByRole('link', { name: `走进${organization.name}` });
       expect(entrance).toHaveAttribute('href', `/organizations/${organization.key}`);
+      expect(entrance).toHaveAccessibleDescription(expect.stringContaining(organization.motto));
       expect(within(entrance).queryByRole('link')).not.toBeInTheDocument();
       for (const department of organization.departments) {
-        expect(within(entrance).getByText(department.name, { exact: true })).toBeInTheDocument();
+        expect(
+          within(entrance).getByText(
+            department.key === 'rights_development_center' ? '权益发展中心' : department.name,
+            { exact: true },
+          ),
+        ).toBeInTheDocument();
+        const content = findShowcase(`${organization.key}.${department.key}`);
+        expect(
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
+        ).toHaveAttribute('href', `/organizations/${organization.key}/${department.key}`);
+        expect(
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
+        ).toHaveAccessibleDescription(content?.summary ?? department.introduction);
       }
     }
-    expect(document.querySelector('.organization-gallery')).not.toHaveTextContent(positionLabels);
+    expect(screen.getByRole('link', { name: '了解电子系 TMS 分会' })).toHaveAttribute(
+      'href',
+      '/organizations/tms',
+    );
+    expect(
+      within(screen.getByRole('group', { name: '按组织筛选' })).getByRole('link', {
+        name: 'TMS',
+      }),
+    ).toHaveAttribute('href', '/organizations/tms');
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it('uses five different sheep scene images with descriptions of their activities', () => {
+  it('gives each of the five organization entrances its own descriptive sheep scene', () => {
     show();
-    const images = screen.getAllByRole('img');
-    expect(images).toHaveLength(5);
-    expect(new Set(images.map((image) => image.getAttribute('src'))).size).toBe(5);
-    for (const activity of [
-      /小羊.*活动/,
-      /小羊.*水墨.*竹/,
-      /小羊.*阅读/,
-      /小羊.*机器人/,
-      /媒中小羊.*拍摄/,
-    ]) {
-      expect(screen.getByRole('img', { name: activity })).toBeInTheDocument();
+    const scenes = ORGANIZATION_GALLERY.map((organization) =>
+      within(screen.getByRole('link', { name: `走进${organization.name}` })).getByRole('img'),
+    );
+    expect(new Set(scenes.map((image) => image.getAttribute('src'))).size).toBe(5);
+    for (const scene of scenes) expect(scene).toHaveAccessibleName(/小羊/);
+    expect(document.querySelector('.organization-gallery')).not.toHaveTextContent(
+      /财务负责人|岗位层级/,
+    );
+  });
+
+  it('searches interests, combines organization filters, and clears search without dropping the chosen organization', () => {
+    show();
+    const filters = screen.getByRole('group', { name: '按组织筛选' });
+    const search = screen.getByRole('searchbox', { name: '搜索部门、活动或兴趣' });
+    fireEvent.change(search, { target: { value: '采访' } });
+    expect(screen.getByRole('status')).toHaveTextContent('找到 2 个去处');
+    expect(screen.getByRole('link', { name: '了解新媒体部暨记者团' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '了解实践组' })).toBeInTheDocument();
+    fireEvent.click(within(filters).getByRole('button', { name: '媒体中心' }));
+    expect(within(filters).getByRole('button', { name: '媒体中心' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
+    fireEvent.click(within(filters).getByRole('button', { name: '科协' }));
+    expect(screen.getByRole('status')).toHaveTextContent('找到 0 个去处');
+    expect(screen.getByRole('heading', { name: '小羊还没找到这一站' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^了解/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '清空搜索' }));
+    expect(search).toHaveValue('');
+    expect(within(filters).getByRole('button', { name: '科协' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getAllByRole('link', { name: /^了解/ })).toHaveLength(5);
+    expect(screen.getByRole('status')).toHaveTextContent('找到 5 个去处');
+  });
+
+  it('resets both filters from the empty result state and ignores surrounding search whitespace', () => {
+    show();
+    const search = screen.getByRole('searchbox', { name: '搜索部门、活动或兴趣' });
+    fireEvent.change(search, { target: { value: '  采访  ' } });
+    expect(screen.getByRole('status')).toHaveTextContent('找到 2 个去处');
+    fireEvent.click(screen.getByRole('button', { name: '学生会' }));
+    fireEvent.click(screen.getByRole('button', { name: '看看全部' }));
+    expect(search).toHaveValue('');
+    expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('link', { name: /^了解/ })).toHaveLength(
+      ORGANIZATION_GALLERY.reduce(
+        (total, organization) => total + Math.max(organization.departments.length, 1),
+        0,
+      ),
+    );
+  });
+
+  it('finds interests and works mentioned inside exhibition chapters rather than only basic department labels', () => {
+    show();
+    const search = screen.getByRole('searchbox', { name: '搜索部门、活动或兴趣' });
+    fireEvent.change(search, { target: { value: 'LaTeX' } });
+    expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
+    expect(screen.getByRole('link', { name: '了解办公室·新生组' })).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: '每一个飞驰的瞬间' } });
+    expect(screen.getByRole('status')).toHaveTextContent('找到 1 个去处');
+    expect(screen.getByRole('link', { name: '了解新媒体部暨记者团' })).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'docx' } });
+    expect(screen.getByRole('status')).toHaveTextContent('找到 0 个去处');
+  });
+
+  it('returns to the top when entering another organization or department in the same mounted page', () => {
+    const { rerender, request } = show();
+    expect(window.scrollTo).toHaveBeenCalledTimes(1);
+    rerender(
+      <MemoryRouter>
+        <OrganizationsPage
+          organizationKey="youth_league"
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    expect(window.scrollTo).toHaveBeenCalledTimes(2);
+    rerender(
+      <MemoryRouter>
+        <OrganizationsPage
+          organizationKey="youth_league"
+          departmentKey="research"
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    expect(window.scrollTo).toHaveBeenCalledTimes(3);
+    expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'instant' });
+    expect(screen.getByTitle('调研组特色展区')).toBeInTheDocument();
+  });
+
+  it('honors an initial department fragment instead of resetting a deep link to the entrance', async () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    const scrolledIds: string[] = [];
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolledIds.push(this.id);
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+    const request = vi.fn(async (path: string) =>
+      path.endsWith('/activities')
+        ? { active: [], past: [] }
+        : { html: null, canEdit: false, revision: 0 },
+    );
+    const view = render(
+      <MemoryRouter initialEntries={['/organizations/youth_league/freshman#showcase-contact']}>
+        <OrganizationsPage
+          organizationKey="youth_league"
+          departmentKey="freshman"
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    try {
+      await screen.findByText('暂无活跃活动');
+      expect(scrolledIds).toEqual(['showcase-contact']);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+      expect(window.scrollTo).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
     }
   });
 
-  it.each(ORGANIZATION_GALLERY)(
-    'shows the complete $name department overview without positions',
+  it('resets the internal reading region when clearing a department fragment and preserves later anchor navigation', async () => {
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
+    const originalIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'scrollIntoView',
+    );
+    const scrollTo = vi.fn();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: scrollTo,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+    const request = vi.fn(async (path: string) =>
+      path.endsWith('/activities')
+        ? { active: [], past: [] }
+        : { html: null, canEdit: false, revision: 0 },
+    );
+    const departmentPath = '/organizations/youth_league/freshman';
+    const view = render(
+      <MemoryRouter initialEntries={[`${departmentPath}#showcase-contact`]}>
+        <Link to={departmentPath}>回到本部门入口</Link>
+        <Link to={`${departmentPath}#showcase-contact`}>跳到联系人</Link>
+        <OrganizationsPage
+          organizationKey="youth_league"
+          departmentKey="freshman"
+          client={{ request: request as ApiClient['request'] }}
+        />
+      </MemoryRouter>,
+    );
+    try {
+      await screen.findByText('暂无活跃活动');
+      const reading = screen.getByRole('region', { name: '办公室·新生组页面内容' });
+      const contact = document.getElementById('showcase-contact');
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.contexts[0]).toBe(contact);
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(window.scrollTo).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('link', { name: '回到本部门入口' }));
+      expect(screen.getByRole('region', { name: '办公室·新生组页面内容' })).toBe(reading);
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.contexts[0]).toBe(reading);
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'instant' });
+      expect(window.scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole('link', { name: '跳到联系人' }));
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+      expect(scrollIntoView.mock.contexts[1]).toBe(contact);
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'instant' });
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(window.scrollTo).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+      if (originalIntoView)
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalIntoView);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+
+  it.each(ORGANIZATION_GALLERY.filter(({ key }) => key !== 'tms'))(
+    'shows every $name department and retains its explicit root activity destination',
     (organization) => {
-      show(organization.key);
-      expect(screen.queryAllByRole('link', { name: /^了解/ })).toHaveLength(
+      const { request } = show(organization.key);
+      expect(screen.getAllByRole('link', { name: /^了解/ })).toHaveLength(
         organization.departments.length,
       );
       for (const department of organization.departments) {
-        expect(screen.getByRole('link', { name: `了解${department.name}` })).toHaveAttribute(
-          'href',
-          `/organizations/${organization.key}/${department.key}`,
-        );
+        const content = findShowcase(`${organization.key}.${department.key}`);
+        expect(
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
+        ).toHaveAttribute('href', `/organizations/${organization.key}/${department.key}`);
+        expect(
+          screen.getByRole('link', {
+            name: `了解${content?.shortName ?? content?.name ?? department.name}`,
+          }),
+        ).toHaveAccessibleDescription(content?.summary ?? department.introduction);
       }
-      expect(
-        screen.getByRole('link', {
-          name: '查看相关活动',
-        }),
-      ).toHaveAttribute('href', organizationRegistrationPath(organization.organizationIds));
-      expect(document.querySelector('.organization-page')).not.toHaveTextContent(positionLabels);
+      expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(
+        'href',
+        organizationRegistrationPath(organization.organizationIds),
+      );
       expect(screen.queryByLabelText('组织分工')).not.toBeInTheDocument();
+      expect(request).not.toHaveBeenCalled();
     },
   );
 
   it.each(
     ORGANIZATION_GALLERY.flatMap((organization) =>
-      organization.departments.map((department) => ({ organization, department })),
+      organization.departments
+        .filter(({ key }) => !usesFullPageShowcase(`${organization.key}.${key}`))
+        .map((department) => ({ organization, department })),
     ),
   )(
-    'loads only $department.name associations without guessing from its parent',
+    'loads only $organization.key/$department.key associations without guessing from its parent',
     async ({ organization, department }) => {
-      show(organization.key, department.key);
-      expect(screen.getByRole('heading', { name: department.name, level: 2 })).toBeInTheDocument();
-      expect(await screen.findByText('暂无活跃活动')).toBeInTheDocument();
-      expect(request).toHaveBeenCalledWith(
+      const { request } = show(organization.key, department.key);
+      await screen.findByText('暂无活跃活动');
+      expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
         `/organizations/${organization.key}/${department.key}/activities`,
-      );
+        `/organizations/${organization.key}/${department.key}/home`,
+      ]);
       expect(screen.queryByRole('link', { name: '查看相关报名' })).not.toBeInTheDocument();
-      expect(document.querySelector('.organization-page')).not.toHaveTextContent(positionLabels);
+      expect(screen.queryByRole('link', { name: '查看活动报名' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('目前展示全部活动报名，媒体中心相关活动请查看活动说明。'),
+      ).not.toBeInTheDocument();
+      const content = findShowcase(`${organization.key}.${department.key}`);
+      expect(
+        screen.getByRole('heading', {
+          level: 2,
+          name: content?.shortName ?? content?.name ?? department.name,
+        }),
+      ).toBeInTheDocument();
     },
   );
-  it('retains the honest all-activity media root link but uses exact media department associations', async () => {
-    const view = show('media_center');
-    expect(screen.getByRole('link', { name: '查看相关活动' })).toHaveAttribute(
+
+  it('retains the honest unscoped media root activity link', () => {
+    show('media_center');
+    expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(
       'href',
       '/collections/registrations',
     );
     expect(
       screen.getByText('目前展示全部活动报名，媒体中心相关活动请查看活动说明。'),
     ).toBeInTheDocument();
-    view.unmount();
-    show('media_center', 'creative');
-    expect(await screen.findByText('暂无活跃活动')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '查看活动报名' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('目前展示全部活动报名，媒体中心相关活动请查看活动说明。'),
-    ).not.toBeInTheDocument();
   });
-  it('loads TMS root from its server position department', async () => {
-    show('tms');
-    await screen.findByText('暂无活跃活动');
-    expect(request).toHaveBeenCalledWith('/organizations/tms/position/home');
-    expect(request).toHaveBeenCalledWith('/organizations/tms/position/activities');
-  });
-  it('rejects unknown departments', () => {
-    show('student_union', 'software');
-    expect(screen.getByRole('heading', { name: '没有找到这个展区' })).toBeInTheDocument();
-  });
-  it('respects the existing information module availability', () => {
-    render(
-      <MemoryRouter>
-        <OrganizationsPage enabled={false} />
-      </MemoryRouter>,
+
+  it.each([undefined, 'position'])(
+    'loads the TMS entrance with department key %s directly from its exact server position',
+    async (departmentKey) => {
+      const { request } = show('tms', departmentKey);
+      await screen.findByText('暂无活跃活动');
+      expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
+        '/organizations/tms/position/activities',
+        '/organizations/tms/position/home',
+      ]);
+      expect(screen.getByRole('link', { name: /^查看相关活动/ })).toHaveAttribute(
+        'href',
+        '/collections/registrations?organization=tms',
+      );
+      expect(
+        screen.getByRole('heading', { name: '电子系 TMS 分会', level: 2 }),
+      ).toBeInTheDocument();
+      const trail = screen.getByRole('navigation', { name: '展厅位置' });
+      expect(trail).toHaveTextContent(/^电子系 TMS 分会$/);
+      expect(within(trail).queryAllByRole('link')).toHaveLength(0);
+      expect(within(trail).getByText('电子系 TMS 分会')).toHaveAttribute('aria-current', 'page');
+      expect(screen.queryByRole('heading', { name: '没有找到这个展区' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('opens research as an independent read-only exhibition without practice APIs or editing actions', () => {
+    const { request } = show('youth_league', 'research');
+    expect(screen.getByTitle('调研组特色展区').parentElement).toHaveClass(
+      'sc-submitted-shell--full-page',
     );
+    expect(screen.getByTitle('调研组特色展区')).toHaveAttribute(
+      'src',
+      '/development/organization-showcase/sites/research/index.html',
+    );
+    expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '撰写部门文章' })).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['youth_league', 'organization'],
+    ['youth_league', 'research'],
+    ['youth_league', 'sail'],
+    ['youth_league', 'humanities'],
+    ['media_center', 'creative'],
+    ['media_center', 'audiovisual'],
+  ])(
+    'retains working hierarchy links above the full-page document for %s/%s',
+    (organization, department) => {
+      const content = findShowcase(`${organization}.${department}`)!;
+      const { request } = show(organization, department);
+      const frame = screen.getByTitle(content.site!.title);
+      expect(frame).toHaveAttribute('src', content.site!.entry);
+      expect(frame).toHaveAttribute('sandbox', expect.stringContaining('allow-scripts'));
+      expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+      expect(frame.parentElement).toHaveClass('sc-submitted-shell--full-page');
+      const breadcrumb = screen.getByRole('navigation', { name: '展厅位置' });
+      expect(breadcrumb).toHaveClass('organization-breadcrumb--header');
+      expect(within(breadcrumb).queryAllByRole('link')).toHaveLength(1);
+      expect(
+        within(breadcrumb).getByRole('link', {
+          name: ORGANIZATION_GALLERY.find(({ key }) => key === organization)!.name,
+        }),
+      ).toHaveAttribute('href', `/organizations/${organization}`);
+      expect(breadcrumb.querySelector('[aria-current="page"]')).toHaveTextContent(
+        content.shortName ?? content.name,
+      );
+      expect(
+        document.querySelector('.sc-hero, .sc-window-bar, #showcase-contact'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: '相关活动' })).not.toBeInTheDocument();
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['student_union', 'liaison_center'],
+    ['science_association', 'software'],
+    ['science_association', 'hardware'],
+  ])('keeps the introduction and window layout for %s/%s', async (organization, department) => {
+    const content = findShowcase(`${organization}.${department}`)!;
+    show(organization, department);
+    const frame = await screen.findByTitle(content.site!.title);
+    expect(frame.parentElement).not.toHaveClass('sc-submitted-shell--full-page');
+    expect(document.querySelector('.sc-hero')).toHaveTextContent(content.shortName ?? content.name);
+    expect(document.querySelector('.sc-window-bar')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '展厅位置' })).toHaveClass(
+      'organization-breadcrumb--header',
+    );
+  });
+
+  it.each([
+    ['student_union', 'software'],
+    ['unknown', undefined],
+    ['youth_league', 'missing'],
+  ])(
+    'rejects unknown organization or department %s/%s without requesting data',
+    (organization, department) => {
+      const { request } = show(organization, department);
+      expect(screen.getByRole('heading', { name: '没有找到这个展区' })).toBeInTheDocument();
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it('respects the existing module availability boundary before rendering or requesting data', () => {
+    const { request } = show('student_union', 'sports_center', false);
     expect(screen.getByRole('status')).toHaveTextContent('风采展示暂未开放');
-    expect(screen.queryByRole('link', { name: /走进/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /走进|了解/ })).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
   });
 });

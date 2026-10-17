@@ -11,6 +11,10 @@ npm ci --prefix development
 echo "[ci] validating development center"
 npm run check --prefix development
 
+echo "[ci] validating portable organization showcase"
+node scripts/build-showcase-review.mjs
+node --test scripts/showcase-review.test.js scripts/showcase-offline-compat.test.js scripts/showcase-photo-layout.test.js scripts/showcase-audiovisual-player.test.js scripts/organization-showcase-static.test.js
+
 echo "[ci] syntax check"
 for script in scripts/*.sh; do
   bash -n "$script"
@@ -25,6 +29,7 @@ node --check public/post-reader.js
 node --check public/post-reward.js
 node --test backend/github-updates.test.js backend/github-code.test.js
 node --test scripts/session-restore.test.js
+node --test scripts/registration-whitelist-page.test.js
 node --check public/request-runtime.js
 npm run test:ui-foundation
 node --check public/typography-preferences.js
@@ -38,6 +43,11 @@ test -s public/desktop-elegant.css
 node --test backend/weekly-digest.test.js backend/mailer.test.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
+node --test backend/moderation-production.test.js scripts/moderation-notice.test.js
+npm run test:moderation-automation
+node --test backend/discussion-moderation.test.js backend/moderation-attachments.test.js backend/moderation-integration.test.js backend/moderation-privacy.test.js backend/moderation-privacy.integration.test.js scripts/moderation-page.test.js
+node --test backend/moderation-ai-client.test.js backend/moderation-ai-test.test.js
+node --test backend/moderation-policy.test.js backend/moderation-policy-decision.test.js backend/moderation-audit.test.js scripts/moderation-policy-regression.test.js
 node --test backend/development-integration.test.js backend/achievement-source.test.js
 node --check backend/background-tasks.js
 node --check backend/workbench-schedule-planner.js
@@ -100,7 +110,7 @@ node --test backend/max-file-uploads.test.js scripts/max-file-preview.test.js ba
 node --check backend/ai-models.js
 node --test backend/ai-models.test.js
 node --check backend/max-images.js
-node --test backend/max-images.test.js
+node --test backend/max-images.test.js backend/max-image-access.test.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
@@ -122,6 +132,7 @@ python3 services/language-lab/test_worker.py
 
 echo "[ci] authentication and typography preferences tests"
 npm run test:auth
+npm run test:privacy-policy
 npm run test:teacher-accounts
 npm run test:identity-usability
 

@@ -1,0 +1,1067 @@
+/* Submitted pages keep their typography and artwork; interface surfaces and photo captions follow the platform. */
+html[data-showcase-site] {
+  --showcase-caption-size: 17px;
+}
+@media (max-width: 700px) {
+  html[data-showcase-site] {
+    --showcase-caption-size: 16px;
+  }
+}
+html[data-showcase-site='software']
+  :is(
+    .hero-caption,
+    .image-caption,
+    .training-media figcaption,
+    .training-media figcaption .text-button,
+    .daily-grid figcaption,
+    .group-photo figcaption > span:last-child,
+    #gallery-caption
+  ),
+html[data-showcase-site='hardware']
+  :is(
+    .project-image.photo-button > span,
+    .moment-caption,
+    .film-caption,
+    .film-caption > a,
+    .competition-media .group-photo > span,
+    #lightbox > p
+  ),
+html[data-showcase-site='research'] :is(figcaption, #lightbox > p),
+html[data-showcase-site='creative']
+  :is(.work figcaption, .collection-work figcaption, .image-viewer figcaption),
+html[data-showcase-site='humanities']
+  :is(.node__pic figcaption, .photo figcaption, .lightbox figcaption),
+html[data-showcase-site='liaison']
+  :is(.lc-hero-photo-overlay, .lc-work-modal-image > span, .lc-lightbox-stage figcaption),
+html[data-showcase-site='audiovisual']
+  .mm-app
+  :is(.media-caption, .phase-visual figcaption, .story-image figcaption) {
+  font-size: var(--showcase-caption-size);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+/* Raise reading copy without changing each department's display lettering or tool labels. */
+html[data-showcase-site='software'] .contacts a {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+html[data-showcase-site='software'] .contacts a > span {
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='software'] .contacts a > span:first-child {
+  flex: 0 0 auto;
+}
+html[data-showcase-site='hardware'] .contact-card {
+  grid-template-columns: minmax(132px, 0.8fr) minmax(0, 1.2fr) 52px;
+}
+html[data-showcase-site='hardware'] :is(.contact-name, .contact-email) {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] :is(.node p, .hero__lead) {
+  font-size: 16px;
+  line-height: 1.8;
+}
+html[data-showcase-site='humanities'] .facts .v {
+  font-size: 15px;
+  line-height: 1.7;
+}
+html[data-showcase-site='research']
+  :is(.duties p, .report-card p, .report-summary p, .message p:not(.eyebrow)) {
+  font-size: 16px;
+  line-height: 1.9;
+}
+html[data-showcase-site='liaison'] {
+  --lc-size-work-text: 15px;
+}
+html[data-showcase-site='audiovisual'] .mm-app {
+  --scene-description-size: 16px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields {
+  grid-template-columns: 6em minmax(0, 1fr);
+  font-size: 14px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields label {
+  font-size: 14px;
+}
+html[data-showcase-site='audiovisual'] .mm-app .contact-fields .email-link {
+  font-size: 15px;
+}
+html[data-showcase-site='audiovisual']
+  .mm-app
+  :is(
+    .about-roles p,
+    .phase-detail-copy > p:not(.mono),
+    .story-invitation,
+    .creation-mv,
+    .creation-pending-copy,
+    .creation-empty,
+    .contact-invitation,
+    .contact-fields > p,
+    #contact .voice-text
+  ) {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1200px) {
+  html[data-showcase-site='hardware'] .contact-card {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 5px 12px;
+  }
+  html[data-showcase-site='hardware'] .contact-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  html[data-showcase-site='hardware'] .contact-email {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  html[data-showcase-site='hardware'] .copy-label {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}
+@media (max-width: 800px) {
+  html[data-showcase-site='software'] .contacts a {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 3px;
+    padding-block: 12px;
+  }
+  html[data-showcase-site='software'] .contacts a > span:last-child {
+    text-align: left;
+  }
+}
+@media (max-width: 520px), (min-width: 961px) and (max-height: 820px) {
+  html[data-showcase-site='audiovisual'] .mm-app {
+    --scene-description-size: 15px;
+  }
+}
+@media (min-width: 961px) and (max-height: 690px) {
+  html[data-showcase-site='audiovisual'] .mm-app #contact {
+    height: auto;
+  }
+  html[data-showcase-site='audiovisual'] .mm-app .contact-grid {
+    height: 600px;
+  }
+}
+:root[data-platform-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-platform-theme='dark'] .showcase-platform-home {
+  background: #203630;
+  color: #e3f4ed;
+  border-color: #537166;
+}
+:root[data-platform-theme='dark'] .showcase-platform-home:hover {
+  background: #2b4940;
+}
+:root[data-platform-theme='dark'] .showcase-storage-note {
+  background: #24352e;
+  color: #e0ede3;
+  border-color: #647a69;
+}
+
+html[data-showcase-site='software'][data-platform-theme='dark'] {
+  --ink: #e9f1f5;
+  --muted: #b2c3cb;
+  --line: #43545c;
+  --paper: #172830;
+  --blue: #8ed0f6;
+  &
+    :is(
+      body,
+      .site-header,
+      .site-header nav,
+      .contest-card,
+      .browser-bar,
+      dialog,
+      .gallery-stage,
+      .daily-section
+    ) {
+    background: #172830;
+    color: var(--ink);
+  }
+  &
+    :is(
+      .light,
+      .image-label,
+      .icon-button,
+      .gallery-stage > .icon-button,
+      .tags span,
+      .menu-button,
+      .skip-link
+    ) {
+    background: #29404c;
+    color: #dfeef6;
+  }
+  & :is(.primary, .identity-band) {
+    background: #165d84;
+    color: #fff;
+  }
+  & .primary:hover {
+    background: #2273a0;
+  }
+  &
+    :is(
+      .season,
+      .season > span,
+      .season.winter,
+      .season.winter > span,
+      .daily-grid figcaption span
+    ) {
+    color: #c5d9e6;
+  }
+  & .card-body .text-button {
+    color: #9cd5f6;
+  }
+  & .card-signature {
+    background: #263c47;
+    color: #c6e5f7;
+  }
+  & .menu-button span {
+    background: #dceef6;
+  }
+  & .icon-button:hover {
+    background: #355669;
+  }
+}
+/* A tall phone hero cannot crop the meeting photo without losing classmates. */
+@media (max-width: 700px) {
+  html[data-showcase-site='software'] {
+    & .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      height: auto;
+      min-height: 0;
+      background: #173b47;
+    }
+    & .hero-content {
+      order: 1;
+      padding-block: 36px;
+    }
+    & .hero-photo {
+      position: static;
+      order: 2;
+      z-index: auto;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    & .hero-shade {
+      display: none;
+    }
+    & .hero-caption {
+      position: static;
+      order: 3;
+      margin: 0;
+      padding: 12px 20px;
+    }
+  }
+}
+html[data-showcase-site='hardware'][data-platform-theme='dark'] {
+  --ink: #e4efdf;
+  --green: #b2d59d;
+  --paper: #17261f;
+  --muted: #b3c6b4;
+  --line: #3f5546;
+  --lime: #4d652f;
+  &
+    :is(
+      .moments,
+      .weekly-feature,
+      .collaboration,
+      .team-life,
+      .activity-card,
+      .activity-card:nth-child(2),
+      .activity-card:nth-child(3),
+      .quote,
+      .quote:nth-child(3n + 2),
+      .quote:nth-child(3n),
+      .publication-link,
+      .tags span,
+      .header .contact-nav
+    ) {
+    background: #24372b;
+    color: #dce9d7;
+  }
+  &
+    :is(
+      .hero-label,
+      .hero-bottom,
+      .green,
+      .project-note,
+      .mini-label,
+      .film-caption > a,
+      .feature-body > p,
+      .weekly-topics p,
+      .activity-list p,
+      .activity-type,
+      .activity-card p,
+      .quote blockquote,
+      .quote-person small,
+      .publication-index,
+      .quote-card-footer
+    ) {
+    color: #b9cead;
+  }
+  & :is(.discipline-strip, .contact, .platform-feature, .chip) {
+    background: #213f2f;
+    color: #eef4e5;
+  }
+  &
+    :is(
+      .discipline-strip > span:first-child,
+      .strip-code,
+      .chip,
+      .contact h2 > span,
+      .contact-list b,
+      .caption-num,
+      .copy-label
+    ) {
+    color: #d1ec9d;
+  }
+  & .contact-card {
+    color: #e7f0dc;
+  }
+  & .copy-status {
+    background: #2e4935;
+    color: #e7f0dc;
+  }
+  & .publication-link:hover {
+    background: #314c37;
+    color: #e9f5da;
+  }
+  & .recruitment > a {
+    background: #cde9a5;
+    color: #213820;
+  }
+  & .recruitment > a:hover {
+    background: #ddf6bd;
+  }
+  & .primary:hover {
+    color: #17261f;
+  }
+}
+/* Retain the submitted emblem and red/gold palette with a clearer type hierarchy. */
+html[data-showcase-site='organization'] {
+  & body {
+    --home-serif: var(--home-sans);
+    font-family: var(--home-sans);
+  }
+  & .introduction {
+    padding-block: clamp(32px, 4vw, 52px);
+  }
+  & .league-emblem {
+    width: clamp(104px, 11vw, 154px);
+    margin-bottom: 26px;
+  }
+  & h1 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+  }
+  & h1 span:first-child {
+    font-size: clamp(19px, 2.2vw, 28px);
+    font-weight: 500;
+  }
+  & h1 wbr {
+    display: none;
+  }
+  & h1 span:last-child {
+    font-size: clamp(36px, 4.4vw, 62px);
+    font-weight: 700;
+  }
+  & .intro-section {
+    margin-top: 30px;
+  }
+  & .intro-section::before {
+    width: 80px;
+    margin-bottom: 20px;
+  }
+  & .intro-section h2 {
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+  }
+  & .intro-section p {
+    font-size: clamp(22px, 2.7vw, 34px);
+    font-weight: 600;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+  & .contact-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    font-size: 17px;
+  }
+  & .contact-section h2 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  @media (max-width: 700px) {
+    & .contact-section {
+      font-size: 16px;
+    }
+  }
+}
+html[data-showcase-site='research'] {
+  & :is(body, button, input, textarea, select) {
+    font-family: var(
+      --font-ui,
+      'Segoe UI',
+      'PingFang SC',
+      'Microsoft YaHei',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif
+    );
+  }
+  & :is(h1, h2, h3, h4) {
+    font-weight: 600;
+    letter-spacing: normal;
+  }
+  & body {
+    font-size: 17px;
+  }
+  & :is(p, .lead, .practice-intro p, .story-text p) {
+    font-size: 17px;
+    line-height: 1.95;
+  }
+  & .hero h1 {
+    font-size: clamp(42px, 5vw, 70px);
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 0;
+  }
+  & .hero {
+    min-height: 0;
+    padding-block: 48px;
+    gap: clamp(24px, 4vw, 50px);
+    align-items: center;
+  }
+  & .hero-image {
+    align-self: center;
+  }
+  & .hero-image img {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+  & nav {
+    font-size: 15px;
+    gap: 22px;
+  }
+  & :is(.button, .report-actions a, .activity-pushes a) {
+    font-size: 16px;
+  }
+  & .message p:not(.eyebrow) {
+    font-size: 16px;
+    line-height: 1.95;
+  }
+  & .brand small {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  & .reader {
+    max-width: 900px;
+  }
+  @media (max-width: 620px) {
+    & :is(p, .lead, .practice-intro p, .story-text p) {
+      font-size: 16px;
+    }
+    & nav {
+      font-size: 14px;
+      gap: 12px 18px;
+    }
+    & .hero h1 {
+      font-size: clamp(38px, 9vw, 48px);
+    }
+  }
+  & .practice-photos .gallery {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 28px 24px;
+    align-items: start;
+  }
+  & .practice-photos .gallery:has(> .photo:only-child) {
+    max-width: 760px;
+  }
+  & .practice-photos .photo {
+    grid-column: span 2;
+    min-width: 0;
+    margin: 0;
+  }
+  & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+  & .practice-photos .photo:last-child:nth-child(3n + 2) {
+    grid-column: span 3;
+  }
+  & .practice-photos .photo:only-child {
+    grid-column: 1 / -1;
+  }
+  & .practice-photos .zoom {
+    aspect-ratio: 3 / 2;
+    border-radius: 12px;
+    cursor: zoom-in;
+  }
+  & .practice-photos .photo img {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+    object-position: center 50%;
+  }
+  & .practice-photos img[src*='调研组成员在实践中参加淮安大学座谈'] {
+    object-position: center 25%;
+  }
+  & .practice-photos img[src*='队员与科普课家长和学生交流（一）'] {
+    object-position: center 20%;
+  }
+  & .practice-photos img[src*='调研组成员在实践中参观航天展览'] {
+    object-position: center 7%;
+  }
+  & .practice-photos img[src*='乐业金陵活动合影'],
+  & .practice-photos img[src*='硅基智能参访合影'],
+  & .practice-photos img[src*='集成电路科普夏令营合影'] {
+    object-position: center 70%;
+  }
+  & .practice-photos img[src*='调研组成员参与科博科普工作坊志愿服务'] {
+    object-position: center top;
+  }
+  & .practice-photos img[src*='支队破冰会合影'] {
+    object-position: center bottom;
+  }
+  & .practice-photos .zoom:hover img {
+    transform: none;
+  }
+  & .practice-photos figcaption {
+    margin-top: 10px;
+    color: #4a6559;
+    font-size: var(--showcase-caption-size);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 1000px) {
+    & .practice-photos .gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    & .practice-photos .photo,
+    & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+    & .practice-photos .photo:last-child:nth-child(3n + 2) {
+      grid-column: auto;
+    }
+    & .practice-photos .photo:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+  @media (max-width: 620px) {
+    & .practice-photos .gallery {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 26px;
+    }
+    & .practice-photos .photo,
+    & .practice-photos .photo:nth-last-child(2):nth-child(3n + 1),
+    & .practice-photos .photo:last-child:nth-child(3n + 2) {
+      grid-column: auto;
+    }
+  }
+}
+html[data-showcase-site='research'][data-platform-theme='dark'] {
+  & :is(body, header, dialog, .brand-report) {
+    background: #172923;
+    color: #e0eee4;
+  }
+  & :is(.reports, .gallery-section, .contact, .ticker, .image-tag, .report-card.light) {
+    background: #263d2f;
+    color: #e2eedb;
+  }
+  &
+    :is(
+      .lead,
+      .note,
+      .duties p,
+      .report-summary p,
+      figcaption,
+      .message p:not(.eyebrow),
+      .member-role,
+      .activity-subtitle,
+      .practice-intro p,
+      .filters button,
+      .close
+    ) {
+    color: #b9cdbb;
+  }
+  & :is(.hero h1 span, .duties b, .story .section-label) {
+    color: #b7d394;
+  }
+  & .filters button[aria-pressed='true'] {
+    background: #b4d4ab;
+    color: #183426;
+  }
+}
+html[data-showcase-site='creative'][data-platform-theme='dark'] {
+  --paper: #27202b;
+  --ink: #f1c3c5;
+  --line: #68505d;
+  & body:not(.page-home) {
+    background: var(--paper);
+  }
+  & body:not(.page-home)::before {
+    opacity: 0.08;
+  }
+  & .about-page {
+    color: var(--ink);
+  }
+  & :is(.about-copy, .collection-work figcaption) {
+    color: #d9cbd5;
+  }
+  & :is(.about-english, .about-vertical) {
+    background: #f3e8e6;
+    border-radius: 8px;
+  }
+  & .media-center-logo {
+    background: #f3e8e6;
+    border-radius: 12px;
+    padding: 8px;
+  }
+  & :is(.image-viewer, .image-viewer button) {
+    background: #352c39;
+    color: #f1dce8;
+  }
+  & .page-home .cover-nav,
+  & body.page-home .cover-nav {
+    color: #743138;
+  }
+  & .work a {
+    background: #352c39;
+  }
+  & :is(.title-art, .wheel) {
+    background: #fff8cf;
+    border-radius: 12px;
+  }
+}
+html[data-showcase-site='humanities'][data-platform-theme='dark'] {
+  --ink: #eee8dc;
+  --ink-soft: #d0c5b4;
+  --ink-faint: #b3a695;
+  --paper: #242521;
+  --paper-2: #30312b;
+  --paper-3: #3b3b32;
+  --kraft: #4a4235;
+  --line: #615d50;
+  --line-soft: #a69e8c33;
+  --accent: #efb29a;
+  --accent-hi: #ffd0ba;
+  --accent-soft: #d7a589;
+  --accent-wash: #413127;
+  --thu: #d7b4ec;
+  --thu-deep: #ddc4ed;
+  --thu-soft: #372d3f;
+  --red: #efaa95;
+  & body {
+    background-image: none;
+  }
+  & .topbar {
+    background: #292a25f5;
+  }
+  & :is(.node__pic, .tpl-card) {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+  & :is(.node__pic figcaption, .tpl-card > span) {
+    color: var(--ink-soft);
+  }
+  & :is(.history-list button, .acc, .pool, .custom-input, .wm__chips button, .help-item, kbd) {
+    background: #30312b;
+    color: var(--ink);
+  }
+  &
+    :is(
+      .btn--primary,
+      .wm__chips button[aria-pressed='true'],
+      .piece-tools button[aria-pressed='true']
+    ) {
+    background: #8a4936;
+    color: #fff3ea;
+  }
+  & .btn--primary:hover {
+    background: #a45f47;
+    color: #fff3ea;
+  }
+  & :is(.drop:hover, .drop.is-over) {
+    background: #443a49;
+  }
+  & :is(input, textarea, select, dialog) {
+    background: #30312b;
+    color: #eee8dc;
+  }
+  & .grain {
+    opacity: 0.08;
+  }
+}
+/* All four submitted timeline photos are 4:3; show their complete original framing. */
+html[data-showcase-site='humanities'] .node__pic img {
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+}
+/* The photo overlay is a figure; clear its browser margins and reserve caption room. */
+html[data-showcase-site='humanities'] .lightbox {
+  --humanities-lightbox-padding: clamp(12px, 3vw, 32px);
+  margin: 0;
+  padding: var(--humanities-lightbox-padding);
+  overflow: auto;
+}
+html[data-showcase-site='humanities'] .lightbox > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(1200px, 100%);
+  min-width: 0;
+  max-height: 100%;
+}
+html[data-showcase-site='humanities'] .lightbox img {
+  display: block;
+  flex: 0 1 auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: calc(
+    100vh - var(--humanities-lightbox-padding) - var(--humanities-lightbox-padding) - 72px
+  );
+  max-height: calc(
+    100dvh - var(--humanities-lightbox-padding) - var(--humanities-lightbox-padding) - 72px
+  );
+  object-fit: contain;
+}
+html[data-showcase-site='humanities'] .lightbox figcaption {
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] .lightbox__close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #ffffff80;
+  border-radius: 50%;
+  background: #242521e8;
+  color: #fff;
+  font:
+    30px/1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+html[data-showcase-site='humanities'] .lightbox__close:hover {
+  background: #413127;
+}
+html[data-showcase-site='humanities'] .lightbox__close:focus-visible {
+  outline: 3px solid #ffd0ba;
+  outline-offset: 3px;
+}
+/* Let the submitted template chooser shrink within its embedded viewport. */
+html[data-showcase-site='humanities']
+  #modalTemplate
+  :is(.modal__box, .modal__body, .tpl-grid, .tpl-card) {
+  min-width: 0;
+  max-width: 100%;
+}
+html[data-showcase-site='humanities'] #modalTemplate .tpl-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(148px, 100%), 1fr));
+}
+html[data-showcase-site='humanities'] #modalTemplate .tpl-card {
+  overflow-wrap: anywhere;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head .btn {
+  margin-left: 0;
+}
+html[data-showcase-site='humanities'] #modalTemplate .modal__head [data-close] {
+  margin-left: auto;
+}
+html[data-showcase-site='humanities'] #modalTemplate .ctrl-row {
+  flex-wrap: wrap;
+}
+html[data-showcase-site='humanities'] #modalTemplate .ctrl-row input[type='range'] {
+  flex: 1 1 80px;
+  min-width: 0;
+  max-width: 100%;
+}
+html[data-showcase-site='liaison'][data-platform-theme='dark'] {
+  --lc-ink: #ece6f5;
+  --lc-muted: #c5bad5;
+  --lc-purple: #ceb4f1;
+  --lc-purple-dark: #e1cdf7;
+  --lc-violet: #b5a3e6;
+  --lc-paper: #211d2c;
+  --lc-lilac: #30283e;
+  --lc-sky: #293441;
+  --lc-border: #665574;
+  &
+    :is(
+      .lc-header,
+      .lc-nav,
+      .lc-about,
+      .lc-work,
+      .lc-work-card,
+      .lc-contact-right,
+      .lc-work-modal-panel,
+      .lc-lightbox-panel,
+      .lc-photo-frame,
+      .lc-orbit-label
+    ) {
+    background: #292333;
+    color: #ece6f5;
+  }
+  & .lc-hero {
+    background:
+      radial-gradient(circle at 77% 26%, #4f3d6c66, transparent 40%),
+      linear-gradient(#211d2c, #2b223a);
+  }
+  &
+    :is(
+      .lc-contact,
+      .lc-filter button,
+      .lc-lightbox-stage img,
+      .lc-work-modal-image,
+      .lc-hero-photo-inner
+    ) {
+    background: #332b42;
+    color: #e5daef;
+  }
+  &
+    :is(
+      .lc-hero-intro,
+      .lc-brand-copy small,
+      .lc-hero-index,
+      .lc-hero-sidecode,
+      .lc-hero-bottom,
+      .lc-section-marker,
+      .lc-about-lead p,
+      .lc-heading-aside,
+      .lc-work-card p,
+      .lc-work-num,
+      .lc-card-bottom,
+      .lc-work-foot,
+      .lc-contact-left p,
+      .lc-contact-card-title,
+      .lc-contact-entry small,
+      .lc-contact-card-bottom,
+      .lc-detail-kicker,
+      .lc-detail-lead,
+      .lc-work-modal-content h3,
+      .lc-work-modal-content li,
+      .lc-detail-note,
+      .lc-lightbox-kicker,
+      .lc-lightbox-stage figcaption,
+      .lc-lightbox-bottom,
+      .lc-photo-head,
+      .lc-benefits li
+    ) {
+    color: #c9bcd9;
+  }
+  &
+    :is(
+      .lc-nav > a:hover,
+      .lc-nav > a.is-current,
+      .lc-marker-number,
+      .lc-work-type,
+      .lc-work-card[data-type='outer'] .lc-work-type,
+      .lc-node-left,
+      .lc-node-right,
+      .lc-pillar-outer
+    ) {
+    background: #3c334d;
+    color: #dfd0f0;
+  }
+  & :is(.lc-button-primary, .lc-filter .lc-filter-active, .lc-band) {
+    background: #674995;
+    color: #fff !important;
+  }
+  & .lc-button-primary:hover {
+    background: #7b5ba9;
+  }
+  & :is(.lc-slide-arrow, .lc-modal-close) {
+    color: #dfc7f8;
+    background: #3a2f49;
+  }
+  & :is(.lc-slide-arrow:hover, .lc-modal-close:hover) {
+    background: #64448e;
+    color: #fff;
+  }
+  & .lc-nav-contact {
+    background: #3a2f49;
+  }
+  & .lc-photo-frame {
+    border-color: #544361;
+  }
+}
+html[data-showcase-site='liaison'] {
+  & .lc-gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  & .lc-gallery-card:nth-child(n) {
+    grid-column: auto !important;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: auto;
+  }
+  & .lc-gallery-card img {
+    flex: 0 0 auto;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  & .lc-gallery-card img[src*='舞会茶歇'] {
+    object-position: center 20%;
+  }
+  & .lc-gallery-card-content {
+    flex: 1 0 auto;
+    align-items: flex-start;
+  }
+  & .lc-work-modal-image {
+    align-self: start;
+    min-height: 0;
+    height: auto;
+  }
+  & .lc-work-modal-image img {
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    object-fit: contain;
+  }
+  & .lc-work-modal-image > span {
+    position: static;
+    display: block;
+    padding: 0 22px;
+    background: none;
+    color: var(--lc-muted);
+  }
+  @media (max-width: 700px) {
+    & .lc-gallery-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+/* Keep the editing-window artwork while giving every photograph its own clear frame. */
+@media (min-width: 961px) {
+  html[data-showcase-site='audiovisual'] .mm-app {
+    /* Longer chapters need continuous scrolling below the fixed editor controls. */
+    & .sequence-scroll {
+      scroll-snap-type: none;
+      scroll-padding-top: calc(var(--stage-top) + 20px);
+      scroll-padding-bottom: calc(var(--stage-bottom) + 20px);
+    }
+    &.workspace-entered .sequence-scroll {
+      clip-path: inset(var(--stage-top) 0 var(--stage-bottom));
+    }
+    & #stories {
+      height: auto;
+      min-height: 100dvh;
+      overflow: visible;
+      align-items: flex-start;
+    }
+    & .stories-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      grid-template-rows: auto auto auto;
+      gap: 24px;
+      align-items: start;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+    }
+    & .story-copy {
+      position: static;
+      grid-column: 1;
+      grid-row: 1;
+      width: auto;
+    }
+    & .stories-grid :is(.story-window, .daily-window, .creation-window) {
+      position: relative;
+      inset: auto;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+      transform: none;
+    }
+    & .story-window {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    & .daily-window {
+      grid-column: 1;
+      grid-row: 3;
+    }
+    & .creation-window {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      align-self: stretch;
+      contain: size;
+    }
+    & :is(.story-window, .daily-window) > .window-body {
+      flex: 0 0 auto;
+    }
+    & .stories-grid :is(.story-photo-stage, .story-slides, .story-image, .story-photo) {
+      height: auto;
+    }
+    & .stories-grid .story-photo img {
+      height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+    }
+    & .stories-grid .daily-image .story-photo img {
+      aspect-ratio: 4 / 3;
+    }
+    & .stories-grid .story-image figcaption {
+      position: static;
+      padding: 10px 12px;
+      background: var(--panel-deep);
+    }
+    & .creation-window > .window-body {
+      min-height: 0;
+      overflow: auto;
+    }
+  }
+}
+@media (max-width: 700px) {
+  html[data-showcase-site='liaison'] .lc-hero h1 em {
+    white-space: pre-line;
+    text-wrap: wrap;
+  }
+}
+/* These two submitted visual worlds already use a dark canvas. Keep media,
+   photographic overlays and editing tools in their original coordinated palette. */
+html[data-showcase-site='sail'],
+html[data-showcase-site='audiovisual'] {
+  color-scheme: dark;
+}

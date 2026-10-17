@@ -1,0 +1,57 @@
+.moderation-data-notice {
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid #a7a4b4;
+  border-radius: 16px;
+  background: #fff;
+  color: #202330;
+  font-size: 16px;
+  font-family: system-ui, 'Microsoft YaHei', sans-serif;
+  line-height: 1.65;
+}
+.moderation-data-notice::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+.moderation-data-notice h2 {
+  font-size: 22px;
+  margin: 0 0 16px;
+}
+.moderation-data-notice a {
+  color: #5434ae;
+  text-decoration: underline;
+}
+.moderation-data-notice label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 20px 0;
+}
+.moderation-data-notice input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+}
+.moderation-data-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.moderation-data-notice button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid #7665a1;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #f2edff;
+  color: #342255;
+  font: inherit;
+}
+.moderation-data-notice button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
