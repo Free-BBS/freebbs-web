@@ -34,17 +34,17 @@ FREE BBS 学习端希望回答的不是“怎样让所有同学完成同一条�
 
 本次定向核查优先采用教育与教育心理期刊的综述、元分析及理论框架，补充生成式 AI 的直接实验和设计型研究方法文献。它不是系统综述，未进行完整数据库检索与质量评级；以下每一项启发都保留从原研究到本平台的推论距离。
 
-| 研究线索 | 对本轮设计的启发 | 不能据此宣称 |
-| --- | --- | --- |
-| 自我调节学习：目标、执行监控、反思相互连接 [1](https://doi.org/10.3389/fpsyg.2017.00422) | 让用户知道当次做什么、在哪里卡住，并能调整下一步 | 每次必须填写目标或反思表 |
-| 动态个性化：学习状态在过程与情境中改变 [2](https://doi.org/10.1007/s10648-020-09570-w) | 起始选择只是默认，具体请求与当前步骤优先 | 一次问卷可以准确分配整学期路线 |
-| 专长反转与支架适配 [3](https://doi.org/10.1016/j.learninstruc.2025.102142) | 初学者容易获得示范，熟悉者容易减少冗余帮助 | 四档自述已经测得专长，或专家不需要帮助 |
-| 检索练习 [4](https://doi.org/10.1007/s10648-021-09595-9) 及间隔研究 [5](https://doi.org/10.1007/s10648-021-09613-w) | 复习可以先回忆或尝试，必要时反馈、以后再访 | 所有人都须先答题，或当天做对等于长期保持 |
-| 有指导探究 [6](https://doi.org/10.3102/0034654315627366) 及发现学习 [7](https://doi.org/10.1037/a0021017) | 问题可以先行，但背景、示例和反馈随时可用 | 无帮助地让新手摸索就是良好探索 |
-| 问题解决后讲解的条件性证据 [8](https://doi.org/10.3102/00346543211019105) | 保留先尝试再补解释的入口 | 所有主题、年龄和任务都应先做后读 |
-| 自主支持与动机研究 [9](https://doi.org/10.3102/00346543211042426) | 自由选择与够得着的下一步并存，允许暂停、求助 | 多几个按钮就能因果性提高成绩 |
-| 自评校准 [10](https://doi.org/10.1007/s10648-023-09819-0) 与 AI 辅助的边界 [11](https://doi.org/10.1073/pnas.2422633122) | 区分本人自述、带帮助完成和独立任务表现 | AI 聊得流畅就能诊断掌握或替代正式评价 |
-| 设计型研究 [12](https://doi.org/10.3102/0013189X032001005) | 在真实情境中持续设计、观察、分析、修订 | 任何产品迭代都自动构成严谨研究 |
+| 研究线索                                                                                                                 | 对本轮设计的启发                                 | 不能据此宣称                             |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------- |
+| 自我调节学习：目标、执行监控、反思相互连接 [1](https://doi.org/10.3389/fpsyg.2017.00422)                                 | 让用户知道当次做什么、在哪里卡住，并能调整下一步 | 每次必须填写目标或反思表                 |
+| 动态个性化：学习状态在过程与情境中改变 [2](https://doi.org/10.1007/s10648-020-09570-w)                                   | 起始选择只是默认，具体请求与当前步骤优先         | 一次问卷可以准确分配整学期路线           |
+| 专长反转与支架适配 [3](https://doi.org/10.1016/j.learninstruc.2025.102142)                                               | 初学者容易获得示范，熟悉者容易减少冗余帮助       | 四档自述已经测得专长，或专家不需要帮助   |
+| 检索练习 [4](https://doi.org/10.1007/s10648-021-09595-9) 及间隔研究 [5](https://doi.org/10.1007/s10648-021-09613-w)      | 复习可以先回忆或尝试，必要时反馈、以后再访       | 所有人都须先答题，或当天做对等于长期保持 |
+| 有指导探究 [6](https://doi.org/10.3102/0034654315627366) 及发现学习 [7](https://doi.org/10.1037/a0021017)                | 问题可以先行，但背景、示例和反馈随时可用         | 无帮助地让新手摸索就是良好探索           |
+| 问题解决后讲解的条件性证据 [8](https://doi.org/10.3102/00346543211019105)                                                | 保留先尝试再补解释的入口                         | 所有主题、年龄和任务都应先做后读         |
+| 自主支持与动机研究 [9](https://doi.org/10.3102/00346543211042426)                                                        | 自由选择与够得着的下一步并存，允许暂停、求助     | 多几个按钮就能因果性提高成绩             |
+| 自评校准 [10](https://doi.org/10.1007/s10648-023-09819-0) 与 AI 辅助的边界 [11](https://doi.org/10.1073/pnas.2422633122) | 区分本人自述、带帮助完成和独立任务表现           | AI 聊得流畅就能诊断掌握或替代正式评价    |
+| 设计型研究 [12](https://doi.org/10.3102/0013189X032001005)                                                               | 在真实情境中持续设计、观察、分析、修订           | 任何产品迭代都自动构成严谨研究           |
 
 这些线索共同支持的是“按需调整活动与帮助”，并不共同证明 16 类存在。尤其要避免把不同研究的总体结果拼接成对整个平台的背书。理论提供可讨论的机制，实际使用帮助发现机制在哪里没有成立。
 
@@ -88,12 +88,12 @@ Max 应当担任辅助老师。当前目的与自述程度帮助确定初始讲�
 
 可用性、过程支持和学习结果应分别研究。找入口更快、少一次来回跳转，是可用性改善；能够说明自己卡在哪里、按需求助，是过程线索；延迟后的独立解释、未暴露任务表现或新情境应用，才更接近保持与迁移。三者都有价值，但不能相互代替。
 
-| 角色 | 适合优先回答的问题 | 可以共同提供的材料 |
-| --- | --- | --- |
-| 同学与实际使用者 | 这次到底想做什么，哪一步多余，哪里缺帮助 | 一个真实任务、原本预期、实际做法、具体卡点或反例 |
-| 课程部 | 哪些概念、前置、示例、题目与解析需要更新 | 内容版本、任务目标、典型误解、提示、解析和评价依据 |
-| 战略部 | 平台范式是否支持自主学习、求助、接续与知识发展，哪些人仍被阻挡 | 跨场景访谈、适当聚合的使用过程、体验与学习结果之间的对应分析 |
-| 技术部 | 推荐、资源定位、身份隔离、上下文和界面是否可靠 | 可复现情境、版本、异常、可访问性与兼容性测试证据 |
+| 角色             | 适合优先回答的问题                                             | 可以共同提供的材料                                           |
+| ---------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
+| 同学与实际使用者 | 这次到底想做什么，哪一步多余，哪里缺帮助                       | 一个真实任务、原本预期、实际做法、具体卡点或反例             |
+| 课程部           | 哪些概念、前置、示例、题目与解析需要更新                       | 内容版本、任务目标、典型误解、提示、解析和评价依据           |
+| 战略部           | 平台范式是否支持自主学习、求助、接续与知识发展，哪些人仍被阻挡 | 跨场景访谈、适当聚合的使用过程、体验与学习结果之间的对应分析 |
+| 技术部           | 推荐、资源定位、身份隔离、上下文和界面是否可靠                 | 可复现情境、版本、异常、可访问性与兼容性测试证据             |
 
 建议从真实需求出发邀请参与者，不要求凑齐每格人数，也不只邀请愿意沿路线走的人。可以请参与者做一次原本就想做的任务，事后简短回答“解决了吗、哪步不需要、下一步希望什么”；对自愿参加进一步研究的人，再了解后续保持或应用。没有完成推荐链、选择暂停或拒绝访谈，都不应被编码成学习失败。
 
@@ -115,15 +115,15 @@ Max 应当担任辅助老师。当前目的与自述程度帮助确定初始讲�
 
 以下 DOI 均用于追溯原研究；正文为概括和设计推论，没有把原研究效应量当作本平台承诺。核查日期：2026 年 10 月 17 日。“全文相关部分”表示核查本论证涉及章节，不声称完成逐字通读或独立复算。
 
-1. Panadero, E. (2017). A Review of Self-regulated Learning: Six Models and Four Directions for Research. *Frontiers in Psychology, 8*, 422. [DOI / 开放全文](https://doi.org/10.3389/fpsyg.2017.00422)。核查模型、循环阶段与讨论相关部分；理论整合，不是对本平台界面的验证。
-2. Tetzlaff, L., Schmiedek, F., & Brod, G. (2021). Developing Personalized Education: A Dynamic Framework. *Educational Psychology Review, 33*, 863–882. [DOI / 开放全文](https://doi.org/10.1007/s10648-020-09570-w)。卷期年份为 2021，2020 年 10 月 29 日在线发表；核查动态框架、教学调整与局限相关部分。
-3. Tetzlaff, L., Simonsmeier, B., Peters, T., & Brod, G. (2025). A cornerstone of adaptivity – A meta-analysis of the expertise reversal effect. *Learning and Instruction, 98*, 102142. [DOI / 出版社](https://doi.org/10.1016/j.learninstruc.2025.102142)；[正式存档](https://www.pedocs.de/frontdoor.php?source_opus=34113)。核查出版社索引摘要及存档可检索片段；直接 PDF 当次访问失败，未声称通读全文。
-4. Agarwal, P. K., Nunes, L. D., & Blunt, J. R. (2021). Retrieval Practice Consistently Benefits Student Learning: a Systematic Review of Applied Research in Schools and Classrooms. *Educational Psychology Review, 33*, 1409–1453. [DOI / 出版社摘要](https://doi.org/10.1007/s10648-021-09595-9)。摘要核查；明确注意课堂与文化样本边界。
-5. Chen, O., Paas, F., & Sweller, J. (2021). Spacing and Interleaving Effects Require Distinct Theoretical Bases: a Systematic Review Testing the Cognitive Load and Discriminative-Contrast Hypotheses. *Educational Psychology Review, 33*, 1499–1522. [DOI / 开放全文](https://doi.org/10.1007/s10648-021-09613-w)。核查定义、筛选与理论解释；机制解释不是统一复习日程。
-6. Lazonder, A. W., & Harmsen, R. (2016). Meta-Analysis of Inquiry-Based Learning: Effects of Guidance. *Review of Educational Research, 86*(3), 681–718. [DOI / 出版社摘要](https://doi.org/10.3102/0034654315627366)。本次核查摘要，未将订阅全文称为已读取。
-7. Alfieri, L., Brooks, P. J., Aldrich, N. J., & Tenenbaum, H. R. (2011). Does Discovery-Based Instruction Enhance Learning? *Journal of Educational Psychology, 103*(1), 1–18. [DOI](https://doi.org/10.1037/a0021017)；[作者机构记录与摘要](https://openresearch.surrey.ac.uk/esploro/outputs/journalArticle/Does-Discovery-Based-Instruction-Enhance-Learning/99515521902346)。摘要核查；区分无帮助与有支持的发现学习。
-8. Sinha, T., & Kapur, M. (2021). When Problem Solving Followed by Instruction Works: Evidence for Productive Failure. *Review of Educational Research, 91*(5), 761–798. [DOI / 开放全文](https://doi.org/10.3102/00346543211019105)。核查摘要、教学条件及局限；不能推出所有任务都应先做后读。
-9. Bureau, J. S., Howard, J. L., Chong, J. X. Y., & Guay, F. (2022). Pathways to Student Motivation: A Meta-Analysis of Antecedents of Autonomous and Controlled Motivations. *Review of Educational Research, 92*(1), 46–72. [DOI / 开放全文](https://doi.org/10.3102/00346543211042426)。卷期年份为 2022，2021 年 9 月 11 日在线发表；核查摘要与局限，作者明确说明相关性限制因果解释。
-10. León, S. P., Panadero, E., & García-Martínez, I. (2023). How Accurate Are Our Students? A Meta-analytic Systematic Review on Self-assessment Scoring Accuracy. *Educational Psychology Review, 35*, 106. [DOI / 出版社摘要](https://doi.org/10.1007/s10648-023-09819-0)。摘要核查；作品自评分数准确性不等于一次熟悉度选择的效度。
-11. Bastani, H., Bastani, O., Sungu, A., Ge, H., Kabakcı, Ö., & Mariman, R. (2025). Generative AI without guardrails can harm learning: Evidence from high school mathematics. *PNAS, 122*(26), e2422633122. [DOI / 当前发表页面](https://doi.org/10.1073/pnas.2422633122)。2025 年 6 月 25 日在线发表；核查摘要、研究情境与相关结果部分。另核查 [2025 年 8 月 20 日在线更正](https://doi.org/10.1073/pnas.2518204122)：更正 Osbert Bastani 的作者单位，并非本文所引用核心结论的修订。本稿不使用未经核对的细分数值，也不把高中数学试验直接外推到本科平台。
-12. The Design-Based Research Collective. (2003). Design-Based Research: An Emerging Paradigm for Educational Inquiry. *Educational Researcher, 32*(1), 5–8. [DOI](https://doi.org/10.3102/0013189X032001005)；[研究团队全文](https://designbasedresearch.org/reppubs/DBRC2003.pdf)。核查四页方法论文章；强调真实情境、连续迭代和过程与结果的连接。
+1. Panadero, E. (2017). A Review of Self-regulated Learning: Six Models and Four Directions for Research. _Frontiers in Psychology, 8_, 422. [DOI / 开放全文](https://doi.org/10.3389/fpsyg.2017.00422)。核查模型、循环阶段与讨论相关部分；理论整合，不是对本平台界面的验证。
+2. Tetzlaff, L., Schmiedek, F., & Brod, G. (2021). Developing Personalized Education: A Dynamic Framework. _Educational Psychology Review, 33_, 863–882. [DOI / 开放全文](https://doi.org/10.1007/s10648-020-09570-w)。卷期年份为 2021，2020 年 10 月 29 日在线发表；核查动态框架、教学调整与局限相关部分。
+3. Tetzlaff, L., Simonsmeier, B., Peters, T., & Brod, G. (2025). A cornerstone of adaptivity – A meta-analysis of the expertise reversal effect. _Learning and Instruction, 98_, 102142. [DOI / 出版社](https://doi.org/10.1016/j.learninstruc.2025.102142)；[正式存档](https://www.pedocs.de/frontdoor.php?source_opus=34113)。核查出版社索引摘要及存档可检索片段；直接 PDF 当次访问失败，未声称通读全文。
+4. Agarwal, P. K., Nunes, L. D., & Blunt, J. R. (2021). Retrieval Practice Consistently Benefits Student Learning: a Systematic Review of Applied Research in Schools and Classrooms. _Educational Psychology Review, 33_, 1409–1453. [DOI / 出版社摘要](https://doi.org/10.1007/s10648-021-09595-9)。摘要核查；明确注意课堂与文化样本边界。
+5. Chen, O., Paas, F., & Sweller, J. (2021). Spacing and Interleaving Effects Require Distinct Theoretical Bases: a Systematic Review Testing the Cognitive Load and Discriminative-Contrast Hypotheses. _Educational Psychology Review, 33_, 1499–1522. [DOI / 开放全文](https://doi.org/10.1007/s10648-021-09613-w)。核查定义、筛选与理论解释；机制解释不是统一复习日程。
+6. Lazonder, A. W., & Harmsen, R. (2016). Meta-Analysis of Inquiry-Based Learning: Effects of Guidance. _Review of Educational Research, 86_(3), 681–718. [DOI / 出版社摘要](https://doi.org/10.3102/0034654315627366)。本次核查摘要，未将订阅全文称为已读取。
+7. Alfieri, L., Brooks, P. J., Aldrich, N. J., & Tenenbaum, H. R. (2011). Does Discovery-Based Instruction Enhance Learning? _Journal of Educational Psychology, 103_(1), 1–18. [DOI](https://doi.org/10.1037/a0021017)；[作者机构记录与摘要](https://openresearch.surrey.ac.uk/esploro/outputs/journalArticle/Does-Discovery-Based-Instruction-Enhance-Learning/99515521902346)。摘要核查；区分无帮助与有支持的发现学习。
+8. Sinha, T., & Kapur, M. (2021). When Problem Solving Followed by Instruction Works: Evidence for Productive Failure. _Review of Educational Research, 91_(5), 761–798. [DOI / 开放全文](https://doi.org/10.3102/00346543211019105)。核查摘要、教学条件及局限；不能推出所有任务都应先做后读。
+9. Bureau, J. S., Howard, J. L., Chong, J. X. Y., & Guay, F. (2022). Pathways to Student Motivation: A Meta-Analysis of Antecedents of Autonomous and Controlled Motivations. _Review of Educational Research, 92_(1), 46–72. [DOI / 开放全文](https://doi.org/10.3102/00346543211042426)。卷期年份为 2022，2021 年 9 月 11 日在线发表；核查摘要与局限，作者明确说明相关性限制因果解释。
+10. León, S. P., Panadero, E., & García-Martínez, I. (2023). How Accurate Are Our Students? A Meta-analytic Systematic Review on Self-assessment Scoring Accuracy. _Educational Psychology Review, 35_, 106. [DOI / 出版社摘要](https://doi.org/10.1007/s10648-023-09819-0)。摘要核查；作品自评分数准确性不等于一次熟悉度选择的效度。
+11. Bastani, H., Bastani, O., Sungu, A., Ge, H., Kabakcı, Ö., & Mariman, R. (2025). Generative AI without guardrails can harm learning: Evidence from high school mathematics. _PNAS, 122_(26), e2422633122. [DOI / 当前发表页面](https://doi.org/10.1073/pnas.2422633122)。2025 年 6 月 25 日在线发表；核查摘要、研究情境与相关结果部分。另核查 [2025 年 8 月 20 日在线更正](https://doi.org/10.1073/pnas.2518204122)：更正 Osbert Bastani 的作者单位，并非本文所引用核心结论的修订。本稿不使用未经核对的细分数值，也不把高中数学试验直接外推到本科平台。
+12. The Design-Based Research Collective. (2003). Design-Based Research: An Emerging Paradigm for Educational Inquiry. _Educational Researcher, 32_(1), 5–8. [DOI](https://doi.org/10.3102/0013189X032001005)；[研究团队全文](https://designbasedresearch.org/reppubs/DBRC2003.pdf)。核查四页方法论文章；强调真实情境、连续迭代和过程与结果的连接。

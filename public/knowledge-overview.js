@@ -258,6 +258,17 @@
       if (dialog.open) return;
       const dismiss = onDismiss;
       onDismiss = null;
+      // Native close releases modality before its queued event runs. A learner
+      // may already have focused another point or input; that newer action owns
+      // focus and must not be replaced by an old trigger or reopened catalog.
+      const active = document.activeElement;
+      if (
+        active?.isConnected &&
+        active !== document.body &&
+        active !== returnFocus &&
+        !dialog.contains(active)
+      )
+        return;
       if (dismiss) {
         try {
           if (dismiss() !== false) return;

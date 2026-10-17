@@ -877,15 +877,25 @@ async function authorScenario(page, result, preview, localBase, scene) {
   await page.waitForFunction(
     () => window.FreeBbsLearningAssessment?.getSnapshot()?.questions.length === 4,
   );
-  await pointerWorks(page, page.locator('.learning-start-adjust'));
-  await page
-    .locator('.learning-start-dialog[open] [data-learning-start-choice="level"]')
-    .selectOption('familiar');
-  await page
-    .locator('.learning-start-dialog[open] [data-learning-start-choice="goal"]')
-    .selectOption('practice');
-  await page.locator('.learning-start-dialog[open] .learning-start-apply').click();
-  await page.locator('.learning-start-dialog[open]').waitFor({ state: 'hidden' });
+  // A first visit already exposes the inline editor; only a saved/deferred
+  // preference has an Adjust control. No mandatory learning-start dialog exists.
+  await page.waitForFunction(() =>
+    Boolean(document.querySelector('.learning-start-editor, .learning-start-summary')),
+  );
+  if (!(await page.locator('.learning-start-editor').isVisible()))
+    await pointerWorks(page, page.getByRole('button', { name: '调整学习方式', exact: true }));
+  const learningStart = page.locator('.learning-start-editor');
+  await learningStart.waitFor({ state: 'visible' });
+  const goal = learningStart.locator('input[name="learning-start-goal"][value="practice"]');
+  await pointerWorks(page, goal.locator('..'));
+  assert.equal(await goal.isChecked(), true);
+  await learningStart.locator('select[name="level"]').selectOption('familiar');
+  await pointerWorks(
+    page,
+    learningStart.getByRole('button', { name: '按这个方式学习', exact: true }),
+  );
+  await learningStart.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.learning-start-dialog[open]').count(), 0);
   await pointerWorks(page, page.locator('[data-knowledge-tag="important"]'));
   await page.waitForTimeout(100);
   const beforeGuide = await stableLearningState(page);

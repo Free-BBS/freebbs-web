@@ -171,6 +171,10 @@ function overviewHarness({ nativeDialog = true } = {}) {
       this.valueHtml = '';
     }
 
+    contains(node) {
+      return this === node || this.children.some((child) => child.contains(node));
+    }
+
     get childElementCount() {
       return this.children.length;
     }
@@ -211,6 +215,7 @@ function overviewHarness({ nativeDialog = true } = {}) {
 
     showModal() {
       this.open = true;
+      document.activeElement = this;
     }
 
     close() {
@@ -480,6 +485,76 @@ test('a deferred dialog close cannot steal the keyboard focus handed to the rela
   dialog.fire('close');
   assert.equal(h.document.activeElement, destination);
   assert.equal(trigger.focusCount, 0);
+});
+
+test('a delayed close respects a new outside focus and discards its old catalog dismissal', async () => {
+  for (const withCatalog of [false, true]) {
+    const h = overviewHarness();
+    const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+    const dialog = h.document.body.children[0];
+    const trigger = h.document.createElement('button');
+    const destination = h.document.createElement('input');
+    let dismissals = 0;
+    const opening = drawer.open(
+      { id: 'SS-01-01', title: '卷积' },
+      {},
+      trigger,
+      null,
+      withCatalog
+        ? {
+            onDismiss() {
+              dismissals += 1;
+              return true;
+            },
+          }
+        : undefined,
+    );
+    h.requests[0].resolve({ node: { id: 'SS-01-01', title: '卷积', sections: {} } });
+    await opening;
+    // Native close removes modality before it dispatches the queued close event.
+    dialog.close = () => {
+      dialog.open = false;
+    };
+    dialog.close();
+    destination.focus();
+    dialog.fire('close');
+    assert.equal(h.document.activeElement, destination);
+    assert.equal(trigger.focusCount, 0);
+    assert.equal(dismissals, 0, 'An old catalog must not reopen after a deliberate new action');
+
+    h.document.activeElement = h.document.body;
+    dialog.fire('close');
+    assert.equal(dismissals, 0, 'The skipped dismissal is discarded, not deferred');
+  }
+});
+
+test('an old queued close cannot clear the dismissal owned by a newer open overview', async () => {
+  const h = overviewHarness();
+  const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+  const dialog = h.document.body.children[0];
+  const trigger = h.document.createElement('button');
+  const first = drawer.open({ id: 'SS-01-01', title: '旧点' }, {}, trigger);
+  h.requests[0].resolve({ node: { id: 'SS-01-01', title: '旧点', sections: {} } });
+  await first;
+  dialog.close = () => {
+    dialog.open = false;
+  };
+  dialog.close();
+  let dismissals = 0;
+  const latest = drawer.open({ id: 'SS-02-01', title: '新点' }, {}, trigger, null, {
+    onDismiss() {
+      dismissals += 1;
+      return true;
+    },
+  });
+  h.requests[1].resolve({ node: { id: 'SS-02-01', title: '新点', sections: {} } });
+  await latest;
+  dialog.fire('close');
+  assert.equal(dialog.open, true);
+  assert.equal(dismissals, 0);
+  dialog.close();
+  dialog.fire('close');
+  assert.equal(dismissals, 1, 'Only the newer overview owns its normal dismissal');
 });
 
 test('overview style keeps short-screen scrolling, long text and themed explicit actions', () => {

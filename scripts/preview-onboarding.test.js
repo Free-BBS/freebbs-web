@@ -4,11 +4,13 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const http = require('node:http');
 const express = require('express');
 const sharp = require('sharp');
 const { createBoneSales, createBoneSalesRouter } = require('../backend/economy-sales');
 const { createOnboardingPreview, courseFixture } = require('./preview-onboarding');
 const { TOKEN } = require('./preview-economy');
+const { listenAllowedLoopback } = require('./fixtures/allowed-loopback');
 const {
   GUIDE_VERSION,
   LEGACY_GUIDE_VERSIONS,
@@ -23,11 +25,149 @@ const {
   RELEASE_STEP_IDS,
 } = require('../public/max-guide-stations');
 
+test('preview privacy reads current public policy and a verified synthetic status without consent writes', async (t) => {
+  const { server, store } = createOnboardingPreview();
+  await listenAllowedLoopback(server);
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const policy = require('../public/privacy-policy.json');
+  const before = structuredClone(store.account());
+  const authorization = { Authorization: `Bearer ${TOKEN}` };
+  const publicResponse = await fetch(`${origin}/api/privacy-policy`);
+  assert.equal(publicResponse.status, 200);
+  assert.match(publicResponse.headers.get('cache-control'), /no-store/);
+  assert.deepEqual(await publicResponse.json(), policy);
+  const head = await fetch(`${origin}/api/privacy-policy`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  for (let count = 0; count < 2; count += 1) {
+    const response = await fetch(`${origin}/api/privacy-policy/status`, { headers: authorization });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    const status = await response.json();
+    assert.equal(status.version, policy.version);
+    assert.equal(status.contentHash, policy.contentHash);
+    assert.equal(status.accepted, true);
+    assert.equal(status.requiresFullPolicy, false);
+    assert.equal(status.acceptedAt, null, 'there is no fabricated human acceptance timestamp');
+    assert.equal(status.previewOnly, true);
+    assert.equal(status.simulatedAcceptance, true);
+    assert.match(status.message, /不代表真实用户/);
+  }
+  for (const headers of [{}, { Authorization: 'Bearer invalid-preview-account' }]) {
+    assert.equal((await fetch(`${origin}/api/privacy-policy/status`, { headers })).status, 403);
+    assert.equal(
+      (await fetch(`${origin}/api/privacy-policy/accept`, { method: 'POST', headers })).status,
+      403,
+    );
+  }
+  for (const route of ['/api/privacy-policy', '/api/privacy-policy/status']) {
+    assert.equal(
+      (
+        await fetch(`${origin}${route}`, {
+          headers: { ...authorization, Origin: 'https://www.free-bbs.cn' },
+        })
+      ).status,
+      403,
+    );
+    const hostileHost = await new Promise((resolve, reject) => {
+      http
+        .get(
+          `${origin}${route}`,
+          { headers: { ...authorization, Host: 'untrusted.invalid' } },
+          (res) => {
+            res.resume();
+            res.once('end', () => resolve(res.statusCode));
+          },
+        )
+        .once('error', reject);
+    });
+    assert.equal(hostileHost, 403);
+    assert.equal(
+      (await fetch(`${origin}${route}`, { method: 'POST', headers: authorization })).status,
+      405,
+    );
+  }
+  const rejected = await fetch(`${origin}/api/privacy-policy/accept`, {
+    method: 'POST',
+    headers: { ...authorization, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      privacyAccepted: true,
+      privacyPolicyVersion: policy.version,
+      privacyPolicyHash: policy.contentHash,
+    }),
+  });
+  assert.equal(rejected.status, 405);
+  assert.match((await rejected.json()).message, /不接受或保存真实隐私确认/);
+  assert.deepEqual(
+    store.account(),
+    before,
+    'all policy operations leave local account data unchanged',
+  );
+});
+
+test('the unchanged privacy controller restores synthetic previews without hiding real status failures', async (t) => {
+  for (const fail of [false, true]) {
+    const { server } = createOnboardingPreview({
+      extraApi: fail
+        ? ({ route }) =>
+            route === '/api/privacy-policy/status'
+              ? { status: 503, body: { message: '模拟隐私状态不可用' } }
+              : null
+        : null,
+    });
+    await listenAllowedLoopback(server);
+    t.after(() => {
+      server.closeAllConnections();
+      server.close();
+    });
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const notices = [];
+    const requests = [];
+    let onReady;
+    const document = {
+      readyState: 'loading',
+      addEventListener(name, callback) {
+        assert.equal(name, 'DOMContentLoaded');
+        onReady = callback;
+      },
+      body: { prepend: (notice) => notices.push(notice) },
+      createElement(tag) {
+        assert.ok(['p', 'a'].includes(tag), 'a fixture never opens or accepts a privacy dialog');
+        return { setAttribute() {}, appendChild() {} };
+      },
+    };
+    const window = {
+      location: { origin, pathname: '/world' },
+      localStorage: { getItem: () => TOKEN },
+    };
+    vm.runInNewContext(
+      fs.readFileSync(path.join(__dirname, '../public/privacy-consent.js'), 'utf8'),
+      {
+        document,
+        window,
+        fetch(url, options) {
+          requests.push({ url, method: options?.method || 'GET' });
+          return fetch(url, options);
+        },
+      },
+    );
+    await onReady();
+    assert.deepEqual(requests, [{ url: `${origin}/api/privacy-policy/status`, method: 'GET' }]);
+    assert.equal(notices.length, fail ? 1 : 0);
+    if (fail) {
+      assert.equal(notices[0].className, 'privacy-restore-notice');
+      assert.match(notices[0].textContent, /模拟隐私状态不可用.*重新登录完成确认/);
+    }
+  }
+});
+
 test('onboarding preview uses real empty learning stores across its three course fixtures', async (t) => {
   const { server, learning } = createOnboardingPreview();
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(() => server.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   async function get(route) {
@@ -70,9 +210,7 @@ test('onboarding preview uses real empty learning stores across its three course
 
 test('guide completion and reward cannot manufacture learning evidence or change default recording', async (t) => {
   const { server, learning } = createOnboardingPreview();
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(() => server.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   async function call(route, method = 'GET', body = undefined) {
@@ -105,9 +243,7 @@ test('guide completion and reward cannot manufacture learning evidence or change
 
 test('shared learning preview APIs preserve authentication, same-origin and invalid-context errors', async (t) => {
   const { server } = createOnboardingPreview();
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(() => server.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   assert.equal((await fetch(`${origin}/api/learning-stars/math`)).status, 401);
@@ -153,9 +289,7 @@ test('merged ranch preview saves appearance separately from Poisson wool, assets
       return 0.99;
     },
   });
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(() => {
     server.closeAllConnections();
     server.close();
@@ -214,9 +348,7 @@ test('onboarding preview uses real local pages, account progress and transaction
   const { server, store } = createOnboardingPreview({
     now: () => Date.parse('2026-09-20T10:00:00Z'),
   });
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(async () => {
     server.closeAllConnections();
     await new Promise((resolve) => {
@@ -601,7 +733,10 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   const source = fs.readFileSync(path.join(__dirname, '../public/max-guide-stations.js'), 'utf8');
   const sandbox = { window: {} };
   vm.runInNewContext(source, sandbox);
-  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.STEPS)), STEPS);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.STEPS)),
+    JSON.parse(JSON.stringify(STEPS)),
+  );
   assert.equal(STEPS.length, 17);
   assert.equal(STATIONS.length, 11);
   assert.deepEqual(
@@ -761,7 +896,7 @@ test('the actual inventory client sale URL reaches both production router and lo
       requireAuth: async () => ({ id: 1 }),
     }),
   );
-  const productionRouterServer = app.listen(0, '127.0.0.1');
+  const productionRouterServer = http.createServer(app);
   const servers = [preview.server, productionRouterServer];
   t.after(async () => {
     for (const server of servers) {
@@ -772,12 +907,8 @@ test('the actual inventory client sale URL reaches both production router and lo
     }
   });
   await Promise.all([
-    new Promise((resolve) => {
-      preview.server.listen(0, '127.0.0.1', resolve);
-    }),
-    new Promise((resolve) => {
-      productionRouterServer.once('listening', resolve);
-    }),
+    listenAllowedLoopback(preview.server),
+    listenAllowedLoopback(productionRouterServer),
   ]);
   const requestKey = randomUUID();
   const receipts = [];
@@ -849,9 +980,7 @@ test('rubber rod catalogue preserves permanent ownership, partner classification
 
 test('preview rubber rod purchase uses the real price, one-item limit and idempotent receipt', async (t) => {
   const { server, store } = createOnboardingPreview();
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(async () => {
     server.closeAllConnections();
     await new Promise((resolve) => {
@@ -917,9 +1046,7 @@ test('preview preserves same-day wool and permits a second shear after Beijing m
       return growthDraws % 5 === 0 ? 0.9 : 0.1;
     },
   });
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await listenAllowedLoopback(server);
   t.after(async () => {
     server.closeAllConnections();
     await new Promise((resolve) => {

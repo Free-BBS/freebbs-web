@@ -390,8 +390,8 @@ test('thinking questions open Max drafts only and are removed during session res
       children: [],
       events: {},
       classList: { toggle: () => {} },
-      setAttribute(name, value) {
-        this[name] = value;
+      setAttribute(name, attributeValue) {
+        this[name] = attributeValue;
       },
       replaceChildren() {
         this.children = [];
