@@ -172,6 +172,7 @@ function createOnboardingPreview({
   extraApi: additionalApi = null,
   transformHtml: additionalTransform = null,
   learningFixture = null,
+  learningContextRows = null,
 } = {}) {
   const resolveCourse = (slug) =>
     learningFixture?.course.slug === slug
@@ -547,7 +548,7 @@ function createOnboardingPreview({
   const identity = (request) =>
     request.headers.authorization === `Bearer ${TOKEN}` ? previewUser : null;
   const learning = createLearningPreviewApi({
-    contextRows: learningContexts,
+    contextRows: Array.isArray(learningContextRows) ? learningContextRows : learningContexts,
     previewUsers: [previewUser],
     managers: [],
     identity,

@@ -15,6 +15,7 @@ const LEARNING_GROUPS = [
   'test:learning-research',
   'test:learning-human-contracts',
   'test:learning-companion',
+  'test:learning-policy',
   'test:learning-stars',
   'test:learning-structure',
   'test:course-maps',

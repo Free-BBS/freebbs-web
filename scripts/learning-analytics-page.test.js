@@ -15,6 +15,7 @@ test('visible, focused and recently active time is bounded and monotonic', () =>
   assert.equal(activeDelta(input), 20);
   assert.equal(activeDelta({ ...input, visible: false }), 0);
   assert.equal(activeDelta({ ...input, focused: false }), 0);
+  assert.equal(activeDelta({ ...input, paused: true }), 0);
   assert.equal(activeDelta({ ...input, end: 900 }), 0);
   assert.equal(activeDelta({ ...input, start: 70000, end: 90000 }), 0);
   assert.equal(activeDelta({ ...input, start: 51000, end: 71000 }), 10);
@@ -55,10 +56,10 @@ test('learning choice normalization preserves unknown goals, accepts controlled 
     action: 'learning_start_set',
     level: 'new',
   });
-  for (const goal of ['concepts', 'practice', 'explore'])
+  for (const goal of ['concepts', 'practice', 'review', 'explore'])
     assert.equal(normalizeLearningChoice({ ...choice, goal }).metadata.goal, goal);
   for (const changes of [
-    { goal: 'review' },
+    { goal: 'unrecognized-goal' },
     { level: 'expert' },
     { nodeId: '' },
     { courseSlug: 'private text' },
@@ -140,10 +141,12 @@ function analyticsBrowser(
   const admin = createElement();
   const calls = [];
   const browserListeners = new Map();
+  const documentListeners = new Map();
   let route;
   let clock = 1000;
   let heartbeat;
   let serial = 0;
+  let focused = true;
   const app = {
     userState: { ...initialUser },
     callApi(url, options = {}) {
@@ -181,9 +184,11 @@ function analyticsBrowser(
     getElementById: (id) =>
       id === 'personal-learning-data' ? personal : id === 'admin-learning-data' ? admin : null,
     createElement,
-    addEventListener() {},
+    addEventListener(name, callback) {
+      documentListeners.set(name, [...(documentListeners.get(name) || []), callback]);
+    },
     visibilityState: 'visible',
-    hasFocus: () => true,
+    hasFocus: () => focused,
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../public/learning-analytics.js'), 'utf8'),
@@ -224,9 +229,20 @@ function analyticsBrowser(
       calls.filter((call) => call.method === 'POST' && call.body?.metadata?.action === 'visit'),
     loadKnowledge: () =>
       emitPage('knowledge:loaded', { course: { slug: 'signals' }, node: { id: 'SS-01-01' } }),
-    tick: () => {
-      clock += 20000;
+    tick: (milliseconds = 20000) => {
+      clock += milliseconds;
       heartbeat();
+    },
+    elapse: (milliseconds) => {
+      clock += milliseconds;
+    },
+    interact: (name = 'pointerdown') =>
+      documentListeners.get(name)?.forEach((callback) => callback()),
+    setVisible: (visible) => {
+      document.visibilityState = visible ? 'visible' : 'hidden';
+    },
+    setFocused: (value) => {
+      focused = value;
     },
     flush: () =>
       new Promise((resolve) => {
@@ -234,6 +250,128 @@ function analyticsBrowser(
       }),
   };
 }
+
+test('resuming after a drained idle interval never bills time before the new interaction', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  const total = () =>
+    browser.calls
+      .filter((call) => call.body?.type === 'engagement')
+      .reduce((sum, call) => sum + call.body.deltaSeconds, 0);
+  for (let index = 0; index < 5; index += 1) {
+    browser.tick();
+    await browser.flush();
+  }
+  assert.equal(total(), 60);
+  browser.elapse(15000);
+  browser.interact('scroll');
+  await browser.flush();
+  const before = total();
+  browser.tick(4000);
+  await browser.flush();
+  assert.equal(total() - before, 4, 'The first beat counts only the four active seconds');
+  browser.tick();
+  await browser.flush();
+  assert.equal(total() - before, 24);
+});
+
+test('resuming before the next heartbeat preserves only the valid pre-idle tail, exactly once', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  const values = () =>
+    browser.calls
+      .filter((call) => call.body?.type === 'engagement')
+      .map((call) => call.body.deltaSeconds);
+  browser.tick();
+  await browser.flush();
+  browser.tick();
+  await browser.flush();
+  browser.elapse(25000); // 20 valid seconds before the cutoff, then five idle.
+  browser.interact();
+  await browser.flush();
+  assert.deepEqual(values(), [20, 20, 20]);
+  browser.interact('keydown');
+  await browser.flush();
+  assert.deepEqual(values(), [20, 20, 20], 'Repeated input cannot flush the tail twice');
+  browser.tick(4000);
+  await browser.flush();
+  assert.deepEqual(values(), [20, 20, 20, 4]);
+});
+
+test('ordinary input within the active window does not discard time since the prior heartbeat', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  browser.tick();
+  await browser.flush();
+  browser.elapse(15000);
+  browser.interact('keydown');
+  browser.tick(5000);
+  await browser.flush();
+  assert.deepEqual(
+    browser.calls
+      .filter((call) => call.body?.type === 'engagement')
+      .map((call) => call.body.deltaSeconds),
+    [20, 20],
+  );
+});
+
+for (const condition of ['hidden', 'unfocused', 'paused', 'replaced-owner'])
+  test(`idle recovery cannot flush a pre-idle tail while ${condition}`, async () => {
+    const browser = analyticsBrowser();
+    browser.loadKnowledge();
+    await browser.flush();
+    if (condition === 'hidden') browser.setVisible(false);
+    if (condition === 'unfocused') browser.setFocused(false);
+    if (condition === 'paused') {
+      browser.emitPage('knowledge:tool-change', { tool: 'continue' });
+      browser.emitPage('knowledge:path-pause', { paused: true });
+    }
+    if (condition === 'replaced-owner') browser.app.userState.uid = 'another-member';
+    browser.elapse(65000);
+    browser.interact('scroll');
+    await browser.flush();
+    assert.equal(browser.calls.filter((call) => call.body?.type === 'engagement').length, 0);
+  });
+
+test('pausing a suggested path stops its active-time estimate without saving a grade, and other learning tools remain available', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  browser.emitPage('knowledge:tool-change', { tool: 'continue' });
+  await browser.flush();
+  browser.emitPage('knowledge:path-pause', { paused: true });
+  browser.tick();
+  await browser.flush();
+  const active = () => browser.calls.filter((call) => call.body?.type === 'engagement');
+  assert.equal(active().length, 0);
+  browser.emitPage('knowledge:tool-change', { tool: 'content' });
+  await browser.flush();
+  browser.tick();
+  await browser.flush();
+  assert.equal(active().length, 1);
+  assert.equal(active()[0].body.metadata.tool, 'content');
+  browser.emitPage('knowledge:tool-change', { tool: 'continue' });
+  await browser.flush();
+  browser.tick();
+  await browser.flush();
+  assert.equal(active().length, 1, 'The path remains paused when revisited');
+  browser.emitPage('knowledge:path-pause', { paused: 'false' });
+  browser.tick();
+  await browser.flush();
+  assert.equal(active().length, 1, 'Malformed local events cannot resume the timer');
+  browser.emitPage('knowledge:path-pause', { paused: false });
+  browser.tick();
+  await browser.flush();
+  assert.equal(active().length, 2);
+  assert.equal(active()[1].body.deltaSeconds, 20);
+  assert.equal(
+    browser.calls.some((call) => /assessment|stars|personal-records/.test(call.url)),
+    false,
+  );
+});
 
 test('same-identity wallet/session notifications, manual refresh and BFCache do not manufacture visits', async () => {
   const browser = analyticsBrowser();

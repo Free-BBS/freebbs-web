@@ -417,7 +417,7 @@ test('compact layout keeps two-chapter one-hop graphs in bounded, non-overlappin
   assert.equal(macro.width <= 380, true);
   assert.deepEqual(macro.regions, []);
 });
-test('sparse authored coordinates are reused while collisions fall back to readable deterministic slots', () => {
+test('the reading layout derives safe geometry without rewriting authored coordinates', () => {
   const links = [{ source: 'SS-01-01', target: 'SS-01-02', type: 'related' }];
   const positioned = buildModel(
     [
@@ -427,11 +427,12 @@ test('sparse authored coordinates are reused while collisions fall back to reada
     links,
   );
   const state = reduceState(initialState(), { type: 'focus', id: 'SS-01-01' }, positioned);
+  const original = JSON.stringify(positioned.nodes);
   const boxes = layout(positioned, viewModel(positioned, state)).boxes.filter(
     (box) => box.kind === 'knowledge',
   );
-  assert.equal(boxes[1].x - boxes[0].x, 400);
-  assert.equal(boxes[1].y, boxes[0].y);
+  assert.equal(JSON.stringify(positioned.nodes), original);
+  assert.equal(boxes.length, 2);
   const overlapping = buildModel(
     positioned.nodes.map((node) => ({ ...node, position: { x: 0, y: 0 } })),
     links,
@@ -439,7 +440,20 @@ test('sparse authored coordinates are reused while collisions fall back to reada
   const fallback = layout(overlapping, viewModel(overlapping, state)).boxes.filter(
     (box) => box.kind === 'knowledge',
   );
-  assert.equal(fallback[1].x - fallback[0].x, 234);
+  for (const result of [boxes, fallback]) {
+    const [a, b] = result;
+    assert.ok(
+      a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y,
+      'the reading graph must not overlap cards even when author positions collide',
+    );
+  }
+  assert.deepEqual(
+    overlapping.nodes.map((node) => node.position),
+    [
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+    ],
+  );
 });
 test('invalid transitions, duplicate IDs and mixed-level links do not corrupt published models', () => {
   const input = JSON.stringify({ nodes, edges });
@@ -523,6 +537,7 @@ function readerFixture(inputNodes, inputEdges = [], fixtureOptions = {}) {
       this.listeners = new Map();
       this.className = '';
       this.dataset = {};
+      this.style = { setProperty: () => {} };
       this.value = '';
       this.hidden = false;
       this.disabled = false;
@@ -590,8 +605,18 @@ function readerFixture(inputNodes, inputEdges = [], fixtureOptions = {}) {
     }
 
     focus(options) {
+      let child = this;
+      for (let ancestor = this.parent; ancestor; ancestor = ancestor.parent) {
+        if (ancestor.tag === 'details' && !ancestor.open && ancestor.children[0] !== child) return;
+        child = ancestor;
+      }
       this.focusOptions = options;
       document.activeElement = this;
+    }
+
+    scrollIntoView(options) {
+      this.scrollOptions = options;
+      this.scrollCalls = (this.scrollCalls || 0) + 1;
     }
 
     getBoundingClientRect() {
@@ -613,8 +638,9 @@ function readerFixture(inputNodes, inputEdges = [], fixtureOptions = {}) {
     }
   }
   const document = {
-    createElement: (tag) => new Element(tag),
-    createElementNS: (namespace, tag) => new Element(tag),
+    createElement: (tag) => Object.assign(new Element(tag), { ownerDocument: document }),
+    createElementNS: (namespace, tag) =>
+      Object.assign(new Element(tag), { ownerDocument: document }),
   };
   const container = new Element('main');
   container.ownerDocument = document;
@@ -629,7 +655,15 @@ function readerFixture(inputNodes, inputEdges = [], fixtureOptions = {}) {
     location: {},
     FreeBbsKnowledgeOverview: require('../public/knowledge-overview'),
     FreeBbsLearningContent: learningContent,
+    FreeBbsLearningGraphLayout: require('../public/learning-graph-layout'),
+    FreeBbsCourseLearningRoute: require('../public/course-learning-route'),
+    FreeBbsCourseCatalog: require('../public/course-catalog'),
+    FreeBbsCourseNavigation: require('../public/course-navigation'),
   };
+  if (Object.hasOwn(fixtureOptions, 'graphLayout'))
+    window.FreeBbsLearningGraphLayout = fixtureOptions.graphLayout;
+  if (Object.hasOwn(fixtureOptions, 'catalogView'))
+    window.FreeBbsCourseCatalog = fixtureOptions.catalogView;
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../public/course-structure.js'), 'utf8'),
     { window, URLSearchParams },
@@ -840,7 +874,10 @@ test('resume is a validated ordinary point with explicit read and locate actions
   const link = h
     .byClass('course-structure-resume-actions')
     .children.find((item) => item.tag === 'a');
-  assert.equal(link.href, '/knowledge?course=signals&point=SS-01-0066&view=reading');
+  const linkQuery = new URL(link.href, 'http://localhost').searchParams;
+  assert.equal(linkQuery.get('point'), 'SS-01-0066');
+  assert.equal(linkQuery.get('view'), 'reading');
+  assert.ok(linkQuery.get('returnTo')?.startsWith('/course?course=signals'));
   assert.equal(h.controller.getState().focusedNodeId, '');
   assert.equal(openings, 0);
   h.button('查看位置').click();
@@ -857,8 +894,109 @@ test('resume is a validated ordinary point with explicit read and locate actions
       course: { slug: 'signals' },
       resumeNodeId,
     });
-    assert.equal(fresh.byClass('course-structure-resume'), undefined);
+    assert.equal(fresh.byClass('course-structure-resume').hidden, true);
   }
+});
+
+test('late personal context updates only recent decorations, preserving lookup, route page, DOM and keyboard focus', () => {
+  let catalogCreates = 0;
+  const points = matchingPoints(67);
+  const h = readerFixture([...points, { id: 'SS-01-00', title: '真实章名' }], [], {
+    course: { slug: 'signals', name: '信号与系统' },
+    catalogView: {
+      create: () => {
+        catalogCreates += 1;
+        return { destroy() {} };
+      },
+    },
+  });
+  h.controller.selectChapter('SS-01');
+  const search = h.byLabel('查找课程知识点');
+  search.value = '卷积 practice';
+  search.dispatch('input');
+  h.byClass('course-structure-search-next').click();
+  const picker = h.byClass('course-structure-picker-search');
+  picker.value = '卷积 practice';
+  picker.dispatch('input');
+  h.byClass('course-structure-picker-next').click();
+  h.byClass('course-route-next').click();
+  search.focus();
+  const navigation = { ...h.controller.getNavigationState() };
+  const firstRouteButton = h.byClass('course-route-node');
+  const firstPickerButton = h.point('SS-01-0045');
+  assert.ok(firstPickerButton);
+  const routePage = h.controller.getRouteState().page;
+  const recent = h.byClass('course-structure-resume');
+  assert.equal(recent.hidden, true);
+  h.controller.updatePersonalContext({ resumeNodeId: 'SS-01-0066' });
+  assert.equal(recent.hidden, false);
+  assert.equal(recent.dataset.courseResumeId, 'SS-01-0066');
+  assert.match(recent.textContent, /卷积 practice/);
+  const link = h
+    .byClass('course-structure-resume-actions')
+    .children.find((item) => item.tag === 'a');
+  assert.equal(new URL(link.href, 'http://localhost').searchParams.get('point'), 'SS-01-0066');
+  assert.deepEqual({ ...h.controller.getNavigationState() }, navigation);
+  assert.equal(h.controller.getRouteState().page, routePage);
+  assert.equal(h.byClass('course-route-node'), firstRouteButton);
+  assert.equal(h.point('SS-01-0045'), firstPickerButton);
+  assert.equal(h.activeElement(), search);
+  assert.equal(catalogCreates, 1);
+  for (const resumeNodeId of ['SS-01-00', 'SS-99-01', '<img>', '']) {
+    h.controller.updatePersonalContext({ resumeNodeId });
+    assert.equal(recent.hidden, true);
+    assert.equal(recent.dataset.courseResumeId, undefined);
+    assert.equal(h.controller.getRouteState().page, routePage);
+    assert.equal(h.byClass('course-route-node'), firstRouteButton);
+    assert.equal(h.activeElement(), search);
+  }
+});
+
+test('live recent and own learned markers refresh route badges without replacing its focused point', () => {
+  let learned = false;
+  const h = readerFixture(matchingPoints(12), [], {
+    course: { slug: 'signals' },
+    getNodeTags: (id) => (learned && id === 'SS-01-0001' ? [{ key: 'learned' }] : []),
+  });
+  h.controller.selectChapter('SS-01');
+  const entry = h.byClass('course-route-node');
+  assert.equal(entry.attributes['aria-label'], undefined, 'Native text names include live badges');
+  assert.equal(entry.attributes['aria-describedby'], 'course-learning-route-interaction-hint');
+  entry.focus();
+  h.controller.updatePersonalContext({ resumeNodeId: 'SS-01-0001' });
+  assert.equal(
+    h.controller.getRouteState().steps.find((step) => step.id === 'SS-01-0001').resume,
+    true,
+  );
+  assert.equal(h.byClass('course-route-status').textContent, '上次看到');
+  assert.match(entry.textContent, /上次看到/);
+  learned = true;
+  h.controller.updatePersonalContext({ resumeNodeId: 'SS-01-0002' });
+  assert.equal(h.byClass('course-route-status').textContent, '已标记学习');
+  assert.match(entry.textContent, /已标记学习/);
+  assert.equal(h.byClass('course-route-node'), entry);
+  assert.equal(h.activeElement(), entry);
+  learned = false;
+  h.controller.updatePersonalContext({ resumeNodeId: '' });
+  assert.equal(h.byClass('course-route-status'), undefined);
+  assert.doesNotMatch(entry.textContent, /上次看到|已标记学习/);
+  assert.equal(h.activeElement(), entry);
+});
+
+test('visible branch and current-location facts remain in the native route button name', () => {
+  const points = matchingPoints(3);
+  const h = readerFixture(points, [
+    { source: points[0].id, target: points[1].id, type: 'ordered' },
+    { source: points[0].id, target: points[2].id, type: 'ordered' },
+  ]);
+  const entry = h.byClass('course-route-node');
+  assert.equal(entry.attributes['aria-label'], undefined);
+  assert.match(entry.textContent, /含分支联系/);
+  h.controller.focusNode(points[0].id);
+  const current = h.byClass('course-route-node');
+  assert.equal(current.attributes['aria-current'], 'location');
+  assert.equal(current.attributes['aria-label'], undefined);
+  assert.match(current.textContent, /正在查看.*含分支联系/);
 });
 
 test('chapter visibility adjusts only its own scroll offset, with no focus or document scrolling', () => {
@@ -990,18 +1128,25 @@ test('relationship text groups only published one-hop edges by actual direction 
 test('directory containment is separate from current-point relations and metadata comes after readable relationship text', () => {
   const h = readerFixture(directionalNodes, directionalEdges);
   const directory = h.byClass('course-structure-sidebar');
-  assert.equal(directory.children[0].className, 'course-structure-chapters');
-  assert.match(directory.children[0].textContent, /真实章名一包含 3 个知识点/);
-  assert.match(directory.children[0].textContent, /真实章名二包含 2 个知识点/);
-  directory.children[0].children.find((item) => item.dataset.courseChapterId === 'EE-01').click();
+  const chapters = h.byClass('course-structure-chapters');
+  assert.equal(chapters.parent, directory);
+  assert.match(chapters.textContent, /真实章名一包含 3 个知识点/);
+  assert.match(chapters.textContent, /真实章名二包含 2 个知识点/);
+  chapters.children.find((item) => item.dataset.courseChapterId === 'EE-01').click();
   assert.equal(h.controller.getState().focusedNodeId, '');
   assert.deepEqual(h.graphIds(), []);
   h.point('EE-01-01').click();
   const content = h.byClass('course-structure-current');
   const detail = h.byClass('course-structure-details');
   assert.equal(content.children[0], detail);
-  assert.equal(content.children[1].tag, 'details');
-  assert.equal(Boolean(content.children[1].open), false);
+  const auxiliaryGraph = h.byClass('course-structure-graph-area');
+  assert.equal(auxiliaryGraph.tag, 'details');
+  assert.equal(
+    auxiliaryGraph.parent,
+    content.parent,
+    'the optional graph uses the full course grid width',
+  );
+  assert.equal(Boolean(auxiliaryGraph.open), false);
   assert.match(detail.textContent, /所属章节：真实章名一 · EE-01-01/);
   assert.match(detail.textContent, /可先了解1 个课程组标记前序/);
   assert.match(detail.textContent, /接着了解1 个课程组标记后序/);
@@ -1048,6 +1193,29 @@ test('chapter entry previews use at most three actual points without a fabricate
     undefined,
     'No unused filter for no relations',
   );
+});
+
+test('chapter lookup opens its closed filter before revealing and focusing it without changing navigation', () => {
+  const h = readerFixture(nodes, edges);
+  h.controller.selectChapter('SS-01');
+  const refine = h.byClass('course-direct-refine');
+  const search = h.byClass('course-structure-picker-search');
+  const entry = h.byClass('course-structure-picker-open');
+  const state = h.controller.getState();
+  const picker = h.controller.getPickerState();
+  assert.equal(Boolean(refine.open), false);
+  entry.focus();
+  search.focus();
+  assert.equal(h.activeElement(), entry, 'A closed details cannot receive input focus');
+
+  entry.click();
+
+  assert.equal(refine.open, true);
+  assert.equal(h.activeElement(), search);
+  assert.equal(search.focusOptions.preventScroll, true);
+  assert.deepEqual({ ...search.scrollOptions }, { block: 'center', behavior: 'instant' });
+  assert.deepEqual(h.controller.getState(), state);
+  assert.deepEqual(h.controller.getPickerState(), picker);
 });
 
 test('relation cards visibly separate published categories and cross-chapter ownership while retaining local navigation', () => {
@@ -1219,6 +1387,236 @@ test('local Back does not steal a stable input focus and native history Back add
   );
 });
 
+test('the initial learning path is visible, bounded, freely selectable and preserves explicit pagination', () => {
+  const h = readerFixture(matchingPoints(55));
+  assert.equal(h.controller.getRouteState().steps.length, 6);
+  assert.equal(h.controller.getRouteState().kind, 'directory');
+  const route = h.byClass('course-learning-route');
+  const direct = h.byClass('course-direct-find');
+  assert.ok(route.parent.children.indexOf(route) < direct.parent.children.indexOf(direct));
+  const next = h.byClass('course-route-next');
+  next.focus();
+  next.click();
+  next.click();
+  assert.equal(h.controller.getRouteState().page, 2);
+  assert.equal(h.activeElement(), next, 'Enter can keep moving forward without bouncing to Back');
+  const first = h.byClass('course-route-stops').children[0].children[0];
+  assert.equal(first.disabled, false);
+  first.click();
+  assert.equal(h.controller.getState().focusedNodeId, matchingPoints(55)[12].id);
+  assert.equal(h.controller.getRouteState().page, 2);
+});
+
+test('route/search/picker clicks open one overview but programmatic return and resume only locate', () => {
+  const opened = [];
+  const points = matchingPoints(55);
+  const h = readerFixture(points, [], {
+    resumeNodeId: points[40].id,
+    onOpenOverview: (node) => opened.push(node.id),
+  });
+  assert.equal(h.controller.getRouteState().page, 6);
+  h.controller.focusNode(points[50].id);
+  assert.equal(h.controller.getRouteState().page, 8);
+  assert.equal(opened.length, 0);
+  h.byClass('course-route-stops').children[0].children[0].click();
+  assert.equal(opened.length, 1);
+  h.point(points[0].id)?.click();
+  assert.equal(opened.at(-1), points[0].id);
+  h.byClass('course-route-locate').click();
+  assert.equal(opened.length, 2, 'locating last position must not reopen the overview');
+  assert.equal(h.controller.getState().focusedNodeId, points[40].id);
+});
+
+test('return navigation restores direct search, filtering and route page without creating learning progress', () => {
+  const points = matchingPoints(55);
+  const h = readerFixture(points);
+  h.controller.restoreNavigation({
+    focus: points[44].id,
+    chapter: 'SS-01',
+    find: '卷积 practice',
+    findPage: '1',
+    pickerChapter: 'SS-01',
+    pickerQuery: '卷积 practice',
+    pickerPage: '1',
+    routePage: '7',
+  });
+  const restored = h.controller.getNavigationState();
+  assert.equal(restored.focus, points[44].id);
+  assert.equal(restored.find, '卷积 practice');
+  assert.equal(restored.findPage, 1);
+  assert.equal(restored.pickerPage, 1);
+  assert.equal(restored.routePage, 7);
+  assert.equal(h.byClass('course-structure-search-panel').hidden, false);
+  assert.equal(
+    h.controller.getRouteState().steps.some((step) => step.id === points[44].id),
+    true,
+  );
+});
+
+test('a cross-page path branch has a concrete knowledge entry instead of a fabricated next edge', () => {
+  const points = matchingPoints(18);
+  const routeEdges = points
+    .slice(1)
+    .map((node, index) => ({ source: points[index].id, target: node.id, type: 'ordered' }));
+  routeEdges.push({ source: points[0].id, target: points[8].id, type: 'ordered' });
+  const h = readerFixture(points, routeEdges);
+  const exits = h.byClass('course-route-exits');
+  const link = exits.children.find((item) => item.dataset.courseRouteExitId === points[8].id);
+  assert.ok(link);
+  link.click();
+  assert.equal(h.controller.getState().focusedNodeId, points[8].id);
+  assert.equal(h.controller.getRouteState().page, 1);
+});
+
+test('the explicit relationship action reveals its reading region even when the point is already selected', () => {
+  const h = readerFixture(directionalNodes, directionalEdges);
+  h.controller.focusNode('EE-01-01');
+  const region = h.byClass('course-structure-current');
+  const search = h.byLabel('查找课程知识点');
+  search.focus();
+  assert.equal(h.controller.showRelations('EE-01-01'), true);
+  assert.equal(h.activeElement(), region);
+  assert.equal(region.scrollOptions.block, 'start');
+  assert.equal(region.focusOptions.preventScroll, true);
+  const calls = region.scrollCalls;
+  for (const id of ['', 'EE-99-01', 'EE-01-00'])
+    assert.equal(h.controller.showRelations(id), false);
+  assert.equal(region.scrollCalls, calls);
+  assert.equal(h.controller.getState().focusedNodeId, 'EE-01-01');
+});
+
+test('a missing or failing optional graph never blocks the learning route or direct lookup', () => {
+  const points = matchingPoints(18);
+  for (const graphLayout of [
+    undefined,
+    {
+      ...require('../public/learning-graph-layout'),
+      layout() {
+        throw new Error('Optional layout is unavailable');
+      },
+    },
+  ]) {
+    const h = readerFixture(points, [], { graphLayout });
+    assert.ok(h.controller);
+    assert.equal(h.byClass('course-structure-viewer').hidden, true);
+    assert.match(h.byClass('course-structure-graph-status').textContent, /仍可使用学习路线或目录/);
+    assert.equal(h.controller.getRouteState().steps.length, 6);
+    const search = h.byLabel('查找课程知识点');
+    search.value = points[10].id;
+    search.dispatch('input');
+    assert.match(
+      h.byClass('course-structure-search-results').textContent,
+      new RegExp(points[10].id),
+    );
+    h.controller.focusNode(points[10].id);
+    assert.equal(h.controller.getState().focusedNodeId, points[10].id);
+    assert.doesNotMatch(h.byClass('course-structure-status').textContent, /Error|unavailable/);
+  }
+});
+
+test('recent reading links preserve live search and pagination for normal, keyboard and new-tab navigation', () => {
+  const points = matchingPoints(67);
+  const h = readerFixture(points, [], {
+    course: { slug: 'signals' },
+    resumeNodeId: points[50].id,
+  });
+  const link = h
+    .byClass('course-structure-resume-actions')
+    .children.find((item) => item.tag === 'a');
+  const search = h.byLabel('查找课程知识点');
+  search.value = '  卷积 practice  ';
+  search.dispatch('input');
+  h.byClass('course-structure-search-next').click();
+  for (const event of ['focus', 'pointerdown', 'contextmenu', 'click', 'auxclick']) {
+    h.byClass('course-route-next').click();
+    link.dispatch(event);
+    const href = new URL(link.href, 'http://localhost');
+    const context = require('../public/course-navigation').parse(
+      href.searchParams.get('returnTo'),
+      'signals',
+    );
+    assert.equal(href.searchParams.get('point'), points[50].id);
+    assert.equal(context.get('find'), '  卷积 practice  ');
+    assert.equal(context.get('findPage'), '1');
+    assert.equal(context.get('routePage'), String(h.controller.getRouteState().page));
+  }
+});
+
+test('full-width typing and pasted identifiers find the same real content without rewriting the visible query', () => {
+  const mixed = [
+    {
+      id: 'SS-01-01',
+      title: '卷积 Convolution',
+      chapterTitle: '第1章 LTI 系统',
+      aliases: ['ＬＴＩ　分析'],
+    },
+    { id: 'SS-02-01', title: '傅里叶变换', chapterTitle: '第2章 频域分析' },
+  ];
+  const searchModel = buildModel(mixed);
+  for (const query of ['ＳＳ－０１－０１', 'Ｃｏｎｖｏｌｕｔｉｏｎ', 'LTI 分析'])
+    assert.equal(searchNodes(searchModel, query)[0].id, 'SS-01-01');
+  assert.equal(searchChapters(searchModel, '第１章　ＬＴＩ')[0].id, 'SS-01');
+  const h = readerFixture(mixed);
+  const search = h.byLabel('查找课程知识点');
+  search.value = '  ＳＳ－０１－０１  ';
+  search.dispatch('input');
+  assert.match(h.byClass('course-structure-search-results').textContent, /SS-01-01/);
+  assert.equal(search.value, '  ＳＳ－０１－０１  ');
+  const picker = h.byClass('course-structure-picker-search');
+  picker.value = 'Ｃｏｎｖｏｌｕｔｉｏｎ';
+  picker.dispatch('input');
+  assert.ok(h.point('SS-01-01'));
+  assert.equal(h.point('SS-02-01'), undefined);
+  assert.equal(picker.value, 'Ｃｏｎｖｏｌｕｔｉｏｎ');
+});
+
+test('catalog source is restored explicitly without leaking its reopen state into unrelated entries', () => {
+  const points = matchingPoints(55);
+  const catalogState = { chapterId: 'SS-01', query: '  卷积 practice  ', page: 1, open: false };
+  let callbacks;
+  let restored;
+  let catalogOpened;
+  const sources = [];
+  const h = readerFixture(points, [], {
+    catalogView: {
+      create(options) {
+        callbacks = options;
+        return {
+          getState: () => ({ ...catalogState }),
+          open: (openOptions) => {
+            catalogOpened = openOptions;
+            return true;
+          },
+          restoreState: (state, restoreOptions) => {
+            restored = { state, options: restoreOptions };
+          },
+          destroy() {},
+        };
+      },
+    },
+    onOpenOverview: () => sources.push(h.controller.getNavigationState()),
+  });
+  callbacks.onOpenNode(points[44], { ...catalogState, open: true });
+  assert.equal(sources[0].catalogOpen, 1);
+  assert.equal(sources[0].catalogQuery, '  卷积 practice  ');
+  h.point(points[0].id).click();
+  assert.equal(sources[1].catalogOpen, 0);
+  h.controller.restoreNavigation({
+    focus: points[44].id,
+    catalogChapter: 'SS-01',
+    catalogQuery: '  卷积 practice  ',
+    catalogPage: '1',
+    catalogOpen: '1',
+  });
+  assert.deepEqual({ ...restored.state }, { ...catalogState, open: true });
+  assert.equal(restored.options.reopen, true);
+  assert.equal(catalogOpened.focusNodeId, points[44].id);
+  assert.equal(catalogOpened.preserveScroll, true);
+  const before = h.controller.getState();
+  for (const invalid of [null, false, [], 'invalid']) h.controller.restoreNavigation(invalid);
+  assert.deepEqual(h.controller.getState(), before);
+});
+
 test('mobile reader CSS reserves the document focus scrollport above navigation without changing its layer or desktop layout', () => {
   // Source contract only: actual Chromium Tab scrolling and occlusion need the
   // separate native browser check, not this lightweight DOM fixture.
@@ -1237,5 +1635,5 @@ test('mobile reader CSS reserves the document focus scrollport above navigation 
     /scroll-padding-block-end/,
   );
   assert.doesNotMatch(mobile, /z-index\s*:|position\s*:\s*fixed|overflow\s*:\s*hidden/);
-  assert.match(css, /\.course-structure-current\s*\{[^}]*scroll-margin-top:\s*90px;/);
+  assert.match(css, /\.course-structure-current\s*\{[^}]*scroll-margin-top:\s*110px;/);
 });

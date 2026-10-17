@@ -129,6 +129,34 @@ test('one origin serves world, full Max guide, all three courses and long author
   }
 });
 
+test('an isolated public-snapshot composition can supply its real node contexts without inheriting demo assessment content', async (t) => {
+  const preview = await openPreview(t, () =>
+    createCompleteLearningPreview({
+      learningContextRows: [
+        {
+          course_id: 19,
+          slug: 'signals',
+          course_name: '公开快照',
+          node_id: 'SS-04-09',
+          title: '公开知识点',
+          document_markdown: '只有公开正文',
+          knowledge_markdown: '只有公开正文',
+        },
+      ],
+    }),
+  );
+  const context = await preview.call(
+    '/api/learning-companion/sources?course=signals&point=SS-04-09',
+  );
+  assert.equal(context.status, 200);
+  const questions = await preview.call('/api/learning-assessments/signals/SS-04-09/questions');
+  assert.equal(questions.status, 200);
+  assert.deepEqual(questions.data.questions, []);
+  assert.deepEqual(preview.learning.assessmentStore.rows, []);
+  assert.equal((await preview.call('/world')).status, 200);
+  assert.equal((await preview.call('/guide')).status, 200);
+});
+
 test('guide progress, private notes and actual formal/practice attempts share one demo identity without forged completion', async (t) => {
   const preview = await openPreview(t);
   const starsBefore = await preview.call('/api/learning-stars/signals');

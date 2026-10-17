@@ -109,6 +109,8 @@ const COURSE_ORBIT_SLOTS = 6;
 
 const elements = {
   explorer: document.getElementById('world-explorer'),
+  courseDirectory: document.getElementById('world-course-directory'),
+  courseDirectoryList: document.getElementById('world-course-directory-list'),
   orbitShell: document.querySelector('.world-orbit-shell'),
   orbit: document.getElementById('world-orbit'),
   core: document.getElementById('world-core'),
@@ -182,6 +184,40 @@ function normalizeSlot(value) {
 
 function courseHref(course) {
   return `/course?course=${encodeURIComponent(course)}`;
+}
+
+function renderWorldCourseDirectory() {
+  const directory = elements.courseDirectory;
+  const list = elements.courseDirectoryList;
+  if (!directory || !list) return;
+
+  const seen = new Set();
+  const items = [];
+  for (const world of studyWorlds) {
+    if (world.status !== 'active' || !Array.isArray(world.courses)) continue;
+    for (const course of world.courses) {
+      if (
+        !course ||
+        typeof course.slug !== 'string' ||
+        !/^[a-z][a-z0-9-]{0,63}$/.test(course.slug) ||
+        typeof course.name !== 'string' ||
+        !course.name.trim() ||
+        seen.has(course.slug)
+      )
+        continue;
+      seen.add(course.slug);
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.className = 'world-course-directory-link';
+      link.href = courseHref(course.slug);
+      link.textContent = course.name.trim();
+      link.dataset.courseSlug = course.slug;
+      item.append(link);
+      items.push(item);
+    }
+  }
+  list.replaceChildren(...items);
+  directory.hidden = items.length === 0;
 }
 
 function discussionHref(board) {
@@ -704,3 +740,4 @@ document.body.dataset.worldView = 'orbit';
 setWheelRotationActive(false);
 setCourseWheelRotationActive(false);
 updateOrbitState();
+renderWorldCourseDirectory();

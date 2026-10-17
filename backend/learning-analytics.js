@@ -19,7 +19,7 @@ const ACTIONS = [
   'recommendation_choose',
 ];
 const LEVELS = ['new', 'familiar', 'basic', 'advanced'];
-const GOALS = ['concepts', 'practice', 'explore'];
+const GOALS = ['concepts', 'practice', 'review', 'explore'];
 const PATH_TYPES = ['recommended', 'alternative', 'custom'];
 const CHOICE_FIELDS = ['level', 'goal', 'pathType', 'documentVersion'];
 const SCOPE = 'learning_analytics_only';

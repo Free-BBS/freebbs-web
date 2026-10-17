@@ -2525,8 +2525,8 @@ test('archived v3: a confirmed empty activity list is immediately explained, whi
   await view.controller.pause();
 });
 
-test('current and archived course tours prepare the real overview drawer before highlighting knowledge relations', async () => {
-  for (const version of [VERSION, ARCHIVED_VERSION]) {
+test('archived course tour prepares the real overview drawer before highlighting knowledge relations', async () => {
+  for (const version of [ARCHIVED_VERSION]) {
     const index = indexOf('course-relations', version);
     const step = stepsFor(version)[index];
     const next = stepsFor(version)[index + 1];
@@ -2590,6 +2590,63 @@ test('current and archived course tours prepare the real overview drawer before 
     assert.equal(rewardWrites(view).length, 0);
     await view.controller.pause();
   }
+});
+
+test('current course tour introduces route and direct find before preparing only the knowledge overview', async () => {
+  const index = indexOf('course-directory');
+  const directory = stepsFor(VERSION)[index];
+  const find = stepsFor(VERSION)[index + 1];
+  const enter = stepsFor(VERSION)[index + 2];
+  let overview;
+  const clicks = [];
+  const view = fixture({
+    href: '/course?course=math&guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      const route = value.node(directory.target);
+      const direct = value.node(find.target);
+      overview = value.node('#course-knowledge-overview', { tag: 'dialog' });
+      value.selectors.set(directory.prepare[0].whenMissing, () => (overview.open ? [] : [route]));
+      value.selectors.set(find.prepare[0].whenMissing, () => (overview.open ? [] : [direct]));
+      const close = value.node(directory.prepare[0].selector, {
+        tag: 'button',
+        click: () => {
+          clicks.push('close-overview');
+          overview.close();
+        },
+      });
+      overview.append(close);
+      value.selectors.set(directory.prepare[0].selector, () => (overview.open ? [close] : []));
+      const study = value.node(enter.target, { tag: 'a' });
+      study.setAttribute('href', '/knowledge?course=math&point=MA-01-01');
+      value.selectors.set(enter.target, () => (overview.open ? [study] : []));
+      value.node(enter.prepare[0].selector, {
+        tag: 'button',
+        click: () => {
+          clicks.push('open-overview');
+          overview.showModal();
+        },
+      });
+    },
+  });
+  await settle();
+  assert.equal(view.controller.activeStep, index);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, directory.body);
+  assert.deepEqual(clicks, []);
+  view.next.click();
+  await settle();
+  assert.equal(view.controller.activeStep, index + 1);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, find.body);
+  assert.deepEqual(clicks, [], 'No point or search is activated to introduce either path');
+  view.next.click();
+  await settle();
+  assert.equal(view.controller.activeStep, index + 2);
+  assert.equal(view.next.textContent, '进入知识点');
+  assert.deepEqual(clicks, ['open-overview']);
+  assert.equal(overview.open, true);
+  assert.equal(view.retry.hidden, true);
+  assert.equal(rewardWrites(view).length, 0);
+  await view.controller.pause();
 });
 
 test('archived v4: detail-to-composer closes the post reader without opening an editor or publishing', async () => {

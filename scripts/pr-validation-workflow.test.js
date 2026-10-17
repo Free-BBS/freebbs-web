@@ -57,7 +57,18 @@ test('the validation job uses repository Node, Python 3 and the shared complete 
   assert.match(ci, /^npm run test:workbench\s*$/m);
   assert.match(ci, /^npm run test:ui-page-migration\s*$/m);
   assert.match(ci, /^npm run test:learning-human-contracts\s*$/m);
+  assert.match(ci, /^npm run test:learning-policy\s*$/m);
   const commands = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
+  for (const file of [
+    'learning-policy',
+    'learning-policy-companion',
+    'learning-workflow',
+    'learning-workflow-panel',
+    'learning-workflow-workspace',
+    'preview-learning-policy',
+  ]) {
+    assert.ok(commands['test:learning-policy'].includes(`scripts/${file}.test.js`));
+  }
   for (const file of [
     'typography-role-migration',
     'action-page-migration',

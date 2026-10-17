@@ -110,17 +110,35 @@
   border-radius: 16px;
   background: var(--learning-soft);
 }
-.chapter-network svg {
-  width: 100%;
-  max-height: 480px;
+.chapter-network-viewport {
+  max-height: 560px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--learning-line);
+  background: var(--learning-surface);
+}
+.chapter-network-viewport:focus-visible {
+  outline: 3px solid #51aeb7;
+  outline-offset: 3px;
+}
+.chapter-network-viewport svg {
+  display: block;
+  max-width: none;
   color: var(--learning-ink);
 }
-.chapter-network line {
-  stroke: currentColor;
-  stroke-width: 2;
+.chapter-network-connector {
+  fill: none;
+  stroke: #66878b;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.chapter-network-related {
+.chapter-network-edge.is-related .chapter-network-connector {
   stroke-dasharray: 7 5;
+  stroke: #9b83aa;
+}
+.chapter-network-arrow {
+  fill: #66878b;
 }
 .chapter-network rect {
   fill: var(--learning-surface);
@@ -129,10 +147,10 @@
 }
 .chapter-network text {
   fill: var(--learning-ink);
-  font: 16px var(--font-ui);
+  font: 18px var(--font-ui);
 }
 .chapter-network .chapter-network-id {
-  font-size: 12px;
+  font-size: 13px;
 }
 .chapter-network a:focus-visible rect,
 .chapter-network a:hover rect {
@@ -1343,7 +1361,34 @@
 }
 @media (max-width: 620px) {
   .knowledge-page {
-    --knowledge-reading-inset: calc(60px + env(safe-area-inset-top, 0px));
+    --knowledge-reading-inset: calc(72px + env(safe-area-inset-top, 0px));
+  }
+  html:has(body.knowledge-page) {
+    scroll-padding-block-start: calc(72px + env(safe-area-inset-top, 0px));
+  }
+  .knowledge-page .knowledge-return-bar {
+    position: fixed;
+    inset: 0 0 auto;
+    height: calc(72px + env(safe-area-inset-top, 0px));
+    z-index: 276;
+    border-bottom: 1px solid var(--learning-line);
+    background: var(--learning-surface);
+  }
+  .knowledge-page .knowledge-return-bar .course-material-back {
+    min-height: 44px;
+    width: auto;
+    padding-inline: 13px;
+  }
+  .knowledge-page .knowledge-return-bar .course-material-back strong {
+    display: inline;
+    font-size: 0.875rem;
+  }
+  body.has-mobile-header.knowledge-page .knowledge-return-bar {
+    top: calc(112px + env(safe-area-inset-top, 0px));
+    height: 68px;
+  }
+  html:has(body.has-mobile-header.knowledge-page) {
+    scroll-padding-block-start: calc(180px + env(safe-area-inset-top, 0px));
   }
   .knowledge-history {
     top: var(--knowledge-reading-inset);
@@ -1453,6 +1498,8 @@
     border-radius: 16px;
   }
   .knowledge-page .knowledge-workbench .knowledge-chat-max-view {
+    grid-template-rows: max-content max-content minmax(160px, 1fr) repeat(3, max-content);
+    grid-auto-rows: max-content;
     overflow-y: auto;
     overscroll-behavior: contain;
   }

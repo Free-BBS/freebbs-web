@@ -6,7 +6,12 @@
     basic: '能独立做题',
     advanced: '完整掌握',
   };
-  const GOAL_LABELS = { concepts: '理解知识', practice: '练习解题', explore: '探索研究' };
+  const GOAL_LABELS = {
+    concepts: '理解知识',
+    practice: '练习解题',
+    review: '复习知识',
+    explore: '探索研究',
+  };
   const PATH_TYPES = ['recommended', 'alternative', 'custom'];
   function normalizeLearningChoice(value) {
     if (
@@ -51,8 +56,16 @@
     if (value.documentVersion !== undefined) metadata.documentVersion = value.documentVersion;
     return { courseSlug: value.courseSlug, nodeId: value.nodeId, metadata };
   }
-  function activeDelta({ start, end, lastInteraction, visible, focused, idleMs = 60000 }) {
-    if (!visible || !focused || !Number.isFinite(start) || end <= start) return 0;
+  function activeDelta({
+    start,
+    end,
+    lastInteraction,
+    visible,
+    focused,
+    paused = false,
+    idleMs = 60000,
+  }) {
+    if (paused || !visible || !focused || !Number.isFinite(start) || end <= start) return 0;
     return Math.min(30, Math.max(0, Math.min(end, lastInteraction + idleMs) - start) / 1000);
   }
   function canViewOwnProfile(uid, state) {
@@ -80,6 +93,7 @@
     context: null,
     documentVersion: null,
     tool: 'content',
+    planPaused: false,
     busy: false,
   };
   let preferencesRequest = null;
@@ -1194,6 +1208,7 @@
     preferencesRequest = null;
     posting = false;
     if (identityChanged()) {
+      state.planPaused = false;
       sessionUid = String(app.userState?.uid || '');
       sessionToken = app.userState?.token || '';
       sessionId = crypto.randomUUID();
@@ -1210,6 +1225,7 @@
     if (page && state.context) refreshPreferences({ recordVisit });
   }
   page?.addEventListener('knowledge:loaded', (event) => {
+    state.planPaused = false;
     state.context = event.detail;
     state.documentVersion = null;
     state.tool = page.dataset.learningTool || 'content';
@@ -1223,7 +1239,14 @@
   });
   page?.addEventListener('knowledge:tool-change', (event) => {
     state.tool = event.detail.tool;
+    lastTick = performance.now();
     post('navigation', 'tool_open');
+  });
+  page?.addEventListener('knowledge:path-pause', (event) => {
+    if (typeof event.detail?.paused !== 'boolean' || !current()) return;
+    state.planPaused = event.detail.paused;
+    lastTick = performance.now();
+    if (!state.planPaused) lastInteraction = lastTick;
   });
   [
     ['knowledge:path-saved', 'path_save'],
@@ -1243,7 +1266,22 @@
     document.addEventListener(
       name,
       () => {
-        lastInteraction = performance.now();
+        const now = performance.now();
+        if (now > lastInteraction + 60000) {
+          // Retain a valid pre-idle tail once, but never let the next heartbeat
+          // retroactively count idle time before this new interaction.
+          const tail = activeDelta({
+            start: lastTick,
+            end: now,
+            lastInteraction,
+            visible: document.visibilityState === 'visible',
+            focused: document.hasFocus(),
+            paused: state.tool === 'continue' && state.planPaused,
+          });
+          lastTick = now;
+          if (tail >= 1) post('engagement', null, Math.floor(tail));
+        }
+        lastInteraction = now;
       },
       { passive: true },
     );
@@ -1261,6 +1299,7 @@
       lastInteraction,
       visible: document.visibilityState === 'visible',
       focused: document.hasFocus(),
+      paused: state.tool === 'continue' && state.planPaused,
     });
     lastTick = end;
     if (delta >= 1) post('engagement', null, Math.floor(delta));

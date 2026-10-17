@@ -161,6 +161,7 @@ npm run test:learning-analytics
 npm run test:learning-research
 npm run test:learning-human-contracts
 npm run test:learning-companion
+npm run test:learning-policy
 npm run test:learning-stars
 npm run test:learning-structure
 npm run test:course-authoring
