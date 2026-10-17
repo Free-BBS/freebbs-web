@@ -40,7 +40,7 @@
 }
 [data-learning-tool]:not([data-learning-tool='content']):not([data-learning-tool='notes'])
   .course-material-heading
-  h1 {
+  h1#knowledge-title {
   font-size: 1.55rem;
   margin: 0;
 }
@@ -143,6 +143,11 @@
 }
 .knowledge-history-content .discussion-markdown-body {
   font-size: 0.95rem;
+}
+.knowledge-page #knowledge-history[data-learning-origin-state='empty'] {
+  display: none;
+  position: static;
+  top: auto;
 }
 #knowledge-body details {
   margin-block: 16px;
@@ -1204,6 +1209,15 @@
 /* Reading size follows the shared user scale; mathematical and code faces stay independent. */
 .knowledge-page {
   --knowledge-reading-inset: 0px;
+}
+.knowledge-page .course-material-header {
+  padding-bottom: 16px;
+}
+.knowledge-page [data-learning-tool='content'] .course-material-header h1#knowledge-title,
+.knowledge-page [data-learning-tool='notes'] .course-material-header h1#knowledge-title {
+  font-size: clamp(1.75rem, 2.5vw, 2.5rem);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .knowledge-page #knowledge-body {
   font-size: 1.15rem;

@@ -23,10 +23,21 @@ const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
 test('the human-learning release has coherent fresh cache keys on every changed page asset', () => {
   const release = '20261010-human-1';
   const authoringReleases = {
-    'knowledge-overview.js': '20261012-authoring-1',
+    'knowledge-overview.js': '20261014-world-ui-1',
+    'knowledge-overview.css': '20261014-world-ui-1',
+    'knowledge-workspace.css': '20261014-world-ui-1',
+    'knowledge.js': '20261015-human-nav-1',
+    'knowledge-workspace.js': '20261015-human-nav-1',
+    'learning-next-steps.js': '20261015-human-nav-1',
+    'learning-reader.js': '20261015-human-nav-1',
+    'learning-outline.js': '20261015-human-nav-1',
+    'learning-outline.css': '20261015-human-nav-1',
+    'course-reader.css': '20261014-world-ui-1',
+    'course-directory.js': '20261014-world-ui-1',
     'learning-content.js': '20261012-chapter-names-1',
-    'course-structure.js': '20261012-chapter-names-1',
-    'course-map.js': '20261012-chapter-names-1',
+    'course-structure.js': '20261015-human-nav-1',
+    'course-structure.css': '20261015-human-nav-1',
+    'course-map.js': '20261015-human-nav-1',
     'course-upload.js': '20261012-authoring-1',
   };
   const humanAssets = new Set([
@@ -50,6 +61,7 @@ test('the human-learning release has coherent fresh cache keys on every changed 
   const assets = {
     'public/knowledge.html': [
       'knowledge-overview.js',
+      'knowledge-overview.css',
       'learning-content.js',
       'knowledge-workspace.css',
       'human-learning-annotations.css',
@@ -67,10 +79,15 @@ test('the human-learning release has coherent fresh cache keys on every changed 
       'knowledge-annotations.js',
       'knowledge-workspace.js',
       'learning-reader.js',
+      'learning-outline.js',
+      'learning-outline.css',
       'learning-guide.js',
     ],
     'public/course.html': [
       'knowledge-overview.js',
+      'knowledge-overview.css',
+      'course-reader.css',
+      'course-directory.js',
       'learning-content.js',
       'course-structure.css',
       'learning-stars.js',

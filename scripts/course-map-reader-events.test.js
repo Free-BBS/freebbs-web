@@ -11,6 +11,7 @@ function createHarness(layout = 'structure') {
   assert.ok(start >= 0 && end > start);
   const canvasHandlers = new Map();
   const documentHandlers = new Map();
+  const layoutHandlers = new Map();
   let renders = 0;
   class Target {
     constructor(selectors = []) {
@@ -19,6 +20,10 @@ function createHarness(layout = 'structure') {
 
     closest(selector) {
       return this.selectors.includes(selector) ? this : null;
+    }
+
+    matches(selector) {
+      return this.selectors.includes(selector);
     }
   }
   const state = {
@@ -38,19 +43,136 @@ function createHarness(layout = 'structure') {
       querySelector: () => null,
     },
     document: {
-      getElementById: () => null,
+      getElementById: (id) =>
+        id === 'course-layout-toggle'
+          ? { addEventListener: (name, handler) => layoutHandlers.set(name, handler) }
+          : null,
       addEventListener: (name, handler) => documentHandlers.set(name, handler),
     },
     window: { addEventListener() {} },
     scroller: null,
     hideReaderEdgeTooltip() {},
-    chapterIdForNodeId: () => 'SS-02',
+    chapterIdForNodeId: (id) =>
+      String(id || '')
+        .split('-')
+        .slice(0, 2)
+        .join('-'),
+    courseChapters: () => [{ id: 'SS-01' }, { id: 'SS-02' }, { id: 'SS-07' }],
     renderMap: () => {
       renders += 1;
     },
   });
-  return { Target, state, canvasHandlers, documentHandlers, renders: () => renders };
+  return {
+    Target,
+    state,
+    canvasHandlers,
+    documentHandlers,
+    layoutHandlers,
+    renders: () => renders,
+  };
 }
+
+test('switching from structure to directory keeps its actual selected chapter and drops only another chapter filter', () => {
+  const h = createHarness();
+  h.state.activeChapterId = 'SS-01';
+  h.state.learningNodeId = 'SS-02-01';
+  h.state.directoryQuery = '旧章搜索';
+  h.state.directoryPage = 3;
+  h.state.structureController = { getState: () => ({ selectedChapterId: 'SS-07' }) };
+  const button = {};
+  h.layoutHandlers.get('click')({ currentTarget: button });
+  assert.equal(h.state.readerLayout, 'directory');
+  assert.equal(h.state.activeChapterId, 'SS-07');
+  assert.equal(h.state.directoryQuery, '');
+  assert.equal(h.state.directoryPage, 0);
+  assert.equal(h.state.learningNodeId, 'SS-02-01', 'Reading history is not a view selection');
+  assert.equal(h.renders(), 1);
+  assert.equal(button.textContent, '知识图');
+});
+
+test('layout switching preserves matching filters and rejects absent or invalid structure chapter state', () => {
+  for (const selected of ['SS-07', '', 'SS-99', '<img src=x>', null, undefined]) {
+    const h = createHarness();
+    h.state.activeChapterId = 'SS-07';
+    h.state.directoryQuery = '卷积';
+    h.state.directoryPage = 2;
+    h.state.structureController =
+      selected === undefined ? null : { getState: () => ({ selectedChapterId: selected }) };
+    h.layoutHandlers.get('click')({ currentTarget: {} });
+    assert.equal(h.state.activeChapterId, 'SS-07');
+    assert.equal(h.state.directoryQuery, '卷积');
+    assert.equal(h.state.directoryPage, 2);
+  }
+  for (const emptyState of [null, undefined]) {
+    const h = createHarness();
+    h.state.activeChapterId = 'SS-07';
+    h.state.structureController = { getState: () => emptyState };
+    h.layoutHandlers.get('click')({ currentTarget: {} });
+    assert.equal(h.state.activeChapterId, 'SS-07');
+  }
+  const h = createHarness('directory');
+  h.state.activeChapterId = 'SS-07';
+  h.state.structureController = { getState: () => ({ selectedChapterId: 'SS-01' }) };
+  h.layoutHandlers.get('click')({ currentTarget: {} });
+  assert.equal(h.state.readerLayout, 'structure');
+  assert.equal(
+    h.state.activeChapterId,
+    'SS-07',
+    'Directory is the active owner when entering structure',
+  );
+});
+
+test('production structure re-render restores only a real active chapter and never overrides explicit focus or resume evidence', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../public/course-map.js'), 'utf8');
+  const start = source.indexOf('  function renderReaderMap() {');
+  const end = source.indexOf('    const viewModel = readerViewModel();', start);
+  assert.ok(start >= 0 && end > start);
+  for (const activeChapterId of ['SS-07', '', 'SS-99', '<img src=x>']) {
+    for (const focusedNodeId of ['', 'SS-02-01']) {
+      const calls = [];
+      const options = [];
+      const state = {
+        readerLayout: 'structure',
+        activeChapterId,
+        focusedNodeId,
+        learningNodeId: 'SS-02-02',
+        nodes: [],
+        edges: [],
+        course: {},
+      };
+      const before = state.learningNodeId;
+      vm.runInNewContext(`${source.slice(start, end)}\n}\nrenderReaderMap();`, {
+        state,
+        canvas: { classList: { remove() {} }, style: {}, replaceChildren() {} },
+        scroller: null,
+        window: {
+          FreeBbsCourseStructure: {
+            render: (settings) => {
+              options.push(settings);
+              return {
+                focusNode: (id) => calls.push(['focus', id]),
+                selectChapter: (id) => calls.push(['chapter', id]),
+              };
+            },
+          },
+        },
+        renderReaderHeader() {},
+        courseChapters: () => [{ id: 'SS-01' }, { id: 'SS-02' }, { id: 'SS-07' }],
+      });
+      assert.deepEqual(
+        calls,
+        focusedNodeId
+          ? [['focus', focusedNodeId]]
+          : activeChapterId === 'SS-07'
+            ? [['chapter', 'SS-07']]
+            : [],
+      );
+      assert.equal(state.learningNodeId, before);
+      assert.equal(options.length, 1);
+      assert.equal(options[0].resumeNodeId, 'SS-02-02');
+    }
+  }
+});
 
 test('structure summary, form, text and graph clicks do not trigger legacy blank exit', () => {
   const h = createHarness();
@@ -93,4 +215,36 @@ test('Escape in a field, dialog or already handled event does not discard direct
     assert.equal(h.state.focusedNodeId, 'SS-02-01');
     assert.equal(h.renders(), 0);
   }
+});
+
+test('directory search preserves IME composition and resets only pagination on committed input', () => {
+  const h = createHarness('directory');
+  const target = new h.Target(['[data-course-directory-search]']);
+  target.value = '卷积';
+  h.state.directoryPage = 3;
+  h.canvasHandlers.get('input')({ target, isComposing: true });
+  assert.equal(h.renders(), 0);
+  assert.equal(h.state.directoryPage, 3);
+  h.canvasHandlers.get('compositionend')({ target });
+  assert.equal(h.state.directoryQuery, '卷积');
+  assert.equal(h.state.directoryPage, 0);
+  assert.equal(h.state.focusedNodeId, 'SS-02-01');
+  assert.equal(h.renders(), 1);
+  h.canvasHandlers.get('click')({ target });
+  assert.equal(h.state.focusedNodeId, 'SS-02-01');
+  assert.equal(h.renders(), 1);
+});
+
+test('directory pagination never activates disabled buttons or restores legacy focus', () => {
+  const h = createHarness('directory');
+  const target = new h.Target(['[data-directory-page]']);
+  target.dataset = { directoryPage: '2' };
+  target.disabled = true;
+  h.canvasHandlers.get('click')({ target });
+  assert.equal(h.renders(), 0);
+  target.disabled = false;
+  h.canvasHandlers.get('click')({ target });
+  assert.equal(h.state.directoryPage, 2);
+  assert.equal(h.state.focusedNodeId, 'SS-02-01');
+  assert.equal(h.renders(), 1);
 });

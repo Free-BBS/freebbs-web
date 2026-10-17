@@ -178,7 +178,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /const KNOWLEDGE_TAGS =/);
   assert.match(controller, /function renderNodeTags\(nodeId\)/);
   assert.match(controller, /function renderDirectoryNodeTags\(nodeId\)/);
-  assert.match(controller, /remainingNodes\.map\(\(node\) => renderReaderNode/);
+  assert.match(controller, /directoryPage\.nodes\.map\(\(node\) => renderReaderNode/);
   assert.doesNotMatch(controller, /is-knowledge-map/);
   assert.doesNotMatch(controller, /course-reader-study-link/);
   assert.match(controller, /course-map-topic-tags/);
@@ -207,7 +207,13 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
 
 // Actual production functions, with only their API/storage/render boundary stubbed.
 // This is a memory contract, not a browser or database test.
-async function initializeReaderFixture({ current = {}, progress = {}, focus = '', nodes } = {}) {
+async function initializeReaderFixture({
+  current = {},
+  progress = {},
+  focus = '',
+  nodes,
+  directoryReady = true,
+} = {}) {
   const source = fs.readFileSync(path.join(root, 'public/course-map.js'), 'utf8');
   const section = (start, end) => {
     const first = source.indexOf(start);
@@ -247,7 +253,10 @@ async function initializeReaderFixture({ current = {}, progress = {}, focus = ''
     mapPage: {},
     editorPage: null,
     URLSearchParams,
-    window: { FreeBbsLearningContent: require('../public/learning-content') },
+    window: {
+      FreeBbsLearningContent: require('../public/learning-content'),
+      FreeBbsCourseDirectory: directoryReady ? require('../public/course-directory') : undefined,
+    },
     app: {
       sessionReady: Promise.resolve(),
       callApi: async (endpoint, options) => {
@@ -263,7 +272,7 @@ async function initializeReaderFixture({ current = {}, progress = {}, focus = ''
     setStatus: (message, error) => statuses.push({ message, error }),
     renderChapterIndex: () => '',
     renderDirectoryNodeTags: () => '',
-    renderReaderNode: () => '',
+    renderReaderNode: (node) => `<button data-reader-node-id="${node.id}">${node.title}</button>`,
     renderMap: () => {
       renderCalls.push('render');
       state.structureController = {
@@ -299,8 +308,47 @@ async function initializeReaderFixture({ current = {}, progress = {}, focus = ''
     progressBefore,
     'Initialization must not mutate progress evidence',
   );
-  return { state, renderCalls, html: context.readerFixture.directory() };
+  return {
+    state,
+    renderCalls,
+    html: context.readerFixture.directory(),
+    directory: context.readerFixture.directory,
+  };
 }
+
+test('production legacy directory bounds dense chapters and searches real titles including primary', async () => {
+  const nodes = Array.from({ length: 53 }, (_, index) => ({
+    id: `SS-01-${String(index + 1).padStart(2, '0')}`,
+    title: index ? `真实知识点 ${index + 1}` : '真实开篇',
+    chapterTitle: '真实章节',
+  }));
+  const h = await initializeReaderFixture({ nodes });
+  assert.equal((h.html.match(/data-reader-node-id=/g) || []).length, 13);
+  assert.match(h.html, /1–12 \/ 52 项/);
+  h.state.directoryPage = 4;
+  assert.match(h.directory(), /49–52 \/ 52 项/);
+  h.state.directoryQuery = '真实开篇';
+  const found = h.directory();
+  assert.match(found, /data-reader-node-id="SS-01-01"/);
+  assert.match(found, /1–1 \/ 1 项/);
+  assert.doesNotMatch(found, /从这里开始|data-directory-page/);
+  h.state.directoryQuery = '不存在';
+  assert.match(h.directory(), /未找到知识点/);
+});
+
+test('a failed directory helper never silently hides published points', async () => {
+  const nodes = Array.from({ length: 53 }, (_, index) => ({
+    id: `SS-01-${String(index + 1).padStart(2, '0')}`,
+    title: `真实知识点 ${index + 1}`,
+    chapterTitle: '真实章节',
+  }));
+  const h = await initializeReaderFixture({ nodes, directoryReady: false });
+  assert.equal((h.html.match(/data-reader-node-id=/g) || []).length, 53);
+  assert.match(h.html, /筛选暂不可用，已显示本章全部知识点/);
+  h.state.directoryQuery = '不会悄悄隐藏';
+  assert.equal((h.directory().match(/data-reader-node-id=/g) || []).length, 53);
+  assert.doesNotMatch(h.directory(), /data-directory-page/);
+});
 
 test('production reader initialize keeps a fresh first-point entry without claiming previous learning', async () => {
   const h = await initializeReaderFixture();

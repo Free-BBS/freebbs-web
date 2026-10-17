@@ -19,6 +19,8 @@
       '修改人',
       '修订人',
       '审核人',
+      '复核人',
+      '复核者',
     ],
   };
   const canonical = (value) =>
@@ -87,6 +89,25 @@
     }
     return result.filter(Boolean).join(' ');
   }
+  function actualChapter(node, fields) {
+    const id = String(node.id || '')
+      .split('-')
+      .slice(0, 2)
+      .join('-');
+    return (
+      [node.chapterTitle, fields.chapter]
+        .map(plain)
+        .find(
+          (name) =>
+            name &&
+            name !== id &&
+            !/^(?:第\s*(?:\d+|[零〇一二三四五六七八九十百千]+|[Xx]+)\s*章|(?:chapter|unit)\s*(?:\d+|[ivxlcdm]+|n)|\d+)[.、:：。\s-]*$/i.test(
+              name,
+            ) &&
+            !/^[A-Z][A-Z0-9]*-[A-Z0-9]+-0+$/.test(name),
+        ) || ''
+    );
+  }
   function model(node = {}, course = {}) {
     const fields = readFields(node.sections?.basicInfoMarkdown);
     const participants = [
@@ -102,7 +123,7 @@
       id: node.id || '',
       title: node.title || '知识点',
       course: course.name || fields.course || '',
-      chapter: fields.chapter || '',
+      chapter: actualChapter(node, fields),
       type: fields.type || '',
       level: fields.level || '',
       difficulty: fields.difficulty || '',
@@ -118,17 +139,23 @@
     if (text) result.textContent = text;
     return result;
   }
-  function render(container, node, course) {
+  function render(container, node = {}, course = {}) {
     const info = model(node, course);
     container.replaceChildren();
     container.classList.add('knowledge-overview-content');
     const identity = element('div', 'knowledge-overview-identity');
-    identity.append(
-      element('p', 'knowledge-overview-course', [info.course, info.id].filter(Boolean).join(' · ')),
-      element('h2', '', info.title),
-    );
+    const location = element('div', 'knowledge-overview-location');
+    if (info.course) location.append(element('p', 'knowledge-overview-course', info.course));
+    if (info.id) location.append(element('span', 'knowledge-overview-id', info.id));
+    if (location.childElementCount) identity.append(location);
     if (info.chapter) identity.append(element('p', 'knowledge-overview-chapter', info.chapter));
+    identity.append(element('h2', '', info.title));
     container.append(identity);
+    if (info.summary) {
+      const section = element('section', 'knowledge-overview-brief');
+      section.append(element('h3', '', '学什么'), element('p', '', info.summary));
+      container.append(section);
+    }
     const facts = element('dl', 'knowledge-overview-facts');
     for (const [label, value] of [
       ['类型', info.type],
@@ -138,18 +165,13 @@
       ['建议时长', info.duration],
     ]) {
       if (!value) continue;
-      const cell = element('div');
+      const cell = element('div', label === '建议时长' ? 'knowledge-overview-duration' : '');
       const display =
         ['难度', '重要程度'].includes(label) && /^[1-5]$/.test(value) ? `${value} / 5` : value;
       cell.append(element('dt', '', label), element('dd', '', display));
       facts.append(cell);
     }
     if (facts.childElementCount) container.append(facts);
-    if (info.summary) {
-      const section = element('section', 'knowledge-overview-brief');
-      section.append(element('h3', '', '学什么'), element('p', '', info.summary));
-      container.append(section);
-    }
     if (!/^[A-Z][A-Z0-9]*-[A-Z0-9]+-0+$/.test(node.id || '')) {
       const stars = element('div', 'learning-star-strip');
       container.append(stars);
@@ -160,14 +182,14 @@
         level: /拓展|extension|elective/.test(info.level) ? 'extension' : info.level,
       });
     }
-    const people = element('section', 'knowledge-overview-people');
-    people.append(element('h3', '', '参与同学'));
-    const list = element('ul');
-    info.participants.forEach((name) => list.append(element('li', '', name)));
-    people.append(
-      info.participants.length ? list : element('p', 'knowledge-overview-muted', '暂未署名'),
-    );
-    container.append(people);
+    if (info.participants.length) {
+      const people = element('section', 'knowledge-overview-people');
+      people.append(element('h3', '', '参与同学'));
+      const list = element('ul');
+      info.participants.forEach((name) => list.append(element('li', '', name)));
+      people.append(list);
+      container.append(people);
+    }
     return info;
   }
   function createDrawer({ app, courseSlug }) {
@@ -177,14 +199,16 @@
     const header = element('header', 'knowledge-overview-drawer-header');
     const heading = element('h2', '', '学习概览');
     heading.id = 'course-knowledge-overview-title';
-    const close = element('button', '', '×');
+    const close = element('button', 'bbs-action', '×');
     close.type = 'button';
+    close.dataset.actionTone = 'quiet';
     close.setAttribute('aria-label', '关闭学习概览');
     close.autofocus = true;
     header.append(heading, close);
     const content = element('div', 'knowledge-overview-drawer-body');
-    const message = element('p', 'knowledge-overview-muted');
+    const message = element('p', 'knowledge-overview-muted knowledge-overview-status');
     message.setAttribute('role', 'status');
+    message.setAttribute('aria-live', 'polite');
     const facts = element('div');
     const originals = element('details', 'knowledge-overview-originals');
     originals.append(element('summary', '', '完整说明'));
@@ -192,9 +216,11 @@
     originals.append(originalBody);
     content.append(message, facts, originals);
     const footer = element('footer', 'knowledge-overview-drawer-footer');
-    const study = element('a', 'knowledge-overview-study', '进入学习');
-    const relation = element('button', '', '查看知识关系');
+    const study = element('a', 'knowledge-overview-study bbs-action', '进入学习');
+    study.dataset.actionTone = 'primary';
+    const relation = element('button', 'bbs-action', '查看知识关系');
     relation.type = 'button';
+    relation.dataset.actionTone = 'secondary';
     footer.append(relation, study);
     dialog.append(header, content, footer);
     document.body.append(dialog);
@@ -248,6 +274,8 @@
       originalBody.replaceChildren();
       render(facts, node, course);
       message.textContent = '正在载入…';
+      message.dataset.state = 'loading';
+      facts.setAttribute('aria-busy', 'true');
       if (!dialog.open) dialog.showModal();
       content.scrollTop = 0;
       try {
@@ -267,9 +295,14 @@
           app.enhanceMarkdownContent(originalBody);
         }
         message.textContent = '';
+        delete message.dataset.state;
+        facts.setAttribute('aria-busy', 'false');
       } catch {
-        if (id === requestId && dialog.open)
+        if (id === requestId && dialog.open) {
           message.textContent = '概览暂未载入，可关闭后重试或直接进入学习。';
+          message.dataset.state = 'error';
+          facts.setAttribute('aria-busy', 'false');
+        }
       }
     }
     return { open, isOpen: () => dialog.open };

@@ -206,6 +206,36 @@
       .filter((node) => matchesQuery(model, node, key))
       .sort((left, right) => compare(left.id, right.id));
   }
+  function searchChapters(model, query) {
+    const key = normalizeQuery(query).trim().toLocaleLowerCase();
+    if (!key) return [];
+    return model.chapters.filter((chapter) =>
+      [chapter.id, chapter.title, chapter.overview?.id]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(key),
+    );
+  }
+  function resumePoint(model, id) {
+    const node = typeof id === 'string' ? model.byId.get(id) : null;
+    return node && !isChapterNode(node) ? node : null;
+  }
+  function revealChapterInList(list, item) {
+    if (!list || !item || !(list.clientHeight > 0)) return;
+    const box = list.getBoundingClientRect?.();
+    const row = item.getBoundingClientRect?.();
+    if (!box || !row || !Number.isFinite(box.top) || !Number.isFinite(row.top)) return;
+    const top = box.top + (list.clientTop || 0) + 4;
+    const bottom = top + list.clientHeight - 8;
+    const rowBottom = row.bottom ?? row.top + row.height;
+    if (!Number.isFinite(rowBottom)) return;
+    const offset =
+      row.top < top || rowBottom - row.top > bottom - top
+        ? row.top - top
+        : Math.max(0, rowBottom - bottom);
+    if (offset) list.scrollTop = Math.max(0, (list.scrollTop || 0) + offset);
+  }
   function relationGroups(view) {
     const groups = [
       { key: 'incoming', title: '可先了解', entries: new Map() },
@@ -336,7 +366,14 @@
     );
     return { boxes, regions, width: maxX, height: maxY };
   }
-  function render({ container, nodes = [], edges = [], course = {}, onOpenOverview } = {}) {
+  function render({
+    container,
+    nodes = [],
+    edges = [],
+    course = {},
+    onOpenOverview,
+    resumeNodeId = '',
+  } = {}) {
     if (!container || !root?.document) return null;
     container.courseStructureController?.destroy();
     const document = container.ownerDocument;
@@ -350,6 +387,7 @@
     let pickerQuery = '';
     let pickerPage = 0;
     let searchPage = 0;
+    let visibleChapterId = '';
     const filterButtons = new Map();
     const make = (tag, value, className) => {
       const element = document.createElement(tag);
@@ -376,8 +414,10 @@
     const toolbar = make('div', undefined, 'course-structure-toolbar');
     const search = make('input');
     search.type = 'search';
-    search.placeholder = '查找知识板块或知识点';
+    search.placeholder = '搜索全课程的章节或知识点';
     search.setAttribute('aria-label', '查找课程知识点');
+    const searchLabel = make('label', undefined, 'course-structure-search-label');
+    searchLabel.append(make('span', '全课程搜索'), search);
     const status = make('p', '', 'course-structure-status');
     status.setAttribute('role', 'status');
     const results = make('div', undefined, 'course-structure-search-results');
@@ -410,10 +450,15 @@
     );
     const searchPageCount = make('span');
     searchPaging.append(previousSearchPage, searchPageCount, nextSearchPage);
-    searchPanel.append(searchSummary, results, searchPaging);
+    const chapterResults = make('div', undefined, 'course-structure-search-chapters');
+    const chapterSearchGroup = make('section', undefined, 'course-structure-search-chapter-group');
+    chapterSearchGroup.append(make('h3', '章节'), chapterResults);
+    const pointSearchGroup = make('section', undefined, 'course-structure-search-point-group');
+    pointSearchGroup.append(make('h3', '知识点'), results, searchPaging);
+    searchPanel.append(searchSummary, chapterSearchGroup, pointSearchGroup);
     toolbar.append(
-      search,
-      button('全局概览', () => navigate({ type: 'reset' })),
+      searchLabel,
+      button('课程概览', () => navigate({ type: 'reset' })),
     );
     const columns = make('div', undefined, 'course-structure-columns');
     const graphArea = make('details', undefined, 'course-structure-graph-area');
@@ -438,10 +483,13 @@
     sidebar.setAttribute('aria-label', '课程目录');
     const chapterList = make('nav', undefined, 'course-structure-chapters');
     chapterList.setAttribute('aria-label', '课程章节');
-    chapterList.append(make('h2', '课程章节'));
+    const chapterHeading = make('div', undefined, 'course-structure-section-heading');
+    chapterHeading.append(make('h2', '章节目录'), make('small', `${model.chapters.length} 章`));
+    chapterList.append(chapterHeading);
     for (const chapter of model.chapters) {
       const item = button('', () => navigate({ type: 'select', id: chapter.id }));
       item.dataset.courseChapterId = chapter.id;
+      item.setAttribute('title', chapter.title);
       item.append(
         make('strong', chapter.title),
         make('span', `包含 ${chapter.nodes.length} 个知识点`),
@@ -452,7 +500,7 @@
     picker.setAttribute('aria-label', '选择知识点');
     const pickerHeading = make('div', undefined, 'course-structure-picker-heading');
     const pickerCount = make('small');
-    pickerHeading.append(make('h2', '选择知识点'), pickerCount);
+    pickerHeading.append(make('h2', '知识点'), pickerCount);
     const pickerChapter = make('select', undefined, 'course-structure-picker-chapter');
     pickerChapter.setAttribute('aria-label', '筛选知识点所属章节');
     const allChapters = make('option', '全部章节');
@@ -467,6 +515,9 @@
     pickerSearch.type = 'search';
     pickerSearch.placeholder = '名称、编号或别名';
     pickerSearch.setAttribute('aria-label', '筛选知识点');
+    const pickerSearchLabel = make('label', undefined, 'course-structure-picker-search-label');
+    const pickerSearchScope = make('span', '筛选全部章节');
+    pickerSearchLabel.append(pickerSearchScope, pickerSearch);
     const pickerList = make('div', undefined, 'course-structure-picker-list');
     const pickerPaging = make('div', undefined, 'course-structure-picker-paging');
     const previousPage = button(
@@ -487,7 +538,7 @@
     );
     const pageCount = make('span');
     pickerPaging.append(previousPage, pageCount, nextPage);
-    picker.append(pickerHeading, pickerChapter, pickerSearch, pickerList, pickerPaging);
+    picker.append(pickerHeading, pickerChapter, pickerSearchLabel, pickerList, pickerPaging);
     const details = make('section', undefined, 'course-structure-details');
     details.setAttribute('aria-label', '课程与知识点详情');
     const currentContent = make('section', undefined, 'course-structure-current');
@@ -496,6 +547,39 @@
     sidebar.append(chapterList, picker);
     currentContent.append(details, graphArea);
     columns.append(sidebar, currentContent);
+    const resume = resumePoint(model, resumeNodeId);
+    if (resume) {
+      const recent = make('section', undefined, 'course-structure-resume');
+      recent.setAttribute('aria-label', '上次阅读位置');
+      recent.dataset.courseResumeId = resume.id;
+      const identity = make('div', undefined, 'course-structure-resume-copy');
+      const owner = model.chapters.find((chapter) => chapter.id === chapterId(resume.id));
+      identity.append(
+        make('small', '上次看到'),
+        make('strong', resume.title),
+        make('span', `${owner.title} · ${resume.id}`),
+      );
+      const actions = make('div', undefined, 'course-structure-resume-actions');
+      if (typeof course.slug === 'string' && /^[a-z0-9-]{1,64}$/.test(course.slug)) {
+        const link = make('a', '继续阅读', 'course-structure-primary');
+        link.href = `/knowledge?${new URLSearchParams({ course: course.slug, point: resume.id, view: 'reading' })}`;
+        actions.append(link);
+      }
+      actions.append(
+        button('查看位置', () =>
+          navigate(
+            { type: 'locate', id: resume.id },
+            {
+              picker: { chapterId: chapterId(resume.id), query: '', page: 0 },
+              revealFocus: true,
+              hideSearch: true,
+            },
+          ),
+        ),
+      );
+      recent.append(identity, actions);
+      shell.append(recent);
+    }
     shell.append(toolbar, searchPanel, status, columns);
     container.replaceChildren(shell);
     const pickerSnapshot = () => ({
@@ -581,6 +665,10 @@
       applyPicker(pickerSnapshot());
       const page = paginateMatches(pickerMatches(model, pickerSnapshot()), pickerPage);
       pickerChapter.value = pickerChapterId;
+      pickerSearch.placeholder = pickerChapterId
+        ? '在本章按名称、编号搜索'
+        : '按名称、编号或别名搜索';
+      pickerSearchScope.textContent = pickerChapterId ? '筛选当前章节' : '筛选全部章节';
       if (pickerSearch.value !== pickerQuery) pickerSearch.value = pickerQuery;
       pickerCount.textContent = `${page.total} 个`;
       pickerList.replaceChildren();
@@ -591,7 +679,10 @@
         item.append(make('small', node.id), make('span', node.title));
         pickerList.append(item);
       }
-      if (!page.total) pickerList.append(make('p', '没有匹配的知识点。'));
+      if (!page.total)
+        pickerList.append(
+          make('p', '没有匹配的知识点，试试其他名称或章节。', 'course-structure-empty'),
+        );
       pickerList.scrollTop = 0;
       pickerPaging.hidden = page.pageCount <= 1;
       previousPage.disabled = pickerPage === 0;
@@ -603,6 +694,13 @@
             'aria-pressed',
             String(item.dataset.courseChapterId === state.selectedChapterId),
           );
+      if (state.selectedChapterId !== visibleChapterId) {
+        visibleChapterId = state.selectedChapterId;
+        const selected = [...chapterList.children].find(
+          (item) => item.dataset.courseChapterId === visibleChapterId,
+        );
+        revealChapterInList(chapterList, selected);
+      }
     }
     pickerChapter.addEventListener('change', () => {
       const pickerState = normalizePickerState(model, { chapterId: pickerChapter.value });
@@ -691,10 +789,7 @@
           title.length > 8 ? `${title.slice(0, 7)}…` : title,
         ),
       );
-      const hint =
-        box.kind === 'chapter'
-          ? `${box.chapter.nodes.length} 个知识点${box.chapter.virtual ? ' · 暂无板块概览' : ''}`
-          : '';
+      const hint = box.kind === 'chapter' ? `${box.chapter.nodes.length} 个知识点` : '';
       if (hint)
         group.append(
           svgNode(
@@ -835,7 +930,11 @@
       if (view.focus && state.selectedNodeId === view.focus.id) {
         const node = view.focus;
         details.append(
-          make('small', `所属章节：${view.expanded.title} · ${node.id}`),
+          make(
+            'small',
+            `所属章节：${view.expanded.title} · ${node.id}`,
+            'course-structure-breadcrumb',
+          ),
           make('h2', node.title),
         );
         const overview = root.FreeBbsKnowledgeOverview?.model(node, course);
@@ -855,7 +954,12 @@
           button('返回章节目录', () => navigate({ type: 'unfocus' })),
         );
         details.append(actions);
-        details.append(make('h3', '当前点的直接关系'));
+        const relationHeading = make('div', undefined, 'course-structure-section-heading');
+        relationHeading.append(
+          make('h3', '相关知识'),
+          make('small', `${view.knowledgeNodes.length - 1} 个`),
+        );
+        details.append(relationHeading);
         const filters = make('div', undefined, 'course-structure-filters');
         for (const [value, label] of [
           ['all', '全部'],
@@ -872,16 +976,19 @@
           toggle.setAttribute('aria-pressed', String(state.filter === value));
           filters.append(toggle);
         }
-        details.append(filters);
+        if (view.links.length) details.append(filters);
         const related = make('div', undefined, 'course-structure-relations');
         const groups = relationGroups(view).filter((group) => group.items.length);
         for (const group of groups) {
           const section = make('section', undefined, 'course-structure-relation-group');
           section.dataset.relationGroup = group.key;
-          section.append(make('h4', group.title));
+          const heading = make('div', undefined, 'course-structure-relation-heading');
+          heading.append(make('h4', group.title), make('small', `${group.items.length} 个`));
+          section.append(heading);
           for (const { node: target, edges: links } of group.items) {
             const owner = model.chapters.find((item) => item.id === chapterId(target.id));
             const item = make('div', undefined, 'course-structure-relation-item');
+            item.classList.toggle('is-cross-chapter', owner.id !== view.expanded.id);
             const entry = button(target.title, () => navigate({ type: 'focus', id: target.id }));
             entry.dataset.courseRelatedId = target.id;
             item.append(entry, make('small', `所属章节：${owner.title} · ${target.id}`));
@@ -892,15 +999,15 @@
           related.append(section);
         }
         if (!view.links.length)
-          related.append(make('p', '尚未发布直接关系，可从目录选择其他知识点。'));
+          related.append(
+            make(
+              'p',
+              '尚未发布直接关系。仍可打开学习概览，或从目录选择其他知识点。',
+              'course-structure-empty',
+            ),
+          );
         details.append(related);
-        details.append(
-          make(
-            'p',
-            '仅依据课程组发布的学习顺序和补充联系，不表示必须先修。',
-            'course-structure-help',
-          ),
-        );
+        details.append(make('p', '学习顺序仅作参考，不表示必须先修。', 'course-structure-help'));
         if (metadata.childNodes.length || node.summary) {
           const information = make('details', undefined, 'course-structure-information');
           information.append(make('summary', '知识点信息'));
@@ -912,33 +1019,46 @@
       }
       const chapter = model.chapters.find((item) => item.id === state.selectedChapterId);
       if (chapter) {
-        details.append(make('small', `${chapter.id} · 知识板块`), make('h2', chapter.title));
         details.append(
-          make(
-            'p',
-            chapter.overview?.summary ||
-              (chapter.virtual ? '本章已有知识点，板块概览尚未发布。' : '本章知识概览。'),
-          ),
+          make('small', `${chapter.id} · 章节`, 'course-structure-breadcrumb'),
+          make('h2', chapter.title),
         );
-        details.append(
-          make('p', `本章包含 ${chapter.nodes.length} 个知识点，请从目录选择具体内容。`),
-        );
+        if (chapter.overview?.summary) details.append(make('p', chapter.overview.summary));
+        const summary = make('div', undefined, 'course-structure-chapter-summary');
+        summary.append(make('strong', `${chapter.nodes.length} 个知识点`));
         const levels = { core: 0, general: 0, extension: 0, unknown: 0 };
         for (const node of chapter.nodes) levels[nodeLevel(node) || 'unknown'] += 1;
         if (levels.core || levels.general || levels.extension)
-          details.append(
+          summary.append(
             make(
-              'p',
+              'span',
               `核心 ${levels.core} · 一般 ${levels.general} · 拓展 ${levels.extension}${levels.unknown ? ` · 未标注 ${levels.unknown}` : ''}`,
             ),
           );
+        details.append(summary);
+        if (chapter.nodes.length) {
+          details.append(make('h3', '从一个知识点开始'));
+          const entries = make('div', undefined, 'course-structure-chapter-entries');
+          for (const point of chapter.nodes.slice(0, 3)) {
+            const entry = button('', () => navigate({ type: 'focus', id: point.id }));
+            entry.dataset.coursePreviewPointId = point.id;
+            entry.append(make('small', point.id), make('strong', point.title));
+            entries.append(entry);
+          }
+          details.append(entries);
+          details.append(
+            button('查找本章知识点', () => pickerSearch.focus(), 'course-structure-picker-open'),
+          );
+        }
         if (chapter.overview) details.append(button('查看板块概览', () => open(chapter.overview)));
       } else {
         details.append(make('small', '课程概览'), make('h2', course.name || '课程知识结构'));
         if (course.description || course.summary)
           details.append(make('p', course.description || course.summary));
         const count = model.chapters.reduce((sum, item) => sum + item.nodes.length, 0);
-        details.append(make('p', `${model.chapters.length} 个知识板块 · ${count} 个知识点`));
+        details.append(make('p', `${model.chapters.length} 个章节 · ${count} 个知识点`));
+        if (count)
+          details.append(make('p', '先选择章节，再打开一个知识点。', 'course-structure-help'));
         const metadata = make('dl', undefined, 'course-structure-metadata');
         for (const [label, value] of [
           ['学分', course.credits],
@@ -969,17 +1089,40 @@
       status.textContent = !model.chapters.length
         ? '课程知识图谱尚未发布。'
         : view.focus
-          ? `聚焦 ${view.focus.title} · ${view.knowledgeNodes.length - 1} 个直接连接知识点${view.satellites.length ? ` · ${view.satellites.length} 个关联板块` : ''}`
-          : '章节概览 · 选择一个知识点查看关联';
+          ? `${view.knowledgeNodes.length - 1} 个相关知识点${view.satellites.length ? ` · 涉及另外 ${view.satellites.length} 个章节` : ''}`
+          : '选择章节，再选择知识点';
     }
     function renderSearch(visible = true) {
       const query = normalizeQuery(search.value);
-      const page = paginateMatches(searchNodes(model, query), searchPage);
+      const chapters = searchChapters(model, query);
+      const page = paginateMatches(
+        searchNodes(model, query).filter((node) => !isChapterNode(node)),
+        searchPage,
+      );
       searchPage = page.page;
       searchPanel.hidden = !visible || !query.trim();
       results.replaceChildren();
       results.hidden = searchPanel.hidden;
-      searchSummary.textContent = `共 ${page.total} 个结果 · 显示 ${page.start}–${page.end}`;
+      chapterSearchGroup.hidden = !chapters.length;
+      pointSearchGroup.hidden = !page.total && Boolean(chapters.length);
+      chapterResults.replaceChildren();
+      for (const chapter of chapters) {
+        const entry = button('', () =>
+          navigate(
+            { type: 'select', id: chapter.id },
+            { picker: { chapterId: chapter.id, query: '', page: 0 }, hideSearch: true },
+          ),
+        );
+        entry.dataset.courseSearchChapterId = chapter.id;
+        entry.append(
+          make('strong', chapter.title),
+          make('small', `${chapter.id} · ${chapter.nodes.length} 个知识点`),
+        );
+        chapterResults.append(entry);
+      }
+      searchSummary.textContent = chapters.length
+        ? `${chapters.length} 个章节 · ${page.total} 个知识点${page.total ? ` · 显示 ${page.start}–${page.end}` : ''}`
+        : `共 ${page.total} 个结果 · 显示 ${page.start}–${page.end}`;
       for (const node of page.nodes)
         results.append(
           button(`${node.id} · ${node.title}`, () => {
@@ -1001,7 +1144,8 @@
             details.scrollTop = 0;
           }),
         );
-      if (!page.total && query.trim()) results.append(make('p', '未找到匹配的已发布知识点。'));
+      if (!page.total && !chapters.length && query.trim())
+        results.append(make('p', '未找到匹配的章节或知识点。'));
       results.scrollTop = 0;
       searchPaging.hidden = page.pageCount <= 1;
       previousSearchPage.disabled = searchPage === 0;
@@ -1129,6 +1273,9 @@
     viewModel,
     layout,
     searchNodes,
+    searchChapters,
+    resumePoint,
+    revealChapterInList,
     relationGroups,
     paginateMatches,
     normalizePickerState,
