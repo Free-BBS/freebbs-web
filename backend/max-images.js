@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { PRIVATE_DIRECTORY } = require('./max-image-access');
 
 const MAX_GENERATED_IMAGES = 1;
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
@@ -27,11 +28,12 @@ function decodeImageDataUrl(value) {
 }
 
 function createGeneratedImageFileName(ownerId) {
-  const safeOwner = Number.isSafeInteger(Number(ownerId)) ? Number(ownerId) : 0;
+  const safeOwner = Number(ownerId);
+  if (!Number.isSafeInteger(safeOwner) || safeOwner <= 0) throw new Error('生成图片归属无效');
   return `max-image-${safeOwner}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.webp`;
 }
 
-async function persistOneImage(image, { ownerId, uploadDir }) {
+async function persistOneImage(image, { ownerId, uploadDir, visibility }) {
   if (
     !image ||
     typeof image !== 'object' ||
@@ -70,9 +72,11 @@ async function persistOneImage(image, { ownerId, uploadDir }) {
   )
     throw new Error('生成图片转换结果无效');
 
-  await fs.promises.mkdir(uploadDir, { recursive: true });
+  const directory =
+    visibility === 'discussion' ? uploadDir : path.join(uploadDir, PRIVATE_DIRECTORY);
+  await fs.promises.mkdir(directory, { recursive: true });
   const fileName = createGeneratedImageFileName(ownerId);
-  const destination = path.join(uploadDir, fileName);
+  const destination = path.join(directory, fileName);
   const temporary = `${destination}.uploading`;
   try {
     await fs.promises.writeFile(temporary, output, { flag: 'wx' });
@@ -83,8 +87,9 @@ async function persistOneImage(image, { ownerId, uploadDir }) {
   }
   return {
     placeholder: image.placeholder,
-    markdown: `![${safeAlt(image.alt)}](/uploads/${fileName})`,
+    markdown: `![${safeAlt(image.alt)}](${visibility === 'discussion' ? '/uploads/' : '/api/ai/images/'}${fileName})`,
     fileName,
+    destination,
   };
 }
 
@@ -106,7 +111,7 @@ function stripGeneratedImages(payload, message = '> 图片生成结果暂时无�
   return next;
 }
 
-async function persistGeneratedImages(payload, { ownerId, uploadDir }) {
+async function persistGeneratedImages(payload, { ownerId, uploadDir, visibility = 'private' }) {
   const images = payload?.generated_images;
   if (!Array.isArray(images) || !images.length) return { payload, generatedCount: 0, files: [] };
   if (images.length > MAX_GENERATED_IMAGES) throw new Error('单次回答最多生成一张图片');
@@ -114,12 +119,10 @@ async function persistGeneratedImages(payload, { ownerId, uploadDir }) {
   const replacements = [];
   try {
     for (const image of images)
-      replacements.push(await persistOneImage(image, { ownerId, uploadDir }));
+      replacements.push(await persistOneImage(image, { ownerId, uploadDir, visibility }));
   } catch (error) {
     await Promise.all(
-      replacements.map((item) =>
-        fs.promises.unlink(path.join(uploadDir, item.fileName)).catch(() => {}),
-      ),
+      replacements.map((item) => fs.promises.unlink(item.destination).catch(() => {})),
     );
     throw error;
   }

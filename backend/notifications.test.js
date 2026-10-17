@@ -669,6 +669,35 @@ test('only administrators can publish or inspect audience and delivery state', a
   assert.equal(pool.data.notifications[0].recipient_id, 2);
 });
 
+test('legacy moderation topics never leak through the inbox before cleanup and recipient checks remain intact', async (t) => {
+  const pool = createDatabase();
+  const created = new Date('2026-01-01T00:00:00.000Z');
+  pool.data.notifications.push({
+    id: 1,
+    recipient_id: 1,
+    kind: 'moderation',
+    title: '【心理关怀】须负责人重点复核',
+    body: '该内容触发心理关怀人工审核要求。',
+    link: '/moderation?id=private-submission',
+    event_key: 'moderation-auto:01234567-89ab-cdef-0123-456789abcdef:review',
+    read_at: created,
+    created_at: created,
+  });
+  const before = structuredClone(pool.data.notifications[0]);
+  const request = await startServer(t, pool);
+  const payload = await (await request('/notifications', { user: 1 })).json();
+  assert.equal(payload.notifications.length, 1);
+  assert.match(payload.notifications[0].title, /重点复核/);
+  assert.doesNotMatch(JSON.stringify(payload), /心理关怀|政治内容|event_key/);
+  assert.equal(payload.notifications[0].readAt, created.toISOString());
+  assert.equal(payload.notifications[0].createdAt, created.toISOString());
+  assert.equal(payload.notifications[0].link, before.link);
+  assert.equal(payload.unreadCount, 0);
+  assert.deepEqual(pool.data.notifications[0], before);
+  assert.deepEqual((await (await request('/notifications')).json()).notifications, []);
+  assert.equal((await request('/notifications/1/read', { method: 'POST' })).status, 404);
+});
+
 test(
   'MySQL: full existing schema coexists with inbox, deduplication, transactions and outbox retry',
   {

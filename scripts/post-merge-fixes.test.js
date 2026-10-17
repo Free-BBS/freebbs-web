@@ -4,6 +4,26 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { hashPassword, verifyPasswordAsync } = require('../backend/password');
 const { clientIpForBackend } = require('../proxy-client-ip');
+const { policy, createPrivacyPolicyService } = require('../backend/privacy-policy');
+
+const privacyAcknowledgement = {
+  privacyAccepted: true,
+  privacyPolicyVersion: policy.version,
+  privacyPolicyHash: policy.contentHash,
+};
+
+function unconfirmedPrivacyPolicyService() {
+  return createPrivacyPolicyService({
+    pool: {
+      execute: async (sql, [userId, version]) => {
+        assert.match(sql, /^SELECT .* FROM privacy_policy_acceptances /);
+        assert.equal(userId, 7);
+        assert.equal(version, policy.version);
+        return [[]];
+      },
+    },
+  });
+}
 
 test('login password verification leaves the event loop responsive', async () => {
   const stored = hashPassword('correct');
@@ -12,7 +32,9 @@ test('login password verification leaves the event loop responsive', async () =>
     completed = true;
     return matches;
   });
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   assert.equal(completed, false);
   assert.equal(await verification, true);
   assert.equal(await verifyPasswordAsync('wrong', stored), false);
@@ -76,7 +98,7 @@ const loginCode = server.slice(
   server.indexOf("app.post('/api/auth/login',"),
   server.indexOf("app.post('/api/auth/reset-password',"),
 );
-test('production login accepts password alone, rejects invalid credentials and missing input', async () => {
+test('production login requires valid credentials and current policy acknowledgement without recording first acceptance', async () => {
   let handler;
   let lookups = 0;
   const ctx = vm.createContext({
@@ -91,12 +113,13 @@ test('production login accepts password alone, rejects invalid credentials and m
         assert.match(sql, /WHERE username = \? OR email = \?/);
         return [
           args[0] === 'reader'
-            ? [{ username: 'reader', password_hash: hashPassword('correct') }]
+            ? [{ id: 7, username: 'reader', password_hash: hashPassword('correct') }]
             : [],
         ];
       },
     },
     verifyPasswordAsync,
+    privacyPolicyService: unconfirmedPrivacyPolicyService(),
     loginRateLimiter: {
       consumeIp: async () => ({ allowed: true }),
       consumeAccount: async () => ({ allowed: true }),
@@ -120,14 +143,31 @@ test('production login accepts password alone, rejects invalid credentials and m
     await handler({ body }, response);
     return response;
   };
-  assert.equal(
-    (await call({ identifier: ' reader ', password: 'correct' })).payload.token,
-    'verified-token',
-  );
+  const signedIn = await call({
+    identifier: ' reader ',
+    password: 'correct',
+    ...privacyAcknowledgement,
+  });
+  assert.equal(signedIn.payload.token, 'verified-token');
+  assert.equal(signedIn.payload.privacyPolicy.accepted, false);
+  assert.equal(signedIn.payload.privacyPolicy.requiresFullPolicy, true);
   assert.equal((await call({ identifier: 'reader', password: 'wrong' })).code, 401);
   assert.equal((await call({ identifier: 'unknown', password: 'correct' })).code, 401);
   assert.equal((await call({ identifier: 'reader' })).code, 400);
   assert.equal(lookups, 3);
+  const missingAcknowledgement = await call({ identifier: 'reader', password: 'correct' });
+  assert.equal(missingAcknowledgement.code, 428);
+  assert.equal(missingAcknowledgement.payload.code, 'privacy_policy_required');
+  assert.equal(missingAcknowledgement.payload.token, undefined);
+  const staleAcknowledgement = await call({
+    identifier: 'reader',
+    password: 'correct',
+    ...privacyAcknowledgement,
+    privacyPolicyHash: 'outdated-policy-hash',
+  });
+  assert.equal(staleAcknowledgement.code, 428);
+  assert.equal(staleAcknowledgement.payload.code, 'privacy_policy_changed');
+  assert.equal(staleAcknowledgement.payload.token, undefined);
   const registration = server.slice(
     server.indexOf("app.post('/api/auth/register',"),
     server.indexOf("app.post('/api/auth/login',"),
@@ -180,6 +220,7 @@ test('login rejects repeated guesses before password verification and accepts lo
       hashes += 1;
       return password === 'correct';
     },
+    privacyPolicyService: unconfirmedPrivacyPolicyService(),
     toUserProfile: (row) => ({ username: row.username }),
     issueToken: () => 'verified-token',
   });
@@ -200,7 +241,10 @@ test('login rejects repeated guesses before password verification and accepts lo
         this.payload = payload;
       },
     };
-    await handler({ body: { identifier, password }, ip: '203.0.113.5' }, response);
+    await handler(
+      { body: { identifier, password, ...privacyAcknowledgement }, ip: '203.0.113.5' },
+      response,
+    );
     return { ...response, headers };
   };
   for (const identifier of [

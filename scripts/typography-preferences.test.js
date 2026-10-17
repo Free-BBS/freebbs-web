@@ -474,6 +474,19 @@ for (const [file, mode, endpoint] of [
       agreement.checked = true;
       agreement.dataset.version = '2026-09-09';
     }
+    if (mode === 'login') {
+      harness.elements.get('auth-privacy-agreement').checked = true;
+      harness.window.freeBbsPrivacy = {
+        async loginAcknowledgement() {
+          assert.equal(harness.elements.get('auth-privacy-agreement').checked, true);
+          return {
+            privacyAccepted: true,
+            privacyPolicyVersion: 'typography-fixture',
+            privacyPolicyHash: 'fixture-hash',
+          };
+        },
+      };
+    }
     if (mode === 'register' || mode === 'login') {
       harness.window.freeBbsAuthChallenge = {
         run: ({ submit }) => submit({ challengeId: 'typography-fixture', k: 0 }),

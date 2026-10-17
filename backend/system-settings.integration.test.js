@@ -8,7 +8,11 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
 const mysql = require('mysql2/promise');
-const { solveAuthChallenge } = require('./test-helpers/auth');
+const {
+  solveAuthChallenge,
+  privacyAcknowledgement,
+  acceptCurrentPrivacy,
+} = require('./test-helpers/auth');
 
 const projectRoot = path.resolve(__dirname, '..');
 const shouldRun = process.env.RUN_SYSTEM_SETTINGS_INTEGRATION === '1';
@@ -194,15 +198,22 @@ test(
         body: JSON.stringify({ identifier }),
       });
       assert.equal(challenge.response.status, 200);
-      return fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
+      const result = await fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identifier,
           password,
           captcha: solveAuthChallenge(challenge.body),
+          ...privacyAcknowledgement(),
         }),
       });
+      if (result.response.ok && result.body.token)
+        result.body.privacyPolicy = await acceptCurrentPrivacy(
+          `http://127.0.0.1:${apiPort}/api`,
+          result.body.token,
+        );
+      return result;
     }
     const login = await loginUser('admin', 'free-bbs');
     assert.equal(login.response.status, 200);

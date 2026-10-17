@@ -26,8 +26,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/registration-whitelist.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/admin-navigation.css" />
   </head>
-  <body class="adminusers-page">
+  <body class="adminusers-page admin-settings-detail-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -154,6 +155,14 @@
         data-admin-content
         data-page-title="用户管理"
       >
+        <nav class="admin-settings-navigation" aria-label="管理员页面导航">
+          <a
+            class="system-settings-back bbs-action"
+            data-action-tone="secondary"
+            href="/system-settings"
+            >← 返回系统设置</a
+          >
+        </nav>
         <section class="settings-shell admin-directory-shell" aria-label="用户管理">
           <header class="admin-page-header">
             <div class="admin-page-heading">
@@ -376,6 +385,7 @@
     <script src="/request-runtime.js"></script>
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
+    <script src="/admin-ai-dialog-export.js"></script>
     <script src="/admin-account-credentials.js"></script>
     <script src="/admin-certifications.js"></script>
     <script src="/learning-analytics.js?v=20261011-records-4"></script>

@@ -12,6 +12,12 @@ const submitSource = appSource.slice(
   appSource.indexOf('async function handleDiscussionComposeSubmit(event)'),
   appSource.indexOf('\nfunction insertTextAtTextarea'),
 );
+const submissionFeedbackSource = appSource.slice(
+  appSource.indexOf('function setDiscussionMessage(message)'),
+  appSource.indexOf('\nasync function observeModerationSubmission'),
+);
+const noticeVersion = 'synthetic-policy-v1';
+const requestId = '00000000-0000-4000-8000-000000000001';
 const cid = 'c_0123456789abcdef01234567';
 const handoffUrl = `https://example.test/discussion?board=circuit&compose=circuit&cid=${cid}&revision=3`;
 const reference = `[电路动态图](/circuit?cid=${cid}&revision=3&view=live)`;
@@ -25,9 +31,21 @@ const flush = () =>
 function makeElement() {
   const listeners = new Map();
   const classes = new Set();
+  const children = [];
+  let text = '';
   return {
     value: '',
-    textContent: '',
+    children,
+    get textContent() {
+      return text;
+    },
+    set textContent(value) {
+      text = value;
+      children.length = 0;
+    },
+    append(...nodes) {
+      children.push(...nodes);
+    },
     hidden: false,
     dataset: {},
     classList: {
@@ -74,14 +92,21 @@ function harness({
   const window = makeElement();
   let location = new URL(url);
   Object.defineProperty(window, 'location', { get: () => location });
+  const historyUpdates = [];
   window.history = {
     replaceState(_state, _title, nextUrl) {
+      historyUpdates.push(String(nextUrl));
       location = new URL(String(nextUrl), location);
     },
   };
   const calls = [];
   const app = {
-    userState: { uid, isLoggedIn: Boolean(uid), isAdmin: false },
+    userState: {
+      uid,
+      token: uid ? `synthetic-${uid}` : '',
+      isLoggedIn: Boolean(uid),
+      isAdmin: false,
+    },
     sessionReady: Promise.resolve(),
     discussionReady:
       ready ||
@@ -115,6 +140,8 @@ function harness({
     calls,
     storage,
     form,
+    elements,
+    historyUpdates,
     title,
     content,
     board,
@@ -129,12 +156,21 @@ function connectSubmission(fixture, callApi) {
   const { title: titleField, content: contentField } = fixture;
   const button = { disabled: false };
   let resetCount = 0;
-  const messages = [];
+  const message = fixture.elements.get('discussion-compose-message');
+  const events = [];
+  const postLoads = [];
+  const renderedPosts = [];
+  const queryUpdates = [];
+  const observations = [];
+  let previewRefreshes = 0;
   Object.assign(fixture.form, {
     querySelector: () => button,
     setAttribute() {},
     removeAttribute() {},
-    dispatchEvent: (event) => fixture.form.emit(event.type, event),
+    dispatchEvent: (event) => {
+      events.push(event.type);
+      return fixture.form.emit(event.type, event);
+    },
     reset() {
       resetCount += 1;
       titleField.value = '';
@@ -142,32 +178,56 @@ function connectSubmission(fixture, callApi) {
     },
   });
   const context = vm.createContext({
-    document: { getElementById: () => null },
+    document: {
+      getElementById: (id) => fixture.elements.get(id),
+      createElement: makeElement,
+      createTextNode: (textContent) => ({ textContent }),
+    },
+    window: {
+      location: fixture.window.location,
+      FreeBbsModerationNotice: { confirm: async () => noticeVersion },
+    },
+    crypto: { randomUUID: () => requestId },
+    moderationSubmissionIntents: new Map(),
     discussionComposeForm: fixture.form,
+    discussionComposeMessage: message,
     discussionComposeBoard: fixture.board,
     discussionComposeTitle: fixture.title,
     discussionComposeContent: fixture.content,
     discussionState: { isFallback: false },
     userState: fixture.app.userState,
     callApi,
-    setDiscussionMessage: (message) => messages.push(message),
-    loadDiscussionPosts: async () => {},
-    renderDiscussionDetail() {},
+    loadDiscussionPosts: async (options) => postLoads.push(options),
+    renderDiscussionDetail: (post) => renderedPosts.push(post),
+    observeModerationSubmission: (id, target) => observations.push({ id, target }),
+    renderDiscussionUploadPreviews: () => {
+      previewRefreshes += 1;
+    },
     syncDiscussionAnonymousOption() {},
-    updateDiscussionQuery() {},
+    updateDiscussionQuery: (query) => queryUpdates.push(query),
+    isCurrentPath: (current) => fixture.window.location.pathname === current,
     openModal() {},
     CustomEvent: class CustomEvent {
       constructor(type, options) {
         this.type = type;
-        this.detail = options.detail;
+        this.detail = options?.detail;
       }
     },
   });
-  vm.runInContext(submitSource, context);
+  vm.runInContext(`${submissionFeedbackSource}\n${submitSource}`, context);
   return {
     submit: () => context.handleDiscussionComposeSubmit({ preventDefault() {} }),
     button,
-    messages,
+    message,
+    events,
+    postLoads,
+    renderedPosts,
+    queryUpdates,
+    observations,
+    context,
+    get previewRefreshes() {
+      return previewRefreshes;
+    },
     get resetCount() {
       return resetCount;
     },
@@ -439,6 +499,8 @@ test('manual publish sends the edited fields once, then clears the persisted han
         boardSlug: 'math',
         loginRequired: true,
         isAnonymous: false,
+        requestId,
+        moderationNoticeVersion: noticeVersion,
       },
     },
   ]);
@@ -448,6 +510,11 @@ test('manual publish sends the edited fields once, then clears the persisted han
   assert.equal(submission.button.disabled, false);
   assert.equal(fixture.storage.has(storageKey), false);
   assert.equal(fixture.storage.has(pointerKey), false);
+  assert.deepEqual(submission.events, ['discussion:published']);
+  assert.equal(submission.renderedPosts[0].id, 'POST01');
+  assert.equal(submission.postLoads.length, 1);
+  assert.equal(submission.context.moderationSubmissionIntents.size, 0);
+  assert.equal(submission.observations.length, 0);
 });
 
 test('a failed manual publish leaves the editable draft and storage available to retry', async () => {
@@ -463,6 +530,63 @@ test('a failed manual publish leaves the editable draft and storage available to
   assert.match(JSON.parse(fixture.storage.get(storageKey)).content, /My explanation/);
   assert.equal(submission.resetCount, 0);
   assert.equal(submission.button.disabled, false);
-  assert.equal(submission.messages.at(-1), 'Temporary failure');
+  assert.equal(submission.message.textContent, 'Temporary failure');
+  assert.deepEqual(submission.events, []);
+  assert.equal(submission.postLoads.length, 0);
+  assert.equal(submission.context.moderationSubmissionIntents.size, 1);
   assert.equal(fixture.form.classList.contains('hidden'), false);
+});
+
+test('a pending submission clears its handoff once without treating it as a published post', async () => {
+  const fixture = harness();
+  await fixture.ready();
+  fixture.title.value = 'Submitted circuit notes';
+  fixture.content.value = `My explanation\n\n${reference}`;
+  await fixture.form.emit('input');
+  const calls = [];
+  const submission = connectSubmission(fixture, async (route, options) => {
+    calls.push({ route, body: JSON.parse(options.body), method: options.method });
+    return { moderation: { status: 'pending', id: 'circuit-submission-1' } };
+  });
+  await submission.submit();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].route, '/discussion/posts');
+  assert.equal(calls[0].method, 'POST');
+  assert.match(calls[0].body.contentMarkdown, /My explanation/);
+  assert.equal(calls[0].body.requestId, requestId);
+  assert.equal(calls[0].body.moderationNoticeVersion, noticeVersion);
+  assert.deepEqual(submission.events, ['discussion:submitted']);
+  assert.equal(submission.resetCount, 1);
+  assert.equal(submission.previewRefreshes, 1);
+  assert.equal(submission.button.disabled, false);
+  assert.equal(submission.context.moderationSubmissionIntents.size, 0);
+  assert.equal(submission.message.dataset.moderationSubmissionId, 'circuit-submission-1');
+  assert.equal(
+    submission.message.children.at(-1).href,
+    '/moderation?mine=1&id=circuit-submission-1',
+  );
+  assert.equal(submission.observations[0].target, submission.message);
+  assert.equal(submission.observations[0].id, 'circuit-submission-1');
+  assert.equal(submission.postLoads.length, 0);
+  assert.equal(submission.renderedPosts.length, 0);
+  assert.equal(submission.queryUpdates.length, 0);
+  assert.equal(fixture.form.classList.contains('hidden'), false);
+  assert.equal(fixture.storage.has(storageKey), false);
+  assert.equal(fixture.storage.has(pointerKey), false);
+  assert.equal(fixture.form.dataset.circuitHandoff, undefined);
+  assert.equal(fixture.window.location.search.includes('compose='), false);
+  const finishedUpdates = fixture.historyUpdates.length;
+  await fixture.form.emit('discussion:submitted');
+  await fixture.form.emit('discussion:published');
+  await fixture.window.emit('pagehide');
+  assert.equal(
+    fixture.historyUpdates.length,
+    finishedUpdates,
+    'duplicate completion does not rerun cleanup',
+  );
+  assert.equal(fixture.storage.has(storageKey), false, 'pagehide cannot restore a submitted draft');
+  const fresh = harness({ url: fixture.window.location.href, storage: fixture.storage });
+  await fresh.ready();
+  assert.equal(fresh.calls.length, 0);
+  assert.equal(fresh.content.value, '');
 });
