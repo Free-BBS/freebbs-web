@@ -74,10 +74,10 @@ describe('organization exhibition catalog', () => {
     );
     expect(findOrganization('invalid')).toBeUndefined();
   });
-  it('registers all eighteen submitted exhibitions at valid, unique browse routes', () => {
-    expect(SHOWCASES).toHaveLength(18);
-    expect(new Set(SHOWCASES.map(({ departmentId }) => departmentId)).size).toBe(18);
-    expect(new Set(SHOWCASES.map(showcaseRoute)).size).toBe(18);
+  it('registers all twenty submitted exhibitions at valid, unique browse routes', () => {
+    expect(SHOWCASES).toHaveLength(20);
+    expect(new Set(SHOWCASES.map(({ departmentId }) => departmentId)).size).toBe(20);
+    expect(new Set(SHOWCASES.map(showcaseRoute)).size).toBe(20);
     for (const content of SHOWCASES) {
       const [organizationKey, departmentKey] = content.departmentId.split('.');
       const organization = findOrganization(organizationKey)!;

@@ -114,6 +114,14 @@ export function OrganizationsPage({
         }
         fullPage={fullPage}
       >
+        {fullPage && curated?.departmentId === 'youth_league.organization' ? (
+          <Link
+            className="sc-fullscreen-toggle sc-department-tool"
+            to="/organizations/youth_league/organization/ledger"
+          >
+            班级活动台账 <span aria-hidden="true">↗</span>
+          </Link>
+        ) : null}
         {fullPage && curated ? (
           <SubmittedDepartmentShowcase key={curated.slug} content={curated} fullPage />
         ) : canonicalDepartment ? (

@@ -11,6 +11,10 @@ npm ci --prefix development
 echo "[ci] validating development center"
 npm run check --prefix development
 
+echo "[ci] validating portable organization showcase"
+node scripts/build-showcase-review.mjs
+node --test scripts/showcase-review.test.js scripts/showcase-offline-compat.test.js scripts/showcase-photo-layout.test.js scripts/showcase-audiovisual-player.test.js scripts/organization-showcase-static.test.js
+
 echo "[ci] syntax check"
 for script in scripts/*.sh; do
   bash -n "$script"

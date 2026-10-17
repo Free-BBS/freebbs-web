@@ -1444,6 +1444,11 @@ body.theme-light .curated-showcase {
   width: 18px;
   height: 18px;
 }
+.sc-department-tool {
+  right: auto;
+  left: max(16px, env(safe-area-inset-left));
+  text-decoration: none;
+}
 .sc-fullscreen-toggle:hover {
   background: var(--surface-muted);
 }

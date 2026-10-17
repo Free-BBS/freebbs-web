@@ -35,8 +35,12 @@ const callbackSource = playerCallbackSource();
 
 async function settle() {
   // Media promises and volumechange events finish on separate turns in browsers.
-  await new Promise((done) => setTimeout(done, 0));
-  await new Promise((done) => setTimeout(done, 0));
+  await new Promise((done) => {
+    setTimeout(done, 0);
+  });
+  await new Promise((done) => {
+    setTimeout(done, 0);
+  });
 }
 
 function createPlayer(t, { rejectAudioAttempts = 0 } = {}) {

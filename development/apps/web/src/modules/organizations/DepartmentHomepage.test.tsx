@@ -164,16 +164,33 @@ describe('department homepage', () => {
     expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByTitle('体育中心主页')).not.toBeInTheDocument();
   });
-  it('keeps the original introduction fallback for departments without a submitted exhibition', async () => {
-    setup({
+  it('shows the complete learning and training submission when no uploaded override exists', async () => {
+    const { request } = setup({
       empty: true,
       canEdit: false,
       organizationKey: 'science_association',
       departmentKey: 'training',
     });
-    expect(await screen.findByText('部门主页正在准备中。')).toBeInTheDocument();
+    await screen.findByText('暂无活跃活动');
     expect(screen.getByRole('heading', { name: '学习培养部', level: 2 })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '学习与成长，都有伙伴同行' })).getAllByRole('img'),
+    ).toHaveLength(4);
+    expect(
+      within(screen.getByRole('region', { name: '交流的日常，也藏着新的收获' })).getAllByRole(
+        'img',
+      ),
+    ).toHaveLength(2);
+    expect(screen.getByRole('link', { name: /songxz23@mails.tsinghua.edu.cn/ })).toHaveAttribute(
+      'href',
+      'mailto:songxz23@mails.tsinghua.edu.cn',
+    );
+    expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+    expect(request.mock.calls.map(([path]) => path).sort()).toEqual([
+      '/organizations/science_association/training/activities',
+      '/organizations/science_association/training/home',
+    ]);
   });
   it('preserves accurate active and past activity destinations alongside the curated fallback', async () => {
     const { request } = setup({ empty: true, canEdit: false, active: true });
