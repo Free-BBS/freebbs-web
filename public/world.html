@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/world-refinements.css" />
+    <link rel="stylesheet" href="/world-course-directory.css?v=20261016-direct-courses-1" />
   </head>
   <body class="world-page">
     <div class="page-shell page-shell-world">
@@ -150,6 +151,15 @@
           <header class="world-explorer-intro">
             <h1 id="world-page-title">探索六大知识岛</h1>
             <p>轻轻转动星球，选一座知识岛，开始今天的学习。</p>
+            <nav
+              class="world-course-directory"
+              id="world-course-directory"
+              aria-labelledby="world-course-directory-title"
+              hidden
+            >
+              <span id="world-course-directory-title">直接选课程</span>
+              <ul id="world-course-directory-list"></ul>
+            </nav>
           </header>
 
           <div class="world-orbit-shell">
@@ -524,7 +534,7 @@
     <script src="/request-runtime.js"></script>
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
-    <script src="/world.js"></script>
+    <script src="/world.js?v=20261016-direct-courses-1"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

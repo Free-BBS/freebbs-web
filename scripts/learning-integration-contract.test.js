@@ -23,21 +23,37 @@ const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
 test('the human-learning release has coherent fresh cache keys on every changed page asset', () => {
   const release = '20261010-human-1';
   const authoringReleases = {
-    'knowledge-overview.js': '20261014-world-ui-1',
+    'knowledge-overview.js': '20261016-route-2',
     'knowledge-overview.css': '20261014-world-ui-1',
-    'knowledge-workspace.css': '20261014-world-ui-1',
-    'knowledge.js': '20261015-human-nav-1',
-    'knowledge-workspace.js': '20261015-human-nav-1',
-    'learning-next-steps.js': '20261015-human-nav-1',
+    'knowledge-workspace.css': '20261016-human-nav-3',
+    'knowledge.js': '20261017-needs-flow-1',
+    'learning-policy.js': '20261017-needs-flow-1',
+    'knowledge-workspace.js': '20261017-needs-flow-1',
+    'learning-workflow.js': '20261017-needs-flow-1',
+    'learning-workflow-panel.js': '20261017-needs-flow-1',
+    'learning-workflow-panel.css': '20261017-needs-flow-1',
+    'learning-analytics.js': '20261016-learning-4x4-1',
+    'learning-next-steps.js': '20261016-learning-4x4-1',
+    'learning-strategies.js': '20261017-needs-flow-1',
+    'learning-start.js': '20261016-learning-4x4-1',
+    'learning-start.css': '20261016-learning-4x4-1',
     'learning-reader.js': '20261015-human-nav-1',
     'learning-outline.js': '20261015-human-nav-1',
     'learning-outline.css': '20261015-human-nav-1',
     'course-reader.css': '20261014-world-ui-1',
     'course-directory.js': '20261014-world-ui-1',
-    'learning-content.js': '20261012-chapter-names-1',
-    'course-structure.js': '20261015-human-nav-1',
-    'course-structure.css': '20261015-human-nav-1',
-    'course-map.js': '20261015-human-nav-1',
+    'learning-graph-layout.js': '20261015-graph-1',
+    'learning-content.js': '20261016-route-2',
+    'course-structure.js': '20261016-route-2',
+    'course-structure.css': '20261016-route-2',
+    'course-map.js': '20261016-route-2',
+    'learning-route.js': '20261016-route-2',
+    'course-learning-route.js': '20261016-route-2',
+    'course-learning-route.css': '20261016-route-2',
+    'learning-guide.js': '20261016-route-2',
+    'course-navigation.js': '20261016-route-2',
+    'course-catalog.js': '20261016-route-2',
+    'course-catalog.css': '20261016-route-2',
     'course-upload.js': '20261012-authoring-1',
   };
   const humanAssets = new Set([
@@ -60,15 +76,22 @@ test('the human-learning release has coherent fresh cache keys on every changed 
   ]);
   const assets = {
     'public/knowledge.html': [
+      'course-navigation.js',
       'knowledge-overview.js',
       'knowledge-overview.css',
       'learning-content.js',
+      'learning-graph-layout.js',
       'knowledge-workspace.css',
       'human-learning-annotations.css',
       'learning-stars.js',
       'learning-analytics.js',
       'learning-strategies.js',
+      'learning-policy.js',
+      'learning-workflow.js',
+      'learning-workflow-panel.js',
+      'learning-workflow-panel.css',
       'learning-start.js',
+      'learning-start.css',
       'learning-next-steps.js',
       'learning-chat-drafts.js',
       'knowledge.js',
@@ -84,19 +107,33 @@ test('the human-learning release has coherent fresh cache keys on every changed 
       'learning-guide.js',
     ],
     'public/course.html': [
+      'course-navigation.js',
       'knowledge-overview.js',
       'knowledge-overview.css',
       'course-reader.css',
       'course-directory.js',
       'learning-content.js',
+      'learning-graph-layout.js',
       'course-structure.css',
+      'learning-route.js',
+      'course-learning-route.js',
+      'course-learning-route.css',
+      'course-catalog.js',
+      'course-catalog.css',
+      'learning-guide.js',
       'learning-stars.js',
       'course-structure.js',
       'learning-strategies.js',
+      'learning-policy.js',
       'learning-start.js',
+      'learning-start.css',
       'course-map.js',
     ],
-    'public/course-map-editor.html': ['learning-content.js', 'course-map.js'],
+    'public/course-map-editor.html': [
+      'learning-graph-layout.js',
+      'learning-content.js',
+      'course-map.js',
+    ],
     'public/settings.html': ['course-upload.js'],
     'public/adminusers.html': ['learning-analytics.js', 'learning-analytics.css'],
     'public/profile.html': ['learning-analytics.js', 'learning-analytics.css'],
@@ -445,12 +482,26 @@ test('course and knowledge pages load shared structure and content helpers befor
   assertBefore(course, '/app.js', '/course-map.js');
   assertBefore(course, '/learning-progress.js', '/course-map.js');
   assertBefore(course, '/knowledge-overview.js', '/course-structure.js');
+  assertBefore(course, '/course-navigation.js', '/knowledge-overview.js');
+  assertBefore(course, '/learning-route.js', '/course-learning-route.js');
+  assertBefore(course, '/course-learning-route.js', '/course-structure.js');
+  assertBefore(course, '/course-catalog.js', '/course-structure.js');
   assertBefore(course, '/learning-content.js', '/course-structure.js');
+  assertBefore(course, '/learning-policy.js', '/learning-strategies.js');
+  assertBefore(course, '/learning-graph-layout.js', '/learning-content.js');
   assertBefore(course, '/course-structure.js', '/course-map.js');
   const knowledge = scriptOrder(read('public/knowledge.html'));
   assertBefore(knowledge, '/app.js', '/knowledge.js');
+  assertBefore(knowledge, '/learning-policy.js', '/learning-strategies.js');
+  assertBefore(knowledge, '/learning-workflow.js', '/knowledge-workspace.js');
+  assertBefore(knowledge, '/learning-workflow-panel.js', '/knowledge-workspace.js');
+  assertBefore(knowledge, '/learning-strategies.js', '/learning-start.js');
   assertBefore(knowledge, '/learning-progress.js', '/knowledge.js');
   assertBefore(knowledge, '/learning-content.js', '/knowledge.js');
+  assertBefore(knowledge, '/course-navigation.js', '/knowledge.js');
+  assertBefore(knowledge, '/learning-graph-layout.js', '/learning-content.js');
+  const editor = scriptOrder(read('public/course-map-editor.html'));
+  assertBefore(editor, '/learning-graph-layout.js', '/learning-content.js');
   assertBefore(knowledge, '/learning-next-steps.js', '/knowledge.js');
   assertBefore(knowledge, '/learning-next-steps.js', '/knowledge-workspace.js');
   assertBefore(knowledge, '/knowledge-annotations.js', '/knowledge-workspace.js');

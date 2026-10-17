@@ -82,7 +82,8 @@ test('isolated preview serves mock APIs and processes avatars only in memory', a
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-security-policy'), /connect-src 'self'/);
       const html = await response.text();
-      assert.match(html, /<script src="\/world.js"><\/script>/);
+      assert.match(html, /<script src="\/world\.js\?v=20261016-direct-courses-1"><\/script>/);
+      assert.match(html, /href="\/world-course-directory\.css\?v=20261016-direct-courses-1"/);
       assert.match(html, /qa-only-3106-not-a-real-token/);
       assert.doesNotMatch(html, /<link\b[^>]*href=["']https?:\/\//i);
       assert.ok(
@@ -90,6 +91,12 @@ test('isolated preview serves mock APIs and processes avatars only in memory', a
       );
       assert.equal((await (await get('/api/auth/me', '/world')).json()).user.uid, 'QA-LOCAL-ONLY');
       assert.equal((await get('/world.js', '/world')).status, 200);
+      const directoryStyles = await get(
+        '/world-course-directory.css?v=20261016-direct-courses-1',
+        '/world',
+      );
+      assert.equal(directoryStyles.status, 200);
+      assert.match(await directoryStyles.text(), /\.world-course-directory-link:focus-visible/);
     },
   );
 

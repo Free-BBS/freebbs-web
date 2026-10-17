@@ -42,7 +42,7 @@ test('independent guide dependencies download in parallel before loading the con
     scripts.map((item) => item.src),
     [
       '/max-guide-releases.js?v=20261008-1',
-      '/max-guide-stations.js?v=20261008-1',
+      '/max-guide-stations.js?v=20261016-route-2',
       '/max-guide-geometry.js?v=20261008-1',
     ],
   );

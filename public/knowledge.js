@@ -71,12 +71,19 @@
 
   function knowledgeHref(nextNodeId) {
     const query = new URLSearchParams({ course: courseSlug, point: nextNodeId });
+    const returnTo = window.FreeBbsCourseNavigation?.encode?.(params.get('returnTo'), courseSlug);
+    if (returnTo) query.set('returnTo', returnTo);
     return `/knowledge?${query.toString()}`;
   }
 
   function courseDirectoryHref() {
-    const query = new URLSearchParams({ course: courseSlug });
-    if (state.node?.id) query.set('focus', state.node.id);
+    const query =
+      window.FreeBbsCourseNavigation?.parse?.(params.get('returnTo'), courseSlug) ||
+      new URLSearchParams({ course: courseSlug });
+    if (state.node?.id) {
+      if (query.get('focus') !== state.node.id) query.delete('routePage');
+      query.set('focus', state.node.id);
+    }
     return `/course?${query.toString()}`;
   }
 
@@ -101,7 +108,7 @@
     title.textContent = `${targetNode.id} · ${targetNode.title}`;
     link.setAttribute(
       'aria-label',
-      `${linkId.includes('previous') ? '上一个' : '下一个'}知识点：${targetNode.title}`,
+      `目录中的${linkId.includes('previous') ? '上一个' : '下一个'}知识点：${targetNode.title}`,
     );
   }
 
@@ -750,9 +757,69 @@
   function buildKnowledgeChatRequest(prompt) {
     const course = state.course || {};
     const node = state.node || {};
-    const goal = window.FreeBbsLearningWorkspace?.currentGoal?.() || '';
+    const purposes = {
+      concepts: 'learn',
+      practice: 'practice',
+      review: 'review',
+      explore: 'explore',
+    };
     const task = state.learningTask || {};
+    const preference = window.FreeBbsLearningStart?.currentPreference?.() || null;
+    const activeGoal = window.FreeBbsLearningWorkspace?.currentGoal?.() || task.goal || '';
+    const goal =
+      typeof activeGoal === 'string' && Object.hasOwn(purposes, activeGoal) ? activeGoal : '';
+    let learningPolicyContext = null;
+    // Current confirmed self-report and current intention are the normal entry.
+    // An explicit old URL is only a fallback; it never overrides a newer choice.
+    if (
+      !state.learningPolicySuspended &&
+      typeof window.FreeBbsLearningPolicy?.normalizeContext === 'function'
+    ) {
+      const policy = window.FreeBbsLearningPolicy;
+      const policyParams = new URLSearchParams(window.location.search);
+      if (
+        ['policy', 'purpose', 'level', 'module'].every(
+          (key) => policyParams.getAll(key).length <= 1,
+        )
+      ) {
+        learningPolicyContext =
+          !state.learningPolicyUrlSuspended &&
+          policy.normalizeContext({
+            policyVersion: policyParams.get('policy'),
+            purpose: policyParams.get('purpose'),
+            level: policyParams.get('level'),
+            ...(policyParams.has('module') && !state.learningPolicyUrlModuleSuperseded
+              ? { module: policyParams.get('module') }
+              : {}),
+          });
+      }
+      const selectedGoal = goal || preference?.goal;
+      if (preference && typeof selectedGoal === 'string' && Object.hasOwn(purposes, selectedGoal)) {
+        const purpose = purposes[selectedGoal];
+        learningPolicyContext = policy.normalizeContext({
+          policyVersion: policy.POLICY_VERSION,
+          purpose,
+          level: preference.level,
+          ...(learningPolicyContext?.purpose === purpose &&
+          learningPolicyContext.level === preference.level &&
+          learningPolicyContext.module
+            ? { module: learningPolicyContext.module }
+            : {}),
+        });
+      }
+    }
 
+    const learningStepContext = learningPolicyContext
+      ? normalizeCurrentLearningStep(
+          window.FreeBbsLearningWorkspace?.currentStep?.(),
+          learningPolicyContext,
+        )
+      : null;
+    // A live page step supersedes an older source URL module, never the reverse.
+    if (learningStepContext) {
+      delete learningPolicyContext.module;
+      state.learningPolicyUrlModuleSuperseded = true;
+    }
     return {
       question: prompt,
       history: state.chatMessages.slice(-6),
@@ -763,11 +830,131 @@
         knowledgePointTitle: node.title || '',
         knowledgePointSummary: node.summary || '',
         knowledgePointMarkdown: node.markdown || '',
-        learningStartPreference: window.FreeBbsLearningStart?.currentPreference() || null,
+        learningStartPreference: preference,
         learningTask:
           Object.keys(task).length || goal ? { ...task, ...(goal ? { goal } : {}) } : null,
+        ...(learningPolicyContext ? { learningPolicyContext } : {}),
+        ...(learningStepContext ? { learningStepContext } : {}),
       },
     };
+  }
+
+  function normalizeCurrentLearningStep(raw, policyContext) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const purposes = {
+      concepts: 'learn',
+      practice: 'practice',
+      review: 'review',
+      explore: 'explore',
+    };
+    const phases = {
+      learn: ['path', 'finished'],
+      practice: ['path', 'finished'],
+      review: ['recall', 'repair', 'check', 'finished'],
+      explore: ['question', 'investigate', 'finished'],
+    };
+    const modules = window.FreeBbsLearningPolicy?.MODULES || {};
+    const status = raw.status || 'active';
+    if (
+      typeof raw.goal !== 'string' ||
+      !Object.hasOwn(purposes, raw.goal) ||
+      purposes[raw.goal] !== policyContext.purpose ||
+      raw.level !== policyContext.level ||
+      typeof raw.moduleId !== 'string' ||
+      !Object.hasOwn(modules, raw.moduleId) ||
+      !phases[policyContext.purpose]?.includes(raw.phase) ||
+      !['unknown', 'gap', 'clear'].includes(raw.outcome) ||
+      !['active', 'paused', 'finished'].includes(status) ||
+      (status === 'finished') !== (raw.phase === 'finished') ||
+      !/^[a-f0-9]{64}$/.test(state.node?.documentVersion || '') ||
+      (raw.question !== undefined && typeof raw.question !== 'string')
+    )
+      return null;
+    const question = typeof raw.question === 'string' ? raw.question.trim().slice(0, 1000) : '';
+    return {
+      goal: raw.goal,
+      level: raw.level,
+      moduleId: raw.moduleId,
+      phase: raw.phase,
+      outcome: raw.outcome,
+      status,
+      courseSlug,
+      knowledgePointId: state.node.id || nodeId,
+      documentVersion: state.node.documentVersion,
+      ...(question ? { question } : {}),
+    };
+  }
+
+  function renderLearningPolicyContext() {
+    document.getElementById('knowledge-learning-policy-context')?.remove();
+    const requestContext = buildKnowledgeChatRequest('').context;
+    const context = requestContext.learningPolicyContext;
+    const mount = document.getElementById('knowledge-chat-context')?.parentElement;
+    if (!context || !state.node || !mount) return;
+    const policy = window.FreeBbsLearningPolicy;
+    const row = document.createElement('div');
+    row.id = 'knowledge-learning-policy-context';
+    row.className = 'learning-actions';
+    const label = document.createElement('small');
+    label.textContent = `学习方向：${policy.PURPOSES[context.purpose]} · ${policy.LEVELS[context.level]}`;
+    const currentStep = requestContext.learningStepContext;
+    if (currentStep)
+      label.textContent += ` · ${policy.MODULES[currentStep.moduleId].title}${{ paused: '（已暂停）', finished: '（本次已结束）' }[currentStep.status] || ''}`;
+    row.append(label);
+    const definition = !currentStep && context.module && policy.MODULES[context.module];
+    if (definition) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = '准备这一步的问题';
+      button.title = `来自学习链的「${definition.title}」，只准备可编辑草稿`;
+      button.addEventListener('click', () => {
+        const current = buildKnowledgeChatRequest('').context.learningPolicyContext;
+        if (
+          !current ||
+          current.purpose !== context.purpose ||
+          current.level !== context.level ||
+          current.module !== context.module
+        )
+          return;
+        // Existing draft/busy guards remain authoritative. Opening this source
+        // never switches the actual learning tool or sends a question for them.
+        prepareChatPrompt(definition.question);
+      });
+      row.append(button);
+    }
+    mount.append(row);
+  }
+
+  function bindLearningPolicyContext() {
+    let token = app?.userState?.token || '';
+    let uid = app?.userState?.uid || '';
+    const clear = () => {
+      state.learningPolicySuspended = true;
+      state.learningPolicyUrlSuspended = true;
+      document.getElementById('knowledge-learning-policy-context')?.remove();
+    };
+    window.addEventListener('freebbs:session-change', () => {
+      const nextToken = app?.userState?.token || '';
+      const nextUid = app?.userState?.uid || '';
+      if (nextToken === token && nextUid === uid) return;
+      const initialConfirmation = !uid && nextUid && token && token === nextToken;
+      token = nextToken;
+      uid = nextUid;
+      if (!initialConfirmation) clear();
+    });
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'free_bbs_auth_token' || event.key === null) clear();
+    });
+    window.addEventListener('learning:start-change', () => {
+      // currentPreference itself enforces owner/session validity. The old URL
+      // remains suspended even after this account confirms a new preference.
+      if (state.learningTask) delete state.learningTask.goal;
+      if (window.FreeBbsLearningStart?.currentPreference?.()) state.learningPolicySuspended = false;
+      renderLearningPolicyContext();
+    });
+    window.addEventListener('knowledge:learning-step-change', renderLearningPolicyContext);
+    if (typeof page !== 'undefined')
+      page.addEventListener('knowledge:learning-step-change', renderLearningPolicyContext);
   }
 
   function setChatSending(isSending, status = '') {
@@ -890,6 +1077,11 @@
       node: state.node,
     }),
   };
+  Promise.resolve(app?.sessionReady).then(bindLearningPolicyContext, () => {});
+  page.addEventListener('knowledge:loaded', renderLearningPolicyContext);
+  page.addEventListener('knowledge:tool-select', renderLearningPolicyContext);
+  page.addEventListener('knowledge:task-focus', renderLearningPolicyContext);
+  page.addEventListener('knowledge:goal-change', renderLearningPolicyContext);
   page.addEventListener('knowledge:open-interaction', (event) => {
     setChatTab(event.detail?.tab === 'discussion' ? 'discussion' : 'max');
     setChatOpen(true);
@@ -932,7 +1124,9 @@
       /^[A-Za-z0-9._:-]{1,120}$/.test(detail.questionId)
         ? { questionId: detail.questionId }
         : {}),
-      ...(tool === 'content' && detail.view === 'origin' ? { view: 'origin' } : {}),
+      ...(tool === 'content' && ['origin', 'overview'].includes(detail.view)
+        ? { view: detail.view }
+        : {}),
     };
   }
   page.addEventListener('knowledge:task-focus', (event) => focusLearningTask(event.detail));
@@ -943,8 +1137,7 @@
   });
   function navigateLearning(detail = {}) {
     if (detail.view === 'relations') {
-      const query = new URLSearchParams({ course: courseSlug, focus: state.node?.id || nodeId });
-      window.location.assign(`/course?${query}`);
+      window.location.assign(courseDirectoryHref());
       return;
     }
     page.dispatchEvent(
@@ -983,7 +1176,11 @@
           : undefined,
       );
     }
-    if (detail.tool === 'content' || detail.tool === 'notes') setKnowledgeView('reading');
+    if (detail.tool === 'content' || detail.tool === 'notes')
+      setKnowledgeView(
+        detail.tool === 'content' && detail.view === 'overview' ? 'overview' : 'reading',
+        { focus: detail.tool === 'content' && detail.view === 'overview' },
+      );
     state.learningTask = {
       tool: [
         'content',
@@ -1001,7 +1198,9 @@
       /^[A-Za-z0-9._:-]{1,120}$/.test(detail.questionId)
         ? { questionId: detail.questionId }
         : {}),
-      ...(detail.view === 'origin' ? { view: 'origin' } : {}),
+      ...(detail.tool === 'content' && ['origin', 'overview'].includes(detail.view)
+        ? { view: detail.view }
+        : {}),
     };
     // Heading-only fallback questions can share IDs with reviewed questions but not their role.
     // Only a server-loaded snapshot resolves the destination permanently.
@@ -2005,6 +2204,56 @@
     }
   }
 
+  function confineNarrowChatFocus(event) {
+    if (
+      event.key !== 'Tab' ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      !state.chatOpen ||
+      !window.matchMedia?.('(max-width: 920px)').matches ||
+      document.querySelector(
+        'dialog[open], .learning-annotation-colors:not([hidden]), #learning-annotation-popover:not([hidden])',
+      )
+    )
+      return false;
+    const panel = document.getElementById('knowledge-chat-panel');
+    if (!panel || !panel.getClientRects().length) return false;
+    const controls = [
+      ...panel.querySelectorAll(
+        'a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable="true"]',
+      ),
+    ].filter((element) => {
+      if (
+        element.tabIndex < 0 ||
+        element.matches(':disabled') ||
+        element.closest('[inert]') ||
+        !element.getClientRects().length
+      )
+        return false;
+      const style = window.getComputedStyle(element);
+      return style.visibility !== 'hidden' && style.visibility !== 'collapse';
+    });
+    if (!controls.length) return false;
+    const index = controls.indexOf(document.activeElement);
+    // Chrome can include a scroll container in native Tab order without an
+    // explicit tabindex. It already belongs to this panel, not the underlay.
+    if (index === -1 && panel.contains(document.activeElement)) return false;
+    if (
+      index !== -1 &&
+      !(event.shiftKey && index === 0) &&
+      !(!event.shiftKey && index === controls.length - 1)
+    )
+      return false;
+    const target = event.shiftKey ? controls.at(-1) : controls[0];
+    event.preventDefault();
+    target.focus({ preventScroll: true });
+    revealNarrowChatControl(target);
+    return true;
+  }
+
   function bindChatControls() {
     const toggle = document.getElementById('knowledge-chat-toggle');
     const close = document.getElementById('knowledge-chat-close');
@@ -2067,13 +2316,15 @@
     });
     discussionBack?.addEventListener('click', () => showDiscussionList({ focus: true }));
     document.addEventListener('keydown', (event) => {
-      const annotationLayerOpen = document.querySelector(
-        '.learning-annotation-colors:not([hidden]), #learning-annotation-popover:not([hidden])',
+      if (confineNarrowChatFocus(event)) return;
+      const keyboardOverlayOpen = document.querySelector(
+        'dialog[open], .learning-annotation-colors:not([hidden]), #learning-annotation-popover:not([hidden])',
       );
       if (
         event.key === 'Escape' &&
         !event.defaultPrevented &&
-        !annotationLayerOpen &&
+        !event.isComposing &&
+        !keyboardOverlayOpen &&
         state.chatOpen
       ) {
         setChatOpen(false);

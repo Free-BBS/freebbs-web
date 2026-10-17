@@ -153,10 +153,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
     controller,
     /directoryLink\.href = returnToDirectory \? courseDirectoryHref\(\) : '\/world'/,
   );
-  assert.match(
-    controller,
-    /overviewDrawer\.open\(nodeById\(id\), state.course, topicButton, focusNode\)/,
-  );
+  assert.match(controller, /openReaderOverview\(nodeById\(id\), topicButton, focusNode\)/);
   assert.match(controller, /点击知识点查看学习概览/);
   assert.match(backend, /const EDGE_TYPES = new Set\(\['ordered', 'related'\]\)/);
   assert.match(controller, /两类知识点连接/);
@@ -266,6 +263,8 @@ async function initializeReaderFixture({
       },
     },
     readLocalJson: (key) => (key === 'current' ? current : progress),
+    personalContextIsCurrent: () => true,
+    document: { body: {} },
     renderReaderHeader() {},
     bindReaderViewport() {},
     setSaveState() {},
@@ -287,7 +286,7 @@ async function initializeReaderFixture({
       section('  function getLearningNodeId(', '  function getNodeTags('),
       section('  function chapterIdForNodeId(', '  function renderReaderNode('),
       section('  function renderDirectoryView(', '  function renderFocusedChapter('),
-      section('  async function initialize()', '\n  initialize();'),
+      section('  let initializing =', '\n  initialize();'),
       'globalThis.readerFixture = { initialize, directory: () => renderDirectoryView(readerViewModel()) };',
     ].join('\n'),
     context,

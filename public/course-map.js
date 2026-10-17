@@ -10,7 +10,19 @@
   const params = new URLSearchParams(window.location.search);
   const courseSlug = params.get('course') || 'signals';
   const overviewDrawer =
-    mapPage && window.FreeBbsKnowledgeOverview?.createDrawer({ app, courseSlug });
+    mapPage &&
+    window.FreeBbsKnowledgeOverview?.createDrawer({
+      app,
+      courseSlug,
+      getReturnTo: () =>
+        window.FreeBbsCourseNavigation?.encode(
+          {
+            course: courseSlug,
+            ...state.structureController?.getNavigationState(),
+          },
+          courseSlug,
+        ) || '',
+    });
   const NODE_LABEL_WIDTH = 230;
   const NODE_LABEL_HEIGHT = 112;
   const NODE_DOT_RADIUS = 11;
@@ -155,6 +167,30 @@
     return `/knowledge?${query.toString()}`;
   }
 
+  function openReaderOverview(node, trigger, onRelations, options) {
+    if (!node?.id) return false;
+    if (overviewDrawer?.open)
+      return overviewDrawer.open(node, state.course, trigger, onRelations, options);
+    // The optional drawer can be unavailable after a failed asset load or on
+    // a browser without native dialog. An explicit point choice still opens
+    // its real reading surface; a decorative callback must not swallow it.
+    const query = new URLSearchParams({ course: courseSlug, point: node.id, view: 'reading' });
+    try {
+      const returnTo = window.FreeBbsCourseNavigation?.encode?.(
+        { course: courseSlug, ...state.structureController?.getNavigationState?.() },
+        courseSlug,
+      );
+      if (returnTo) {
+        query.set('returnTo', returnTo);
+        window.FreeBbsCourseNavigation?.remember?.(returnTo, courseSlug);
+      }
+    } catch {
+      // A failed optional return context must never prevent opening the text.
+    }
+    window.location.assign(`/knowledge?${query}`);
+    return true;
+  }
+
   function mapEditorHref() {
     return `/course-map-editor?course=${encodeURIComponent(courseSlug)}`;
   }
@@ -169,13 +205,17 @@
   }
 
   function readLocalJson(key) {
-    return window.FreeBbsLearningProgress?.read(localStorage, key, app?.userState) || {};
+    try {
+      return window.FreeBbsLearningProgress?.read(localStorage, key, app?.userState) || {};
+    } catch {
+      return {};
+    }
   }
 
   function getLearningNodeId() {
     const current = readLocalJson(CURRENT_LEARNING_STORAGE_KEY);
     const currentNodeId = typeof current === 'string' ? current : current?.[courseSlug];
-    if (currentNodeId && nodeById(currentNodeId)) {
+    if (currentNodeId && nodeById(currentNodeId) && !/-0+$/.test(currentNodeId)) {
       return currentNodeId;
     }
 
@@ -185,7 +225,9 @@
     }
 
     const [latestReview] = Object.entries(courseProgress)
-      .filter(([nodeId, entry]) => nodeById(nodeId) && entry?.status === 'review')
+      .filter(
+        ([nodeId, entry]) => nodeById(nodeId) && !/-0+$/.test(nodeId) && entry?.status === 'review',
+      )
       .sort((left, right) =>
         String(right[1]?.updatedAt || '').localeCompare(String(left[1]?.updatedAt || '')),
       );
@@ -971,14 +1013,34 @@
         edges: state.edges,
         course: state.course,
         resumeNodeId: state.learningNodeId,
-        onOpenOverview: (node) =>
-          overviewDrawer?.open(node, state.course, null, () =>
-            state.structureController?.focusNode(node.id),
+        getNodeTags,
+        onOpenOverview: (node, options) =>
+          openReaderOverview(
+            node,
+            null,
+            () => {
+              if (state.structureController?.showRelations)
+                state.structureController.showRelations(node.id);
+              else state.structureController?.focusNode(node.id);
+            },
+            options,
           ),
       });
       if (state.focusedNodeId) state.structureController.focusNode(state.focusedNodeId);
       else if (courseChapters().some((chapter) => chapter.id === state.activeChapterId))
         state.structureController.selectChapter(state.activeChapterId);
+      if (!state.navigationRestored && window.FreeBbsCourseNavigation) {
+        const navigation = { course: courseSlug };
+        for (const key of window.FreeBbsCourseNavigation.FIELDS)
+          if (key !== 'course' && params.has(key)) navigation[key] = params.get(key);
+        const parsed = window.FreeBbsCourseNavigation.parse(
+          window.FreeBbsCourseNavigation.encode(navigation, courseSlug),
+          courseSlug,
+        );
+        if (parsed && [...parsed.keys()].some((key) => key !== 'course'))
+          state.structureController.restoreNavigation(Object.fromEntries(parsed));
+        state.navigationRestored = true;
+      }
       renderReaderHeader();
       return;
     }
@@ -1271,6 +1333,30 @@
     edgesSvg?.setAttribute('height', String(dimensions.height));
   }
 
+  function renderReaderMeta() {
+    const meta = document.getElementById('course-reader-meta');
+    if (!meta) return;
+    const knowledgeNodes = state.nodes.filter(
+      (node) => !window.FreeBbsLearningContent?.isChapterNode(node),
+    );
+    const learnedCount = knowledgeNodes.filter((node) =>
+      getNodeTags(node.id).some((tag) => tag.key === 'learned'),
+    ).length;
+    meta.replaceChildren();
+    [
+      state.course.code,
+      `${courseChapters().length} 个章节`,
+      `${knowledgeNodes.length} 个知识点`,
+      learnedCount ? `已标记学习 ${learnedCount} 个` : '',
+    ].forEach((value, index) => {
+      if (!value) return;
+      const item = document.createElement('span');
+      item.textContent = value;
+      if (index === 0) item.className = 'course-reader-code';
+      meta.append(item);
+    });
+  }
+
   function renderReaderHeader() {
     document.title = `FREE-BBS - ${state.course.name}`;
     document.getElementById('course-reader-title').textContent = state.course.name;
@@ -1280,26 +1366,7 @@
     const summary = document.getElementById('course-reader-summary');
     summary.textContent = state.course.summary || state.course.description || '';
     summary.classList.toggle('hidden', !summary.textContent);
-    const knowledgeNodes = state.nodes.filter(
-      (node) => !window.FreeBbsLearningContent?.isChapterNode(node),
-    );
-    const learnedCount = knowledgeNodes.filter((node) =>
-      getNodeTags(node.id).some((tag) => tag.key === 'learned'),
-    ).length;
-    const meta = document.getElementById('course-reader-meta');
-    meta.replaceChildren();
-    [
-      state.course.code,
-      `${courseChapters().length} 个章节`,
-      `${knowledgeNodes.length} 个知识点`,
-      learnedCount ? `已学习 ${learnedCount} 个` : '',
-    ].forEach((value, index) => {
-      if (!value) return;
-      const item = document.createElement('span');
-      item.textContent = value;
-      if (index === 0) item.className = 'course-reader-code';
-      meta.append(item);
-    });
+    renderReaderMeta();
     const editLink = document.getElementById('course-map-edit-link');
     const directoryLink = document.getElementById('course-map-directory-link');
     editLink.href = mapEditorHref();
@@ -1388,8 +1455,7 @@
           return;
         }
         if (!editorPage) {
-          if (overviewDrawer) overviewDrawer.open(nodeById(nodeId), state.course, nodeElement);
-          else window.location.href = knowledgeHref(nodeId);
+          openReaderOverview(nodeById(nodeId), nodeElement);
           return;
         }
         if (state.edgeTool) {
@@ -2089,8 +2155,7 @@
       const topicButton = target?.closest('[data-reader-node-id]');
       if (topicButton) {
         const id = topicButton.dataset.readerNodeId;
-        if (overviewDrawer) overviewDrawer.open(nodeById(id), state.course, topicButton, focusNode);
-        else focusNode(id);
+        openReaderOverview(nodeById(id), topicButton, focusNode);
         return;
       }
 
@@ -2173,30 +2238,94 @@
     PROGRESS_STORAGE_KEY,
     app?.userState,
   );
-  window.addEventListener('freebbs:session-change', () => {
-    const scope = window.FreeBbsLearningProgress?.scopedKey(PROGRESS_STORAGE_KEY, app?.userState);
-    if (scope === progressScope) return;
-    progressScope = scope;
+  let personalContextSignature = '';
+  function personalContextIsCurrent() {
+    const user = app?.userState;
+    try {
+      const token = localStorage.getItem('free_bbs_auth_token');
+      if (user?.isLoggedIn === true) return Boolean(user.uid && user.token && token === user.token);
+      return user?.isLoggedIn === false && !token;
+    } catch {
+      return false;
+    }
+  }
+  function refreshPersonalContext({ clear = false } = {}) {
     if (!mapPage || !state.course) return;
-    state.progress = readLocalJson(PROGRESS_STORAGE_KEY);
-    state.learningNodeId = getLearningNodeId();
-    state.activeChapterId =
-      chapterIdForNodeId(state.learningNodeId) || courseChapters()[0]?.id || '';
-    renderReaderHeader();
-    renderMap();
+    const current = !clear && personalContextIsCurrent();
+    state.progress = current ? readLocalJson(PROGRESS_STORAGE_KEY) : {};
+    state.learningNodeId = current ? getLearningNodeId() : '';
+    progressScope = window.FreeBbsLearningProgress?.scopedKey(PROGRESS_STORAGE_KEY, app?.userState);
+    const signature = JSON.stringify([
+      current ? progressScope : null,
+      state.progress[courseSlug] || null,
+      state.learningNodeId,
+    ]);
+    if (signature === personalContextSignature) return;
+    personalContextSignature = signature;
+    // Only these private decorations change. Keep the directory instance,
+    // selected point, search/cursor, open catalog and keyboard focus intact.
+    if (state.structureController?.updatePersonalContext) {
+      renderReaderMeta();
+      state.structureController.updatePersonalContext({ resumeNodeId: state.learningNodeId });
+    } else if (state.readerLayout === 'directory') {
+      renderReaderHeader();
+      renderMap();
+    }
+  }
+  window.addEventListener('freebbs:session-change', () => {
+    refreshPersonalContext();
   });
   window.addEventListener('storage', (event) => {
-    if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
-    if (!mapPage || !state.course) return;
-    state.progress = {};
-    state.learningNodeId = '';
-    renderReaderHeader();
-    renderMap();
+    if (event.key === 'free_bbs_auth_token' || event.key === null) {
+      refreshPersonalContext({ clear: true });
+      return;
+    }
+    const currentScope = window.FreeBbsLearningProgress?.scopedKey(
+      CURRENT_LEARNING_STORAGE_KEY,
+      app?.userState,
+    );
+    const ownerScope = window.FreeBbsLearningProgress?.scopedKey(
+      PROGRESS_STORAGE_KEY,
+      app?.userState,
+    );
+    if (event.key === currentScope || event.key === ownerScope) refreshPersonalContext();
   });
+  window.addEventListener('focus', () => refreshPersonalContext());
+  window.addEventListener('pageshow', () => refreshPersonalContext());
 
+  let initializing = false;
+  let controlsBound = false;
+  let loadRecovery;
+  let retryLoad;
+  function showLoadRecovery() {
+    if (!mapPage || loadRecovery) return;
+    loadRecovery = document.createElement('nav');
+    loadRecovery.className = 'course-map-reader-controls course-map-load-recovery';
+    loadRecovery.setAttribute('aria-label', '课程加载恢复');
+    retryLoad = document.createElement('button');
+    retryLoad.type = 'button';
+    retryLoad.className = 'course-map-reader-control';
+    retryLoad.textContent = '重新加载课程';
+    retryLoad.addEventListener('click', initialize);
+    const back = document.createElement('a');
+    back.className = 'course-map-reader-control';
+    back.href = '/world';
+    back.textContent = '返回学习世界';
+    loadRecovery.append(retryLoad, back);
+    status?.after(loadRecovery);
+  }
   async function initialize() {
-    await app.sessionReady;
+    if (initializing) return;
+    initializing = true;
+    const retryButton = retryLoad;
+    if (retryLoad) {
+      retryLoad.disabled = true;
+      retryLoad.textContent = '正在加载…';
+      loadRecovery?.setAttribute('aria-busy', 'true');
+    }
+    if (loadRecovery) setStatus('正在重新加载课程…');
     try {
+      await app.sessionReady;
       const payload = await app.callApi(`/courses/${encodeURIComponent(courseSlug)}/map`, {
         method: 'GET',
       });
@@ -2204,8 +2333,8 @@
       state.nodes = payload.nodes || [];
       state.edges = payload.edges || [];
       state.backgroundUrl = payload.backgroundUrl || '';
-      state.progress = readLocalJson(PROGRESS_STORAGE_KEY) || {};
-      state.learningNodeId = getLearningNodeId();
+      state.progress = personalContextIsCurrent() ? readLocalJson(PROGRESS_STORAGE_KEY) : {};
+      state.learningNodeId = personalContextIsCurrent() ? getLearningNodeId() : '';
       const initialChapters = courseChapters();
       state.activeChapterId =
         chapterIdForNodeId(state.learningNodeId) || initialChapters[0]?.id || '';
@@ -2238,23 +2367,57 @@
         });
         return;
       }
+      const focusBeforeRetryRender = retryButton ? document.activeElement : null;
       if (mapPage) {
         renderReaderHeader();
-        bindReaderViewport();
+        if (!controlsBound) bindReaderViewport();
       } else {
         renderEditorHeader();
-        bindEditorControls();
+        if (!controlsBound) bindEditorControls();
       }
+      controlsBound = true;
       renderMap();
+      const restoreRetryFocus =
+        retryButton &&
+        (focusBeforeRetryRender === retryButton || focusBeforeRetryRender === document.body);
+      const completedRecovery = loadRecovery;
+      if (!restoreRetryFocus && completedRecovery?.contains(focusBeforeRetryRender)) {
+        // A learner may Tab to the return link while waiting. Keep that live
+        // target until they leave it rather than deleting their keyboard focus.
+        retryButton?.remove();
+        completedRecovery.setAttribute('aria-busy', 'false');
+        completedRecovery.addEventListener('focusout', (event) => {
+          if (!completedRecovery.contains(event.relatedTarget)) completedRecovery.remove();
+        });
+        focusBeforeRetryRender?.focus({ preventScroll: true });
+      } else completedRecovery?.remove();
+      loadRecovery = undefined;
+      retryLoad = undefined;
+      if (restoreRetryFocus) {
+        const heading = document.getElementById('course-reader-title');
+        heading?.setAttribute('tabindex', '-1');
+        heading?.focus({ preventScroll: true });
+      } else if (focusBeforeRetryRender?.isConnected) {
+        focusBeforeRetryRender.focus({ preventScroll: true });
+      }
       // A chapter overview returns to its directory, never a fabricated point focus.
       if (requestedChapterId) state.structureController?.selectChapter(requestedChapterId);
       setSaveState(editorPage ? '所有修改会自动保存' : '');
       setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
     } catch (error) {
       if (mapPage && !state.course) {
-        document.getElementById('course-reader-title').textContent = '课程暂时无法加载';
+        const title = document.getElementById('course-reader-title');
+        if (title) title.textContent = '课程暂时无法加载';
       }
       setStatus(error.message, true);
+      showLoadRecovery();
+    } finally {
+      initializing = false;
+      if (retryLoad) {
+        retryLoad.disabled = false;
+        retryLoad.textContent = '重新加载课程';
+        loadRecovery?.setAttribute('aria-busy', 'false');
+      }
     }
   }
 

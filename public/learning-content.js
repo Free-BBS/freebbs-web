@@ -1,5 +1,9 @@
 /* The same document conventions serve course authoring, maps and the reader. */
 (function expose(root) {
+  const graphLayout =
+    typeof module === 'object' && module.exports
+      ? require('./learning-graph-layout')
+      : root.FreeBbsLearningGraphLayout;
   function chapterId(id) {
     return String(id || '')
       .split('-')
@@ -121,88 +125,112 @@
       Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
       return element;
     };
-    const positions = new Map(
-      nodes.map((item, index) => [
-        item.id,
-        {
-          x: Number.isFinite(Number(item.position?.x))
-            ? Number(item.position.x)
-            : (index % 3) * 290,
-          y: Number.isFinite(Number(item.position?.y))
-            ? Number(item.position.y)
-            : Math.floor(index / 3) * 140,
-        },
-      ]),
-    );
-    const xs = [...positions.values()].map((point) => point.x);
-    const ys = [...positions.values()].map((point) => point.y);
-    const minX = Math.min(...xs) - 135;
-    const minY = Math.min(...ys) - 52;
-    const width = Math.max(...xs) - minX + 135;
-    const height = Math.max(...ys) - minY + 52;
+    let diagram;
+    try {
+      if (
+        !['layout', 'titleLines', 'fitSvgLabel'].every(
+          (name) => typeof graphLayout?.[name] === 'function',
+        )
+      )
+        throw new Error('Optional graph unavailable');
+      diagram = graphLayout.layout(nodes, edges, { compact: container.clientWidth < 520 });
+    } catch {
+      const notice = document.createElement('p');
+      notice.textContent = '关系图暂不可用，可从本章目录继续。';
+      const list = document.createElement('ul');
+      for (const item of nodes) {
+        const entry = document.createElement('li');
+        const link = document.createElement('a');
+        link.textContent = `${item.title} · ${item.id}`;
+        link.href = `/knowledge?${new URLSearchParams({ course: course.slug, point: item.id })}`;
+        entry.append(link);
+        list.append(entry);
+      }
+      container.append(notice, list);
+      return;
+    }
     const svg = make('svg', {
-      viewBox: [minX, minY, width, height].join(' '),
+      viewBox: `0 0 ${diagram.width} ${diagram.height}`,
+      width: diagram.width,
+      height: diagram.height,
       role: 'group',
       'aria-label': `${node.title}知识网络`,
     });
-    const defs = make('defs');
-    const marker = make('marker', {
-      id: 'chapter-network-arrow',
-      markerWidth: 9,
-      markerHeight: 9,
-      refX: 8,
-      refY: 4.5,
-      orient: 'auto',
-    });
-    marker.append(make('path', { d: 'M 0 0 L 9 4.5 L 0 9 z', fill: 'currentColor' }));
-    defs.append(marker);
-    svg.append(defs);
-    for (const edge of edges) {
-      const a = positions.get(edge.source);
-      const b = positions.get(edge.target);
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const distance = Math.hypot(dx, dy) || 1;
-      const inset = Math.min(
-        124 / (Math.abs(dx) / distance || 1e-9),
-        40 / (Math.abs(dy) / distance || 1e-9),
-        distance / 2,
-      );
-      svg.append(
-        make('line', {
-          x1: a.x + (dx / distance) * inset,
-          y1: a.y + (dy / distance) * inset,
-          x2: b.x - (dx / distance) * inset,
-          y2: b.y - (dy / distance) * inset,
-          class: edge.type === 'ordered' ? 'chapter-network-ordered' : 'chapter-network-related',
-          ...(edge.type === 'ordered' ? { 'marker-end': 'url(#chapter-network-arrow)' } : {}),
-        }),
-      );
+    for (const route of diagram.routes) {
+      const { edge } = route;
+      const group = make('g', {
+        class: `chapter-network-edge is-${edge.type}`,
+        'data-source': edge.source,
+        'data-target': edge.target,
+      });
+      group.append(make('path', { d: route.path, class: 'chapter-network-connector' }));
+      if (route.arrow)
+        group.append(make('path', { d: route.arrow, class: 'chapter-network-arrow' }));
+      const tooltip = make('title');
+      tooltip.textContent = `${edge.type === 'ordered' ? '学习顺序' : '补充联系'}${edge.note ? `：${edge.note}` : ''}`;
+      group.append(tooltip);
+      svg.append(group);
     }
-    for (const item of nodes) {
-      const point = positions.get(item.id);
+    const textLabels = [];
+    for (const box of diagram.boxes) {
+      const item = box.node;
       const link = make('a', {
         href: `/knowledge?${new URLSearchParams({ course: course.slug, point: item.id })}`,
         'aria-label': `查看${item.title}学习概览`,
+        'data-node-id': item.id,
+        transform: `translate(${box.x} ${box.y})`,
       });
-      link.append(
-        make('rect', { x: point.x - 120, y: point.y - 36, width: 240, height: 72, rx: 12 }),
-      );
-      const id = make('text', {
-        x: point.x,
-        y: point.y - 10,
-        'text-anchor': 'middle',
-        class: 'chapter-network-id',
-      });
-      id.textContent = item.id;
-      const label = make('text', { x: point.x, y: point.y + 15, 'text-anchor': 'middle' });
-      label.textContent = item.title.length > 13 ? `${item.title.slice(0, 13)}…` : item.title;
+      link.append(make('rect', { width: box.width, height: box.height, rx: 12 }));
+      const id = make('text', { x: 14, y: 25, class: 'chapter-network-id' });
+      id.textContent = graphLayout.titleLines(item.id, 26, 1)[0];
+      // A full accessible label and tooltip are kept even for very long names.
+      const label = make('text', { x: 14, y: 50 });
+      for (const [index, line] of graphLayout.titleLines(item.title || item.id, 21, 2).entries()) {
+        const span = make('tspan', { x: 14, y: 50 + index * 23 });
+        span.textContent = line;
+        label.append(span);
+      }
       const tooltip = make('title');
-      tooltip.textContent = item.title;
+      tooltip.textContent = `${item.id} · ${item.title}`;
       link.append(tooltip, id, label);
+      textLabels.push({ id, label, item, width: box.width - 28 });
+      link.addEventListener('focus', () => {
+        const reveal = () => {
+          const frame = viewport.getBoundingClientRect();
+          const card = link.querySelector('rect').getBoundingClientRect();
+          const left = frame.left + viewport.clientLeft;
+          const top = frame.top + viewport.clientTop;
+          const right = left + viewport.clientWidth;
+          const bottom = top + viewport.clientHeight;
+          if (card.left < left + 8) viewport.scrollLeft -= left + 8 - card.left;
+          else if (card.right > right - 8) viewport.scrollLeft += card.right - right + 8;
+          if (card.top < top + 8) viewport.scrollTop -= top + 8 - card.top;
+          else if (card.bottom > bottom - 8) viewport.scrollTop += card.bottom - bottom + 8;
+        };
+        reveal();
+        // Finish after the browser's native SVG focus scrolling, which may only
+        // reveal the text anchor rather than the complete clickable card.
+        root.requestAnimationFrame?.(reveal);
+      });
       svg.append(link);
     }
-    container.append(svg);
+    const viewport = document.createElement('div');
+    viewport.className = 'chapter-network-viewport';
+    viewport.tabIndex = 0;
+    viewport.setAttribute('role', 'region');
+    viewport.setAttribute('aria-label', '本章知识网络，可滚动查看');
+    viewport.append(svg);
+    container.append(viewport);
+    for (const { id, label, item, width } of textLabels) {
+      graphLayout.fitSvgLabel(id, item.id, { width, identifier: true, x: 14, y: 25 });
+      graphLayout.fitSvgLabel(label, item.title || item.id, { width, lines: 2, x: 14, y: 50 });
+    }
+    if (container.clientWidth < 520 && viewport.clientWidth > 0) {
+      const first = diagram.boxes[0];
+      // Keep a full card visible on narrow phones; the routing gutter remains
+      // reachable by native scrolling instead of taking the first reading space.
+      viewport.scrollLeft = Math.max(0, first.x - (viewport.clientWidth - first.width) / 2);
+    }
     const legend = document.createElement('p');
     legend.className = 'learning-caption';
     legend.textContent = '实线箭头：学习顺序 · 虚线：关联';

@@ -105,7 +105,8 @@ test('each request composes the live page goal with current task without mutatin
   assert.deepEqual(reads, [[17, '', false]]);
   const before = copy(trusted);
   assert.deepEqual(companionPreference(trusted), { level: 'familiar', goal: 'practice' });
-  assert.match(companionHint(trusted), /本页临时目标：练习解题/);
+  assert.match(companionHint(trusted), /本次目的：练习解题/);
+  assert.doesNotMatch(companionHint(trusted), /本页临时目标：/);
   assert.deepEqual(trusted, before);
   assert.deepEqual(trusted.learningEvidence, {
     officialTotal: 0,

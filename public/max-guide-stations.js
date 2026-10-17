@@ -1017,12 +1017,53 @@
   // their original indices and text; their receipts are not interpreted as v5.
   const currentReading = essentialSteps.find((entry) => entry.id === 'knowledge-reading');
   currentReading.body =
-    '正文支持公式、图片与代码，也可以直接在原文上高亮、划线和写评注；批注仅自己可见。读完后按需要做练习、自测，或从「继续学习」选择下一步，不必逐一完成才能查阅内容。';
+    '先看知识起源，再按需阅读正文和学习资源；可以在原文上高亮、划线、写评注，批注仅自己可见。学习反馈提供练习、自测与订正，「继续学习」帮你选下一步，参与共建可提交建议；不必逐项完成才能查阅。';
   currentReading.caption =
     'Max 是辅助老师，星标不替代掌握程度；导引不会写批注、作答或增加学习进度。';
   const currentOverview = essentialSteps.find((entry) => entry.id === 'knowledge-overview');
   currentOverview.caption =
     '先了解知识背景，再按自己的需要阅读、自测或探索；不会自动替你选择学习起点。';
+  // Preserve every published step ID and saved index. Only the current tour
+  // follows the new route/direct-find entry points; archived views stay intact.
+  const courseOverviewClosed = 'body:not(:has(#course-knowledge-overview[open]))';
+  const closeCourseOverview = (target) => [
+    ready(
+      '#course-knowledge-overview[open] [aria-label="关闭学习概览"]',
+      `${courseOverviewClosed} ${target}`,
+    ),
+  ];
+  const currentDirectory = essentialSteps.find((entry) => entry.id === 'course-directory');
+  Object.assign(currentDirectory, {
+    target: '.course-learning-route',
+    title: '想顺着学，从这条路线出发',
+    body: '“顺着学”展示课程已发布的学习路线与分支。没有顺序连线时按目录浏览；任何知识点都可以自由选择，不需要解锁或逐个完成。',
+    caption: '路线用于找方向，不等于强制先修；也可以直接查找需要的知识点。',
+    prepare: closeCourseOverview('.course-learning-route'),
+    action: undefined,
+  });
+  const currentRelations = essentialSteps.find((entry) => entry.id === 'course-relations');
+  Object.assign(currentRelations, {
+    target: '.course-direct-find',
+    title: '已有问题？直接找到需要的知识点',
+    body: '用名称、编号、别名搜索全课程，或打开“完整目录”按章查找。回来时可以用“回到上次位置”接续；点击知识点先看概览，再决定阅读或查看联系。',
+    caption: '这一步只认识入口，不输入搜索词、不更改学习起点，也不会替你完成学习。',
+    prepare: closeCourseOverview('.course-direct-find'),
+    action: undefined,
+    emptyTarget: '#course-map-status',
+    emptyBody: '课程正在载入或暂时没有知识点。可以稍后再看，也可以跳过这一步。',
+  });
+  const currentEnter = essentialSteps.find((entry) => entry.id === 'course-enter-knowledge');
+  Object.assign(currentEnter, {
+    title: '先看概览，再选择进入学习',
+    body: '概览展示当前知识点的背景和已发布信息。想阅读时再点“进入学习”；也可以查看知识联系，或回去换一个知识点。',
+    caption: '导引只打开概览；进入正文仍由你点击真实链接，不替你作答或授星。',
+    prepare: [
+      ready(
+        '.course-learning-route [data-course-route-node-id], .course-direct-find [data-course-point-id]',
+        overviewStudy,
+      ),
+    ],
+  });
   const essentialStationOrder = [
     'home',
     'world',

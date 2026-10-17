@@ -555,7 +555,13 @@ test('returning to the course carries the actual current point rather than losin
   const end = source.indexOf('  function setSequenceLink(', start);
   assert.ok(start >= 0 && end > start);
   const state = { node: { id: 'SS-02-01' } };
-  const sandbox = { state, courseSlug: 'signals', URLSearchParams };
+  const sandbox = {
+    state,
+    courseSlug: 'signals',
+    URLSearchParams,
+    window: {},
+    params: new URLSearchParams(),
+  };
   vm.runInNewContext(source.slice(start, end), sandbox);
   assert.equal(sandbox.courseDirectoryHref(), '/course?course=signals&focus=SS-02-01');
   state.node = { id: 'SS-01-01' };

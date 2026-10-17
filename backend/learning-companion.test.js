@@ -17,6 +17,7 @@ const {
   createMemoryAssessmentStore,
   gradeAnswer,
 } = require('./learning-assessment');
+const learningPolicy = require('../public/learning-policy');
 
 const parsed = parse(
   fs.readFileSync(
@@ -147,8 +148,8 @@ test('a bounded same-page task goal guides Max without changing the saved course
   const original = JSON.stringify(context);
   assert.deepEqual(companionPreference(context), { level: 'familiar', goal: 'explore' });
   assert.equal(JSON.stringify(context), original);
-  assert.match(companionHint(context), /本页临时目标：探索研究/);
-  assert.match(companionHint(context), /不覆盖课程默认偏好/);
+  assert.match(companionHint(context), /本次目的：探索研究/);
+  assert.doesNotMatch(companionHint(context), /本页临时目标：/);
   assert.equal(companionPreference({ learningTask: context.learningTask }), null);
   for (const invalid of ['FORGED_GOAL', '__proto__', [], null]) {
     const task = normalizeTask({ tool: 'content', goal: invalid });
@@ -199,6 +200,31 @@ test('Max consumes real parsed question versions and authenticated persisted pas
   assert.equal(context.learningEvidence.passed, 1);
   assert.equal(context.learningEvidence.failed, 1);
   assert.equal(context.learningEvidence.pending, 1);
+  const policyEvidence = learningPolicy.currentEvidence(
+    context.resources.trustedEvidence,
+    learningPolicy.normalizeQuestions(context.resources.questions),
+    context.resources.documentVersion,
+  );
+  assert.deepEqual(
+    policyEvidence.map((record) => record.outcome).sort(),
+    ['fail', 'pass', 'pending'],
+    'the learning chain uses only the current owner, formal channel and current versions',
+  );
+  assert.equal(
+    context.resources.questions.length,
+    assessment.questions.length + assessment.practiceQuestions.length,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(context.resources),
+    /独立推导的待复核过程|correctAnswer|"answer"|rubric|explanation/,
+  );
+  const reviewPlan = learningPolicy.buildPolicy(
+    { purpose: 'review', level: 'new' },
+    context.resources,
+  );
+  assert.equal(reviewPlan.evidenceSummary.observed, 3);
+  assert.equal(reviewPlan.evidenceSummary.pending, 1);
+  assert.ok(reviewPlan.steps.find((step) => step.moduleId === 'practice').question);
   await submit(user, numeric, 0);
   const corrected = await loadCompanionContext({
     store,
@@ -209,6 +235,12 @@ test('Max consumes real parsed question versions and authenticated persisted pas
   assert.equal(corrected.learningEvidence.passed, 2);
   assert.equal(corrected.learningEvidence.failed, 0);
   assert.equal(corrected.learningEvidence.pending, 1);
+  const correctedPlan = learningPolicy.buildPolicy(
+    { purpose: 'review', level: 'advanced' },
+    corrected.resources,
+  );
+  assert.equal(correctedPlan.evidenceSummary.observed, 3);
+  assert.equal(correctedPlan.evidenceSummary.pending, 1);
 });
 
 test('Max selects latest formal evidence before versions so rollback cannot revive an old pass', () => {

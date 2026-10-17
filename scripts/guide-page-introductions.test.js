@@ -100,3 +100,42 @@ test('published update tours keep their original order and the new eight-page re
     /分别保存/,
   );
 });
+
+test('current learning tour introduces real route and direct-find controls before a real overview link', () => {
+  const directory = STEPS.find((entry) => entry.id === 'course-directory');
+  const find = STEPS.find((entry) => entry.id === 'course-relations');
+  const enter = STEPS.find((entry) => entry.id === 'course-enter-knowledge');
+  assert.equal(directory.target, '.course-learning-route');
+  assert.equal(find.target, '.course-direct-find');
+  assert.equal(
+    directory.action,
+    undefined,
+    'Learning route is introduced without activating a point',
+  );
+  assert.equal(
+    find.action,
+    undefined,
+    'Direct find is introduced without typing or choosing for the learner',
+  );
+  assert.match(directory.body, /分支/);
+  assert.match(directory.body, /自由选择/);
+  assert.match(find.body, /名称、编号、别名/);
+  assert.match(find.body, /回到上次位置/);
+  assert.equal(enter.prepare.length, 1, 'Do not detour through the old relations view');
+  assert.match(enter.prepare[0].selector, /data-course-route-node-id/);
+  assert.match(enter.prepare[0].selector, /data-course-point-id/);
+  assert.equal(enter.action.kind, 'link');
+  assert.equal(enter.action.selector, '#course-knowledge-overview[open] .knowledge-overview-study');
+  const reading = STEPS.find((entry) => entry.id === 'knowledge-reading');
+  assert.match(reading.body, /知识起源/);
+  assert.match(reading.body, /学习资源/);
+  assert.match(reading.body, /练习、自测与订正/);
+  assert.match(reading.body, /参与共建/);
+  assert.doesNotMatch(reading.body, /只预留|还在开发/);
+  assert.match(LEGACY_V4_STEPS.find((entry) => entry.id === 'course-relations').body, /直接联系/);
+  for (const entry of [directory, find, enter, reading])
+    assert.doesNotMatch(
+      `${entry.body} ${entry.caption}`,
+      /[\u4e00-\u9fff][A-Za-z]|[A-Za-z][\u4e00-\u9fff]/,
+    );
+});

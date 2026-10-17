@@ -25,10 +25,11 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/knowledge-editor.css" />
     <link rel="stylesheet" href="/knowledge-overview.css?v=20261014-world-ui-1" />
-    <link rel="stylesheet" href="/knowledge-workspace.css?v=20261014-world-ui-1" />
+    <link rel="stylesheet" href="/knowledge-workspace.css?v=20261016-human-nav-3" />
     <link rel="stylesheet" href="/learning-outline.css?v=20261015-human-nav-1" />
     <link rel="stylesheet" href="/learning-stars.css?v=20261002-1" />
-    <link rel="stylesheet" href="/learning-start.css?v=20261003-1" />
+    <link rel="stylesheet" href="/learning-start.css?v=20261016-learning-4x4-1" />
+    <link rel="stylesheet" href="/learning-workflow-panel.css?v=20261017-needs-flow-1" />
     <link rel="stylesheet" href="/human-learning-annotations.css?v=20261011-human-2" />
     <link rel="stylesheet" href="/learning-research.css?v=20261011-research-1" />
     <link rel="stylesheet" href="/learning-companion-memory.css?v=20261011-research-1" />
@@ -159,15 +160,17 @@
         data-knowledge-page
         aria-busy="true"
       >
-        <a
-          class="course-map-reader-control course-material-back"
-          id="knowledge-course-link"
-          href="/course?course=signals"
-          aria-label="返回课程目录"
-        >
-          <span aria-hidden="true">←</span>
-          <strong>课程目录</strong>
-        </a>
+        <nav class="knowledge-return-bar" aria-label="返回课程">
+          <a
+            class="course-map-reader-control course-material-back"
+            id="knowledge-course-link"
+            href="/course?course=signals"
+            aria-label="返回课程目录"
+          >
+            <span aria-hidden="true">←</span>
+            <strong>课程目录</strong>
+          </a>
+        </nav>
         <div class="knowledge-workbench" id="knowledge-workbench">
           <aside class="knowledge-tools" id="knowledge-tools" aria-label="知识点工具栏">
             <header class="knowledge-tools-header">
@@ -307,6 +310,12 @@
                 学习指南
               </button>
             </div>
+            <section
+              id="learning-workflow-strip"
+              class="learning-workflow-strip"
+              aria-label="当前学习任务"
+              hidden
+            ></section>
             <p class="knowledge-edit-notice" id="knowledge-edit-notice" role="status" hidden></p>
             <section
               class="knowledge-editor"
@@ -1094,7 +1103,7 @@
               >
                 <span aria-hidden="true">←</span>
                 <span>
-                  <small>上一个知识点</small>
+                  <small>目录上一点</small>
                   <strong id="knowledge-previous-title">正在载入前后知识点…</strong>
                 </span>
               </a>
@@ -1104,7 +1113,7 @@
                 aria-disabled="true"
               >
                 <span>
-                  <small>下一个知识点</small>
+                  <small>目录下一点</small>
                   <strong id="knowledge-next-title">正在载入前后知识点…</strong>
                 </span>
                 <span aria-hidden="true">→</span>
@@ -1575,26 +1584,31 @@
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/learning-stars.js?v=20261010-human-1"></script>
-    <script src="/knowledge-overview.js?v=20261014-world-ui-1"></script>
-    <script src="/learning-content.js?v=20261012-chapter-names-1"></script>
+    <script src="/course-navigation.js?v=20261016-route-2"></script>
+    <script src="/knowledge-overview.js?v=20261016-route-2"></script>
+    <script src="/learning-graph-layout.js?v=20261015-graph-1"></script>
+    <script src="/learning-content.js?v=20261016-route-2"></script>
     <script src="/learning-progress.js?v=20261001-1"></script>
-    <script src="/learning-analytics.js?v=20261011-records-4"></script>
+    <script src="/learning-analytics.js?v=20261016-learning-4x4-1"></script>
     <script src="/learning-companion-memory.js?v=20261011-research-1"></script>
     <script src="/learning-research.js?v=20261011-research-2"></script>
-    <script src="/learning-strategies.js?v=20261011-human-2"></script>
-    <script src="/learning-start.js?v=20261010-human-1"></script>
-    <script src="/learning-next-steps.js?v=20261015-human-nav-1"></script>
+    <script src="/learning-policy.js?v=20261017-needs-flow-1"></script>
+    <script src="/learning-workflow.js?v=20261017-needs-flow-1"></script>
+    <script src="/learning-workflow-panel.js?v=20261017-needs-flow-1"></script>
+    <script src="/learning-strategies.js?v=20261017-needs-flow-1"></script>
+    <script src="/learning-start.js?v=20261016-learning-4x4-1"></script>
+    <script src="/learning-next-steps.js?v=20261016-learning-4x4-1"></script>
     <script src="/learning-chat-drafts.js?v=20261011-human-2"></script>
-    <script src="/knowledge.js?v=20261015-human-nav-1"></script>
+    <script src="/knowledge.js?v=20261017-needs-flow-1"></script>
     <script src="/knowledge-history.js?v=20261010-annotation-3"></script>
     <script src="/learning-answer-drafts.js?v=20261010-human-1"></script>
     <script src="/learning-assessment.js?v=20261010-human-1"></script>
     <script src="/learning-resources.js?v=20261010-human-1"></script>
     <script src="/knowledge-annotations.js?v=20261011-human-2"></script>
-    <script src="/knowledge-workspace.js?v=20261015-human-nav-1"></script>
+    <script src="/knowledge-workspace.js?v=20261017-needs-flow-1"></script>
     <script src="/learning-reader.js?v=20261015-human-nav-1"></script>
     <script src="/learning-outline.js?v=20261015-human-nav-1"></script>
-    <script src="/learning-guide.js?v=20261011-records-2"></script>
+    <script src="/learning-guide.js?v=20261016-route-2"></script>
     <script src="/knowledge-editor.js"></script>
     <script src="/notifications.js"></script>
   </body>

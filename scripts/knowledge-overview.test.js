@@ -136,7 +136,7 @@ test('reviewer aliases retain all published contributors without adding missing 
   );
 });
 
-function overviewHarness() {
+function overviewHarness({ nativeDialog = true } = {}) {
   const starCalls = [];
   const requests = [];
   const assignments = [];
@@ -169,6 +169,10 @@ function overviewHarness() {
       this.children = [...nodes];
       this.valueText = '';
       this.valueHtml = '';
+    }
+
+    contains(node) {
+      return this === node || this.children.some((child) => child.contains(node));
     }
 
     get childElementCount() {
@@ -211,6 +215,7 @@ function overviewHarness() {
 
     showModal() {
       this.open = true;
+      document.activeElement = this;
     }
 
     close() {
@@ -227,7 +232,11 @@ function overviewHarness() {
       return this.rect;
     }
   }
-  document.createElement = (tag) => new Element(tag);
+  document.createElement = (tag) => {
+    const item = new Element(tag);
+    if (tag === 'dialog' && !nativeDialog) item.showModal = undefined;
+    return item;
+  };
   document.body = new Element('body');
   document.activeElement = new Element('button');
   const context = {
@@ -315,6 +324,13 @@ test('empty legacy overview fields do not create blank facts, invented names or 
     assert.equal(h.byClass(host, name), undefined);
   assert.equal(h.starCalls.length, 0);
   assert.doesNotMatch(host.textContent, /暂未署名|待补充|0 \/ 5|已掌握/);
+});
+
+test('an unsupported native dialog is an absent optional drawer, not a throwing learning gate', () => {
+  const h = overviewHarness({ nativeDialog: false });
+  assert.equal(h.api.createDrawer({ app: h.app, courseSlug: 'signals' }), null);
+  assert.equal(h.document.body.children.length, 0);
+  assert.equal(h.requests.length, 0);
 });
 
 test('drawer keeps explicit actions available during loading and failure and restores its trigger focus', async () => {
@@ -405,6 +421,140 @@ test('chapter overview retains its actual network action and never invents indiv
     '/knowledge?course=signals&point=SS-01-00&view=reading#knowledge-chapter-network',
   ]);
   assert.equal(h.starCalls.length, 0);
+});
+
+test('cancelled catalog overviews return to their exact origin but relation actions and later unrelated entries do not reopen it', async () => {
+  const h = overviewHarness();
+  const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+  const dialog = h.document.body.children[0];
+  const trigger = h.document.createElement('button');
+  let dismissals = 0;
+  let relations = 0;
+  async function show(options) {
+    const loading = drawer.open(
+      { id: 'SS-01-01', title: '连续时间卷积' },
+      {},
+      trigger,
+      () => {
+        relations += 1;
+      },
+      options,
+    );
+    h.requests.at(-1).resolve({ node: { id: 'SS-01-01', title: '连续时间卷积', sections: {} } });
+    await loading;
+  }
+  const options = {
+    onDismiss() {
+      dismissals += 1;
+      return true;
+    },
+  };
+  await show(options);
+  h.byClass(dialog, 'knowledge-overview-drawer-header').children[1].fire('click');
+  assert.equal(dismissals, 1);
+  assert.equal(trigger.focusCount, 0, 'The catalog restores its own focused card');
+  await show(options);
+  h.byClass(dialog, 'knowledge-overview-drawer-footer').children[0].fire('click');
+  assert.equal(dismissals, 1);
+  assert.equal(relations, 1);
+  await show();
+  dialog.close();
+  assert.equal(dismissals, 1, 'An unrelated point does not inherit the prior catalog');
+  const before = trigger.focusCount;
+  await show({ onDismiss: () => false });
+  dialog.close();
+  assert.equal(
+    trigger.focusCount,
+    before + 1,
+    'A destroyed origin can fall back to the ordinary trigger',
+  );
+});
+
+test('a deferred dialog close cannot steal the keyboard focus handed to the relationship destination', async () => {
+  const h = overviewHarness();
+  const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+  const dialog = h.document.body.children[0];
+  const trigger = h.document.createElement('button');
+  const destination = h.document.createElement('section');
+  const opening = drawer.open({ id: 'SS-01-01', title: '卷积' }, {}, trigger, () =>
+    destination.focus(),
+  );
+  h.requests[0].resolve({ node: { id: 'SS-01-01', title: '卷积', sections: {} } });
+  await opening;
+  h.byClass(dialog, 'knowledge-overview-drawer-footer').children[0].fire('click');
+  dialog.fire('close');
+  assert.equal(h.document.activeElement, destination);
+  assert.equal(trigger.focusCount, 0);
+});
+
+test('a delayed close respects a new outside focus and discards its old catalog dismissal', async () => {
+  for (const withCatalog of [false, true]) {
+    const h = overviewHarness();
+    const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+    const dialog = h.document.body.children[0];
+    const trigger = h.document.createElement('button');
+    const destination = h.document.createElement('input');
+    let dismissals = 0;
+    const opening = drawer.open(
+      { id: 'SS-01-01', title: '卷积' },
+      {},
+      trigger,
+      null,
+      withCatalog
+        ? {
+            onDismiss() {
+              dismissals += 1;
+              return true;
+            },
+          }
+        : undefined,
+    );
+    h.requests[0].resolve({ node: { id: 'SS-01-01', title: '卷积', sections: {} } });
+    await opening;
+    // Native close removes modality before it dispatches the queued close event.
+    dialog.close = () => {
+      dialog.open = false;
+    };
+    dialog.close();
+    destination.focus();
+    dialog.fire('close');
+    assert.equal(h.document.activeElement, destination);
+    assert.equal(trigger.focusCount, 0);
+    assert.equal(dismissals, 0, 'An old catalog must not reopen after a deliberate new action');
+
+    h.document.activeElement = h.document.body;
+    dialog.fire('close');
+    assert.equal(dismissals, 0, 'The skipped dismissal is discarded, not deferred');
+  }
+});
+
+test('an old queued close cannot clear the dismissal owned by a newer open overview', async () => {
+  const h = overviewHarness();
+  const drawer = h.api.createDrawer({ app: h.app, courseSlug: 'signals' });
+  const dialog = h.document.body.children[0];
+  const trigger = h.document.createElement('button');
+  const first = drawer.open({ id: 'SS-01-01', title: '旧点' }, {}, trigger);
+  h.requests[0].resolve({ node: { id: 'SS-01-01', title: '旧点', sections: {} } });
+  await first;
+  dialog.close = () => {
+    dialog.open = false;
+  };
+  dialog.close();
+  let dismissals = 0;
+  const latest = drawer.open({ id: 'SS-02-01', title: '新点' }, {}, trigger, null, {
+    onDismiss() {
+      dismissals += 1;
+      return true;
+    },
+  });
+  h.requests[1].resolve({ node: { id: 'SS-02-01', title: '新点', sections: {} } });
+  await latest;
+  dialog.fire('close');
+  assert.equal(dialog.open, true);
+  assert.equal(dismissals, 0);
+  dialog.close();
+  dialog.fire('close');
+  assert.equal(dismissals, 1, 'Only the newer overview owns its normal dismissal');
 });
 
 test('overview style keeps short-screen scrolling, long text and themed explicit actions', () => {

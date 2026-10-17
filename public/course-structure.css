@@ -116,6 +116,7 @@
   align-items: start;
 }
 .course-structure-graph-area {
+  grid-column: 1 / -1;
   min-width: 0;
   border: 1px solid var(--structure-line);
   border-radius: 16px;
@@ -141,17 +142,19 @@
 }
 .course-structure-current {
   min-width: 0;
-  scroll-margin-top: 90px;
+  scroll-margin-top: 110px;
 }
 .course-structure-current:focus {
   outline: none;
 }
 .course-structure-viewer {
-  height: 280px;
-  min-height: 240px;
+  height: var(--graph-height, 440px);
+  min-height: 360px;
   border: 1px solid var(--structure-line);
   border-radius: 16px;
   background: var(--structure-paper);
+  background-image: radial-gradient(var(--structure-line) 0.65px, transparent 0.65px);
+  background-size: 20px 20px;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
@@ -492,6 +495,18 @@
   fill: #e9f3f2;
   stroke: #88aaa9;
 }
+.course-structure-node[data-group='incoming'] rect {
+  fill: color-mix(in srgb, #87ad86 9%, var(--structure-paper));
+}
+.course-structure-node[data-group='outgoing'] rect {
+  fill: color-mix(in srgb, #7d9fb2 9%, var(--structure-paper));
+}
+.course-structure-node[data-group='related'] rect {
+  fill: color-mix(in srgb, #a58bb3 9%, var(--structure-paper));
+}
+.course-structure-node[data-group='current'] rect {
+  fill: color-mix(in srgb, #3f9a9a 14%, var(--structure-paper));
+}
 .course-structure-node.is-selected rect,
 .course-structure-node:focus rect {
   stroke: #197c86;
@@ -508,16 +523,16 @@
   pointer-events: none;
 }
 .course-structure-node-id {
-  font-size: 0.875rem;
+  font-size: 13px;
   fill: var(--structure-muted) !important;
   letter-spacing: 0.3px;
 }
 .course-structure-node-title {
-  font-size: 1.125rem;
+  font-size: 18px;
   font-weight: 650;
 }
 .course-structure-node-detail {
-  font-size: 0.875rem;
+  font-size: 13px;
   fill: var(--structure-muted) !important;
 }
 .course-structure-node.is-knowledge .course-structure-node-detail {
@@ -540,16 +555,24 @@
   fill: #f7f4fb;
   stroke: #bfb3d0;
 }
-.course-structure-link line {
-  stroke: #778e99;
-  stroke-width: 1.5;
+.course-structure-group-label {
+  fill: var(--structure-muted);
+  font-size: 15px;
+  font-weight: 650;
 }
-.course-structure-link.is-related line {
+.course-structure-link .course-structure-connector {
+  fill: none;
+  stroke: #66878b;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.course-structure-link.is-related .course-structure-connector {
   stroke-dasharray: 5 4;
-  stroke: #b1986f;
+  stroke: #9b83aa;
 }
-.course-structure-link path {
-  fill: #778e99;
+.course-structure-link .course-structure-arrow {
+  fill: #66878b;
 }
 .course-structure-link text {
   font-size: 10px;
@@ -687,8 +710,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .course-structure-viewer {
-    min-height: 240px;
-    height: 240px;
+    min-height: 360px;
+    height: min(var(--graph-height, 440px), 62dvh);
   }
   .course-structure-sidebar {
     max-height: none;
@@ -725,6 +748,9 @@
     min-height: 44px;
   }
   .course-structure.has-focus .course-structure-current {
+    order: -2;
+  }
+  .course-structure.has-focus .course-structure-graph-area {
     order: -1;
   }
 }

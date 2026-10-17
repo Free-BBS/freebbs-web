@@ -9,12 +9,14 @@ const {
   normalizePreference,
   recommendedGoal,
   buildStrategy,
+  buildIntentStrategy,
 } = require('../public/learning-strategies');
+const policy = require('../public/learning-policy');
 const { validateEntry } = require('../backend/learning-workspace');
 
-test('four self-described starting points and three intentions define twelve repeatable suggestions', () => {
+test('four self-described starting points and four intentions share sixteen repeatable modular suggestions', () => {
   assert.deepEqual(Object.values(LEVELS), ['第一次学', '不甚熟悉', '能独立做题', '完整掌握']);
-  assert.deepEqual(Object.values(GOALS), ['理解知识', '练习解题', '探索研究']);
+  assert.deepEqual(Object.values(GOALS), ['理解知识', '练习解题', '复习知识', '探索研究']);
   const labels = new Set();
   const hints = new Set();
   for (const level of Object.keys(LEVELS))
@@ -29,7 +31,12 @@ test('four self-described starting points and three intentions define twelve rep
       };
       const plan = buildStrategy(preference, options);
       assert.equal(plan.key, `${level}:${goal}`);
-      assert.equal(plan.steps.length, 3);
+      const purpose = goal === 'concepts' ? 'learn' : goal;
+      assert.deepEqual(
+        plan.modules.map((entry) => entry.moduleId),
+        policy.CHAINS[`${purpose}:${level}`],
+      );
+      assert.equal(plan.policyVersion, policy.POLICY_VERSION);
       assert.equal(plan.questions.length, 3);
       assert.ok(plan.steps.every((step) => !step.completed && !step.skipped && step.minutes > 0));
       assert.ok(plan.questions.some((question) => question.includes('「卷积」')));
@@ -43,8 +50,8 @@ test('four self-described starting points and three intentions define twelve rep
       labels.add(plan.label);
       hints.add(plan.hint);
     }
-  assert.equal(labels.size, 12);
-  assert.equal(hints.size, 12);
+  assert.equal(labels.size, 16);
+  assert.equal(hints.size, 16);
 });
 
 test('the suggested intention is a fallback, never a replacement for an explicit intention', () => {
@@ -66,7 +73,7 @@ test('invalid or legacy goals are not learner categories or new mastery claims',
   for (const value of [null, false, [], {}, { level: 'expert' }])
     assert.equal(normalizePreference(value), null);
   assert.deepEqual(
-    normalizePreference({ level: 'familiar', goal: 'review', privateNotes: 'SECRET' }),
+    normalizePreference({ level: 'familiar', goal: 'unknown-goal', privateNotes: 'SECRET' }),
     { level: 'familiar', goal: '' },
   );
   assert.equal(recommendedGoal('expert'), null);
@@ -106,7 +113,11 @@ test('origin and relations are real optional routes, independent of a missing bo
     { hasQuestions: true, questionId: 'q-basic', quizView: 'quick' },
   );
   assert.equal(question.steps[0].questionId, 'q-basic');
-  assert.equal(question.steps[0].quizView, 'quick');
+  assert.equal(
+    question.steps[0].quizView,
+    'practice',
+    'A suggestion is never formal submission consent',
+  );
   assert.equal(
     buildStrategy(
       { level: 'basic', goal: 'practice' },
@@ -127,7 +138,7 @@ test('annotation suggestions name a real selected-passage action instead of an a
       assert.match(plan.hint, /求助、跳过或暂停不表示失败/);
     }
   const uncertain = buildStrategy({ level: 'familiar', goal: 'concepts' });
-  assert.match(uncertain.steps[0].description, /一处/);
+  assert.match(uncertain.steps[0].description, /一个关键概念/);
   assert.doesNotMatch(uncertain.steps[0].description, /先写能解释和不能解释/);
 });
 
@@ -153,6 +164,15 @@ test('missing annotation material opens optional help, or real origin text, neve
       );
       for (const action of origin.steps.filter((entry) => entry.description.includes('批注')))
         assert.equal(action.view, 'origin');
+      const reflection = origin.modules.find((entry) => entry.moduleId === 'reflect');
+      if (reflection) {
+        const action = origin.steps.find((step) => step.id === reflection.stepId);
+        assert.equal(reflection.available, true);
+        assert.equal(action.tool, 'content');
+        assert.equal(action.view, 'origin');
+        assert.equal(action.taskId, 'annotate-origin', `${level}:${goal}`);
+        assert.match(action.description, /在知识起源中选中一处相关原文/);
+      }
     }
 });
 
@@ -182,9 +202,103 @@ test('the model is pure and exports in a browser without network, storage or DOM
   assert.equal(JSON.stringify([preference, options]), before);
   const browser = {};
   vm.runInNewContext(
+    fs.readFileSync(path.join(__dirname, '../public/learning-policy.js'), 'utf8'),
+    { window: browser },
+  );
+  vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../public/learning-strategies.js'), 'utf8'),
     { window: browser },
   );
   assert.equal(typeof browser.FreeBbsLearningStrategies.buildStrategy, 'function');
   assert.equal(browser.FreeBbsLearningStrategies.buildStrategy(preference).goal, 'practice');
+});
+
+test('old intent IDs are retained and an unknown starting point is never silently a novice', () => {
+  for (const goal of ['concepts', 'practice', 'explore', 'review']) {
+    assert.equal(normalizePreference({ level: 'familiar', goal }).goal, goal);
+    const plan = buildIntentStrategy(goal, { hasContent: true });
+    assert.equal(plan.goal, goal);
+    assert.equal(plan.level, '');
+    assert.equal(plan.key, `unspecified:${goal}`);
+    assert.match(plan.hint, /^学习起点未设置/);
+    assert.doesNotMatch(plan.hint, /学生自述|第一次学|实验|16 类/);
+  }
+  assert.equal(buildIntentStrategy('unknown'), null);
+});
+
+test('review keeps three core modules, conditional repair and an optional stopping-friendly revisit', () => {
+  for (const level of Object.keys(LEVELS)) {
+    const plan = buildStrategy({ level, goal: 'review' }, { hasContent: true });
+    assert.equal(plan.coreStepCount, 3);
+    assert.equal(plan.modules[0].moduleId, 'retrieve');
+    const repair = plan.modules.find((entry) => entry.moduleId === 'repair');
+    assert.equal(repair.conditional, true);
+    assert.equal(repair.optional, true);
+    const repairStep = plan.steps.find((entry) => entry.id === repair.stepId);
+    assert.match(repairStep.description, /只有.*发现缺口/);
+    assert.match(repairStep.description, /顺利时可跳过/);
+    assert.ok(plan.modules.filter((entry, index) => index >= 3).every((entry) => entry.optional));
+    const revisit = plan.steps.find(
+      (entry) => entry.id === plan.modules.find((item) => item.moduleId === 'revisit').stepId,
+    );
+    assert.match(revisit.title, /可以结束/);
+    assert.doesNotMatch(JSON.stringify(plan.steps), /实验|原型|16 类|第.*类人/);
+  }
+});
+
+test('exploration exposes question-first suggestions and optional, conditionally-needed lookup metadata', () => {
+  for (const level of Object.keys(LEVELS)) {
+    const plan = buildStrategy(
+      { level, goal: 'explore' },
+      {
+        hasContent: true,
+        hasRelations: true,
+        hasOrigin: true,
+        hasOverview: true,
+      },
+    );
+    assert.equal(plan.modules[0].moduleId, 'explore');
+    assert.equal(plan.steps[0].view, 'relations');
+    assert.ok(plan.modules.slice(1).every((entry) => entry.optional));
+    assert.ok(plan.modules.every((entry) => typeof entry.available === 'boolean'));
+    const read = plan.modules.find((entry) => entry.moduleId === 'read');
+    if (read) assert.equal(read.conditional, true);
+  }
+});
+
+test('policy modules do not change the persisted path contract or fake available overview material', () => {
+  for (const level of Object.keys(LEVELS))
+    for (const goal of Object.keys(GOALS)) {
+      const plan = buildStrategy(
+        { level, goal },
+        {
+          hasContent: true,
+          hasQuestions: true,
+          questions: [{ id: 'real-q', assessmentRole: 'practice', difficulty: 'basic' }],
+        },
+      );
+      assert.deepEqual(
+        validateEntry({ kind: 'path', title: '我的学习路径', content: '', path: plan.steps }).path,
+        plan.steps,
+      );
+      assert.equal(
+        plan.steps.some((entry) => entry.taskId === 'view-overview'),
+        false,
+      );
+    }
+  assert.equal(
+    buildStrategy({ level: 'new', goal: 'concepts' }, { hasOverview: true }).steps[0].taskId,
+    'view-overview',
+  );
+});
+
+test('the title carries the choice once while the reason offers an actionable next step', () => {
+  for (const level of Object.keys(LEVELS))
+    for (const goal of Object.keys(GOALS)) {
+      const plan = buildStrategy({ level, goal }, { hasContent: true });
+      assert.equal(plan.label, `${GOALS[goal]} · ${LEVELS[level]}`);
+      assert.equal(plan.reason.includes(GOALS[goal]), false);
+      assert.equal(plan.reason.includes(LEVELS[level]), false);
+      assert.match(plan.reason, /先|从/);
+    }
 });

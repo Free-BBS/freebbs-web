@@ -193,6 +193,7 @@ const {
   loadCompanionContext,
   companionHint,
   companionPreference,
+  companionPolicyContext,
   createMysqlCompanionNodeLoader,
 } = require('./learning-companion');
 const { createCompanionSourcesRouter } = require('./learning-companion-sources');
@@ -1999,6 +2000,9 @@ function normalizeKnowledgeRagText(value, maximumLength) {
 }
 
 function buildKnowledgeRagPrompt(question, context) {
+  // The authenticated companion rebuilds the current, bounded learning direction.
+  // Do not give Max a second, potentially older course-default strategy.
+  const preference = companionPolicyContext(context) ? null : companionPreference(context);
   return [
     '请作为课程助教回答学生问题。优先使用检索到的课程资料，并结合当前知识点页面内容；如果资料不足，请明确说明。',
     '',
@@ -2008,7 +2012,7 @@ function buildKnowledgeRagPrompt(question, context) {
     `摘要：${context.knowledgePointSummary || '暂无摘要'}`,
     `当前页面正文：\n${context.knowledgePointMarkdown || '暂无正文'}`,
     `当前已发布知识起源${context.knowledgePointOriginTruncated ? '（已节选）' : ''}：\n${context.knowledgePointOriginMarkdown || '暂无起源说明'}`,
-    promptHintFromPreference(companionPreference(context), context.resources),
+    promptHintFromPreference(preference, context.resources),
     companionHint(context),
     '',
     `学生问题：${question}`,
