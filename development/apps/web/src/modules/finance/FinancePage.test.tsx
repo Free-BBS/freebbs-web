@@ -7,7 +7,12 @@ import { FinancePage } from './FinancePage';
 const { mockRequest } = vi.hoisted(() => ({ mockRequest: vi.fn() }));
 
 vi.mock('../../core/api/client.js', () => ({
-  createApiClient: () => ({ request: mockRequest }),
+  createApiClient: () => ({
+    request: (path: string, init?: RequestInit) =>
+      path === '/notifications/organizations'
+        ? Promise.resolve({ organizations: [] })
+        : mockRequest(path.split('?')[0], init),
+  }),
 }));
 
 const existingRecord = {
@@ -27,7 +32,7 @@ const financeLead = {
   displayName: '财务负责人',
   avatarUrl: null,
   baseRole: 'student' as const,
-  roles: [],
+  roles: ['counselor.youth_league' as const],
   tags: [],
   policies: [
     {
@@ -233,7 +238,7 @@ describe('FinancePage', () => {
   });
 
   it('uses the shared module shell for filtering, async states, records and actions', async () => {
-    mockRequest.mockResolvedValueOnce([existingRecord]);
+    mockRequest.mockResolvedValue([existingRecord]);
 
     render(<FinancePage user={financeLead} />);
 

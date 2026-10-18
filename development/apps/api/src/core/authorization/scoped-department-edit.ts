@@ -1,7 +1,8 @@
 import {
   departmentById,
   departmentsForRoles,
-  organizationForRole,
+  organizationMembershipsForRole,
+  isGlobalOrganizationBusinessSupervisor,
   type ScopeRef,
   type SocialOrganizationId,
 } from '@freebbs-development/contracts';
@@ -41,15 +42,61 @@ function matches(rule: PermissionRule, action: string, resource: string) {
   return patternMatches(rule.action, action) && patternMatches(rule.resource, resource);
 }
 function targetScopes(target: EditTarget) {
+  const organizationId =
+    target.organizationId ??
+    (target.departmentId ? departmentById(target.departmentId)?.organizationId : null);
   return [
     ...target.scopes,
     ...(target.departmentId ? [{ type: 'department', id: target.departmentId }] : []),
-    ...(target.organizationId ? [{ type: 'social_organization', id: target.organizationId }] : []),
+    ...(organizationId ? [{ type: 'social_organization', id: organizationId }] : []),
   ];
 }
 
-// Only the two collaboration actions have runtime defaults. Existing production
-// stores can use them immediately; governed inactive rows suppress the defaults.
+function isOrganizationBoundary(scope: ScopeRef): boolean {
+  return scope.type === 'department' || scope.type === 'social_organization';
+}
+
+function appliesToTarget(scope: ScopeRef, target: EditTarget, scopes: ScopeRef[]): boolean {
+  if (global(scope)) return true;
+  if (scope.id === '*') return false;
+  const department = target.departmentId ? departmentById(target.departmentId) : undefined;
+  const organizationId = target.organizationId ?? department?.organizationId;
+  if (scope.type === 'social_organization') return organizationId === scope.id;
+  if (scope.type === 'department') {
+    return target.departmentId
+      ? target.departmentId === scope.id
+      : organizationId != null && departmentById(scope.id)?.organizationId === organizationId;
+  }
+  return scopes.some(({ type, id }) => type === scope.type && id === scope.id);
+}
+
+/** Intersect a position's department with a concrete appointment in that department. */
+function targetScopeIntersection(
+  left: ScopeRef,
+  right: ScopeRef,
+  target: EditTarget,
+  scopes: ScopeRef[],
+): ScopeRef | undefined | null {
+  const direct = combineScopes(left, right);
+  if (direct !== null)
+    return direct && isOrganizationBoundary(direct) && !appliesToTarget(direct, target, scopes)
+      ? null
+      : direct;
+  if (
+    left.type === right.type ||
+    (!isOrganizationBoundary(left) && !isOrganizationBoundary(right)) ||
+    !appliesToTarget(left, target, scopes) ||
+    !appliesToTarget(right, target, scopes)
+  )
+    return null;
+  if (!isOrganizationBoundary(left)) return left;
+  if (!isOrganizationBoundary(right)) return right;
+  return left.type === 'department' ? left : right;
+}
+
+// Rebuild these collaboration grants against the target. Generic compatibility
+// policies cannot intersect a department with an individual activity appointment,
+// and importing them here could bypass an incompatible governed binding.
 async function canEdit(
   store: DevelopmentStore,
   actor: AuthorizationContext,
@@ -76,7 +123,24 @@ async function canEdit(
   if (definitions.length > 0 && !definitions.some(({ status }) => status === 'active'))
     return false;
   const now = Date.now();
+  const department = target.departmentId ? departmentById(target.departmentId) : undefined;
+  if (
+    target.departmentId &&
+    (!department ||
+      (target.organizationId != null && department.organizationId !== target.organizationId))
+  )
+    return false;
   const scopes = targetScopes(target);
+  const liveAssignmentIds = assignments
+    .filter(
+      (row) =>
+        row.subjectUid === actor.uid &&
+        row.status === 'active' &&
+        actor.roles.includes(row.roleKey) &&
+        (row.expiresAt == null || Date.parse(row.expiresAt) > now) &&
+        roles.some((role) => role.key === row.roleKey && role.status === 'active'),
+    )
+    .map((row) => row.id);
   const policies: AuthorizationPolicy[] = (actor.policies ?? []).filter(
     ({ effect }) => effect === 'deny',
   );
@@ -84,7 +148,7 @@ async function canEdit(
     ...(actor.policies ?? []).filter(
       (policy) =>
         policy.effect === 'allow' &&
-        policy.id.startsWith('business-admin:') &&
+        liveAssignmentIds.some((id) => policy.id.startsWith(`business-admin:${id}:`)) &&
         matches(policy, action, resource),
     ),
   );
@@ -119,26 +183,39 @@ async function canEdit(
                 sourceDefinitions.length === 0)
             );
           })
-        : defaults.map((rule, index) => ({
-            ...rule,
-            id: `runtime:${index}`,
-            scope: rule.scope ?? publicScope,
-            effect: 'allow' as const,
-          }));
+        : defaults
+            .filter(
+              () =>
+                !permissions.some(
+                  (permission) =>
+                    permission.status !== 'active' && matches(permission, action, resource),
+                ),
+            )
+            .map((rule, index) => ({
+              ...rule,
+              id: `runtime:${index}`,
+              scope: rule.scope ?? publicScope,
+              effect: 'allow' as const,
+            }));
     const departments = departmentsForRoles([assignment.roleKey]);
     const eligible =
-      assignment.roleKey === 'platform.admin' ||
+      (global(assignment.scope) &&
+        isGlobalOrganizationBusinessSupervisor({ ...actor, roles: [assignment.roleKey] })) ||
       (target.departmentId
         ? departments.some(({ id }) => id === target.departmentId)
         : target.organizationId != null &&
           (departments.some(({ organizationId }) => organizationId === target.organizationId) ||
-            organizationForRole(assignment.roleKey)?.organizationId === target.organizationId)) ||
+            organizationMembershipsForRole(assignment.roleKey).some(
+              ({ organizationId }) => organizationId === target.organizationId,
+            ))) ||
       (action === 'events.workspace.update' &&
+        target.organizationId == null &&
+        target.departmentId == null &&
         target.ownerUid === actor.uid &&
         defaults.length > 0);
     for (const binding of effective) {
       if (binding.effect === 'allow' && !eligible) continue;
-      const scope = combineScopes(assignment.scope, binding.scope);
+      const scope = targetScopeIntersection(assignment.scope, binding.scope, target, scopes);
       if (scope === null) continue;
       policies.push({
         id: `scoped-edit:${assignment.id}:${binding.id}`,

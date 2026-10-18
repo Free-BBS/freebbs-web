@@ -4,6 +4,7 @@ import type {
   RegistrationSource,
 } from '@freebbs-development/contracts';
 import type { ReactNode } from 'react';
+import { lazy, Suspense } from 'react';
 import { Navigate, RouterProvider, createBrowserRouter, useLoaderData } from 'react-router-dom';
 import { useMatches, useParams, useSearchParams } from 'react-router-dom';
 
@@ -12,8 +13,6 @@ import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { SuperAdminRouteGuard } from '../core/permissions/SuperAdminRouteGuard.js';
 import { SystemSettingsRouteGuard } from '../core/permissions/SystemSettingsRouteGuard.js';
-import { SystemSettingsPage } from '../modules/system-settings/SystemSettingsPage.js';
-import { AdminPage } from '../modules/admin/AdminPage.js';
 import { CollectionsLandingPage } from '../modules/collections/CollectionsLandingPage.js';
 import { MyRegistrations } from '../modules/collections/MyRegistrations.js';
 import { RegistrationGallery } from '../modules/collections/RegistrationGallery.js';
@@ -22,7 +21,6 @@ import { ActivityManagementPage } from '../modules/collections/ActivityManagemen
 import { ActivityPage } from '../modules/collections/ActivityPage.js';
 import { ShowcaseDetailPage } from '../modules/collections/ShowcaseDetailPage.js';
 import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
-import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
 import { CommunityPage } from '../modules/community/CommunityPage.js';
 import { DeskPage } from '../modules/desk/DeskPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
@@ -49,11 +47,30 @@ import {
 } from './module-manifests.js';
 import { OrganizationsPage } from '../modules/organizations/OrganizationsPage.js';
 import { OrganizationGroupPage } from '../modules/organization-group/OrganizationGroupPage.js';
-import { CollaborationPage } from '../modules/collaboration/CollaborationPage.js';
 import { PublicRegistrationPage } from '../modules/collections/PublicRegistrationPage.js';
 import { CollectionResultsPage } from '../modules/collections/CollectionResultsPage.js';
 import { DevelopmentSettingsPage } from '../modules/connectors/DevelopmentSettingsPage.js';
 import { PublishingPage } from '../modules/publishing/PublishingPage.js';
+
+// Load management workspaces only when requested, keeping the public entry lean.
+const SystemSettingsPage = lazy(() =>
+  import('../modules/system-settings/SystemSettingsPage.js').then((module) => ({
+    default: module.SystemSettingsPage,
+  })),
+);
+const AdminPage = lazy(() =>
+  import('../modules/admin/AdminPage.js').then((module) => ({ default: module.AdminPage })),
+);
+const CollectionWorkbench = lazy(() =>
+  import('../modules/collections/builder/CollectionWorkbench.js').then((module) => ({
+    default: module.CollectionWorkbench,
+  })),
+);
+const CollaborationPage = lazy(() =>
+  import('../modules/collaboration/CollaborationPage.js').then((module) => ({
+    default: module.CollaborationPage,
+  })),
+);
 
 export async function loadModuleStates(): Promise<ModuleStateOverrides> {
   try {
@@ -559,5 +576,9 @@ export const appRouter = createBrowserRouter(
 );
 
 export function AppRouter() {
-  return <RouterProvider router={appRouter} />;
+  return (
+    <Suspense fallback={<p role="status">正在加载页面…</p>}>
+      <RouterProvider router={appRouter} />
+    </Suspense>
+  );
 }

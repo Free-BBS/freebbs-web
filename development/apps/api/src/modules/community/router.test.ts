@@ -37,6 +37,8 @@ async function testApp() {
     ['viewer', actor('viewer')],
     ['member', actor('member', 'youth_league.freshman.member')],
     ['leader', actor('leader', 'youth_league.freshman.leader')],
+    ['foreign', actor('foreign', 'youth_league.organization.member')],
+    ['executive', actor('executive', 'student_union.executive_president')],
   ]);
   await store.modules.create({
     moduleId: 'community',
@@ -220,5 +222,66 @@ describe('community router', () => {
         ({ sourceCommunityPostId }) => sourceCommunityPostId === postId,
       ),
     ).toHaveLength(1);
+  });
+  it('exposes scoped newcomer capabilities and keeps union conversion targets separate', async () => {
+    const created = await request(app)
+      .post('/community/posts')
+      .set('X-User', 'student')
+      .send({
+        kind: 'wish',
+        title: '社团体验',
+        body: '希望一起体验校园活动。',
+        tags: [],
+        displayMode: 'named',
+      })
+      .expect(201);
+    const postId = String(created.body.data.id);
+    const member = await request(app)
+      .get(`/community/posts/${postId}`)
+      .set('X-User', 'member')
+      .expect(200);
+    expect(member.body.data.item.capabilities).toMatchObject({
+      canRespondToWish: true,
+      canRequestConversion: true,
+      canApproveConversion: false,
+    });
+    await request(app)
+      .post(`/community/wishes/${postId}/responses`)
+      .set('X-User', 'foreign')
+      .send({ body: '越权回应' })
+      .expect(403);
+    const executive = await request(app)
+      .get(`/community/posts/${postId}`)
+      .set('X-User', 'executive')
+      .expect(200);
+    expect(executive.body.data.item.capabilities).toMatchObject({
+      canRespondToWish: false,
+      canRequestConversion: true,
+    });
+    const input = {
+      title: '文艺活动',
+      description: '一起体验。',
+      startsAt: null,
+      organizationId: 'arts_center',
+    };
+    await request(app)
+      .post(`/community/wishes/${postId}/conversion-requests`)
+      .set('X-User', 'executive')
+      .send({ ...input, organizationId: 'sast' })
+      .expect(403);
+    await request(app)
+      .post(`/community/wishes/${postId}/conversion-requests`)
+      .set('X-User', 'executive')
+      .send(input)
+      .expect(200);
+    await request(app)
+      .post(`/community/wishes/${postId}/conversion-requests/approve`)
+      .set('X-User', 'leader')
+      .expect(403);
+    const approved = await request(app)
+      .post(`/community/wishes/${postId}/conversion-requests/approve`)
+      .set('X-User', 'executive')
+      .expect(201);
+    expect(approved.body.data.organizationId).toBe('arts_center');
   });
 });

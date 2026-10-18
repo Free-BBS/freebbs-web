@@ -1,19 +1,20 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import { isGlobalOrganizationBusinessSupervisor } from '@freebbs-development/contracts';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router, type Response } from 'express';
 import { z } from 'zod';
-import {
-  canEditDepartment,
-  departmentById,
-  type UserContext,
-} from '@freebbs-development/contracts';
+import { departmentById, type UserContext } from '@freebbs-development/contracts';
 import { PUBLISHING_CATEGORIES, type PublishingContent } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import type { CollectionsRouterOptions } from '../collections/router.js';
 import { canCreateCollection } from '../collections/access.js';
 import { safePublishingUrl } from './domain.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
+import {
+  generalRoleContext,
+  canEditActorDepartment as canEditDepartment,
+} from '../../core/authorization/role-scope-context.js';
 interface Stored extends PublishingContent {
   reactions: Array<{ uid: string; liked: boolean; rating: number }>;
 }
@@ -59,11 +60,10 @@ function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
   return parsed.data;
 }
 export function managesContent(item: PublishingContent, user: UserContext) {
-  return (
-    item.ownerUid === user.uid ||
-    isDevelopmentBusinessAdmin(user) ||
-    Boolean(item.departmentId && canEditDepartment(user, item.departmentId))
-  );
+  user = generalRoleContext(user);
+  if (isGlobalOrganizationBusinessSupervisor(user)) return true;
+  if (item.departmentId) return canEditDepartment(user, item.departmentId);
+  return item.ownerUid === user.uid && canCreateCollection(user);
 }
 export function visibleContent(item: PublishingContent, user: UserContext) {
   return (
@@ -91,7 +91,7 @@ export function createPublishingRouter(
   const requireModule = (res: Response, category: PublishingContent['category']) => {
     if (!enabled(res, category)) throw new HttpError(503, 'module_disabled', '该资料模块尚未开放');
   };
-  const actor = (res: Response) => res.locals.actor as UserContext;
+  const actor = (res: Response) => generalRoleContext(res.locals.actor as UserContext);
   const send = (res: Response, data: unknown, status = 200) =>
     res.status(status).json({ data, requestId: res.locals.requestId });
   const bounded = (item: Stored) => {
@@ -139,7 +139,10 @@ export function createPublishingRouter(
           .filter((record) => record.enabled && record.status === 'enabled')
           .map((record) => record.moduleId)
       : ['information', 'knowledge'];
-    res.locals.actor = identity.user;
+    res.locals.actor =
+      options.store && 'roleScopes' in identity.user
+        ? await loadAuthorizationContext(options.store, identity.user, new Date())
+        : identity.user;
     next();
   });
   router.get('/', async (_req, res) => {

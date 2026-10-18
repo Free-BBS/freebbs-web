@@ -403,6 +403,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     `${API_BASE_PATH}/collaboration`,
     createMaterialsRouter({
+      store,
       authenticate,
       nodeEnvironment: environment.nodeEnv,
       uploadDirectory:

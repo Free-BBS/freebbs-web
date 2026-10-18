@@ -37,6 +37,14 @@ export interface DevelopmentBusinessAdminBootstrapResult {
   uid: string;
 }
 export type DevelopmentAssignableRole = Exclude<RoleKey, 'platform.super_admin'>;
+export interface DevelopmentDirectoryFilters {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+  organizationId?: string;
+  roleKey?: string;
+  admission?: 'admitted' | 'not_admitted' | 'member' | 'lead';
+}
 export interface SystemSettingsUser {
   uid: string;
   username: string;
@@ -75,7 +83,12 @@ export interface SystemSettingsOrganizationsInput {
 
 const sectionOrganizations: Partial<
   Record<DevelopmentIdentitySection['id'], SocialOrganizationId>
-> = { youth_league: 'tuanwei', science_association: 'sast', tms: 'tms' };
+> = {
+  youth_league: 'tuanwei',
+  science_association: 'sast',
+  tms: 'tms',
+  media_center: 'media_center',
+};
 const groupOrganizations: Readonly<Record<string, SocialOrganizationId>> = {
   'student_union.arts_center': 'arts_center',
   'student_union.sports_center': 'sports_center',
@@ -229,6 +242,7 @@ export interface SystemSettingsRewardHistory extends DevelopmentRewardResult {
 }
 export interface SystemSettingsBootstrap {
   users: SystemSettingsUser[];
+  usersPage?: Page<SystemSettingsUser>;
   identitySections: readonly DevelopmentIdentitySection[];
   organizations: SystemSettingsOrganizations;
   sportsTeams: Array<{ id: string; name: string }>;

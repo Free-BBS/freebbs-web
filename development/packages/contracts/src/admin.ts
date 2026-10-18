@@ -7,6 +7,14 @@ export interface Page<T> {
   pageSize: number;
   total: number;
 }
+export interface BatchAllowDevelopmentUsersInput {
+  uids: string[];
+}
+export interface BatchAllowDevelopmentUsersResponse {
+  changedCount: number;
+  unchangedCount: number;
+  items: { uid: string; accessLevel: 'member' | 'lead' }[];
+}
 export interface AdminRecord {
   id: string;
   status: string;

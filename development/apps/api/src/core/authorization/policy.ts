@@ -16,6 +16,13 @@ export interface AuthorizationPolicy extends PermissionRule {
 
 export interface AuthorizationContext extends UserContext {
   policies?: AuthorizationPolicy[];
+  /** Current trusted appointments; role names alone do not imply department-wide authority. */
+  roleScopes?: ReadonlyArray<{
+    subjectUid: string;
+    roleKey: RoleKey;
+    scope: ScopeRef;
+    expiresAt: string | null;
+  }>;
 }
 
 export interface AuthorizationRequest {

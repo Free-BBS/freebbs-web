@@ -279,6 +279,38 @@ const groupByRole = new Map(
 export type IdentitySelectionValidation =
   { ok: true } | { ok: false; groupId: string; message: string };
 
+/** Finance appointments remain independent of the organization's ordinary position. */
+export function identityOrganizationForRole(
+  roleKey: RoleKey,
+): DevelopmentIdentitySection['id'] | null {
+  if (roleKey.endsWith('.finance') || roleKey.startsWith('platform.')) return null;
+  if (roleKey.startsWith('counselor.')) return 'counselors';
+  if (
+    roleKey.startsWith('student_union.') ||
+    roleKey.startsWith('domain.') ||
+    roleKey.startsWith('department.')
+  )
+    return 'student_union';
+  if (roleKey.startsWith('youth_league.') || roleKey.startsWith('affiliation.tuanwei_'))
+    return 'youth_league';
+  if (roleKey.startsWith('science_association.') || roleKey.startsWith('affiliation.sast_'))
+    return 'science_association';
+  if (roleKey.startsWith('media_center.')) return 'media_center';
+  if (roleKey.startsWith('affiliation.tms_')) return 'tms';
+  return null;
+}
+
+export function toggleIdentitySelection(roles: readonly RoleKey[], roleKey: RoleKey): RoleKey[] {
+  if (roles.includes(roleKey)) return roles.filter((role) => role !== roleKey);
+  const organization = identityOrganizationForRole(roleKey);
+  return [
+    ...roles.filter(
+      (role) => organization === null || identityOrganizationForRole(role) !== organization,
+    ),
+    roleKey,
+  ];
+}
+
 export function validateIdentitySelection(roles: readonly RoleKey[]): IdentitySelectionValidation {
   const selected = new Set(roles);
   for (const group of DEVELOPMENT_IDENTITY_GROUPS) {
@@ -290,6 +322,13 @@ export function validateIdentitySelection(roles: readonly RoleKey[]): IdentitySe
         groupId: group.id,
         message: `${group.label}只能选择一个身份`,
       };
+    }
+  }
+  for (const section of DEVELOPMENT_IDENTITY_SECTIONS) {
+    if (
+      [...selected].filter((role) => identityOrganizationForRole(role) === section.id).length > 1
+    ) {
+      return { ok: false, groupId: section.id, message: `${section.label}只能选择一个常规身份` };
     }
   }
   return { ok: true };

@@ -1,10 +1,11 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  SOCIAL_ORGANIZATION_IDS,
+} from '@freebbs-development/contracts';
 import {
   departmentById,
-  departmentsForRoles,
   legacyDepartmentId,
   organizationById,
-  organizationForRole,
   type CollectionSchema,
   type DepartmentActivitySummary,
   type SocialOrganizationId,
@@ -19,18 +20,24 @@ import type {
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { canManageCollection } from './access.js';
+import {
+  generalRoleContext,
+  departmentsForActor,
+  organizationMembershipsForActor,
+  roleContextForScopes,
+} from '../../core/authorization/role-scope-context.js';
 import { readCollectionFeature } from './feature-storage.js';
 import { resolve } from 'node:path';
 import { activityWithWorkspaceSchedule } from '../events/workspace-schedule.js';
 import { readActivityWorkspace } from '../events/workspace-storage.js';
 
 export function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
+  if (isGlobalOrganizationBusinessSupervisor(generalRoleContext(actor)))
+    return [...SOCIAL_ORGANIZATION_IDS];
   return [
     ...new Set([
-      ...actor.roles
-        .map((role) => organizationForRole(role)?.organizationId)
-        .filter((id): id is SocialOrganizationId => id !== undefined),
-      ...departmentsForRoles(actor.roles)
+      ...organizationMembershipsForActor(actor).map(({ organizationId }) => organizationId),
+      ...departmentsForActor(actor)
         .map(({ organizationId }) => organizationId)
         .filter((id): id is SocialOrganizationId => id !== null),
     ]),
@@ -40,19 +47,20 @@ export function resolvePublisher(
   actor: AuthorizationContext,
   schema: CollectionSchema,
   requestedOrganization: SocialOrganizationId | null | undefined,
+  formId?: string,
 ): { schema: CollectionSchema; organizationId: SocialOrganizationId | null } {
-  const departments = departmentsForRoles(actor.roles);
+  const resourceScopes = formId ? [{ type: 'collection_form', id: formId }] : [];
+  const supervisor = isGlobalOrganizationBusinessSupervisor(
+    roleContextForScopes(actor, resourceScopes),
+  );
+  const departments = departmentsForActor(actor, resourceScopes);
   const selected = schema.publisherDepartmentId;
   const department = selected
     ? departmentById(selected)
     : departments.length === 1
       ? departments[0]
       : undefined;
-  if (
-    selected &&
-    (!department ||
-      (!isDevelopmentBusinessAdmin(actor) && !departments.some(({ id }) => id === selected)))
-  )
+  if (selected && (!department || (!supervisor && !departments.some(({ id }) => id === selected))))
     throw new HttpError(403, 'forbidden', '不能以未加入的部门发布活动');
   if (department) {
     if (requestedOrganization != null && requestedOrganization !== department.organizationId)
@@ -66,10 +74,19 @@ export function resolvePublisher(
       organizationId: department.organizationId,
     };
   }
+  if (
+    !selected &&
+    !supervisor &&
+    departments.length > 1 &&
+    actor.roles.some(
+      (role) => role === 'counselor.practice' || role === 'counselor.student_development',
+    )
+  ) {
+    throw new HttpError(400, 'department_required', '请选择本次表单的发布部门');
+  }
   // Old payloads and actors without a gallery department remain valid.
   const organizations = actorOrganizations(actor);
-  if (isDevelopmentBusinessAdmin(actor))
-    return { schema, organizationId: requestedOrganization ?? null };
+  if (supervisor) return { schema, organizationId: requestedOrganization ?? null };
   if (requestedOrganization != null) {
     if (!organizations.includes(requestedOrganization))
       throw new HttpError(403, 'forbidden', '不能以未加入的组织创建或维护表单');
@@ -84,7 +101,7 @@ export function audienceAllows(actor: AuthorizationContext, schema: CollectionSc
   if (!rule || rule.value === 'all' || rule.value === true) return true;
   const organizations = actorOrganizations(actor);
   if (rule.value === 'social_org')
-    return organizations.length > 0 || departmentsForRoles(actor.roles).length > 0;
+    return organizations.length > 0 || departmentsForActor(actor).length > 0;
   if (typeof rule.value === 'string')
     return organizations.includes(rule.value as SocialOrganizationId);
   if (Array.isArray(rule.value))
@@ -135,7 +152,7 @@ export function canViewCollection(
   form: CollectionFormRecord,
   schema: CollectionSchema,
 ): boolean {
-  return canManageCollection(actor, form.ownerUid) || audienceAllows(actor, schema);
+  return canManageCollection(actor, form, schema) || audienceAllows(actor, schema);
 }
 export function canReadPublishedActivity(
   actor: AuthorizationContext,
@@ -150,7 +167,7 @@ export function canReadPublishedActivity(
   if (
     (activity.scope.type === 'public' && activity.scope.id === '*') ||
     actor.uid === activity.ownerUid ||
-    isDevelopmentBusinessAdmin(actor)
+    isGlobalOrganizationBusinessSupervisor(actor)
   )
     return true;
   // Baseline student events.read is unscoped. A private catalog entry needs an
@@ -180,7 +197,7 @@ export async function registrationFromForm(
   if (!version?.publishedAt || !canViewCollection(actor, form, version.schema)) return null;
   const featureState = await readCollectionFeature(featureDirectory, form.id);
   if (
-    !canManageCollection(actor, form.ownerUid) &&
+    !canManageCollection(actor, form, version.schema) &&
     version.schema.recipientMode &&
     version.schema.recipientMode !== 'open'
   ) {
@@ -198,6 +215,7 @@ export async function registrationFromForm(
   const department = publisherDepartmentId ? departmentById(publisherDepartmentId) : undefined;
   const organizationId = department ? department.organizationId : form.organizationId;
   const active = responses.filter((item) => item.formId === form.id && item.status === 'submitted');
+  const attemptLimit = version.schema.formRules.find(({ kind }) => kind === 'attempt_limit')?.value;
   const { schedule } = await readActivityWorkspace(featureDirectory, 'native_collection', form.id);
   return {
     id: form.id,
@@ -217,6 +235,8 @@ export async function registrationFromForm(
     capacity: effectiveCapacity(form, version.schema),
     registrationCount: active.length + featureState.responses.length,
     registered: active.some((item) => item.respondentUid === actor.uid),
+    attemptsUsed: active.filter((item) => item.respondentUid === actor.uid).length,
+    attemptLimit: typeof attemptLimit === 'number' ? attemptLimit : 1,
     status: nativeStatus(form, version.schema),
     schema: version.schema,
   };

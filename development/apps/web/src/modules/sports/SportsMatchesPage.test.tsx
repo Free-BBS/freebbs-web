@@ -53,6 +53,51 @@ const endedToday = () => {
 };
 
 describe('SportsMatchesPage', () => {
+  it('honors canonical organization update scope and source public denies', async () => {
+    const request = vi.fn().mockResolvedValue([matchToday({ ownerUid: 'another' })]);
+    const actor: SportsUser = {
+      ...member,
+      roles: ['student_union.presidium'],
+      policies: [
+        {
+          action: 'sports.match.update',
+          resource: 'sports_match',
+          scope: { type: 'social_organization', id: 'sports_center' },
+        },
+      ],
+    };
+    const view = show(request, actor);
+    expect(await screen.findByRole('button', { name: '修改赛果' })).toBeInTheDocument();
+    view.unmount();
+    show(request, {
+      ...actor,
+      policies: [
+        ...actor.policies!,
+        {
+          action: 'sports.match.update',
+          resource: 'sports_match',
+          effect: 'deny',
+          scope: { type: 'public', id: '*' },
+        },
+      ],
+    });
+    await screen.findByText('电院 72–68 自动化');
+    expect(screen.queryByRole('button', { name: '修改赛果' })).not.toBeInTheDocument();
+  });
+  it.each([
+    'counselor.youth_league_secretary',
+    'counselor.youth_league',
+    'student_union.presidium',
+  ] as const)(
+    'lets %s supervise another user’s match with a loaded update policy',
+    async (role) => {
+      show(vi.fn().mockResolvedValue([matchToday({ ownerUid: 'another' })]), {
+        ...member,
+        roles: [role],
+      });
+      expect(await screen.findByRole('button', { name: '修改赛果' })).toBeInTheDocument();
+    },
+  );
   it('preserves a newer result when an older live-link response arrives last', async () => {
     const match = matchToday();
     let finishLink!: (value: SportsMatch) => void;

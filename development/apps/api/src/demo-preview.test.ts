@@ -147,7 +147,20 @@ describe('integrated demo preview', () => {
       expect.objectContaining({ organizationId: 'sports_center' }),
     ]);
 
-    const oversight = await asDemo(app, 'demo-tuanwei-lead')
+    const youthOrganization = await asDemo(app, 'demo-tuanwei-lead')
+      .get('/api/development/v1/finance/records')
+      .expect(200);
+    expect(
+      youthOrganization.body.data.every(
+        (record: { organizationId: string }) => record.organizationId === 'tuanwei',
+      ),
+    ).toBe(true);
+    expect(
+      youthOrganization.body.data.map(
+        (record: { organizationId: string }) => record.organizationId,
+      ),
+    ).not.toEqual(expect.arrayContaining(['liaison_center', 'sports_center']));
+    const oversight = await asDemo(app, 'demo-admin')
       .get('/api/development/v1/finance/records')
       .expect(200);
     expect(

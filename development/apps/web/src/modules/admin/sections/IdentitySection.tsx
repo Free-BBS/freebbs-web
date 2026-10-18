@@ -1,5 +1,6 @@
 import {
   identityLabels,
+  toggleIdentitySelection,
   type DevelopmentIdentitySection,
   type RoleKey,
 } from '@freebbs-development/contracts';
@@ -29,10 +30,7 @@ export function IdentitySection({
     if (readonly) return;
     const group = section.groups[groupIndex];
     if (!group) return;
-    const groupKeys = new Set(group.options.map(({ roleKey: key }) => key));
-    const next = roles.filter((key) => !groupKeys.has(key));
-    if (!selectedRoles.has(roleKey)) next.push(roleKey);
-    onRolesChange(next);
+    onRolesChange(toggleIdentitySelection(roles, roleKey));
   }
 
   return (

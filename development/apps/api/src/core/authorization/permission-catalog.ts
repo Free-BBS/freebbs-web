@@ -1,7 +1,7 @@
 import {
   ROLE_KEYS,
   departmentsForRoles,
-  organizationForRole,
+  organizationMembershipsForRole,
   type RoleKey,
 } from '@freebbs-development/contracts';
 import type { PermissionRule, RolePermissionCatalog } from './policy.js';
@@ -320,8 +320,107 @@ function inheritedPermissionProfile(roleKey: RoleKey): RoleKey | null {
     return 'affiliation.sast_director';
   if (roleKey.startsWith('science_association.') && roleKey.endsWith('.member'))
     return 'affiliation.sast_member';
+  if (roleKey.startsWith('media_center.')) {
+    if (roleKey.endsWith('.consultant')) return 'affiliation.tms_lead';
+    if (roleKey.endsWith('.minister')) return 'affiliation.tms_director';
+    if (roleKey.endsWith('.member')) return 'affiliation.tms_member';
+  }
   return null;
 }
+
+const ORGANIZATION_BUSINESS_ACTIONS = [
+  'knowledge.*',
+  'information.*',
+  'clubs.*',
+  'growth.*',
+  'community.*',
+  'events.*',
+  'collections.*',
+  'liaison.*',
+  'sports.*',
+  'finance.*',
+] as const;
+
+function scopedBusinessDefaults(roleKey: RoleKey): PermissionRule[] {
+  if (roleKey === 'counselor.youth_league_secretary' || roleKey === 'counselor.youth_league') {
+    return ORGANIZATION_BUSINESS_ACTIONS.map((action) => ({ action, resource: '*' }));
+  }
+  const memberships = organizationMembershipsForRole(roleKey);
+  const departments = departmentsForRoles([roleKey]);
+  const defaults: PermissionRule[] = [];
+  for (const { organizationId, level } of memberships) {
+    const scope = { type: 'social_organization', id: organizationId };
+    defaults.push(...rules(['finance.record.read', 'finance_record', scope]));
+    if (level === 'lead' || roleKey.endsWith('.finance')) {
+      defaults.push(
+        ...rules(
+          ['finance.record.create', 'finance_record', scope],
+          ['finance.record.update', 'finance_record', scope],
+          ['finance.record.review', 'finance_record', scope],
+        ),
+      );
+    }
+    if (roleKey.endsWith('.finance')) continue;
+    defaults.push(
+      ...rules(
+        ['events.create', 'activity', scope],
+        ['knowledge.create', 'knowledge_entry', scope],
+      ),
+    );
+    if (level !== 'member') {
+      defaults.push(
+        ...rules(
+          ['events.update', 'activity', scope],
+          ['knowledge.publish', 'knowledge_entry', scope],
+        ),
+      );
+    }
+    if (level === 'lead') {
+      defaults.push(...rules(['events.*', '*', scope], ['knowledge.*', '*', scope]));
+    }
+  }
+  for (const department of departments) {
+    const scope = { type: 'department', id: department.id };
+    defaults.push(
+      ...rules(
+        ['events.department_home.update', 'department_home', scope],
+        ['events.workspace.update', 'activity', scope],
+      ),
+    );
+    if (roleKey.startsWith('counselor.')) {
+      defaults.push(
+        ...ORGANIZATION_BUSINESS_ACTIONS.filter((action) => action !== 'finance.*').map(
+          (action) => ({ action, resource: '*', scope }),
+        ),
+      );
+    }
+  }
+  if (roleKey === 'counselor.innovation') {
+    for (const action of ORGANIZATION_BUSINESS_ACTIONS) {
+      defaults.push({
+        action,
+        resource: '*',
+        scope: { type: 'social_organization', id: 'sast' },
+      });
+    }
+  }
+  if (roleKey === 'student_union.executive_president' || roleKey === 'student_union.presidium') {
+    for (const membership of memberships)
+      for (const action of ORGANIZATION_BUSINESS_ACTIONS) {
+        defaults.push({
+          action,
+          resource: '*',
+          scope: { type: 'social_organization', id: membership.organizationId },
+        });
+      }
+  }
+  return defaults;
+}
+
+/** Additive policy defaults are also used for unreconciled existing stores. */
+export const ORGANIZATION_BUSINESS_DEFAULTS = Object.fromEntries(
+  ROLE_KEYS.map((roleKey) => [roleKey, scopedBusinessDefaults(roleKey)]),
+) as unknown as RolePermissionCatalog;
 
 export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = Object.fromEntries(
   ROLE_KEYS.map((roleKey) => {
@@ -329,22 +428,42 @@ export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = Object.fromEntries
     return [
       roleKey,
       [
-        ...(BASE_ROLE_PERMISSION_CATALOG[roleKey] ??
-          (inherited ? BASE_ROLE_PERMISSION_CATALOG[inherited] : undefined) ??
-          []),
-        ...(departmentsForRoles([roleKey]).length > 0
-          ? rules(['events.department_home.update', 'department_home'])
-          : []),
-        ...(organizationForRole(roleKey) !== null ||
-        [
-          'counselor.',
-          'student_union.',
-          'youth_league.',
-          'science_association.',
-          'media_center.',
-        ].some((prefix) => roleKey.startsWith(prefix))
-          ? rules(['events.workspace.update', 'activity'])
-          : []),
+        ...new Map(
+          [
+            ...(
+              BASE_ROLE_PERMISSION_CATALOG[roleKey] ??
+              (inherited ? BASE_ROLE_PERMISSION_CATALOG[inherited] : undefined) ??
+              []
+            )
+              .filter(
+                ({ action }) =>
+                  !(
+                    action === 'finance.*' &&
+                    roleKey !== 'platform.admin' &&
+                    !roleKey.startsWith('counselor.')
+                  ),
+              )
+              .map((rule) => {
+                if (
+                  ['youth_league.', 'science_association.', 'media_center.'].some((prefix) =>
+                    roleKey.startsWith(prefix),
+                  )
+                ) {
+                  const membership = organizationMembershipsForRole(roleKey)[0];
+                  if (membership)
+                    return {
+                      ...rule,
+                      scope: { type: 'social_organization', id: membership.organizationId },
+                    };
+                }
+                return rule;
+              }),
+            ...ORGANIZATION_BUSINESS_DEFAULTS[roleKey],
+          ].map((rule) => [
+            `${rule.action}:${rule.resource}:${rule.scope?.type ?? 'public'}:${rule.scope?.id ?? '*'}`,
+            rule,
+          ]),
+        ).values(),
       ],
     ];
   }),

@@ -28,6 +28,15 @@ const organizationId = z.enum(SOCIAL_ORGANIZATION_IDS);
 const querySchema = z
   .object({
     status: status.optional(),
+    page: z.coerce.number().int().min(1).max(1000000).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    organizationId: organizationId.optional(),
+    organizationMatches: z
+      .string()
+      .transform((value) => value.split(','))
+      .pipe(z.array(organizationId).max(SOCIAL_ORGANIZATION_IDS.length))
+      .optional(),
+    legacyMatch: z.enum(['true']).optional(),
     scopeType: identifier.regex(/^[a-z][a-z0-9_]*$/).optional(),
     scopeId: identifier.optional(),
     query: z.string().trim().min(1).max(200).optional(),
@@ -125,7 +134,25 @@ export function createFinanceRouter(options: FinanceRouterOptions): Router {
   router.get('/records', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
-    const result = await service.list(actor, parse(querySchema, request.query));
+    const { page, pageSize, organizationMatches, legacyMatch, ...inputFilters } = parse(
+      querySchema,
+      request.query,
+    );
+    const filters = {
+      ...inputFilters,
+      queryOrganizationIds: organizationMatches,
+      queryLegacyOrganization: legacyMatch === 'true',
+    };
+    if (page !== undefined || pageSize !== undefined) {
+      const result = await service.page(actor, filters, {
+        page: page ?? 1,
+        pageSize: pageSize ?? 20,
+      });
+      if (!result.authorized) return forbid(response);
+      send(response, 200, result.page);
+      return;
+    }
+    const result = await service.list(actor, filters);
     if (!result.authorized) return forbid(response);
     send(response, 200, result.records);
   });

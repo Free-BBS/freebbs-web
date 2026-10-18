@@ -43,6 +43,38 @@ function show(old = false) {
   return request;
 }
 describe('publisher department metadata', () => {
+  it.each([
+    { role: 'student_union.executive_president' as const, count: 4 },
+    { role: 'student_union.presidium' as const, count: 4 },
+    { role: 'counselor.practice' as const, count: 1 },
+    { role: 'counselor.student_development' as const, count: 2 },
+    { role: 'counselor.innovation' as const, count: 6 },
+    { role: 'department.arts_member' as const, count: 1 },
+  ])('restricts $role publisher choices to $count covered departments', async ({ role, count }) => {
+    actor.roles = [role];
+    show();
+    const options = within(await screen.findByLabelText('发布部门')).getAllByRole('option');
+    expect(options).toHaveLength(count + 1);
+    expect(options.map((item) => item.getAttribute('value'))).not.toContain(
+      'media_center.creative',
+    );
+  });
+  it('does not give retained platform role strings global publisher choices', async () => {
+    actor.roles = ['platform.admin'];
+    show();
+    await screen.findByLabelText('表单名称');
+    expect(screen.queryByLabelText('发布部门')).not.toBeInTheDocument();
+  });
+  it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+    'offers all canonical departments to global supervisor %s',
+    async (role) => {
+      actor.roles = [role];
+      show();
+      expect(within(await screen.findByLabelText('发布部门')).getAllByRole('option')).toHaveLength(
+        21,
+      );
+    },
+  );
   beforeEach(() => {
     actor.roles = [];
     actor.businessAdmin = false;

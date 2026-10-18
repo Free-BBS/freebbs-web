@@ -5,10 +5,19 @@ import type {
   SystemSettingsNotificationHistory,
   SystemSettingsRewardHistory,
   SystemSettingsUser,
+  DevelopmentDirectoryFilters,
+  Page,
 } from '@freebbs-development/contracts';
 import { useRef, useState } from 'react';
 import { ConfirmDialog } from '../../components/ConfirmDialog.js';
 import type { ApiClient } from '../../core/api/client.js';
+
+import {
+  directoryUrl,
+  directoryResult,
+  DirectoryFilters,
+  DirectoryPagination,
+} from './DirectoryControls.js';
 
 export function BatchSettings({
   kind,
@@ -25,6 +34,9 @@ export function BatchSettings({
   const [electric, setElectric] = useState('0');
   const [magnetic, setMagnetic] = useState('0');
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<DevelopmentDirectoryFilters>({});
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(initial.usersPage?.total ?? initial.users.length);
   const [users, setUsers] = useState(initial.users);
   const [selected, setSelected] = useState<SystemSettingsUser[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -38,15 +50,18 @@ export function BatchSettings({
   >(reward ? initial.rewards : initial.notifications);
   const requestId = useRef<string | null>(null);
   const submitting = useRef(false);
-  async function search() {
+  async function search(requestedPage = 1) {
     setSearching(true);
     setError('');
     try {
-      setUsers(
-        await client.request<SystemSettingsUser[]>(
-          `/system-settings/users${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ''}`,
+      const result = directoryResult(
+        await client.request<SystemSettingsUser[] | Page<SystemSettingsUser>>(
+          directoryUrl('/system-settings/users', query, filters, requestedPage),
         ),
       );
+      setUsers(result.items);
+      setPage(result.page);
+      setTotal(result.total);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '收件人加载失败');
     } finally {
@@ -230,6 +245,17 @@ export function BatchSettings({
                 查找
               </button>
             </div>
+            <DirectoryFilters
+              value={filters}
+              onChange={setFilters}
+              metadata={initial.organizations}
+            />
+            <DirectoryPagination
+              page={page}
+              total={total}
+              loading={searching || busy || locked}
+              onPage={(next) => void search(next)}
+            />
             <p>已选择 {selected.length} / 100 位同学</p>
             <div className="settings-recipient-list">
               {users.map((user) => (

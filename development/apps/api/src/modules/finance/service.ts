@@ -1,4 +1,8 @@
-import type { ScopeRef, SocialOrganizationId } from '@freebbs-development/contracts';
+import {
+  SOCIAL_ORGANIZATION_IDS,
+  type ScopeRef,
+  type SocialOrganizationId,
+} from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
@@ -85,6 +89,18 @@ function assertOrganizationScope(
   }
 }
 
+async function assertLinkedActivityOrganization(
+  store: DevelopmentStore,
+  record: Pick<FinanceRecord, 'activityId' | 'organizationId'>,
+): Promise<void> {
+  if (record.activityId == null) return;
+  const activity = await store.activities.getForUpdate(record.activityId);
+  if (activity === null || (activity.organizationId ?? null) !== (record.organizationId ?? null)) {
+    // Keep missing and foreign activity references indistinguishable.
+    throw new HttpError(404, 'activity_not_found', 'Activity not found');
+  }
+}
+
 export class FinanceService {
   constructor(private readonly store: DevelopmentStore) {}
 
@@ -100,18 +116,38 @@ export class FinanceService {
     };
   }
 
+  async page(
+    actor: AuthorizationContext,
+    filters: ListFilters,
+    request: { page: number; pageSize: number },
+  ) {
+    // Record visibility is defined exclusively by organization, including null legacy rows.
+    // Compile every catalog choice through the exact existing policy check, so denies win.
+    const organizationIds = [...SOCIAL_ORGANIZATION_IDS, null].filter((id) =>
+      canAccessFinanceOrganization(actor, id),
+    );
+    const [page, summaries] = await Promise.all([
+      this.store.financeRecords.page({ ...filters, organizationIds }, request),
+      this.store.financeRecords.summarize({ organizationIds }),
+    ]);
+    return { authorized: hasFinanceAccess(actor), page: { ...page, summaries } };
+  }
+
   async create(actor: AuthorizationContext, input: FinanceInput): Promise<FinanceRecord> {
     return this.store.transaction(async (store) => {
       assertActivityScope(input.activityId, input.scope);
-      if (input.activityId !== null) {
-        const activity = await store.activities.getForUpdate(input.activityId);
-        if (activity === null) throw new HttpError(404, 'activity_not_found', 'Activity not found');
-      }
-      const freshActor = await loadAuthorizationContext(store, actor, new Date());
       const organizationId = input.organizationId ?? null;
+      let freshActor = await loadAuthorizationContext(store, actor, new Date());
       if (!canAccessFinanceOrganization(freshActor, organizationId, 'create'))
         throw financeForbidden();
       assertOrganizationScope(organizationId, input.activityId, input.scope);
+      await assertLinkedActivityOrganization(store, {
+        activityId: input.activityId,
+        organizationId,
+      });
+      freshActor = await loadAuthorizationContext(store, actor, new Date());
+      if (!canAccessFinanceOrganization(freshActor, organizationId, 'create'))
+        throw financeForbidden();
       const created = await store.financeRecords.create({
         ...input,
         organizationId,
@@ -150,16 +186,22 @@ export class FinanceService {
       if (current.status !== 'draft' || !canMaintain(freshActor, current, targetOrganizationId)) {
         throw financeNotFound();
       }
+      await assertLinkedActivityOrganization(store, current);
       const targetActivityId =
         patch.activityId === undefined ? (current.activityId ?? null) : patch.activityId;
       assertActivityScope(targetActivityId, targetScope);
       assertOrganizationScope(targetOrganizationId, targetActivityId, targetScope);
-      if (targetActivityId !== null) {
-        const activity = await store.activities.getForUpdate(targetActivityId);
-        if (activity === null) throw new HttpError(404, 'activity_not_found', 'Activity not found');
-        freshActor = await loadAuthorizationContext(store, actor, new Date());
-        if (!canMaintain(freshActor, current, targetOrganizationId)) throw financeNotFound();
+      if (
+        targetActivityId !== current.activityId ||
+        targetOrganizationId !== current.organizationId
+      ) {
+        await assertLinkedActivityOrganization(store, {
+          activityId: targetActivityId,
+          organizationId: targetOrganizationId,
+        });
       }
+      freshActor = await loadAuthorizationContext(store, actor, new Date());
+      if (!canMaintain(freshActor, current, targetOrganizationId)) throw financeNotFound();
       const updated = await store.financeRecords.update(id, patch);
       if (updated === null) throw financeNotFound();
       await recordAuditEvent(store, {
@@ -187,20 +229,37 @@ export class FinanceService {
     const result = await this.store.transaction<TransitionResult>(async (store) => {
       const current = await store.financeRecords.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
-      const freshActor = await loadAuthorizationContext(store, actor, new Date());
+      let freshActor = await loadAuthorizationContext(store, actor, new Date());
       const from = current.status as FinanceStatus;
       const reviewEdge = from === 'submitted' && (to === 'approved' || to === 'rejected');
       const permitted = reviewEdge
         ? canReviewFinance(freshActor, current.organizationId ?? null)
         : canMaintain(freshActor, current);
       if (!permitted) return { kind: 'missing' };
+      await assertLinkedActivityOrganization(store, current);
+      freshActor = await loadAuthorizationContext(store, actor, new Date());
+      if (
+        !(reviewEdge
+          ? canReviewFinance(freshActor, current.organizationId ?? null)
+          : canMaintain(freshActor, current))
+      )
+        return { kind: 'missing' };
       if (
         !Object.hasOwn(FINANCE_TRANSITIONS, from) ||
         !canTransition(FINANCE_TRANSITIONS, from, to)
       ) {
         return { kind: 'rejected', from, to, scope: current.scope };
       }
-      const updated = await store.financeRecords.update(id, { status: to });
+      const updated = await store.financeRecords.update(id, {
+        status: to,
+        ...(reviewEdge
+          ? {
+              reviewerUid: actor.uid,
+              reviewedAt: new Date().toISOString(),
+              reviewDecision: to as 'approved' | 'rejected',
+            }
+          : {}),
+      });
       if (updated === null) return { kind: 'missing' };
       await recordAuditEvent(store, {
         actorUid: actor.uid,
@@ -233,7 +292,10 @@ export class FinanceService {
     return this.store.transaction(async (store) => {
       const current = await store.financeRecords.getForUpdate(id);
       if (current === null) throw financeNotFound();
-      const freshActor = await loadAuthorizationContext(store, actor, new Date());
+      let freshActor = await loadAuthorizationContext(store, actor, new Date());
+      if (!canReviewFinance(freshActor, current.organizationId ?? null)) throw financeForbidden();
+      await assertLinkedActivityOrganization(store, current);
+      freshActor = await loadAuthorizationContext(store, actor, new Date());
       if (!canReviewFinance(freshActor, current.organizationId ?? null)) throw financeForbidden();
       if (current.status !== 'submitted') {
         throw new HttpError(

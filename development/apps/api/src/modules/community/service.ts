@@ -1,4 +1,8 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
+import {
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
+  SOCIAL_ORGANIZATIONS,
+} from '@freebbs-development/contracts';
 import type {
   CommunityChannel,
   CommunityComment,
@@ -12,6 +16,7 @@ import type {
   CreateCommunityCommentInput,
   CreateCommunityPostInput,
   SocialOrganizationId,
+  ScopeRef,
 } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
@@ -34,8 +39,60 @@ const wishTransitions: Readonly<Record<CommunityWishStatus, readonly CommunityWi
   realized: [],
 };
 
-function allowed(actor: AuthorizationContext, action: string, resource: string): boolean {
-  return authorize(actor, { action, resource }).allowed;
+function allowed(
+  actor: AuthorizationContext,
+  action: string,
+  resource: string,
+  scopes: readonly ScopeRef[] = [],
+): boolean {
+  if (actor.previewing) return false;
+  const decisions = [publicScope, ...scopes].map((scope) =>
+    authorize(actor, { action, resource, scope }),
+  );
+  return (
+    !decisions.some(({ reason }) => reason === 'explicit-deny' || reason === 'invalid-scope') &&
+    decisions.some(({ allowed }) => allowed)
+  );
+}
+
+function conversionOrganizationAvailable(
+  actor: AuthorizationContext,
+  organizationId: string,
+): boolean {
+  return (
+    SOCIAL_ORGANIZATIONS.some(({ id }) => id === organizationId) &&
+    (organizationId === 'tuanwei' ||
+      isGlobalOrganizationBusinessSupervisor(actor) ||
+      organizationMembershipsForRoles(actor.roles).some(
+        (membership) =>
+          membership.organizationId === organizationId && membership.level !== 'member',
+      ))
+  );
+}
+
+function wishAllowed(
+  actor: AuthorizationContext,
+  action: string,
+  scopes: readonly ScopeRef[],
+  organizationId = 'tuanwei',
+): boolean {
+  if (actor.previewing || !conversionOrganizationAvailable(actor, organizationId)) return false;
+  const target = { type: 'social_organization', id: organizationId };
+  const sources = [
+    publicScope,
+    ...scopes,
+    { type: 'department', id: 'youth_league.freshman' },
+    { type: 'social_organization', id: 'tuanwei' },
+  ];
+  const decisions = [...sources, target].map((scope) =>
+    authorize(actor, { action, resource: 'community_wish', scope }),
+  );
+  if (decisions.some(({ reason }) => reason === 'explicit-deny' || reason === 'invalid-scope'))
+    return false;
+  // A Tuanwei grant may handle newcomer wishes, but cannot authorize another organization's conversion.
+  return organizationId === 'tuanwei'
+    ? decisions.some(({ allowed }) => allowed)
+    : authorize(actor, { action, resource: 'community_wish', scope: target }).allowed;
 }
 
 function forbidden(message = 'Community permission is required'): HttpError {
@@ -334,25 +391,46 @@ export class CommunityService {
   }
 
   async respondToWish(actor: AuthorizationContext, postId: string, response: string) {
-    if (!allowed(actor, 'community.wish.respond', 'community_wish')) throw forbidden();
-    return this.updateWish(actor, postId, async (store, workflow) =>
-      store.communityWishWorkflows.update(workflow.id, {
+    return this.updateWish(actor, postId, async (store, workflow, post) => {
+      if (
+        !wishAllowed(
+          actor,
+          'community.wish.respond',
+          [post.scope, workflow.scope],
+          workflow.conversionPayload?.organizationId,
+        )
+      )
+        throw forbidden();
+      return store.communityWishWorkflows.update(workflow.id, {
         officialResponse: response,
         responseByUid: actor.uid,
         wishStatus: workflow.wishStatus === 'collecting' ? 'responded' : workflow.wishStatus,
-      }),
-    );
+      });
+    });
   }
 
   async transitionWish(actor: AuthorizationContext, postId: string, to: CommunityWishStatus) {
-    if (!allowed(actor, 'community.wish.transition', 'community_wish')) throw forbidden();
-    return this.updateWish(actor, postId, async (store, workflow) => {
+    return this.updateWish(actor, postId, async (store, workflow, post) => {
+      if (
+        !wishAllowed(
+          actor,
+          'community.wish.transition',
+          [post.scope, workflow.scope],
+          workflow.conversionPayload?.organizationId,
+        )
+      )
+        throw forbidden();
       if (!wishTransitions[workflow.wishStatus].includes(to)) {
         throw new HttpError(409, 'invalid_wish_transition', 'Wish transition is invalid');
       }
       if (
         to === 'realized' &&
-        !allowed(actor, 'community.wish.convert.approve', 'community_wish')
+        !wishAllowed(
+          actor,
+          'community.wish.convert.approve',
+          [post.scope, workflow.scope],
+          workflow.conversionPayload?.organizationId,
+        )
       ) {
         throw forbidden('Leader approval is required');
       }
@@ -365,11 +443,16 @@ export class CommunityService {
     postId: string,
     payload: CommunityWishConversionInput,
   ) {
-    if (!allowed(actor, 'community.wish.convert.request', 'community_wish')) throw forbidden();
-    if (payload.organizationId !== 'tuanwei' && !isDevelopmentBusinessAdmin(actor)) {
-      throw forbidden('The selected organization is not available');
-    }
-    return this.updateWish(actor, postId, async (store, workflow) => {
+    return this.updateWish(actor, postId, async (store, workflow, post) => {
+      if (
+        !wishAllowed(
+          actor,
+          'community.wish.convert.request',
+          [post.scope, workflow.scope],
+          payload.organizationId,
+        )
+      )
+        throw forbidden('The selected organization is not available');
       if (workflow.activityId !== null) return workflow;
       return store.communityWishWorkflows.update(workflow.id, {
         conversionStatus: 'requested',
@@ -382,13 +465,20 @@ export class CommunityService {
     actor: AuthorizationContext,
     postId: string,
   ): Promise<ActivityRecord> {
-    if (!allowed(actor, 'community.wish.convert.approve', 'community_wish')) throw forbidden();
     return this.store.transaction(async (store) => {
-      const { workflow } = await this.findWish(store, postId, true);
-      if (workflow.activityId !== null) {
-        const existing = await store.activities.get(workflow.activityId);
-        if (existing !== null) return existing;
-      }
+      const { post, workflow } = await this.findWish(store, postId, true);
+      const existing =
+        workflow.activityId !== null ? await store.activities.get(workflow.activityId) : null;
+      if (
+        !wishAllowed(
+          actor,
+          'community.wish.convert.approve',
+          [post.scope, workflow.scope, ...(existing ? [existing.scope] : [])],
+          existing?.organizationId ?? workflow.conversionPayload?.organizationId,
+        )
+      )
+        throw forbidden();
+      if (existing !== null) return existing;
       if (workflow.conversionStatus !== 'requested' || workflow.conversionPayload === null) {
         throw new HttpError(409, 'conversion_not_requested', 'Wish conversion was not requested');
       }
@@ -428,11 +518,15 @@ export class CommunityService {
   private async updateWish<T>(
     actor: AuthorizationContext,
     postId: string,
-    update: (store: DevelopmentStore, workflow: CommunityWishWorkflowRecord) => Promise<T>,
+    update: (
+      store: DevelopmentStore,
+      workflow: CommunityWishWorkflowRecord,
+      post: CommunityPostRecord,
+    ) => Promise<T>,
   ): Promise<T> {
     return this.store.transaction(async (store) => {
-      const { workflow } = await this.findWish(store, postId, true);
-      const result = await update(store, workflow);
+      const { post, workflow } = await this.findWish(store, postId, true);
+      const result = await update(store, workflow, post);
       await recordAuditEvent(store, {
         actorUid: actor.uid,
         action: 'community.wish.updated',
@@ -500,15 +594,39 @@ export class CommunityService {
         canReport: allowed(actor, 'community.post.report', 'community_post') && !owner,
         canModerate: allowed(actor, 'community.content.moderate', 'community_post'),
         canRespondToWish:
-          post.kind === 'wish' && allowed(actor, 'community.wish.respond', 'community_wish'),
+          post.kind === 'wish' &&
+          wishAllowed(
+            actor,
+            'community.wish.respond',
+            [post.scope, ...(workflow ? [workflow.scope] : [])],
+            workflow?.conversionPayload?.organizationId,
+          ),
         canTransitionWish:
-          post.kind === 'wish' && allowed(actor, 'community.wish.transition', 'community_wish'),
+          post.kind === 'wish' &&
+          wishAllowed(
+            actor,
+            'community.wish.transition',
+            [post.scope, ...(workflow ? [workflow.scope] : [])],
+            workflow?.conversionPayload?.organizationId,
+          ),
         canRequestConversion:
           post.kind === 'wish' &&
-          allowed(actor, 'community.wish.convert.request', 'community_wish'),
+          SOCIAL_ORGANIZATIONS.some(({ id }) =>
+            wishAllowed(
+              actor,
+              'community.wish.convert.request',
+              [post.scope, ...(workflow ? [workflow.scope] : [])],
+              id,
+            ),
+          ),
         canApproveConversion:
           post.kind === 'wish' &&
-          allowed(actor, 'community.wish.convert.approve', 'community_wish'),
+          wishAllowed(
+            actor,
+            'community.wish.convert.approve',
+            [post.scope, ...(workflow ? [workflow.scope] : [])],
+            workflow?.conversionPayload?.organizationId,
+          ),
       },
     };
   }

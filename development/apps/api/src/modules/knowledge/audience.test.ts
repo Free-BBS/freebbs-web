@@ -136,8 +136,8 @@ describe('knowledge audience isolation', () => {
       .expect(404);
   });
 
-  it('lists only the member organizations while leads can manage across organizations', async () => {
-    const { app, sportsDraft } = await audienceApp();
+  it('keeps members and organization leads within their own organizations', async () => {
+    const { app, artsDraft, sportsDraft } = await audienceApp();
 
     const member = await request(app)
       .get('/api/development/v1/knowledge/entries?audience=social_org')
@@ -153,12 +153,17 @@ describe('knowledge audience isolation', () => {
       .send({ id: sportsDraft.id, title: '越权修改' })
       .expect(404);
 
-    const leadUpdate = await request(app)
+    await request(app)
       .patch('/api/development/v1/knowledge/entries')
       .set('X-Demo-User', 'arts-lead')
       .send({ id: sportsDraft.id, title: '负责人协助维护' })
+      .expect(404);
+    const leadUpdate = await request(app)
+      .patch('/api/development/v1/knowledge/entries')
+      .set('X-Demo-User', 'arts-lead')
+      .send({ id: artsDraft.id, title: '本组织负责人维护' })
       .expect(200);
-    expect(leadUpdate.body.data.title).toBe('负责人协助维护');
+    expect(leadUpdate.body.data.title).toBe('本组织负责人维护');
   });
 
   it('allows directors to publish their organization drafts but not another organization', async () => {

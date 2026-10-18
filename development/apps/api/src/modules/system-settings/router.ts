@@ -26,7 +26,13 @@ import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { listModuleManifests } from '../../core/modules/registry.js';
 import { ASSIGNABLE_ROLES } from '../admin/development-users-router.js';
-import { hasRecipientAccess, listSettingsUsers, updateSettingsUser } from './users.js';
+import {
+  hasRecipientAccess,
+  listSettingsUsers,
+  updateSettingsUser,
+  settingsUsersPage,
+  parseDirectoryFilters,
+} from './users.js';
 import {
   appendFeatureAudit,
   ownInbox,
@@ -255,21 +261,42 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
         .strict(),
       query,
     );
-    const logs = [...(await options.store.auditLogs.list()), ...state.audits]
-      .filter((log) =>
-        Object.entries(parsed).every(
-          ([key, value]) =>
-            key === 'page' ||
-            key === 'pageSize' ||
-            log[key as 'actorUid' | 'action' | 'resourceType' | 'resourceId'] === value,
-        ),
-      )
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    const featureLogs = state.audits.filter((log) =>
+      Object.entries(parsed).every(
+        ([key, value]) =>
+          key === 'page' ||
+          key === 'pageSize' ||
+          log[key as 'actorUid' | 'action' | 'resourceType' | 'resourceId'] === value,
+      ),
+    );
+    const offset = (parsed.page - 1) * parsed.pageSize;
+    // At most featureLogs.length rows can displace a SQL row. Start near the
+    // requested rank and merge only that bounded SQL window with feature audits.
+    const firstSqlPage = Math.floor(Math.max(0, offset - featureLogs.length) / 100) + 1;
+    const sqlSkipped = (firstSqlPage - 1) * 100;
+    let sqlPage = await options.store.queryAuditLogs({
+      ...parsed,
+      page: firstSqlPage,
+      pageSize: 100,
+    });
+    const databaseLogs = [...sqlPage.items];
+    while (sqlSkipped + databaseLogs.length < Math.min(sqlPage.total, offset + parsed.pageSize)) {
+      sqlPage = await options.store.queryAuditLogs({
+        ...parsed,
+        page: sqlPage.page + 1,
+        pageSize: 100,
+      });
+      if (!sqlPage.items.length) break;
+      databaseLogs.push(...sqlPage.items);
+    }
+    const logs = [...databaseLogs, ...featureLogs].sort(
+      (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+    );
     return {
-      items: logs.slice((parsed.page - 1) * parsed.pageSize, parsed.page * parsed.pageSize),
+      items: logs.slice(offset - sqlSkipped, offset - sqlSkipped + parsed.pageSize),
       page: parsed.page,
       pageSize: parsed.pageSize,
-      total: logs.length,
+      total: sqlPage.total + featureLogs.length,
     };
   }
   async function trustedRecipients(uids: string[]): Promise<SystemSettingsRecipient[]> {
@@ -304,11 +331,11 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
     });
   settings.get('/', async (_request, response) => {
     const state = await requireStorage().read();
-    const [users, organizations, teams, modules, audits] = await Promise.all([
-      listSettingsUsers(
+    const [usersPage, organizations, teams, modules, audits] = await Promise.all([
+      settingsUsersPage(
         options.store,
         requireDirectory(),
-        '',
+        { page: 1, pageSize: 20 },
         options.authMode === 'demo',
         options.allowedUids,
       ),
@@ -318,7 +345,8 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
       auditPage({}, state),
     ]);
     send(response, 200, {
-      users,
+      users: usersPage.items,
+      usersPage,
       identitySections: systemSettingsIdentitySections(organizations),
       organizations,
       sportsTeams: teams
@@ -331,21 +359,31 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
       rewardMode: options.rewardProvider ? 'shared-wallet' : provider ? 'demo' : 'unavailable',
     });
   });
-  settings.get('/users', async (request, response) =>
+  settings.get('/users', async (request, response) => {
+    const filters = parseDirectoryFilters(request.query);
+    const paged = ['page', 'pageSize', 'roleKey', 'organizationId', 'admission'].some(
+      (key) => key in request.query,
+    );
     send(
       response,
       200,
-      await listSettingsUsers(
-        options.store,
-        requireDirectory(),
-        String(request.query.query ?? '')
-          .trim()
-          .slice(0, 80),
-        options.authMode === 'demo',
-        options.allowedUids,
-      ),
-    ),
-  );
+      paged
+        ? await settingsUsersPage(
+            options.store,
+            requireDirectory(),
+            filters,
+            options.authMode === 'demo',
+            options.allowedUids,
+          )
+        : await listSettingsUsers(
+            options.store,
+            requireDirectory(),
+            filters.query ?? '',
+            options.authMode === 'demo',
+            options.allowedUids,
+          ),
+    );
+  });
   settings.put('/users/:uid', async (request, response) =>
     send(
       response,
@@ -570,6 +608,9 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
     });
     send(response, locallyReplayed ? 200 : 201, result);
   });
+  inbox.get('/organizations', async (_request, response) =>
+    send(response, 200, await metadata(await requireStorage().read())),
+  );
   inbox.get('/', async (_request, response) =>
     send(response, 200, ownInbox(await requireStorage().read(), actor(response).uid)),
   );

@@ -1,10 +1,14 @@
 import request from 'supertest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { GrowthSummary, SocialOrganizationId } from '@freebbs-development/contracts';
 
 import { createApp } from '../../app.js';
 import { DemoAuthClient } from '../../core/auth/demo-auth-client.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
+import { changeActivityWorkspace } from '../events/workspace-storage.js';
 
 function archive() {
   const store = createMemoryStore({ seed: false });
@@ -51,6 +55,46 @@ function archive() {
 }
 
 describe('personal growth archive API', () => {
+  it.each([
+    { endsAt: '2020-01-01T00:00:00.000Z', finished: false, expected: 0 },
+    { endsAt: '2099-01-01T00:00:00.000Z', finished: true, expected: 1 },
+  ])(
+    'uses authoritative workspace schedule for legacy completion: $finished',
+    async ({ endsAt, finished, expected }) => {
+      const directory = await mkdtemp(join(tmpdir(), 'growth-schedule-'));
+      try {
+        const { store, add } = archive();
+        const activity = await add('arts_center', endsAt, 'published');
+        await changeActivityWorkspace(
+          directory,
+          'development_activity',
+          activity.id,
+          (workspace) => {
+            workspace.schedule = { startsAt: null, endsAt: '2099-02-01T00:00:00.000Z', finished };
+          },
+        );
+        const app = createApp({
+          store,
+          authMode: 'demo',
+          authClient: new DemoAuthClient(['demo-student']),
+          collectionsUploadDirectory: directory,
+        });
+        const response = await request(app)
+          .get('/api/development/v1/growth/summary')
+          .set('X-Demo-User', 'demo-student')
+          .expect(200);
+        expect(response.body.data.total).toBe(expected);
+        if (expected)
+          expect(response.body.data.activities[0]).toMatchObject({
+            id: activity.id,
+            endsAt: '2099-02-01T00:00:00.000Z',
+            status: 'finished',
+          });
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
   it('returns all 18 locked badges for an empty archive with stable series and preserved IDs', async () => {
     const data = await archive().summary();
     expect(data.achievements).toHaveLength(18);

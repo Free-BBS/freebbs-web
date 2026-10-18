@@ -1,9 +1,11 @@
 import {
-  canManageDevelopmentAccess,
   isDevelopmentBusinessAdmin,
+  isGlobalOrganizationBusinessSupervisor,
+  organizationMembershipsForRoles,
   type ScopeRef,
 } from '@freebbs-development/contracts';
 import { authorize } from '../../core/authorization/authorize.js';
+import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type { DevelopmentStore, SportsTeamRecord } from '../../core/database/types.js';
 
@@ -63,6 +65,7 @@ export async function loadSportsCardAuthorizer(
     bindings,
     assignmentsWithTags,
     tagBindings,
+    currentActor,
   ] = await Promise.all([
     store.subjects.list({ query: actor.uid }),
     store.roleAssignments.list({ query: actor.uid }),
@@ -73,7 +76,17 @@ export async function loadSportsCardAuthorizer(
     store.rolePermissions.list(),
     store.tagAssignments.list({ query: actor.uid }),
     store.tagPermissions.list(),
+    loadAuthorizationContext(store, actor, new Date()),
   ]);
+  // Current binding denies override every card grant, including cached identities
+  // and business admins. The policy loader validates definitions, scopes and expiry.
+  const denyContext = {
+    ...actor,
+    policies: [
+      ...(actor.policies ?? []),
+      ...(currentActor.policies ?? []).filter(({ effect }) => effect === 'deny'),
+    ],
+  };
   const enabled =
     subjects.some(({ uid, status }) => uid === actor.uid && status === 'active') &&
     modules.some(
@@ -89,19 +102,21 @@ export async function loadSportsCardAuthorizer(
       (assignment.expiresAt === null || Date.parse(assignment.expiresAt) > now),
   );
   return (teamId?: string, operation?: 'sports.showcase.update'): boolean => {
-    if (!enabled) return false;
+    if (!enabled || actor.previewing) return false;
     const action =
       operation ?? (teamId === undefined ? 'sports.team.create' : 'sports.team.update');
     const resource = operation === 'sports.showcase.update' ? 'sports_showcase' : 'sports_team';
     const scope = teamId === undefined ? undefined : { type: 'sports_team', id: teamId };
-    const decision = authorize(actor, { action, resource, scope });
+    const decision = authorize(denyContext, { action, resource, scope });
     if (decision.reason === 'explicit-deny' || decision.reason === 'invalid-scope') return false;
     if (
       [
         { type: 'department', id: 'student_union.sports_center' },
         { type: 'social_organization', id: 'sports_center' },
         { type: 'public', id: '*' },
-      ].some((scope) => authorize(actor, { action, resource, scope }).reason === 'explicit-deny')
+      ].some(
+        (scope) => authorize(denyContext, { action, resource, scope }).reason === 'explicit-deny',
+      )
     )
       return false;
     const permissions = definitions.filter(
@@ -109,7 +124,6 @@ export async function loadSportsCardAuthorizer(
     );
     if (permissions.length > 0 && !permissions.some(({ status }) => status === 'active'))
       return false;
-    if (canManageDevelopmentAccess(actor)) return true;
     if (
       isDevelopmentBusinessAdmin(actor) &&
       currentAssignments.some(
@@ -118,6 +132,28 @@ export async function loadSportsCardAuthorizer(
           assignment.scope.type === 'public' &&
           assignment.scope.id === '*',
       )
+    )
+      return true;
+    const supervisorRoles = currentAssignments
+      .filter(
+        ({ roleKey, scope }) =>
+          scope.type === 'public' && scope.id === '*' && currentActor.roles.includes(roleKey),
+      )
+      .map(({ roleKey }) => roleKey);
+    const supervisesSports =
+      isGlobalOrganizationBusinessSupervisor({ roles: supervisorRoles, businessAdmin: false }) ||
+      organizationMembershipsForRoles(supervisorRoles).some(
+        ({ organizationId, level }) =>
+          organizationId === 'sports_center' && (level === 'lead' || level === 'director'),
+      );
+    if (
+      supervisesSports &&
+      [
+        scope,
+        { type: 'public', id: '*' },
+        { type: 'social_organization', id: 'sports_center' },
+        { type: 'department', id: 'student_union.sports_center' },
+      ].some((candidate) => authorize(currentActor, { action, resource, scope: candidate }).allowed)
     )
       return true;
     if (
@@ -143,6 +179,12 @@ export async function loadSportsCardAuthorizer(
             (binding) =>
               binding.status === 'active' &&
               binding.effect === 'allow' &&
+              definitions.some(
+                (definition) =>
+                  definition.status === 'active' &&
+                  definition.action === binding.action &&
+                  definition.resource === binding.resource,
+              ) &&
               bindingCovers(assignment.scope, binding.scope, teamId),
           )
         );
@@ -185,6 +227,12 @@ export async function loadSportsCardAuthorizer(
           (binding) =>
             binding.status === 'active' &&
             binding.effect === 'allow' &&
+            definitions.some(
+              (definition) =>
+                definition.status === 'active' &&
+                definition.action === binding.action &&
+                definition.resource === binding.resource,
+            ) &&
             bindingCovers(tag.scope, binding.scope, teamId),
         )
       );

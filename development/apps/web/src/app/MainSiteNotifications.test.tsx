@@ -1,5 +1,5 @@
 import type { ApiClient } from '../core/api/client.js';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
 const { main } = vi.hoisted(() => ({ main: vi.fn() }));
@@ -118,5 +118,87 @@ describe('development notification inbox', () => {
       expect(request).toHaveBeenCalledWith('/notifications/system-1/read', { method: 'POST' }),
     );
     expect(main).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'ignores a refresh started before a read succeeds (single=%s)',
+    async (single) => {
+      const notice = {
+        id: 'a',
+        source: 'development_activity',
+        activityId: 'event',
+        title: '延迟通知',
+        body: '',
+        link: '',
+        createdAt: '2026-10-09T09:00:00Z',
+        readAt: null,
+      };
+      let resolveRefresh!: (value: unknown) => void;
+      let defer = false;
+      const request = vi.fn(async (path: string) => {
+        if (path.endsWith('read-all') || path.endsWith('/read')) return {};
+        if (path === '/notifications') return [];
+        if (path.endsWith('unread-count')) return { unreadCount: 0 };
+        if (defer)
+          return new Promise((resolve) => {
+            resolveRefresh = resolve;
+          });
+        return { notifications: [notice], unreadCount: 1, nextCursor: null };
+      });
+      render(
+        <MainSiteNotifications
+          authMode="demo"
+          userUid="a"
+          client={{ request: request as ApiClient['request'] }}
+        />,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }));
+      await screen.findByText('延迟通知');
+      await waitFor(() => expect(screen.getByRole('button', { name: '全部已读' })).toBeEnabled());
+      defer = true;
+      fireEvent(window, new Event('focus'));
+      await waitFor(() => expect(resolveRefresh).toBeTypeOf('function'));
+      fireEvent.click(screen.getByRole('button', { name: single ? /延迟通知/ : '全部已读' }));
+      await screen.findByRole('button', { name: '通知，无未读' });
+      await act(async () =>
+        resolveRefresh({ notifications: [notice], unreadCount: 1, nextCursor: null }),
+      );
+      expect(screen.getByRole('button', { name: '通知，无未读' })).toBeInTheDocument();
+      expect(screen.getByText('延迟通知').closest('article')).not.toHaveClass('is-unread');
+    },
+  );
+  it('preserves the exhausted older-page cursor when refreshing new notices', async () => {
+    const notice = (id: string) => ({
+      id,
+      source: 'development_activity',
+      activityId: 'event',
+      title: id,
+      body: '',
+      link: '',
+      createdAt: '2026-10-09T09:00:00Z',
+      readAt: null,
+    });
+    const request = vi.fn(async (path: string) => {
+      if (path === '/notifications') return [];
+      if (path.endsWith('unread-count')) return { unreadCount: 0 };
+      return path.includes('?before=')
+        ? { notifications: [notice('older')], unreadCount: 2, nextCursor: null }
+        : { notifications: [notice('newest')], unreadCount: 2, nextCursor: 'older-page' };
+    });
+    render(
+      <MainSiteNotifications
+        authMode="demo"
+        userUid="a"
+        client={{ request: request as ApiClient['request'] }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '通知，2 条未读' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加载更多' }));
+    await screen.findByText('older');
+    expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent(window, new Event('focus'));
+    });
+    expect(screen.getByText('older')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument();
   });
 });

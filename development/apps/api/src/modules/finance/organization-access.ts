@@ -1,7 +1,7 @@
-import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import {
+  isGlobalOrganizationBusinessSupervisor,
   SOCIAL_ORGANIZATION_IDS,
-  organizationForRole,
+  organizationMembershipsForRoles,
   type SocialOrganizationId,
 } from '@freebbs-development/contracts';
 
@@ -14,24 +14,39 @@ function organizationScope(organizationId: SocialOrganizationId) {
 }
 
 export function isFinanceSuperAdmin(actor: AuthorizationContext): boolean {
-  return isDevelopmentBusinessAdmin(actor);
+  return isGlobalOrganizationBusinessSupervisor(actor);
 }
 
 export function leadOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
-  return [
-    ...new Set(
-      actor.roles.flatMap((role) => {
-        const membership = organizationForRole(role);
-        if (membership?.level !== 'lead') return [];
-        const allowed = authorize(actor, {
-          action: 'finance.record.read',
-          resource: 'finance_record',
-          scope: organizationScope(membership.organizationId),
-        }).allowed;
-        return allowed ? [membership.organizationId] : [];
-      }),
-    ),
-  ];
+  return SOCIAL_ORGANIZATION_IDS.filter((id) => canAccessFinanceOrganization(actor, id, 'update'));
+}
+
+function eligibleOrganization(
+  actor: AuthorizationContext,
+  organizationId: SocialOrganizationId | null | undefined,
+  action: 'read' | 'create' | 'update' | 'review',
+): boolean {
+  if (actor.previewing === true) return false;
+  if (isGlobalOrganizationBusinessSupervisor(actor)) return true;
+  // Scoped administrators keep their explicit grants; authorize still intersects
+  // every operation with the current assignment's concrete organization scope.
+  if (actor.roles.includes('platform.admin')) return true;
+  if (organizationId == null) return false;
+  if (organizationId === 'sast' && actor.roles.includes('counselor.innovation')) return true;
+  const membership = organizationMembershipsForRoles(actor.roles).find(
+    (item) => item.organizationId === organizationId,
+  );
+  if (membership === undefined) return false;
+  if (action === 'read' || membership.level === 'lead') return true;
+  return actor.roles.some(
+    (role) =>
+      (role === 'student_union.finance' &&
+        ['arts_center', 'liaison_center', 'sports_center', 'rights_development_center'].includes(
+          organizationId,
+        )) ||
+      (role === 'youth_league.finance' && organizationId === 'tuanwei') ||
+      (role === 'media_center.finance' && organizationId === 'media_center'),
+  );
 }
 
 export function hasFinanceAccess(actor: AuthorizationContext): boolean {
@@ -45,17 +60,15 @@ export function canReviewFinance(
   actor: AuthorizationContext,
   organizationId?: SocialOrganizationId | null,
 ): boolean {
+  if (organizationId === undefined) {
+    return [...SOCIAL_ORGANIZATION_IDS, null].some((id) => canReviewFinance(actor, id));
+  }
+  if (!eligibleOrganization(actor, organizationId, 'review')) return false;
   return authorize(actor, {
     action: 'finance.record.review',
     resource: 'finance_record',
-    ...(organizationId === undefined
-      ? {}
-      : {
-          scope:
-            organizationId === null
-              ? { type: 'public', id: '*' }
-              : organizationScope(organizationId),
-        }),
+    scope:
+      organizationId === null ? { type: 'public', id: '*' } : organizationScope(organizationId),
   }).allowed;
 }
 
@@ -64,15 +77,8 @@ export function canAccessFinanceOrganization(
   organizationId: SocialOrganizationId | null | undefined,
   action: 'read' | 'create' | 'update' = 'read',
 ): boolean {
-  const eligible = actor.roles.some(
-    (role) =>
-      role === 'platform.admin' ||
-      role === 'counselor.youth_league_secretary' ||
-      role === 'counselor.youth_league' ||
-      organizationForRole(role)?.level === 'lead',
-  );
   return (
-    eligible &&
+    eligibleOrganization(actor, organizationId, action) &&
     authorize(actor, {
       action: `finance.record.${action}`,
       resource: 'finance_record',

@@ -1,0 +1,188 @@
+/* Keep the existing materials and typefaces while making editing controls readable. */
+.collection-workbench-page .builder-section-nav {
+  display: none;
+}
+.collection-workbench-page .builder-topbar span,
+.collection-workbench-page .builder-topbar p,
+.collection-workbench-page .builder-form-heading-main > span,
+.collection-workbench-page .builder-canvas > header > b,
+.collection-workbench-page .builder-library header p,
+.collection-workbench-page .builder-inspector header p,
+.collection-workbench-page .builder-canvas header p,
+.collection-workbench-page .builder-library-help,
+.collection-workbench-page .builder-part-list small,
+.collection-workbench-page .builder-rule-parts button > small,
+.collection-workbench-page .builder-create-module small,
+.collection-workbench-page .builder-output-parts small,
+.collection-workbench-page .builder-output-dock small,
+.collection-workbench-page .builder-output-dock > p,
+.collection-workbench-page .builder-selection-label,
+.collection-workbench-page .builder-inspector-tip,
+.collection-workbench-page .builder-inspector-form label,
+.collection-workbench-page .builder-field-card h2 + p,
+.collection-workbench-page .builder-preview-input,
+.collection-workbench-page .builder-preview-options span,
+.collection-workbench-page .builder-preview-upload,
+.collection-workbench-page .builder-preview-identity,
+.collection-workbench-page .builder-canvas-end,
+.collection-workbench-page .builder-rule-chips button,
+.collection-workbench-page .builder-field-rules > button,
+.collection-workbench-page .builder-rule-slot small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.collection-workbench-page .builder-part-list strong,
+.collection-workbench-page .builder-rule-parts button > strong,
+.collection-workbench-page .builder-create-module strong,
+.collection-workbench-page .builder-output-parts strong {
+  font-size: 13px;
+}
+.collection-workbench-page .builder-rule-parts button > small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.collection-workbench-page .builder-inspector-form select,
+.collection-workbench-page .builder-module-dialog select,
+.collection-workbench-page .collection-template-toolbar input,
+.collection-workbench-page .collection-template-toolbar button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-page);
+  color: var(--color-text);
+  font: inherit;
+}
+.collection-workbench-page .collection-template-toolbar input,
+.collection-workbench-page .collection-template-toolbar button {
+  width: auto;
+  max-width: 100%;
+}
+.collection-workbench-page select {
+  color-scheme: light;
+}
+.theme-dark .collection-workbench-page select {
+  color-scheme: dark;
+}
+.collection-workbench-page .builder-inspector-form :is(input, textarea, select) {
+  font: inherit;
+  font-size: 14px;
+}
+.collection-workbench-page :is(.builder-library, .builder-canvas, .builder-inspector) {
+  scroll-margin-top: 70px;
+}
+@media (max-width: 1240px) {
+  .collection-workbench-page .builder-section-nav {
+    position: sticky;
+    top: 0;
+    z-index: 19;
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px;
+    border-block: 1px solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+  .collection-workbench-page .builder-section-nav a {
+    flex: 1;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    color: var(--color-text);
+    background: var(--surface-page);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .collection-workbench-page .builder-library {
+    position: relative;
+    top: auto;
+    height: auto;
+  }
+  .collection-workbench-page .builder-topbar {
+    position: relative;
+  }
+}
+@media (max-width: 760px) {
+  .collection-workbench-page .builder-rule-chips button,
+  .collection-workbench-page .builder-field-rules > button,
+  .collection-workbench-page .builder-rule-slot {
+    min-height: 44px;
+  }
+  .collection-workbench-page .builder-topbar > div {
+    gap: 10px;
+  }
+  .collection-workbench-page .builder-topbar p {
+    max-width: none;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+  .collection-workbench-page .builder-topbar span {
+    font-size: 12px;
+  }
+  .collection-workbench-page .builder-topbar button {
+    flex: 1;
+    min-height: 44px;
+  }
+  .collection-workbench-page .collection-template-toolbar {
+    padding: 14px;
+    gap: 10px;
+  }
+  .collection-workbench-page .collection-template-toolbar label {
+    width: 100%;
+    display: grid;
+    gap: 6px;
+  }
+  .collection-workbench-page .collection-template-toolbar :is(input, button) {
+    flex: 1 1 140px;
+  }
+  .collection-workbench-page .builder-part-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .collection-workbench-page .builder-part-list > button {
+    padding: 10px;
+    gap: 8px;
+  }
+  .collection-workbench-page .builder-part-list small {
+    overflow-wrap: anywhere;
+  }
+  .collection-workbench-page .builder-rule-parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .collection-workbench-page .builder-rule-parts button {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 10px;
+  }
+  .collection-workbench-page .builder-rule-parts button > span {
+    grid-row: auto;
+  }
+  .collection-workbench-page .builder-rule-parts button > :is(strong, small) {
+    padding-right: 0;
+  }
+  .collection-workbench-page .builder-rule-parts button::after {
+    display: none;
+  }
+  .collection-workbench-page .builder-form-heading {
+    padding: 20px;
+  }
+  .collection-workbench-page .builder-field-card > button {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 16px;
+  }
+  .collection-workbench-page .builder-field-grip {
+    display: none;
+  }
+  .collection-workbench-page .builder-output-dock > header {
+    align-items: start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .collection-workbench-page .builder-inspector-form :is(input, textarea, select) {
+    font-size: 16px;
+  }
+}

@@ -104,7 +104,25 @@ async function fixture() {
 const identity = (uid: string) => ({ Authorization: `Bearer ${uid}` });
 
 describe('sports card maintenance with authoritative HTTP identities', () => {
-  it.each(['member', 'director', 'sports-lead', 'lead', 'admin'])(
+  it('keeps admission leads from sports business writes without a sports role', async () => {
+    const { app } = await fixture();
+    const capabilities = await request(app)
+      .get(`${base}/capabilities`)
+      .set(identity('lead'))
+      .expect(200);
+    expect(capabilities.body.data.canCreate).toBe(false);
+    await request(app)
+      .post(`${base}/teams`)
+      .set(identity('lead'))
+      .send({ name: 'Unauthorized', description: 'Unauthorized' })
+      .expect(403);
+    await request(app)
+      .patch(`${base}/teams`)
+      .set(identity('lead'))
+      .send({ id: 'team-basketball', description: 'Unauthorized' })
+      .expect(403);
+  });
+  it.each(['member', 'director', 'sports-lead', 'admin'])(
     'allows %s to create, edit and maintain status',
     async (uid) => {
       const { app } = await fixture();
@@ -300,7 +318,7 @@ describe('durable sports HTML homepages', () => {
       .expect(503);
     await request(production).get('/api/development/v1/ready').expect(200);
   });
-  it.each(['member', 'director', 'sports-lead', 'lead', 'admin'])(
+  it.each(['member', 'director', 'sports-lead', 'admin'])(
     'allows %s HTML homepage maintenance',
     async (uid) => {
       const { app } = await fixture();

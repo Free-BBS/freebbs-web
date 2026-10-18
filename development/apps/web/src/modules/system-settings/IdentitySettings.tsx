@@ -2,6 +2,8 @@ import {
   systemSettingsIdentityLabels,
   systemSettingsIdentitySections,
   type DevelopmentAssignableRole,
+  type DevelopmentDirectoryFilters,
+  type Page,
   type SystemSettingsBootstrap,
   type SystemSettingsUser,
   type RoleKey,
@@ -9,6 +11,12 @@ import {
 import { useMemo, useRef, useState } from 'react';
 import { ApiError, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
+import {
+  directoryUrl,
+  directoryResult,
+  DirectoryFilters,
+  DirectoryPagination,
+} from './DirectoryControls.js';
 import { IdentitySection } from '../admin/sections/IdentitySection.js';
 
 const normalized = (user: SystemSettingsUser | null) =>
@@ -39,6 +47,9 @@ export function IdentitySettings({
   );
   const [captainOpen, setCaptainOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<DevelopmentDirectoryFilters>({});
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(initial.usersPage?.total ?? initial.users.length);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stale, setStale] = useState(false);
@@ -62,7 +73,7 @@ export function IdentitySettings({
     setError('');
     setMessage('');
   }
-  async function search(replace = false) {
+  async function search(replace = false, requestedPage = 1) {
     if (loading || saving) return;
     if (dirty && !replace) {
       setMessage('当前身份卡片有未保存修改，请先保存或放弃。');
@@ -73,9 +84,14 @@ export function IdentitySettings({
     setError('');
     try {
       const searchQuery = replace ? '' : query.trim();
-      const next = await client.request<SystemSettingsUser[]>(
-        `/system-settings/users${searchQuery ? `?query=${encodeURIComponent(searchQuery)}` : ''}`,
+      const result = directoryResult(
+        await client.request<SystemSettingsUser[] | Page<SystemSettingsUser>>(
+          directoryUrl('/system-settings/users', searchQuery, filters, requestedPage),
+        ),
       );
+      const next = result.items;
+      setPage(result.page);
+      setTotal(result.total);
       if (current !== generation.current) return;
       setUsers(next);
       onUsersChange(next);
@@ -155,6 +171,11 @@ export function IdentitySettings({
           <button type="submit" disabled={loading || saving}>
             搜索
           </button>
+          <DirectoryFilters
+            value={filters}
+            onChange={setFilters}
+            metadata={initial.organizations}
+          />
         </form>
       </div>
       {message ? (
@@ -176,6 +197,12 @@ export function IdentitySettings({
         </div>
       ) : null}
       {loading ? <p role="status">正在读取用户名单…</p> : null}
+      <DirectoryPagination
+        page={page}
+        total={total}
+        loading={loading || saving}
+        onPage={(next) => void search(false, next)}
+      />
       <div className="development-directory-layout">
         <aside className="development-user-directory" aria-label="用户列表">
           {!users.length ? <p>没有找到符合条件的用户。</p> : null}

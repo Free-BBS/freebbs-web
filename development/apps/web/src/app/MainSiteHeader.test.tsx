@@ -360,4 +360,25 @@ describe('MainSiteHeader', () => {
       false,
     );
   });
+  it('focuses and traps the check-in dialog, locks scroll, and restores its trigger', () => {
+    const view = render(
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const trigger = screen.getByRole('button', { name: '签到' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const close = within(screen.getByRole('dialog')).getByRole('button', { name: '关闭' });
+    expect(close).toHaveFocus();
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+    expect(document.body.style.overflow).toBe('');
+    fireEvent.click(trigger);
+    view.unmount();
+    expect(document.body.style.overflow).toBe('');
+  });
 });

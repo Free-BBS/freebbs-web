@@ -43,6 +43,152 @@ async function addSubject(store: DevelopmentStore, context: AuthorizationContext
 }
 
 describe('community service', () => {
+  async function wishFixture(...contexts: AuthorizationContext[]) {
+    const store = createMemoryStore({ seed: false });
+    const student = actor('wish-author');
+    for (const context of [student, ...contexts]) await addSubject(store, context);
+    const service = new CommunityService(store, now);
+    const post = await service.createPost(student, {
+      kind: 'wish',
+      title: '新生工作坊',
+      body: '希望一起学习。',
+      tags: [],
+      displayMode: 'named',
+    });
+    return { store, service, post };
+  }
+  it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
+    'keeps global supervisor %s able to handle and convert wishes',
+    async (role) => {
+      const supervisor = actor('global-supervisor', role);
+      const { service, post } = await wishFixture(supervisor);
+      await service.respondToWish(supervisor, post.id, '已安排。');
+      await service.requestWishConversion(supervisor, post.id, {
+        title: '实践活动',
+        description: '活动内容',
+        organizationId: 'sast',
+        startsAt: null,
+      });
+      expect(await service.approveWishConversion(supervisor, post.id)).toMatchObject({
+        organizationId: 'sast',
+      });
+    },
+  );
+  it.each([
+    'counselor.practice',
+    'counselor.innovation',
+    'youth_league.organization.member',
+    'science_association.chair',
+  ] as const)('does not give %s newcomer workflow authority', async (role) => {
+    const foreign = actor('foreign', role);
+    const { service, post } = await wishFixture(foreign);
+    await expect(service.respondToWish(foreign, post.id, '越权')).rejects.toMatchObject({
+      status: 403,
+    });
+    expect((await service.getThread(foreign, post.id)).item.capabilities.canRespondToWish).toBe(
+      false,
+    );
+  });
+  it.each(['student_union.executive_president', 'student_union.presidium'] as const)(
+    'allows %s conversion only to an explicitly owned union center',
+    async (role) => {
+      const supervisor = actor('union-supervisor', role);
+      const { service, post, store } = await wishFixture(supervisor);
+      await expect(
+        service.respondToWish(supervisor, post.id, '非新生组回应'),
+      ).rejects.toMatchObject({ status: 403 });
+      expect((await service.getThread(supervisor, post.id)).item.capabilities).toMatchObject({
+        canRespondToWish: false,
+        canRequestConversion: true,
+      });
+      const payload = {
+        title: '校园活动',
+        description: '活动内容',
+        organizationId: 'arts_center',
+        startsAt: null,
+      };
+      await service.requestWishConversion(supervisor, post.id, payload);
+      const audit = await store.auditLogs.list();
+      await expect(
+        service.requestWishConversion(supervisor, post.id, { ...payload, organizationId: 'sast' }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(await store.auditLogs.list()).toEqual(audit);
+      expect(await service.approveWishConversion(supervisor, post.id)).toMatchObject({
+        organizationId: 'arts_center',
+      });
+    },
+  );
+  it('rechecks the selected conversion target before approval and an idempotent retry', async () => {
+    const global = actor('global', 'counselor.youth_league');
+    const newcomer = actor('newcomer', 'youth_league.freshman.leader');
+    const { service, store, post } = await wishFixture(global, newcomer);
+    await service.requestWishConversion(global, post.id, {
+      title: '科协活动',
+      description: '活动内容',
+      organizationId: 'sast',
+      startsAt: null,
+    });
+    const audit = await store.auditLogs.list();
+    await expect(service.approveWishConversion(newcomer, post.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(await store.activities.list()).toEqual([]);
+    expect(await store.auditLogs.list()).toEqual(audit);
+    await service.approveWishConversion(global, post.id);
+    await expect(service.approveWishConversion(newcomer, post.id)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+  it('checks the existing linked activity target during an idempotent approval', async () => {
+    const newcomer = actor('newcomer', 'youth_league.freshman.leader');
+    const { service, store, post } = await wishFixture(newcomer);
+    await service.requestWishConversion(newcomer, post.id, {
+      title: '活动',
+      description: '活动内容',
+      organizationId: 'tuanwei',
+      startsAt: null,
+    });
+    const activity = await service.approveWishConversion(newcomer, post.id);
+    await store.activities.update(activity.id, { organizationId: 'sast' });
+    await expect(service.approveWishConversion(newcomer, post.id)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+  it.each(['public', 'department', 'social_organization'] as const)(
+    'lets a %s scope deny beat a scoped newcomer allow',
+    async (scopeType) => {
+      const newcomer = actor('newcomer', 'youth_league.freshman.leader');
+      newcomer.policies!.push({
+        id: 'newcomer-deny',
+        action: 'community.wish.*',
+        resource: 'community_wish',
+        effect: 'deny',
+        scope: {
+          type: scopeType,
+          id:
+            scopeType === 'public'
+              ? '*'
+              : scopeType === 'department'
+                ? 'youth_league.freshman'
+                : 'tuanwei',
+        },
+      });
+      const { service, store, post } = await wishFixture(newcomer);
+      const audit = await store.auditLogs.list();
+      await expect(service.respondToWish(newcomer, post.id, '禁止回应')).rejects.toMatchObject({
+        status: 403,
+      });
+      await expect(
+        service.requestWishConversion(newcomer, post.id, {
+          title: '新生活动',
+          description: '活动内容',
+          organizationId: 'tuanwei',
+          startsAt: null,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(await store.auditLogs.list()).toEqual(audit);
+    },
+  );
   it('keeps anonymous identities stable inside a thread and redacts real ids', async () => {
     const store = createMemoryStore({ seed: false });
     const author = actor('student-a');

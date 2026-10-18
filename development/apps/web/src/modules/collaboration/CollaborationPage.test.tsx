@@ -837,6 +837,91 @@ function deferredPageResponse() {
   });
   return { promise, resolve };
 }
+it('refreshes versions after conflict while preserving the selected record and draft', async () => {
+  const original = refreshedSpace({
+    kind: 'materials',
+    definitionRevision: 1,
+    entries: [record({ revision: 1 })],
+  });
+  let writes = 0;
+  let reads = 0;
+  const request = vi.fn(async (_path?: string, options?: { method?: string; body?: string }) => {
+    if (options?.method === 'POST') {
+      if (++writes === 1)
+        throw Object.assign(new Error('Conflict'), { status: 409, code: 'revision_conflict' });
+      return { ...original, revision: 6, entries: [record({ revision: 3 })] };
+    }
+    return ++reads === 1
+      ? original
+      : {
+          ...original,
+          revision: 5,
+          definitionRevision: 4,
+          entries: [record({ revision: 2, text: 'Updated server body' })],
+        };
+  });
+  mocks.auth.mockReturnValue({ client: { request }, user: { uid: 'student', roles: [] } });
+  render(
+    <MemoryRouter initialEntries={['/tools/space']}>
+      <Routes>
+        <Route path="/tools/:spaceId" element={<CollaborationPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('tab', { name: '参与填写' }));
+  fireEvent.change(screen.getByLabelText('编辑现有记录'), { target: { value: 'entry' } });
+  fireEvent.change(screen.getByLabelText('内容与说明'), { target: { value: 'Unsaved draft' } });
+  fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+  await screen.findByText('版本 5');
+  expect(screen.getByLabelText('内容与说明')).toHaveValue('Unsaved draft');
+  expect(screen.getByLabelText('编辑现有记录')).toHaveValue('entry');
+  fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+  await screen.findByText('版本 6');
+  const lastWrite = request.mock.calls.filter((call) => call[1]?.method === 'POST').at(-1)!;
+  expect(JSON.parse(lastWrite[1]!.body!)).toMatchObject({
+    entryId: 'entry',
+    entryRevision: 2,
+    definitionRevision: 4,
+    revision: 5,
+    text: 'Unsaved draft',
+  });
+});
+
+it('drops private state when the user changes while the API client stays stable', async () => {
+  const original = refreshedSpace({
+    kind: 'materials',
+    title: 'Private original space',
+    entries: [record()],
+    canManage: true,
+  });
+  const client = { request: vi.fn(async () => original) };
+  mocks.auth.mockReturnValue({ client, user: { uid: 'student', roles: [] } });
+  const page = render(
+    <MemoryRouter initialEntries={['/tools/space']}>
+      <Routes>
+        <Route path="/tools/:spaceId" element={<CollaborationPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByText('Private original space');
+  client.request.mockResolvedValue({
+    ...original,
+    title: 'Public next space',
+    entries: [],
+    canManage: false,
+  });
+  mocks.auth.mockReturnValue({ client, user: { uid: 'other', roles: [] } });
+  page.rerender(
+    <MemoryRouter initialEntries={['/tools/space']}>
+      <Routes>
+        <Route path="/tools/:spaceId" element={<CollaborationPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByText('Public next space');
+  expect(screen.queryByText('Private original space')).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: '管理设置' })).not.toBeInTheDocument();
+});
 it('keeps a newer successful submission when the earlier attachment GET resolves last', async () => {
   const original = refreshedSpace({ kind: 'materials', entries: [record()] });
   const refresh = deferredPageResponse();
@@ -971,4 +1056,51 @@ it('keeps the newer refresh snapshot when it arrives before an older pending mut
   expect(screen.getByLabelText('内容与说明')).toHaveValue('保留的提交内容');
   fireEvent.click(screen.getByRole('tab', { name: '记录' }));
   expect(within(screen.getByRole('tabpanel')).getByText('最新后台记录')).toBeInTheDocument();
+});
+
+it('does not rebase an edited record onto a newer concurrent write when an older save resolves last', async () => {
+  const original = refreshedSpace({
+    kind: 'materials',
+    definitionRevision: 1,
+    entries: [record({ revision: 1 })],
+  });
+  const mutation = deferredPageResponse();
+  let reads = 0;
+  const request = vi.fn(async (path?: string, options?: { method?: string; body?: string }) => {
+    if (options?.method === 'POST') return path?.endsWith('/files') ? {} : mutation.promise;
+    return ++reads === 1
+      ? original
+      : { ...original, revision: 6, entries: [record({ revision: 4, text: 'Concurrent edit' })] };
+  });
+  mocks.auth.mockReturnValue({ client: { request }, user: { uid: 'student', roles: [] } });
+  render(
+    <MemoryRouter initialEntries={['/tools/space']}>
+      <Routes>
+        <Route path="/tools/:spaceId" element={<CollaborationPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('tab', { name: '参与填写' }));
+  fireEvent.change(screen.getByLabelText('编辑现有记录'), { target: { value: 'entry' } });
+  fireEvent.change(screen.getByLabelText('内容与说明'), { target: { value: 'My edit' } });
+  fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+  fireEvent.click(screen.getByRole('tab', { name: '记录' }));
+  fireEvent.change(screen.getByLabelText('补充附件'), {
+    target: { files: [new File(['data'], 'race.txt')] },
+  });
+  await screen.findByText('版本 6');
+  await act(async () => {
+    mutation.resolve({
+      ...original,
+      revision: 5,
+      entries: [record({ revision: 3, text: 'My edit' })],
+    });
+  });
+  fireEvent.click(screen.getByRole('tab', { name: '参与填写' }));
+  fireEvent.click(screen.getByRole('button', { name: '提交记录' }));
+  await act(async () => {});
+  const write = request.mock.calls
+    .filter((call) => call[1]?.method === 'POST' && !call[0]?.endsWith('/files'))
+    .at(-1)!;
+  expect(JSON.parse(write[1]!.body!)).toMatchObject({ entryRevision: 3, text: 'My edit' });
 });

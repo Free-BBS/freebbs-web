@@ -6,7 +6,7 @@ import type { RoleKey } from './modules.js';
 import type { SocialOrganizationId } from './organizations.js';
 import type { UnifiedRegistration } from './collections.js';
 import type { UserContext } from './auth.js';
-import { isDevelopmentBusinessAdmin } from './system-settings.js';
+import { isGlobalOrganizationBusinessSupervisor } from './business-authority.js';
 
 export type DepartmentId =
   | `student_union.${'arts_center' | 'sports_center' | 'liaison_center' | 'rights_development_center'}`
@@ -44,7 +44,7 @@ export const DEPARTMENT_DIRECTORY: readonly DepartmentDefinition[] =
                   ? ('sast' as const)
                   : section.id === 'tms'
                     ? ('tms' as const)
-                    : null,
+                    : ('media_center' as const),
           roleKeys: group.options.map(({ roleKey }) => roleKey),
         };
       }),
@@ -62,8 +62,21 @@ export function departmentForRoute(
   );
 }
 export function departmentsForRoles(roles: readonly RoleKey[]): DepartmentDefinition[] {
-  return DEPARTMENT_DIRECTORY.filter((department) =>
-    department.roleKeys.some((role) => roles.includes(role)),
+  return DEPARTMENT_DIRECTORY.filter(
+    (department) =>
+      department.roleKeys.some((role) => roles.includes(role)) ||
+      (department.organizationKey === 'student_union' &&
+        roles.some(
+          (role) =>
+            role === 'student_union.executive_president' || role === 'student_union.presidium',
+        )) ||
+      (department.organizationKey === 'science_association' &&
+        roles.some(
+          (role) => role === 'science_association.chair' || role === 'counselor.innovation',
+        )) ||
+      (department.id === 'youth_league.practice' && roles.includes('counselor.practice')) ||
+      (['youth_league.freshman', 'youth_league.sail'].includes(department.id) &&
+        roles.includes('counselor.student_development')),
   );
 }
 export function canEditDepartment(
@@ -73,8 +86,8 @@ export function canEditDepartment(
   const department = departmentById(id);
   return (
     department !== undefined &&
-    (isDevelopmentBusinessAdmin(user) ||
-      department.roleKeys.some((role) => user.roles.includes(role)))
+    (isGlobalOrganizationBusinessSupervisor(user) ||
+      departmentsForRoles(user.roles).some(({ id: departmentId }) => departmentId === id))
   );
 }
 export function legacyDepartmentId(

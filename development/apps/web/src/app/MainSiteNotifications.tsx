@@ -56,6 +56,8 @@ export function MainSiteNotifications({
   const busyRef = useRef(false);
   const reads = useRef(new Set<string>());
   const generation = useRef(0);
+  const refreshRevision = useRef(0);
+  const inboxLoaded = useRef(false);
   const counts = useRef({ system: 0, activity: 0 });
   useEffect(() => {
     const currentGeneration = ++generation.current;
@@ -68,20 +70,30 @@ export function MainSiteNotifications({
     setBusy(false);
     busyRef.current = false;
     reads.current.clear();
+    inboxLoaded.current = false;
+    refreshRevision.current++;
     counts.current = { system: 0, activity: 0 };
     const refresh = async () => {
       if (!client || document.hidden || busyRef.current || reads.current.size) return;
+      const revision = ++refreshRevision.current;
       const [system, activity] = await Promise.allSettled([
         client.request<{ unreadCount: number }>('/notifications/unread-count'),
         client.request<ActivityNotificationInbox>('/events/notifications'),
       ]);
-      if (!active || generation.current !== currentGeneration) return;
+      if (
+        !active ||
+        generation.current !== currentGeneration ||
+        revision !== refreshRevision.current ||
+        busyRef.current ||
+        reads.current.size
+      )
+        return;
       if (system.status === 'fulfilled' && Number.isFinite(system.value.unreadCount))
         counts.current.system = system.value.unreadCount;
       if (activity.status === 'fulfilled' && Array.isArray(activity.value.notifications)) {
         counts.current.activity = activity.value.unreadCount;
         setItems((current) => sorted([...current, ...activityItems(activity.value.notifications)]));
-        setActivityCursor(activity.value.nextCursor);
+        if (!inboxLoaded.current) setActivityCursor(activity.value.nextCursor);
       }
       setUnreadCount(counts.current.system + counts.current.activity);
     };
@@ -119,6 +131,7 @@ export function MainSiteNotifications({
   }, [open]);
   async function loadInbox(append = false) {
     if (!client || busyRef.current) return;
+    refreshRevision.current++;
     const activeGeneration = generation.current;
     busyRef.current = true;
     setBusy(true);
@@ -143,6 +156,7 @@ export function MainSiteNotifications({
       activity.value &&
       Array.isArray(activity.value.notifications)
     ) {
+      inboxLoaded.current = true;
       loaded.push(...activityItems(activity.value.notifications));
       counts.current.activity = activity.value.unreadCount;
       setActivityCursor(activity.value.nextCursor);
@@ -168,6 +182,7 @@ export function MainSiteNotifications({
   }
   async function markRead(item: NotificationItem) {
     if (!client || reads.current.has(itemKey(item)) || busyRef.current) return;
+    refreshRevision.current++;
     const activeGeneration = generation.current;
     const key = itemKey(item);
     reads.current.add(key);
@@ -198,6 +213,7 @@ export function MainSiteNotifications({
   }
   async function markAllRead() {
     if (!client || !unreadCount || busyRef.current || reads.current.size) return;
+    refreshRevision.current++;
     const activeGeneration = generation.current;
     busyRef.current = true;
     setBusy(true);
