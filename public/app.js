@@ -452,6 +452,7 @@ function initializeDashboardShell() {
   const pageTitles = {
     '/': '首页',
     '/about': '关于 FREE BBS',
+    '/teachers': '教师参与',
     '/staff': '工作人员名单',
     '/world': '学习世界',
     '/course': '课程',

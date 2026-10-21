@@ -111,8 +111,12 @@ const education = (extra = {}) => ({
   ...extra,
 });
 
-async function fixture(kind, callApi, state = {}) {
+async function fixture(kind, callApi, state = {}, location = {}) {
   const root = new Element();
+  const fold = new Element();
+  fold.className = 'personal-fold';
+  fold.open = false;
+  fold.append(root);
   root.className = `${kind}-certifications`;
   root.hidden = kind === 'admin';
   const ids =
@@ -196,6 +200,7 @@ async function fixture(kind, callApi, state = {}) {
   };
   const app = { userState, callApi, sessionReady: Promise.resolve() };
   const host = {
+    location,
     CustomEvent: function FixtureEvent(type, options) {
       this.type = type;
       this.detail = options.detail;
@@ -222,8 +227,46 @@ async function fixture(kind, callApi, state = {}) {
     app,
   });
   await settle();
-  return { root, el, events, dispatched, userState };
+  return { root, fold, el, events, dispatched, userState };
 }
+
+test('teacher deep link selects the teacher form without submitting or accepting other query kinds', async () => {
+  const routes = [];
+  const payload = { approved: [], requests: [], suggestion: education(), fullName: '教师本人' };
+  const f = await fixture(
+    'user',
+    async (route, options) => {
+      routes.push({ route, options });
+      return payload;
+    },
+    {},
+    { search: '?certification=teacher', hash: '#certifications' },
+  );
+  assert.equal(f.el.kind.value, 'teacher');
+  assert.equal(f.el.year.required, false);
+  assert.equal(f.fold.open, true);
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0].options, undefined);
+  const other = await fixture(
+    'user',
+    async () => payload,
+    {},
+    { search: '?certification=company' },
+  );
+  assert.equal(other.el.kind.value, 'undergraduate');
+  assert.equal(other.fold.open, false);
+});
+
+test('certification hash opens a containing fold without changing the selected identity', async () => {
+  const f = await fixture(
+    'user',
+    async () => ({ approved: [], requests: [] }),
+    {},
+    { hash: '#certifications' },
+  );
+  assert.equal(f.fold.open, true);
+  assert.equal(f.el.kind.value, 'undergraduate');
+});
 
 test('bound student suggestion prefills editable fields; only approved identities appear verified', async () => {
   const f = await fixture('user', async () => ({

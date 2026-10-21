@@ -184,12 +184,13 @@ test('the isolated runner enables its named test files with matching database op
     'backend/workbench-schedule-planner.mysql.test.js',
     'backend/course-schedule.mysql.test.js',
     'backend/teacher-accounts.mysql.test.js',
+    'backend/teacher-participation.mysql.test.js',
     'backend/user-certifications.mysql.test.js',
     'backend/schedule-series.mysql.test.js',
     'backend/learning-research.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 29);
+  assert.equal(new Set(TEST_FILES).size, 30);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -214,7 +215,7 @@ test('the isolated runner enables its named test files with matching database op
 });
 
 test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 29);
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 30);
   assert.ok(
     REQUIRED_MYSQL_TESTS.includes(
       'isolated MySQL: verified identities, notices, privacy, concurrent review and enterprise provisioning',

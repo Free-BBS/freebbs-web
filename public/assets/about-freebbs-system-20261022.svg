@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="about-system-title about-system-description">
+<title id="about-system-title">FREE BBS 学习与发展建设示意</title>
+<desc id="about-system-description">学习端、发展端与公共支持的长期建设示意。创意工坊与完整个性化学习标注 V1.2，项目制学习标注后续建设，不表示全部功能已上线。</desc>
+<defs><linearGradient id="brand"><stop stop-color="#182B6D"/><stop offset="0.62" stop-color="#7036A0"/><stop offset="1" stop-color="#843675"/></linearGradient>
+<style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;letter-spacing:0}</style></defs>
+<rect x="0" y="0" width="1920" height="8" rx="0" fill="url(#brand)" stroke="none" />
+<text x="64" y="48" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" >AI4Edu · FREE BBS</text>
+<text x="1856" y="48" font-size="18" fill="#656170" font-weight="500" text-anchor="end" >学习与发展 · 建设示意</text>
+<text x="64" y="110" font-size="44" fill="#211B2D" font-weight="700" text-anchor="start" >FREE BBS 总体系统架构</text>
+<text x="64" y="150" font-size="22" fill="#656170" font-weight="400" text-anchor="start" >学习与发展两端互通，共用公共服务，保持业务分工和权限边界。</text>
+<text x="1856" y="103" font-size="30" fill="#7036A0" font-weight="700" text-anchor="end" >让学习自由而不孤独</text>
+<text x="1856" y="142" font-size="20" fill="#656170" font-weight="400" text-anchor="end" >学生主导 · 长期公益 · 独立于评价体系</text>
+<text x="64" y="210" font-size="32" fill="#7036A0" font-weight="700" text-anchor="start" >学习端</text>
+<text x="1216" y="208" font-size="21" fill="#7036A0" font-weight="500" text-anchor="end" >自主学习 · 自主讨论 · 自主探索</text>
+<line x1="64" y1="232" x2="1216" y2="232" stroke="#CEB7E0" stroke-width="2" />
+<text x="1280" y="210" font-size="32" fill="#147A81" font-weight="700" text-anchor="start" >发展端</text>
+<text x="1856" y="208" font-size="21" fill="#147A81" font-weight="500" text-anchor="end" >信息 · 参与 · 成长</text>
+<line x1="1280" y1="232" x2="1856" y2="232" stroke="#A9CFD0" stroke-width="2" />
+<line x1="1248" y1="190" x2="1248" y2="804" stroke="#EAE7EE" stroke-width="1" />
+<rect x="64" y="258" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="88" y="296" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="84,273,520,98" >01</text>
+<text x="126" y="300" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="84,273,520,98" >首页与问问 Max</text>
+<text x="88" y="335" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,273,520,98" >统一入口、页面寻址与平台导览</text>
+<text x="88" y="364" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,273,520,98" >主动求助与思路引导，判断仍由本人完成</text>
+<rect x="656" y="258" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="680" y="296" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="676,273,520,98" >02</text>
+<text x="718" y="300" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="676,273,520,98" >学习世界</text>
+<text x="680" y="335" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,273,520,98" >课程地图、正文、标注与学习反馈</text>
+<text x="680" y="364" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,273,520,98" >理解联系、尝试作答、检视并修正理解</text>
+<rect x="64" y="398" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="88" y="436" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="84,413,520,98" >03</text>
+<text x="126" y="440" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="84,413,520,98" >讨论区与内容共建</text>
+<text x="88" y="475" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,413,520,98" >公开讨论、工具分享与 @Max 追问</text>
+<text x="88" y="504" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,413,520,98" >IBBB：思考、发现与可用成果选编</text>
+<rect x="656" y="398" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="680" y="436" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="676,413,520,98" >04</text>
+<text x="718" y="440" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="676,413,520,98" >我的工作台</text>
+<text x="680" y="475" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,413,520,98" >课程、作业、个人安排与重要事项</text>
+<text x="680" y="504" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,413,520,98" >授权聚合信息，用户确认后更新安排</text>
+<rect x="64" y="538" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="88" y="576" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="84,553,520,98" >05</text>
+<text x="126" y="580" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="84,553,520,98" >实验室与创意工坊</text>
+<text x="88" y="615" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,553,520,98" >仿真、实验与小工具创作</text>
+<text x="88" y="644" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,553,520,98" >验证想法、说明限制、选择是否分享</text>
+<rect x="446" y="554" width="154" height="28" rx="4" fill="#FAF2E2" stroke="#EAD9B4" />
+<text x="523" y="568" font-size="16" fill="#95691D" font-weight="600" text-anchor="middle" data-bounds="454,557,138,22" dominant-baseline="central">创意工坊 V1.2</text>
+<rect x="656" y="538" width="560" height="126" rx="6" fill="#FCFBFE" stroke="#E2DDE9" />
+<text x="680" y="576" font-size="18" fill="#7036A0" font-weight="700" text-anchor="start" data-bounds="676,553,520,98" >06</text>
+<text x="718" y="580" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="676,553,520,98" >参与与激励</text>
+<text x="680" y="615" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,553,520,98" >签到、电元、磁元、热力、商城与仓库</text>
+<text x="680" y="644" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,553,520,98" >热力反映参与贡献，不代表学习能力</text>
+<rect x="64" y="678" width="560" height="126" rx="6" fill="#FFFCF7" stroke="#E9DDC5" />
+<text x="88" y="716" font-size="18" fill="#95691D" font-weight="700" text-anchor="start" data-bounds="84,693,520,98" >07</text>
+<text x="126" y="720" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="84,693,520,98" >个性化学习</text>
+<text x="88" y="755" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,693,520,98" >本人授权的学习记录与配套学习方案</text>
+<text x="88" y="784" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="84,693,520,98" >推荐可解释，用户可编辑、选择与退出</text>
+<rect x="446" y="694" width="154" height="28" rx="4" fill="#FAF2E2" stroke="#EAD9B4" />
+<text x="523" y="708" font-size="16" fill="#95691D" font-weight="600" text-anchor="middle" data-bounds="454,697,138,22" dominant-baseline="central">完整方案 V1.2</text>
+<rect x="656" y="678" width="560" height="126" rx="6" fill="#FFFCF7" stroke="#E9DDC5" />
+<text x="680" y="716" font-size="18" fill="#95691D" font-weight="700" text-anchor="start" data-bounds="676,693,520,98" >08</text>
+<text x="718" y="720" font-size="25" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="676,693,520,98" >项目制学习</text>
+<text x="680" y="755" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,693,520,98" >公开招募、队内协作与成果沉淀</text>
+<text x="680" y="784" font-size="21" fill="#656170" font-weight="400" text-anchor="start" data-bounds="676,693,520,98" >项目进度与联系方式按队内授权可见</text>
+<rect x="1038" y="694" width="154" height="28" rx="4" fill="#FAF2E2" stroke="#EAD9B4" />
+<text x="1115" y="708" font-size="16" fill="#95691D" font-weight="600" text-anchor="middle" data-bounds="1046,697,138,22" dominant-baseline="central">后续建设</text>
+<rect x="1280" y="258" width="576" height="174" rx="6" fill="#F8FCFC" stroke="#D4E6E6" />
+<rect x="1280" y="282" width="4" height="30" rx="0" fill="#147A81" stroke="none" />
+<text x="1306" y="310" font-size="27" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="1304,281,528,126" >活动与报名</text>
+<text x="1306" y="352" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,281,528,126" >发现活动、完成报名与交流反馈</text>
+<text x="1306" y="390" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,281,528,126" >连接参与过程、组织事务与协作</text>
+<rect x="1280" y="444" width="576" height="174" rx="6" fill="#F8FCFC" stroke="#D4E6E6" />
+<rect x="1280" y="468" width="4" height="30" rx="0" fill="#147A81" stroke="none" />
+<text x="1306" y="496" font-size="27" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="1304,467,528,126" >信息与经验</text>
+<text x="1306" y="538" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,467,528,126" >按需要查看资讯、机会与经验</text>
+<text x="1306" y="576" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,467,528,126" >让前人的经验成为后来者的起点</text>
+<rect x="1280" y="630" width="576" height="174" rx="6" fill="#F8FCFC" stroke="#D4E6E6" />
+<rect x="1280" y="654" width="4" height="30" rx="0" fill="#147A81" stroke="none" />
+<text x="1306" y="682" font-size="27" fill="#211B2D" font-weight="700" text-anchor="start" data-bounds="1304,653,528,126" >个人成长与组织事务</text>
+<text x="1306" y="724" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,653,528,126" >个人事务安排、成长记录与选择</text>
+<text x="1306" y="762" font-size="22" fill="#656170" font-weight="400" text-anchor="start" data-bounds="1304,653,528,126" >团学工作协调、资源统筹与协作</text>
+<path d="M64 812V820H1216V812M640 820V836" fill="none" stroke="#B79BCB" stroke-width="1.8"/>
+<path d="M1280 812V820H1856V812M1568 820V836" fill="none" stroke="#91BFC1" stroke-width="1.8"/>
+<rect x="64" y="836" width="1792" height="68" rx="6" fill="#F3F0F8" stroke="none" />
+<text x="88" y="870" font-size="25" fill="#583477" font-weight="700" text-anchor="start" data-bounds="84,845,235,48" dominant-baseline="central">公共连接层</text>
+<line x1="340" y1="853" x2="340" y2="887" stroke="#CFC1DD" stroke-width="1" />
+<text x="500" y="870" font-size="23" fill="#583477" font-weight="600" text-anchor="middle" data-bounds="355,845,290,48" dominant-baseline="central">身份与权限</text>
+<text x="806" y="870" font-size="23" fill="#583477" font-weight="600" text-anchor="middle" data-bounds="661,845,290,48" dominant-baseline="central">导航与入口</text>
+<text x="1112" y="870" font-size="23" fill="#583477" font-weight="600" text-anchor="middle" data-bounds="967,845,290,48" dominant-baseline="central">通知与日程</text>
+<text x="1418" y="870" font-size="23" fill="#583477" font-weight="600" text-anchor="middle" data-bounds="1273,845,290,48" dominant-baseline="central">数据与边界</text>
+<text x="1724" y="862" font-size="17" fill="#786888" font-weight="500" text-anchor="middle" >共享服务</text>
+<text x="1724" y="886" font-size="17" fill="#786888" font-weight="500" text-anchor="middle" >受控互通</text>
+<line x1="960" y1="904" x2="960" y2="928" stroke="#B5A1C6" stroke-width="1.8" />
+<rect x="64" y="928" width="1792" height="88" rx="6" fill="#30213F" stroke="none" />
+<text x="88" y="972" font-size="25" fill="#FFFFFF" font-weight="700" text-anchor="start" data-bounds="84,940,245,64" dominant-baseline="central">共同能力底座</text>
+<line x1="340" y1="948" x2="340" y2="996" stroke="#715B83" stroke-width="1" />
+<text x="500" y="972" font-size="21" fill="#F5EFFB" font-weight="500" text-anchor="middle" data-bounds="355,941,290,62" dominant-baseline="central">课程知识库与 RAG</text>
+<text x="806" y="972" font-size="21" fill="#F5EFFB" font-weight="500" text-anchor="middle" data-bounds="661,941,290,62" dominant-baseline="central">账号与数据隔离</text>
+<text x="1112" y="972" font-size="21" fill="#F5EFFB" font-weight="500" text-anchor="middle" data-bounds="967,941,290,62" dominant-baseline="central">受控工具与权限审计</text>
+<text x="1418" y="972" font-size="21" fill="#F5EFFB" font-weight="500" text-anchor="middle" data-bounds="1273,941,290,62" dominant-baseline="central">监管建议与人工复核</text>
+<text x="1724" y="972" font-size="21" fill="#F5EFFB" font-weight="500" text-anchor="middle" data-bounds="1579,941,290,62" dominant-baseline="central">监控与备份回退</text>
+<text x="64" y="1048" font-size="18" fill="#656170" font-weight="400" text-anchor="start" >理解知识之间的联系，在交流中形成判断，用真实尝试验证想法，让经验能够积累与复用。</text>
+<text x="64" y="1074" font-size="16" fill="#82798C" font-weight="400" text-anchor="start" >此图描述长期系统设计，不表示全部功能已上线；各阶段的交付范围、状态与时间见版本更新。</text>
+</svg>

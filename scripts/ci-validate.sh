@@ -134,6 +134,7 @@ echo "[ci] authentication and typography preferences tests"
 npm run test:auth
 npm run test:privacy-policy
 npm run test:teacher-accounts
+npm run test:teacher-participation
 npm run test:identity-usability
 
 echo "[ci] workbench and schedule planner tests"

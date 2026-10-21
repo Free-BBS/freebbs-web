@@ -5,7 +5,10 @@
     <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>关于 FREE BBS | FREE BBS</title>
-    <meta name="description" content="关于 FREE BBS，页面建设中，暂未开放" />
+    <meta
+      name="description"
+      content="FREE BBS：学生主导、长期公益、独立于评价体系的电子系学习发展共同体。让学习自由而不孤独。"
+    />
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
@@ -13,8 +16,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/site-info.css" />
+    <link rel="stylesheet" href="/about-freebbs.css" />
   </head>
-  <body class="site-info-page">
+  <body class="site-info-page about-freebbs-page">
     <div class="page-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -64,7 +68,7 @@
               </div>
               <div class="user-copy">
                 <button class="user-name" type="button" id="user-name">登录/注册</button>
-                <div class="user-role" id="user-role">学生</div>
+                <div class="user-role" id="user-role">访客</div>
               </div>
             </div>
             <div class="user-status" id="user-status"></div>
@@ -74,29 +78,171 @@
 
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
-      <main class="main-content site-info-main">
-        <section class="site-info-card" aria-labelledby="site-info-title">
-          <div class="site-info-copy">
-            <p class="site-info-eyebrow" lang="en">ABOUT FREE BBS</p>
-            <h1 id="site-info-title">关于 FREE BBS</h1>
-            <p class="site-info-status"><span aria-hidden="true"></span>建设中 · 暂未开放</p>
-            <p class="site-info-description">
-              这里将介绍 FREE BBS 的来由、理念与建设方向，内容暂未开放，Max 正在施工
-            </p>
-            <nav class="site-info-actions" aria-label="继续探索">
-              <a class="site-info-primary" href="/">返回首页 <span aria-hidden="true">↗</span></a>
-              <a href="/guide">先看看 Max 的探索手册 <span aria-hidden="true">→</span></a>
-            </nav>
+      <main class="main-content site-info-main about-main" id="about-main">
+        <header class="about-hero">
+          <p class="about-eyebrow" lang="en">ABOUT FREE BBS</p>
+          <h1>让学习<span>自由而不孤独</span></h1>
+          <p class="about-position">学生主导、长期公益、独立于评价体系的电子系学习发展共同体</p>
+          <p class="about-lead">
+            把同学的困惑、老师的启发、系友的经验连接起来。既能找到资料，也能有人一起追问：为什么、凭什么、还能怎么做？
+          </p>
+          <nav class="about-actions" aria-label="开始了解平台">
+            <a class="bbs-action about-primary" data-action-tone="primary" href="/world"
+              >进入学习世界 <span aria-hidden="true">↗</span></a
+            >
+            <a href="/guide">看看探索手册 <span aria-hidden="true">→</span></a>
+            <a href="/teachers">我是老师 <span aria-hidden="true">→</span></a>
+          </nav>
+        </header>
+
+        <section class="about-intro" aria-labelledby="about-why">
+          <div>
+            <p class="about-eyebrow">从真实需要出发</p>
+            <h2 id="about-why">有了答案，<br />学习还要继续。</h2>
           </div>
-          <figure class="site-info-scene">
-            <img
-              src="/assets/development-construction-bbs-v2.webp"
-              width="1536"
-              height="1024"
-              alt="Max 开着挖掘机建设 FREE BBS，地面上挖出了 BBS 字样"
-            />
-            <figcaption>这片小天地，正在一点点建起来</figcaption>
+          <div class="about-prose">
+            <p>
+              AI
+              让寻找解释更容易，却不能替我们理解、判断和行动。学过的知识怎样连起来？一个解释在什么条件下成立？一个想法能不能亲手试试？
+            </p>
+            <p>
+              FREE BBS
+              想为这些问题留一个地方：在共同资料上学习，在讨论中核对理由，在尝试中修正理解。我们希望支持的是<strong>自主学习、独立判断、协作共建、敢于创新</strong>，而不只是多完成一些任务。
+            </p>
+          </div>
+        </section>
+
+        <section class="about-free" aria-labelledby="about-three-free">
+          <div class="about-section-heading">
+            <p class="about-eyebrow">三个 FREE</p>
+            <h2 id="about-three-free">从你需要的地方进入</h2>
+            <p>不是先后闯关。可以从头学，也可以带着一道题、一个疑问来。</p>
+          </div>
+          <div class="about-free-grid">
+            <article class="about-free-item">
+              <span class="about-number" aria-hidden="true">01</span>
+              <h3>自主学习</h3>
+              <p>
+                沿着知识关系找到位置，阅读共同正文，留下自己的批注。复习时按需查漏，不必把每一页再走一遍。
+              </p>
+              <a href="/world">找到要学的知识 <span aria-hidden="true">→</span></a>
+            </article>
+            <article class="about-free-item">
+              <span class="about-number" aria-hidden="true">02</span>
+              <h3>自主讨论</h3>
+              <p>
+                把“不明白”说具体，比较不同的解释，也说明自己的理由。AI
+                可以协助，但答案仍值得一起核对。
+              </p>
+              <a href="/discussion">把问题带进讨论 <span aria-hidden="true">→</span></a>
+            </article>
+            <article class="about-free-item">
+              <span class="about-number" aria-hidden="true">03</span>
+              <h3>自主探索</h3>
+              <p>
+                从一个可以操作的小问题开始：搭一个电路、改一个参数、看结果是否符合预想。记录条件，也记录没成功的尝试。
+              </p>
+              <a href="/laboratory">去实验室试一试 <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </section>
+
+        <section class="about-system" aria-labelledby="about-system-title">
+          <div class="about-section-heading">
+            <p class="about-eyebrow">连接学习与发展</p>
+            <h2 id="about-system-title">同一个共同体，不止一个入口</h2>
+            <p>
+              学习、讨论和探索相互支持，个人工作台帮助安排节奏。创意工坊和项目制学习等方向仍在建设中。
+            </p>
+            <p>发展端连接活动、信息与经验，让课堂之外的选择也有人可以交流。</p>
+            <a href="/development">看看发展端 <span aria-hidden="true">→</span></a>
+          </div>
+          <figure class="about-system-figure">
+            <div class="about-system-images">
+              <img
+                class="about-diagram-light"
+                src="/assets/about-freebbs-system-20261022.svg"
+                width="1920"
+                height="1080"
+                loading="lazy"
+                alt="FREE BBS 建设示意：以自主学习、独立判断、协作共建、敢于创新为目标，连接学习、讨论、探索与发展；图中标注后续规划。"
+              />
+              <img
+                class="about-diagram-dark"
+                src="/assets/about-freebbs-system-dark-20261022.svg"
+                width="1920"
+                height="1080"
+                loading="lazy"
+                alt="FREE BBS 建设示意：以自主学习、独立判断、协作共建、敢于创新为目标，连接学习、讨论、探索与发展；图中标注后续规划。"
+              />
+            </div>
+            <figcaption>
+              建设示意，含后续规划，非已上线功能清单。<a
+                class="about-diagram-light"
+                href="/assets/about-freebbs-system-20261022.svg"
+                target="_blank"
+                rel="noopener"
+                >打开大图 <span aria-hidden="true">↗</span></a
+              ><a
+                class="about-diagram-dark"
+                href="/assets/about-freebbs-system-dark-20261022.svg"
+                target="_blank"
+                rel="noopener"
+                >打开大图 <span aria-hidden="true">↗</span></a
+              >
+            </figcaption>
           </figure>
+        </section>
+
+        <section class="about-intro about-continuity" aria-labelledby="about-continuity-title">
+          <div>
+            <p class="about-eyebrow">让经验有人接着用</p>
+            <h2 id="about-continuity-title">一次讨论之后，<br />还能留下什么？</h2>
+          </div>
+          <div class="about-prose">
+            <p>
+              一条解释、一段学习经历、一个小工具，如果保留了来源、背景和使用条件，就可能让后来的人少走一点弯路。发现不准确的地方，也应该能够继续纠正。
+            </p>
+            <p>
+              <strong>IBBB · I Brainstorm · Bridge · Bloom</strong>
+              希望承接这些思考与尝试：不只有已经做成的事，也有仍值得追问的问题。校园生活、发展选择和教学研究中的经验，都可以成为交流的起点。
+            </p>
+            <a href="/discussion">看看大家正在聊什么 <span aria-hidden="true">→</span></a>
+          </div>
+        </section>
+
+        <section class="about-teachers" aria-labelledby="about-teachers-title">
+          <div class="about-teachers-copy">
+            <p class="about-eyebrow">也邀请老师带着问题来</p>
+            <h2 id="about-teachers-title">不只来看答案，<br />也来看看问题怎样发生。</h2>
+            <p>
+              老师也可以先以学习者视角体验课程，阅读正文与知识关系，参与讨论。完成教师身份确认、关联任教课程后，还能集中查看自己的课程与意见回复，对表述、条件、例子或遗漏提出建议。
+            </p>
+            <p>
+              学生的困惑也能成为重新思考讲解的起点。教师认证不等于直接改稿；课程意见由课程组核查，个人笔记不会因此向教师开放。
+            </p>
+          </div>
+          <div class="about-teachers-entry">
+            <span class="about-entry-label">教师参与</span>
+            <p>查看任教课程<br />体验学习流程<br />提交正文意见</p>
+            <a class="bbs-action about-primary" data-action-tone="primary" href="/teachers"
+              >进入教师入口 <span aria-hidden="true">→</span></a
+            >
+          </div>
+        </section>
+
+        <section class="about-principles" aria-labelledby="about-principles-title">
+          <h2 id="about-principles-title">保有自己的节奏，共同维护这个地方</h2>
+          <ul>
+            <li><strong>可以求助，也可以暂停。</strong>学习路径是支持，不是必须完成的关卡。</li>
+            <li>
+              <strong>尊重个人内容的边界。</strong>笔记不自动变成公开帖子，是否分享由本人决定。
+            </li>
+            <li>
+              <strong>把激励和能力分开。</strong>参与记录、星标和社区激励不等同于对一个人的评价。
+            </li>
+          </ul>
+          <a href="/staff">认识一起建设的同学 <span aria-hidden="true">→</span></a>
         </section>
       </main>
       <footer class="site-footer site-footer-compact">

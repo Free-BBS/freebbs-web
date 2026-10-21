@@ -58,6 +58,18 @@
     let requests = [];
     let suggestion = null;
     let fullName = '';
+    let requestedTeacher = false;
+    try {
+      requestedTeacher =
+        new URLSearchParams(host.location?.search || '').get('certification') === 'teacher';
+    } catch {
+      /* A malformed query must not change certification or submit a request. */
+    }
+    function revealCertification() {
+      if (host.location?.hash !== '#certifications' && !requestedTeacher) return;
+      const fold = root.closest('.personal-fold');
+      if (fold) fold.open = true;
+    }
     const session = () =>
       !externalChange && app.userState.isLoggedIn && app.userState.uid && app.userState.token
         ? `${app.userState.uid}:${app.userState.token}`
@@ -171,7 +183,8 @@
             ? payload.suggestion
             : null;
         ready = true;
-        if (!preserveDraft || first) selectKind(first && Boolean(suggestion));
+        if (first && requestedTeacher) el.kind.value = 'teacher';
+        if (!preserveDraft || first) selectKind(first && Boolean(suggestion) && !requestedTeacher);
         render();
         host.dispatchEvent(
           new host.CustomEvent('freebbs:certifications-updated', { detail: { approved } }),
@@ -302,6 +315,8 @@
         link && doc.getElementById(link.getAttribute('href').slice(1))?.closest('.personal-fold');
       if (fold) fold.open = true;
     });
+    host.addEventListener('hashchange', revealCertification);
+    revealCertification();
     Promise.resolve(app.sessionReady).then(sync);
     controls();
   }
