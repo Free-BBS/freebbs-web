@@ -52,9 +52,22 @@ test('generated appearance entries load the shared preference data before the ea
   }
 });
 
+test('legacy development entry delegates to the app without a duplicate page shell', () => {
+  const source = fs.readFileSync(path.join(root, 'development.html'), 'utf8');
+  assert.equal(source.split('src="/development-entry.js"').length - 1, 1);
+  assert.match(source, /href="\/development\/"/);
+  assert.doesNotMatch(source, /<main\b|<footer\b|src="\/(?:app|notifications)\.js"/);
+  assert.ok(!preparePageShell(source).includes(SITE_FOOTER));
+});
+
+// The legacy development document only redirects; its destination owns the app shell.
 for (const filename of fs
   .readdirSync(root)
-  .filter((name) => name.endsWith('.html') && !['404.html', 'circuit-embed.html'].includes(name))) {
+  .filter(
+    (name) =>
+      name.endsWith('.html') &&
+      !['404.html', 'circuit-embed.html', 'development.html'].includes(name),
+  )) {
   test(`${filename} has one shared footer and early, single appearance initialization`, () => {
     const source = fs.readFileSync(path.join(root, filename), 'utf8');
     const result = preparePageShell(source);
