@@ -38,6 +38,9 @@ export function effectiveGlobalBusinessAdmins(
   identities?: readonly DirectoryUser[],
   allowedUids: readonly string[] = [],
 ): Set<string> {
+  // Retain the legacy call contract; ordinary entry no longer depends on admission records.
+  void access;
+  void allowedUids;
   if (!roles.some((role) => role.key === 'platform.admin' && role.status === 'active'))
     return new Set();
   return new Set(
@@ -50,22 +53,7 @@ export function effectiveGlobalBusinessAdmins(
           row.scope.id === '*' &&
           (identities === undefined || identities.some(({ uid }) => uid === row.subjectUid)) &&
           (row.expiresAt === null || Date.parse(row.expiresAt) > now.getTime()) &&
-          subjects.some(
-            (subject) => subject.uid === row.subjectUid && subject.status === 'active',
-          ) &&
-          (allowedUids.includes(row.subjectUid) ||
-            access.some((grant) => {
-              if (grant.status !== 'active') return false;
-              if (grant.subjectUid) return grant.subjectUid === row.subjectUid;
-              const identity = identities?.find(({ uid }) => uid === row.subjectUid);
-              if (!identity) return false;
-              return grant.studentId
-                ? grant.studentId === identity.studentId
-                : Boolean(
-                    grant.username &&
-                    grant.username.toLocaleLowerCase() === identity.username.toLocaleLowerCase(),
-                  );
-            })),
+          subjects.some((subject) => subject.uid === row.subjectUid && subject.status === 'active'),
       )
       .map(({ subjectUid }) => subjectUid),
   );

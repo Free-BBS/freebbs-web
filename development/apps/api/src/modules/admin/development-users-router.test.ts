@@ -232,7 +232,7 @@ describe('batch development admission', () => {
 });
 
 describe('development access administration', () => {
-  it('lets a main-site administrator configure the first development lead and then closes fallback access', async () => {
+  it('lets a main-site administrator configure the first lead and then retains only ordinary member access', async () => {
     const store = createMemoryStore({ seed: false });
     const users = [
       {
@@ -285,9 +285,19 @@ describe('development access administration', () => {
       .send({ accessLevel: 'lead' })
       .expect(200);
 
-    await request(app)
+    const formerBootstrap = await request(app)
       .get('/api/development/v1/me')
       .set('Authorization', 'Bearer main-admin')
+      .expect(200);
+    expect(formerBootstrap.body.data).toMatchObject({
+      roles: [],
+      developmentAccess: 'member',
+      viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+    });
+    await request(app)
+      .put('/api/development/v1/admin/development-users/u_main_admin')
+      .set('Authorization', 'Bearer main-admin')
+      .send({ accessLevel: 'lead' })
       .expect(403);
     const lead = await request(app)
       .get('/api/development/v1/me')
@@ -364,8 +374,16 @@ describe('development access administration', () => {
       .set('Authorization', 'Bearer lead')
       .expect(200);
     expect(unadmitted.body.data).toMatchObject({
+      total: 0,
+      items: [],
+    });
+    const ordinary = await request(app)
+      .get('/api/development/v1/admin/development-users?page=1&pageSize=20&admission=member')
+      .set('Authorization', 'Bearer lead')
+      .expect(200);
+    expect(ordinary.body.data).toMatchObject({
       total: 1,
-      items: [expect.objectContaining({ uid: 'u_target' })],
+      items: [expect.objectContaining({ uid: 'u_target', accessLevel: 'member' })],
     });
 
     await request(app)

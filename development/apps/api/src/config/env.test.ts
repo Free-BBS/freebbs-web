@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { loadEnvironment } from './env.js';
 
 describe('API listener environment', () => {
-  it('parses a dedicated preview UID list and defaults to denying production entry', () => {
+  it('keeps legacy directory UID metadata optional without making it an entry requirement', () => {
     expect(
       loadEnvironment({ NODE_ENV: 'production', AUTH_MODE: 'main' }).previewAllowedUids,
     ).toEqual([]);

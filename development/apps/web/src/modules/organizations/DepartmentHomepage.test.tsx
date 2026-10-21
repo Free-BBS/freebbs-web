@@ -164,6 +164,17 @@ describe('department homepage', () => {
     expect(screen.queryByText('部门主页正在准备中。')).not.toBeInTheDocument();
     expect(screen.queryByTitle('体育中心主页')).not.toBeInTheDocument();
   });
+  it('keeps curated pages free of HTML upload controls even for an authorized editor', async () => {
+    setup({ empty: true, canEdit: true });
+    await screen.findByText('暂无活跃活动');
+    expect(screen.getByRole('heading', { name: '学生体育中心', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByLabelText('选择 HTML 文件')).not.toBeInTheDocument();
+    expect(screen.queryByText(/上传完整 HTML/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '撰写部门文章' })).toHaveAttribute(
+      'href',
+      '/collections/publishing?department=student_union.sports_center&category=article&create=1',
+    );
+  });
   it('shows the complete learning and training submission when no uploaded override exists', async () => {
     const { request } = setup({
       empty: true,

@@ -28,7 +28,6 @@ export type AuthenticationResult =
       code:
         | 'missing_identity'
         | 'invalid_identity'
-        | 'preview_access_denied'
         | 'preview_identity_denied'
         | 'identity_provider_unavailable'
         | 'development_backend_unavailable';
@@ -39,7 +38,6 @@ export interface AuthMiddlewareOptions {
   authClient: AuthClient;
   mode: 'main' | 'demo';
   store?: DevelopmentStore;
-  allowedUids?: readonly string[];
   userDirectory?: UserDirectory;
   now?: () => Date;
   reportError?: (message: string, error: unknown) => void;
@@ -128,7 +126,6 @@ function temporarySuperAdminContext(context: AuthorizationContext): Authorizatio
 }
 
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
-  const allowedUids = options.allowedUids && new Set(options.allowedUids);
   return async (headers: AuthHeaders): Promise<AuthenticationResult> => {
     const credential = readCredential(headers, options.mode);
     if (!credential.ok) {
@@ -164,14 +161,9 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
             bootstrapAdministrator = true;
           }
         }
-        if (accessLevel === null && allowedUids?.has(viewerIdentity.uid)) accessLevel = 'member';
-        if (accessLevel === null) {
-          return {
-            status: 403,
-            code: 'preview_access_denied',
-            message: 'Development preview is not available for this account',
-          };
-        }
+        // Every verified main-site account can enter. Explicit grants still determine
+        // development lead and identity-preview authority, not ordinary admission.
+        accessLevel ??= 'member';
 
         if (options.store) {
           const viewerSubject = await synchronizeSubject(options.store, viewerIdentity, now);

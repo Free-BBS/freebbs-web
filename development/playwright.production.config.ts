@@ -57,7 +57,8 @@ export default defineConfig({
         HOST: '127.0.0.1',
         PORT: '3100',
         MAIN_SITE_API_BASE_URL: 'http://127.0.0.1:3200',
-        DEVELOPMENT_PREVIEW_UIDS: 'demo-admin,main-site-student',
+        // The ordinary student must work without a legacy preview entry.
+        DEVELOPMENT_PREVIEW_UIDS: 'demo-admin',
       },
     },
     {

@@ -12,7 +12,7 @@ import {
 } from '../../core/authorization/business-admin.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { hasRecipientAccess } from '../system-settings/users.js';
+import { hasDevelopmentGrant } from '../system-settings/users.js';
 import { adminActor } from './subjects-router.js';
 
 const publicScope = { type: 'public', id: '*' } as const;
@@ -113,9 +113,7 @@ export function createBusinessAdminBootstrapRouter(
       const subject = subjects.find(({ uid }) => uid === target.uid);
       if (subject?.status !== 'active')
         throw new HttpError(409, 'subject_inactive', '目标用户须为活跃成员');
-      if (!hasRecipientAccess(target, access, allowedUids))
-        throw new HttpError(409, 'development_access_required', '目标用户须有有效发展端准入');
-      const grant = access.find((row) => hasRecipientAccess(target, [row]));
+      const grant = access.find((row) => hasDevelopmentGrant(target, [row]));
       if (grant && !grant.subjectUid)
         await tx.developmentAccess.update(grant.id, {
           subjectUid: target.uid,

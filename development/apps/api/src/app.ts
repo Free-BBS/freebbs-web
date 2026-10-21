@@ -157,7 +157,6 @@ export function createApp(options: CreateAppOptions = {}) {
     authClient: resolveAuthClient(authMode, options),
     mode: authMode,
     store,
-    allowedUids: previewAllowedUids,
     userDirectory: options.userDirectory,
   });
   const allowedOrigins = new Set(

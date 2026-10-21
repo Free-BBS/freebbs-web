@@ -141,21 +141,6 @@ function AuthState({ children }: { children: ReactNode }) {
   );
 }
 
-function PreviewDenied() {
-  useEffect(() => {
-    if (window.location.pathname.startsWith('/development/')) {
-      window.location.replace('/development');
-    }
-  }, []);
-
-  return (
-    <AuthState>
-      <p>正在返回主站…</p>
-      <a href="/development">返回主站施工页</a>
-    </AuthState>
-  );
-}
-
 export function AppShell({ children, moduleStates }: AppShellProps) {
   const auth = useAuth();
   const location = useLocation();
@@ -180,10 +165,6 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
         <a href={auth.loginUrl}>登录主站</a>
       </AuthState>
     );
-  }
-
-  if (auth.status === 'denied') {
-    return <PreviewDenied />;
   }
 
   if (auth.status === 'error') {

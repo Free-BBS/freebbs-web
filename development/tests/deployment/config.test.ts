@@ -84,7 +84,9 @@ describe('deployment configuration', () => {
     const nginx = configuration('deploy/nginx/freebbs-development.conf');
     const hostLocations = configuration('deploy/nginx/freebbs-development.locations.conf');
 
-    expect(nginx).toMatch(/location\s+=\s+\/development\s*{\s*return\s+308\s+\/development\/;/);
+    expect(nginx).toMatch(
+      /location\s+=\s+\/development\s*{\s*return\s+302\s+\/development\/\$is_args\$args;/,
+    );
     expect(nginx).toMatch(
       /location\s+\/development\/\s*{[\s\S]*?try_files[^;]+\/development\/index\.html;/,
     );
@@ -94,7 +96,9 @@ describe('deployment configuration', () => {
     expect(nginx).toContain('proxy_set_header Authorization $http_authorization;');
     expect(hostLocations).not.toMatch(/\bserver\s*{/);
     expect(hostLocations).not.toMatch(/\blisten\s+/);
-    expect(hostLocations).not.toMatch(/location\s+=\s+\/development\s*{/);
+    expect(hostLocations).toMatch(
+      /location\s+=\s+\/development\s*{\s*return\s+302\s+\/development\/\$is_args\$args;/,
+    );
     expect(hostLocations).toMatch(/location\s+\/development\/\s*{/);
     expect(hostLocations).toMatch(/location\s+\/api\/development\/v1\/\s*{/);
   });

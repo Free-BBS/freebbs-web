@@ -245,13 +245,17 @@ describe('AppShell', () => {
     );
   });
 
-  it('sends a preview-denied identity back to the main-site construction page', () => {
-    mockUseAuth.mockReturnValue({ ...authenticatedAuth(), status: 'denied', user: null });
+  it('keeps authentication failures in the app with a retry instead of a construction redirect', () => {
+    mockUseAuth.mockReturnValue({
+      ...authenticatedAuth(),
+      status: 'error',
+      user: null,
+      error: new Error('Authentication service unavailable'),
+    });
     renderShell('/events');
-    expect(screen.getByRole('link', { name: '返回主站施工页' })).toHaveAttribute(
-      'href',
-      '/development',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Authentication service unavailable');
+    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /施工/ })).not.toBeInTheDocument();
   });
   it('uses the new square-first navigation while keeping established development modules', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());

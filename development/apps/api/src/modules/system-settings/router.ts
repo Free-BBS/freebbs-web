@@ -27,7 +27,6 @@ import { HttpError } from '../../core/errors/http-error.js';
 import { listModuleManifests } from '../../core/modules/registry.js';
 import { ASSIGNABLE_ROLES } from '../admin/development-users-router.js';
 import {
-  hasRecipientAccess,
   listSettingsUsers,
   updateSettingsUser,
   settingsUsersPage,
@@ -300,15 +299,10 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
     };
   }
   async function trustedRecipients(uids: string[]): Promise<SystemSettingsRecipient[]> {
-    const grants = await options.store.developmentAccess.list();
     const result = [];
     for (const userUid of [...uids].sort()) {
       const user = await requireDirectory().get(userUid);
-      const admitted =
-        user &&
-        (options.authMode === 'demo' || hasRecipientAccess(user, grants, options.allowedUids));
-      if (!user || !admitted)
-        throw new HttpError(400, 'invalid_recipient', '接收者不存在或尚未获准进入发展端');
+      if (!user) throw new HttpError(400, 'invalid_recipient', '接收者不存在');
       result.push({
         uid: user.uid,
         displayName: user.displayName,
@@ -375,13 +369,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
             options.authMode === 'demo',
             options.allowedUids,
           )
-        : await listSettingsUsers(
-            options.store,
-            requireDirectory(),
-            filters.query ?? '',
-            options.authMode === 'demo',
-            options.allowedUids,
-          ),
+        : await listSettingsUsers(options.store, requireDirectory(), filters.query ?? ''),
     );
   });
   settings.put('/users/:uid', async (request, response) =>

@@ -59,13 +59,43 @@ describe('effective global business administrator identities', () => {
     },
   );
 
-  it('preserves bound admission when no authoritative directory is available', async () => {
+  it('counts all active stored administrators when no authoritative directory is available', async () => {
     const { assignments, roles, subjects, access } = await fixture();
     const identities = await businessAdminIdentities(assignments);
     expect(
       effectiveGlobalBusinessAdmins(assignments, roles, subjects, access, new Date(), identities),
-    ).toEqual(new Set(['admin']));
+    ).toEqual(new Set(['admin', 'demo-admin']));
   });
+
+  it.each(['missing', 'archived'] as const)(
+    'counts an active verified global administrator with %s admission metadata',
+    async (state) => {
+      const { assignments, roles, subjects, access } = await fixture();
+      const identities = [
+        { uid: 'admin', username: 'admin', displayName: 'Admin', studentId: null, avatarUrl: null },
+      ];
+      expect(
+        effectiveGlobalBusinessAdmins(
+          assignments,
+          roles,
+          subjects,
+          state === 'missing' ? [] : access.map((grant) => ({ ...grant, status: 'archived' })),
+          new Date(),
+          identities,
+        ),
+      ).toEqual(new Set(['admin']));
+      expect(
+        effectiveGlobalBusinessAdmins(
+          assignments,
+          roles,
+          subjects.map((subject) => ({ ...subject, status: 'inactive' })),
+          [],
+          new Date(),
+          identities,
+        ),
+      ).toEqual(new Set());
+    },
+  );
 
   it('distinguishes absent directories from authoritative empty results', async () => {
     const { assignments } = await fixture();

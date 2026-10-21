@@ -693,7 +693,7 @@ describe('development system settings boundaries', () => {
       .expect(200);
     expect(audits.body.data.total).toBe(1);
   });
-  it('validates identity exclusivity, exact captain teams and unwhitelisted recipient eligibility without granting access', async () => {
+  it('validates identities and teams while allowing real recipients without admission records', async () => {
     const { app, store } = await fixture();
     const grant = (await store.developmentAccess.list()).find(
       (row) => row.subjectUid === 'target',
@@ -704,7 +704,7 @@ describe('development system settings boundaries', () => {
       .set('Authorization', 'Bearer admin')
       .expect(200);
     expect(result.body.data).toEqual([
-      expect.objectContaining({ uid: 'target', canReceiveNotifications: false }),
+      expect.objectContaining({ uid: 'target', canReceiveNotifications: true }),
     ]);
     const revision = result.body.data[0].revision;
     for (const change of [
@@ -729,8 +729,8 @@ describe('development system settings boundaries', () => {
     await request(app)
       .post(`${base}/system-settings/notifications`)
       .set('Authorization', 'Bearer admin')
-      .send({ requestId: 'inactive', title: '通知', body: '内容', recipientUids: ['target'] })
-      .expect(400);
+      .send({ requestId: 'unlisted', title: '通知', body: '内容', recipientUids: ['target'] })
+      .expect(201);
     await request(app)
       .post(`${base}/system-settings/notifications`)
       .set('Authorization', 'Bearer admin')
@@ -748,7 +748,13 @@ describe('development system settings boundaries', () => {
           .get(`${base}/system-settings/notifications`)
           .set('Authorization', 'Bearer admin')
       ).body.data,
-    ).toHaveLength(0);
+    ).toHaveLength(1);
+    expect((await store.developmentAccess.get(grant.id))?.status).toBe('archived');
+    const inbox = await request(app)
+      .get(`${base}/notifications`)
+      .set('Authorization', 'Bearer target')
+      .expect(200);
+    expect(inbox.body.data).toHaveLength(1);
   });
   it('edits organization metadata and business module configuration with revisions and complete audit pages', async () => {
     const { app } = await fixture();
@@ -1111,7 +1117,7 @@ describe('development system settings boundaries', () => {
       'disabled',
     );
   });
-  it('does not count inactive administrator subjects as survivors when revoking the last effective administrator access', async () => {
+  it('does not count inactive administrator subjects as survivors when removing the last effective business role', async () => {
     const { app, store } = await fixture();
     await store.roleAssignments.create({
       subjectUid: 'target',
@@ -1126,10 +1132,15 @@ describe('development system settings boundaries', () => {
     const adminGrant = (await store.developmentAccess.list()).find(
       (row) => row.subjectUid === 'admin',
     )!;
+    const users = await request(app)
+      .get(`${base}/system-settings/users?query=admin`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    const administrator = users.body.data.find((user: { uid: string }) => user.uid === 'admin');
     await request(app)
-      .put(`${base}/admin/development-users/admin`)
-      .set('Authorization', 'Bearer lead')
-      .send({ accessLevel: null })
+      .put(`${base}/system-settings/users/admin`)
+      .set('Authorization', 'Bearer admin')
+      .send({ revision: administrator.revision, roles: [], captainTeamIds: [] })
       .expect(409);
     expect(await store.developmentAccess.get(adminGrant.id)).toEqual(adminGrant);
     expect(

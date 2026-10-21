@@ -34,7 +34,7 @@ const current = (row: { status: string; expiresAt: string | null }, now = Date.n
   row.status === 'active' && (row.expiresAt === null || Date.parse(row.expiresAt) > now);
 const editableBusinessIdentity = (row: RoleAssignmentRecord) =>
   row.roleKey !== 'platform.admin' || (row.scope.type === 'public' && row.scope.id === '*');
-export function hasRecipientAccess(
+export function hasDevelopmentGrant(
   user: DirectoryUser,
   access: DevelopmentAccessRecord[],
   allowedUids: readonly string[] = [],
@@ -59,9 +59,6 @@ export function identitySnapshot(
   user: DirectoryUser,
   roles: RoleAssignmentRecord[],
   tags: TagAssignmentRecord[],
-  access: DevelopmentAccessRecord[] = [],
-  demo = false,
-  allowedUids: readonly string[] = [],
 ): SystemSettingsUser {
   const now = Date.now();
   const currentlyActive = (row: { status: string; expiresAt: string | null }) => current(row, now);
@@ -117,7 +114,7 @@ export function identitySnapshot(
       ),
     ].sort(),
     revision,
-    canReceiveNotifications: demo || hasRecipientAccess(user, access, allowedUids),
+    canReceiveNotifications: true,
   };
 }
 export const directoryFiltersSchema = z
@@ -200,44 +197,29 @@ export async function listDirectoryRows(
     );
     uids = uids ? uids.filter((uid) => selected.has(uid)) : [...selected];
   }
-  const identityFilter: DirectoryIdentityFilter = { uids: [], studentIds: [], usernames: [] };
-  const includedUids: string[] = [],
-    studentIds: string[] = [],
-    usernames: string[] = [];
+  // Admission metadata is retained for legacy callers; every directory identity
+  // is now a member unless an active lead grant says otherwise.
+  void demo;
+  void allowedUids;
+  const identityFilter = {
+    uids: [] as string[],
+    studentIds: [] as string[],
+    usernames: [] as string[],
+  } satisfies DirectoryIdentityFilter;
   for (const grant of access) {
-    if (
-      grant.status !== 'active' ||
-      ((filters.admission === 'lead' || filters.admission === 'member') &&
-        grant.accessLevel !== filters.admission)
-    )
-      continue;
-    if (grant.subjectUid) includedUids.push(grant.subjectUid);
-    else if (grant.studentId) studentIds.push(grant.studentId);
-    else if (grant.username) usernames.push(grant.username.toLocaleLowerCase());
+    if (grant.status !== 'active' || grant.accessLevel !== 'lead') continue;
+    if (grant.subjectUid) identityFilter.uids.push(grant.subjectUid);
+    else if (grant.studentId) identityFilter.studentIds.push(grant.studentId);
+    else if (grant.username) identityFilter.usernames.push(grant.username.toLocaleLowerCase());
   }
-  if (filters.admission === 'member') {
-    const grantFor = accessLookup(access);
-    const identities = await Promise.all(allowedUids.map((uid) => directory.get(uid)));
-    includedUids.push(
-      ...identities
-        .filter(
-          (user): user is DirectoryUser => user !== null && grantFor(user)?.accessLevel !== 'lead',
-        )
-        .map((user) => user.uid),
-    );
-  } else if (filters.admission !== 'lead') includedUids.push(...allowedUids);
-  Object.assign(identityFilter, { uids: includedUids, studentIds, usernames });
   const page = await directoryPage(directory, {
     query: filters.query,
     page: filters.page ?? 1,
     pageSize: filters.pageSize ?? 20,
     uids,
-    ...(!filters.admission || (demo && ['admitted', 'not_admitted'].includes(filters.admission))
-      ? {}
-      : filters.admission === 'not_admitted'
-        ? { exclude: identityFilter }
-        : { include: identityFilter }),
-    ...(demo && filters.admission === 'not_admitted' ? { uids: [] } : {}),
+    ...(filters.admission === 'lead' ? { include: identityFilter } : {}),
+    ...(filters.admission === 'member' ? { exclude: identityFilter } : {}),
+    ...(filters.admission === 'not_admitted' ? { uids: [] } : {}),
   });
   const pageUids = page.items.map((user) => user.uid);
   const [roles, tags] = await Promise.all([
@@ -267,38 +249,24 @@ export async function settingsUsersPage(
   const page = await listDirectoryRows(store, directory, filters, demo, allowedUids);
   return {
     ...page,
-    items: page.items.map(({ user, roles, tags, grant }) =>
-      identitySnapshot(user, roles, tags, grant ? [grant] : [], demo, allowedUids),
-    ),
+    items: page.items.map(({ user, roles, tags }) => identitySnapshot(user, roles, tags)),
   };
 }
 export async function listSettingsUsers(
   store: DevelopmentStore,
   directory: UserDirectory,
   query = '',
-  demo = false,
-  allowedUids: readonly string[] = [],
 ) {
-  const [users, roles, tags, access] = await Promise.all([
+  const [users, roles, tags] = await Promise.all([
     directory.list(query),
     store.roleAssignments.list(),
     store.tagAssignments.list({ tagKey: 'sports.team_captain' }),
-    store.developmentAccess.list(),
   ]);
   const ownedRoles = groupedByUid(roles),
-    ownedTags = groupedByUid(tags),
-    grantFor = accessLookup(access);
-  return users.map((user) => {
-    const grant = grantFor(user);
-    return identitySnapshot(
-      user,
-      ownedRoles.get(user.uid) ?? [],
-      ownedTags.get(user.uid) ?? [],
-      grant ? [grant] : [],
-      demo,
-      allowedUids,
-    );
-  });
+    ownedTags = groupedByUid(tags);
+  return users.map((user) =>
+    identitySnapshot(user, ownedRoles.get(user.uid) ?? [], ownedTags.get(user.uid) ?? []),
+  );
 }
 export async function updateSettingsUser(
   store: DevelopmentStore,
@@ -336,7 +304,7 @@ export async function updateSettingsUser(
         uids: [...new Set([uid, ...adminRoles.map((row) => row.subjectUid)])],
       }),
     ]);
-    const previous = identitySnapshot(target, roles, tags, access, false, allowedUids);
+    const previous = identitySnapshot(target, roles, tags);
     if (previous.revision !== input.revision)
       throw new HttpError(409, 'stale_revision', '用户身份已被修改，请重新加载');
     if (
@@ -430,9 +398,6 @@ export async function updateSettingsUser(
       target,
       await tx.roleAssignments.list({ subjectUid: uid }),
       await tx.tagAssignments.list({ subjectUid: uid }),
-      access,
-      false,
-      allowedUids,
     );
     await tx.auditLogs.create({
       actorUid,

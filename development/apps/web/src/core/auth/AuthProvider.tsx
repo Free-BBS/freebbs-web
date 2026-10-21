@@ -19,7 +19,7 @@ import {
   type DemoUserId,
 } from '../api/client.js';
 
-export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'denied' | 'error';
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -95,14 +95,6 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
       ) {
         activeClient.setPreviewUser(null);
         globalThis.location?.reload();
-        return;
-      }
-      if (
-        caught instanceof ApiError &&
-        caught.status === 403 &&
-        caught.code === 'preview_access_denied'
-      ) {
-        setStatus('denied');
         return;
       }
       setError(asError(caught));
