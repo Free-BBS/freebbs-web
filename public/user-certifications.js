@@ -55,6 +55,7 @@
     let ready = false;
     let loading = false;
     let saving = false;
+    let identityRefreshPending = false;
     let approved = [];
     let automatic = [];
     let requests = [];
@@ -256,6 +257,7 @@
       const key = session();
       const epoch = generation;
       if (!key) return;
+      identityRefreshPending = false;
       if (preserveDraft && formOpen) captureDraft();
       loadTicket += 1;
       const ticket = loadTicket;
@@ -338,6 +340,7 @@
       ready = false;
       loading = false;
       saving = false;
+      identityRefreshPending = false;
       formOpen = false;
       approved = [];
       automatic = [];
@@ -414,7 +417,8 @@
       } finally {
         if (owns(key, epoch)) {
           saving = false;
-          controls();
+          if (identityRefreshPending) load();
+          else controls();
         }
       }
     });
@@ -423,7 +427,12 @@
       sync();
     });
     host.addEventListener('freebbs:identity-updated', () => {
-      if (session() && !loading && !saving) load();
+      if (!session()) return;
+      if (saving) {
+        // The submission will read again; a read already in flight predates this identity.
+        identityRefreshPending = true;
+        loadTicket += 1;
+      } else load();
     });
     host.addEventListener('freebbs:notification-open', (event) => {
       if (

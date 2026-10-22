@@ -41,8 +41,8 @@ const USER_AGENT =
 const DEVICE_NAME = 'windows,Chrome/131';
 const LOGIN_SCOPES = Object.freeze(['semesters', 'courses', 'course_notices', 'homework']);
 
-function safeError(code, stage) {
-  return createDirectCasError(code, stage);
+function safeError(code, stage, verification) {
+  return createDirectCasError(code, stage, verification);
 }
 
 function validateAllowedUrl(value) {
@@ -204,14 +204,14 @@ function extractLearnCsrfToken(learnHtml) {
   return candidates.values().next().value;
 }
 
-function captchaIsVisible(html) {
-  return visibleIdentityPage(html).captchaVisible;
-}
-
 function extractCasForm(html, pageUrl) {
   const source = String(html || '');
-  if (captchaIsVisible(source)) {
-    throw safeError('cas_interactive_verification_required');
+  const visible = visibleIdentityPage(source);
+  if (visible.captchaVisible) {
+    throw safeError('cas_interactive_verification_required', undefined, {
+      kind: 'image_captcha',
+      indicators: visible.captchaIndicators,
+    });
   }
 
   const forms = [...source.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)];
@@ -630,7 +630,9 @@ function identityAttributesAreVisible(attributes) {
 
 function visibleIdentityPage(html) {
   const $ = load(String(html || ''));
-  $('script, style, template, noscript, iframe, object, embed, dialog:not([open])').remove();
+  $(
+    'script, style, template, noscript, iframe, object, embed, dialog:not([open]), input[type="hidden" i]',
+  ).remove();
   $('details:not([open])').each((_index, element) => {
     $(element)
       .contents()
@@ -645,8 +647,21 @@ function visibleIdentityPage(html) {
     String(value || '')
       .replace(/\s+/g, ' ')
       .trim();
+  const captchaIndicators = [];
+  if ($('#c_code').length) captchaIndicators.push('visible_image_captcha_container');
+  if ($('input[name="i_captcha"], input#i_code').length)
+    captchaIndicators.push('visible_image_captcha_input');
   return {
-    captchaVisible: $('#c_code').length > 0,
+    captchaVisible: captchaIndicators.length > 0,
+    captchaIndicators,
+    otpVisible: $('input[autocomplete]')
+      .toArray()
+      .some((input) =>
+        String(input.attribs.autocomplete || '')
+          .toLowerCase()
+          .split(/\s+/)
+          .includes('one-time-code'),
+      ),
     noteText: plain($('#c_note').text()),
     text: plain($.root().text()),
   };
@@ -656,13 +671,29 @@ function classifyIdentityPage(html) {
   const source = String(html || '');
   const visible = visibleIdentityPage(source);
   if (visible.captchaVisible) {
-    return safeError('cas_interactive_verification_required');
+    return safeError('cas_interactive_verification_required', undefined, {
+      kind: 'image_captcha',
+      indicators: visible.captchaIndicators,
+    });
   }
   if (/\bBAD_CREDENTIALS\b/.test(source) || /用户名或密码|账号或密码/.test(visible.noteText)) {
     return safeError('cas_credentials_rejected');
   }
-  if (/短信验证码|动态口令|二次认证|二次验证|双重认证|多因子认证|安全验证/.test(visible.text)) {
-    return safeError('cas_interactive_verification_required');
+  const indicators = [];
+  if (/短信验证码|动态口令|二次认证|二次验证|双重认证|多因子认证/.test(visible.text))
+    indicators.push('visible_interactive_prompt');
+  if (visible.otpVisible) indicators.push('visible_otp_input');
+  if (indicators.length) {
+    return safeError('cas_interactive_verification_required', undefined, {
+      kind: 'interactive',
+      indicators,
+    });
+  }
+  if (/安全验证/.test(visible.text)) {
+    return safeError('cas_interactive_verification_required', undefined, {
+      kind: 'unclassified',
+      indicators: ['visible_verification_prompt'],
+    });
   }
   return safeError('cas_identity_response_unrecognized', 'credential_submit');
 }

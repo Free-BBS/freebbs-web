@@ -53,6 +53,7 @@ async function main() {
   let browser;
   let page;
   let stage = 'start';
+  let verification;
   try {
     for (const version of [GUIDE_VERSION, LATEST_RELEASE.id]) {
       const response = await fetch(`${origin}/api/onboarding`, {
@@ -125,6 +126,7 @@ async function main() {
             message: 'Fictional verification challenge',
             code: 'cas_interactive_verification_required',
             stage: 'credential_submit',
+            ...(verification ? { verification } : {}),
             recovery: {
               action: 'official_verification',
               officialUrl: official,
@@ -158,9 +160,45 @@ async function main() {
     const dialog = id('dialog');
     const recovery = id('recovery');
 
+    const verificationCases = [
+      {
+        kind: 'image_captcha',
+        label: '图形验证码',
+        expectedMessage: /出现图形验证码/,
+        indicators: ['visible_image_captcha_container', 'visible_image_captcha_input'],
+      },
+      {
+        kind: 'interactive',
+        label: '交互验证',
+        expectedMessage: /额外的交互验证/,
+        indicators: ['visible_interactive_prompt', 'visible_otp_input'],
+      },
+      {
+        kind: 'unclassified',
+        label: '验证类型未判别',
+        expectedMessage: /未能判别具体类型/,
+        indicators: ['visible_verification_prompt'],
+      },
+      { label: '验证类型未判别', expectedMessage: /未能判别具体类型/, indicators: [] },
+    ];
+    let verificationIndex = 0;
     for (const theme of ['light', 'dark']) {
       for (const width of [1440, 390]) {
-        stage = `MFA recovery ${theme}/${width}`;
+        const currentVerification = verificationCases[verificationIndex];
+        verificationIndex += 1;
+        verification = currentVerification.kind
+          ? {
+              kind: currentVerification.kind,
+              indicators: [
+                ...currentVerification.indicators,
+                ...currentVerification.indicators,
+                'https://untrusted.example/?otp=123456',
+                '<input value="secret">',
+              ],
+              inputValue: 'secret',
+            }
+          : undefined;
+        stage = `verification ${currentVerification.kind || 'legacy'} recovery ${theme}/${width}`;
         await page.setViewportSize({ width, height: 1000 });
         await page.evaluate((mode) => {
           if (document.body.classList.contains('theme-light') !== (mode === 'light'))
@@ -188,6 +226,9 @@ async function main() {
         assert.equal(await id('close').isEnabled(), true);
         assert.match(await recovery.innerText(), /当前直连暂不能接续/);
         assert.match(await recovery.innerText(), /不代表本站会自动获得该登录状态/);
+        assert.equal(await id('recovery-title').innerText(), '需要额外验证');
+        assert.match(await id('status').innerText(), currentVerification.expectedMessage);
+        assert.doesNotMatch(await id('status').innerText(), /二次验证/);
         assert.doesNotMatch(await id('status').innerText(), /cas_interactive|credential_submit/);
         assert.ok(await recovery.locator('details').count(), 'diagnosis is optional disclosure');
         assert.match(
@@ -195,6 +236,16 @@ async function main() {
           /cas_interactive_verification_required/,
         );
         assert.match(await recovery.locator('code').textContent(), /credential_submit/);
+        assert.equal(
+          await recovery.locator('code').textContent(),
+          [
+            currentVerification.label,
+            'cas_interactive_verification_required',
+            'credential_submit',
+            ...currentVerification.indicators,
+          ].join(' · '),
+        );
+        assert.doesNotMatch(await recovery.innerText(), /untrusted|123456|secret|<input/);
         for (const url of [official, learn, help]) {
           const link = recovery.locator(`a[href="${url}"]`);
           assert.equal(await link.count(), 1, `fixed official link: ${url}`);
@@ -223,7 +274,12 @@ async function main() {
         const detail = `recovery-region-${theme}-${width}.png`;
         await recovery.screenshot({ path: path.join(output, detail) });
         report.screenshots.push(name, detail);
-        report.layouts.push({ theme, width, ...layout });
+        report.layouts.push({
+          theme,
+          width,
+          verificationKind: currentVerification.kind || 'legacy_unclassified',
+          ...layout,
+        });
         const gets = report.statusGets;
         await id('recheck').click();
         await page.waitForFunction(() =>
@@ -237,6 +293,11 @@ async function main() {
         assert.equal(await recovery.isVisible(), true);
         await id('cancel').click();
         await dialog.waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+          () =>
+            document.getElementById('workbench-campus-login-status').textContent === '' &&
+            document.getElementById('workbench-campus-login-recovery').hidden,
+        );
         assert.equal(await recovery.isVisible(), false);
         assert.equal(await id('status').innerText(), '');
         assert.equal(await id('password').inputValue(), '');
@@ -244,6 +305,7 @@ async function main() {
     }
     report.checks.push(
       'Four layouts: actual 409 recovery, fixed official/help links, optional diagnosis, clear secrets, no retry, usable close',
+      'Image captcha, interactive challenge, unclassified challenge and legacy missing metadata remain distinct; diagnostic payload strings are allowlisted',
       'Existing in-memory calendar and rendered event survive failed reconnection and dialog exit',
       'Manual return check only GETs the local connection; reports an existing grant without claiming a new shared school session',
     );

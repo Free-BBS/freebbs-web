@@ -95,6 +95,15 @@ async function ensureTeacherAccountTables(pool) {
 }
 
 function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }) {
+  async function lockWhitelist(connection) {
+    // Registration and imports take this lock before locking or creating users.
+    const [[state]] = await connection.execute(
+      'SELECT id FROM registration_whitelist_state WHERE id = 1 FOR UPDATE',
+    );
+    if (!state)
+      throw accountError(503, 'identity_whitelist_unavailable', '身份核验暂时不可用，请稍后重试');
+  }
+
   async function transaction(work) {
     const connection = await pool.getConnection();
     try {
@@ -129,6 +138,51 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     ) {
       throw accountError(401, 'current_password_wrong', '当前密码错误');
     }
+  }
+
+  async function bindWhitelistedStudent(connection, user, studentId) {
+    const email = String(user.email || '')
+      .trim()
+      .toLowerCase();
+    if (
+      user.student_id ||
+      !user.email_verified_at ||
+      !/^[^\s@]+@(?:tsinghua\.edu\.cn|mails\.tsinghua\.edu\.cn)$/.test(email) ||
+      !/^20\d{8}$/.test(studentId)
+    )
+      return false;
+    // Registration allows partially specified rows. Those wildcard permissions
+    // are not proof that this mailbox belongs to this particular student number.
+    const [entries] = await connection.execute(
+      `SELECT id, claimed_user_id FROM registration_whitelist
+       WHERE active = 1 AND student_id IS NOT NULL AND email IS NOT NULL
+         AND BINARY student_id = BINARY ? AND BINARY email = BINARY ?
+         AND (full_name IS NULL OR BINARY full_name = BINARY ?)
+       ORDER BY id FOR UPDATE`,
+      [studentId, email, String(user.full_name || '').trim()],
+    );
+    if (
+      !entries.length ||
+      entries.some(
+        (entry) =>
+          entry.claimed_user_id != null && String(entry.claimed_user_id) !== String(user.id),
+      )
+    )
+      return false;
+    const [[taken]] = await connection.execute(
+      'SELECT id FROM users WHERE student_id = ? AND id <> ? LIMIT 1',
+      [studentId, user.id],
+    );
+    if (taken) return false;
+    await connection.execute('UPDATE users SET student_id = ? WHERE id = ?', [studentId, user.id]);
+    await connection.execute(
+      `UPDATE registration_whitelist SET claimed_user_id = ?,
+       claimed_at = COALESCE(claimed_at, CURRENT_TIMESTAMP)
+       WHERE id IN (${entries.map(() => '?').join(', ')})
+         AND (claimed_user_id IS NULL OR claimed_user_id = ?)`,
+      [user.id, ...entries.map((entry) => entry.id), user.id],
+    );
+    return true;
   }
 
   async function issueCode(connection, user, email, purpose) {
@@ -239,6 +293,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
   async function bindEmail(userId, body = {}) {
     const email = normalizeEmail(body.email);
     const result = await transaction(async (connection) => {
+      await lockWhitelist(connection);
       const user = await lockUser(connection, userId);
       await checkPassword(user, body.currentPassword);
       const error = await consumeCode(connection, userId, email, 'bind_email', body.emailCode);
@@ -253,16 +308,35 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
         'UPDATE account_identity_codes SET used_at = ? WHERE user_id = ? AND used_at IS NULL',
         [new Date(now()), userId],
       );
+      const [[pending]] = await connection.execute(
+        'SELECT student_id, status FROM account_student_requests WHERE user_id = ? FOR UPDATE',
+        [userId],
+      );
+      if (pending?.status === 'pending') {
+        const bound = await bindWhitelistedStudent(
+          connection,
+          { ...user, email, email_verified_at: new Date(now()) },
+          pending.student_id,
+        );
+        if (bound)
+          await connection.execute(
+            "UPDATE account_student_requests SET status = 'approved', reviewed_at = ?, reviewed_by = NULL WHERE user_id = ?",
+            [new Date(now()), userId],
+          );
+        return { studentBinding: { status: bound ? 'bound' : 'pending' } };
+      }
       return {};
     });
     if (result.error) throw result.error;
+    return result;
   }
 
   async function requestStudentId(userId, body = {}) {
     const studentId = String(body.studentId || '').trim();
     if (!/^20\d{8}$/.test(studentId))
       throw accountError(400, 'invalid_student_id', '学号须为 20 开头的 10 位数字');
-    await transaction(async (connection) => {
+    return transaction(async (connection) => {
+      await lockWhitelist(connection);
       const user = await lockUser(connection, userId);
       await checkPassword(user, body.currentPassword);
       if (user.student_id === studentId)
@@ -272,12 +346,21 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
         [studentId, userId],
       );
       if (taken) throw accountError(409, 'student_id_taken', '该学号已被其他账号绑定');
+      const bound = await bindWhitelistedStudent(connection, user, studentId);
       await connection.execute(
-        `INSERT INTO account_student_requests (user_id, student_id, status, requested_at)
-         VALUES (?, ?, 'pending', ?) ON DUPLICATE KEY UPDATE student_id = VALUES(student_id),
-         status = 'pending', requested_at = VALUES(requested_at), reviewed_at = NULL, reviewed_by = NULL`,
-        [userId, studentId, new Date(now())],
+        `INSERT INTO account_student_requests (user_id, student_id, status, requested_at, reviewed_at, reviewed_by)
+         VALUES (?, ?, ?, ?, ?, NULL) ON DUPLICATE KEY UPDATE student_id = VALUES(student_id),
+         status = VALUES(status), requested_at = VALUES(requested_at),
+         reviewed_at = VALUES(reviewed_at), reviewed_by = NULL`,
+        [
+          userId,
+          studentId,
+          bound ? 'approved' : 'pending',
+          new Date(now()),
+          bound ? new Date(now()) : null,
+        ],
       );
+      return { status: bound ? 'bound' : 'pending' };
     });
   }
 
@@ -457,12 +540,26 @@ function createTeacherAccountsRouter({
     response.json({ message: '验证码已发送，10 分钟内有效' });
   });
   route('patch', '/profile/email', requireAuth, async (request, response, user) => {
-    await service.bindEmail(user.id, request.body);
-    response.json({ message: '邮箱已验证并绑定', user: toUserProfile(await getUserById(user.id)) });
+    const result = await service.bindEmail(user.id, request.body);
+    response.json({
+      message:
+        result?.studentBinding?.status === 'bound'
+          ? '邮箱已验证，匹配白名单的学号已自动绑定'
+          : '邮箱已验证并绑定',
+      ...(result?.studentBinding ? { studentBinding: result.studentBinding } : {}),
+      user: toUserProfile(await getUserById(user.id)),
+    });
   });
   route('post', '/profile/student-id', requireAuth, async (request, response, user) => {
-    await service.requestStudentId(user.id, request.body);
-    response.json({ message: '学号申请已提交，请联系管理员核实姓名与学号归属后完成绑定' });
+    const result = await service.requestStudentId(user.id, request.body);
+    const bound = result?.status === 'bound';
+    response.json({
+      status: bound ? 'bound' : 'pending',
+      message: bound
+        ? '学号已自动绑定'
+        : '学号申请已提交，请联系管理员核实姓名与学号归属后完成绑定',
+      ...(bound ? { user: toUserProfile(await getUserById(user.id)) } : {}),
+    });
   });
   route('get', '/admin/student-id-requests', requireAdmin, async (_request, response) =>
     response.json({ requests: await service.pendingStudentRequests() }),

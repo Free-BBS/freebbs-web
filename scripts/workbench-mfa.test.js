@@ -31,6 +31,7 @@ test('recovery uses fixed official links, explains isolated sessions and never r
     /id="workbench-campus-login-official"[^>]*href="https:\/\/id\.tsinghua\.edu\.cn\/do\/off\/ui\/auth\/login"/,
   );
   assert.match(html, /另开页面完成验证，不代表本站会自动获得该登录状态/);
+  assert.match(html, /id="workbench-campus-login-recovery-title">需要额外验证<\/h3>/);
   assert.doesNotMatch(controller, /document\.cookie|localStorage|sessionStorage/);
 });
 
@@ -210,6 +211,9 @@ for (const code of ['cas_interactive_verification_required', 'interactive_verifi
     );
     await submission;
     f.drain();
+    assert.match(f.node('login-status').textContent, /未能判别具体类型/);
+    assert.doesNotMatch(f.node('login-status').textContent, /二次验证/);
+    assert.match(f.node('login-diagnostic').textContent, /验证类型未判别/);
     assert.equal(f.node('login-recovery').hidden, false);
     assert.equal(f.node('login-password').value, '');
     assert.equal(f.node('login-consent').checked, false);
@@ -228,6 +232,80 @@ for (const code of ['cas_interactive_verification_required', 'interactive_verifi
     assert.equal(f.node('login-recovery').hidden, true);
     await f.open();
     assert.equal(f.node('login-submit').disabled, false);
+  });
+}
+
+for (const scenario of [
+  {
+    kind: 'image_captcha',
+    label: '图形验证码',
+    message: /出现图形验证码/,
+    indicators: ['visible_image_captcha_container', 'visible_image_captcha_input'],
+  },
+  {
+    kind: 'interactive',
+    label: '交互验证',
+    message: /额外的交互验证/,
+    indicators: ['visible_interactive_prompt', 'visible_otp_input'],
+  },
+  {
+    kind: 'unclassified',
+    label: '验证类型未判别',
+    message: /未能判别具体类型/,
+    indicators: ['visible_verification_prompt'],
+  },
+  {
+    kind: 'unknown_type_with_secret',
+    label: '验证类型未判别',
+    message: /未能判别具体类型/,
+    indicators: ['visible_otp_input'],
+  },
+]) {
+  test(`verification ${scenario.kind}: honest typed message and fixed diagnostics without upstream details`, async () => {
+    const f = await fixture();
+    await f.open();
+    f.fill();
+    const submission = f.fire('login-form', 'submit');
+    await flush();
+    f.direct()[0].reject(
+      Object.assign(new Error('secret-password 123456 upstream HTML'), {
+        code: 'cas_interactive_verification_required',
+        stage: 'https://untrusted.example/?secret=123456',
+        verification: {
+          kind: scenario.kind,
+          indicators: [
+            ...scenario.indicators,
+            ...scenario.indicators,
+            '<input value="secret-password">',
+            'https://untrusted.example/',
+            null,
+            { value: '123456' },
+          ],
+          inputValue: 'secret-password',
+          html: 'upstream HTML',
+        },
+      }),
+    );
+    await submission;
+    f.drain();
+    assert.match(f.node('login-status').textContent, scenario.message);
+    assert.doesNotMatch(f.node('login-status').textContent, /二次验证/);
+    assert.equal(
+      f.node('login-diagnostic').textContent,
+      [scenario.label, 'cas_interactive_verification_required', ...scenario.indicators].join(' · '),
+    );
+    assert.doesNotMatch(
+      f.node('login-status').textContent + f.node('login-diagnostic').textContent,
+      /secret|123456|upstream|https:|unknown_type|<input/,
+    );
+    assert.equal(f.node('login-recovery').hidden, false);
+    assert.equal(f.node('login-password').value, '');
+    assert.equal(f.node('login-consent').checked, false);
+    assert.equal(f.node('login-submit').disabled, true);
+    assert.equal(f.node('login-close').disabled, false);
+    f.fill('do-not-resubmit');
+    await f.fire('login-form', 'submit');
+    assert.equal(f.direct().length, 1);
   });
 }
 

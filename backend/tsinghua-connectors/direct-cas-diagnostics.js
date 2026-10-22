@@ -13,6 +13,17 @@ const DIRECT_CAS_STAGES = Object.freeze([
   'internal',
 ]);
 const DIRECT_CAS_STAGE_SET = new Set(DIRECT_CAS_STAGES);
+const VERIFICATION_CODES = new Set([
+  'cas_interactive_verification_required',
+  'interactive_verification_required',
+]);
+const VERIFICATION_INDICATORS = Object.freeze([
+  'visible_image_captcha_container',
+  'visible_image_captcha_input',
+  'visible_interactive_prompt',
+  'visible_otp_input',
+  'visible_verification_prompt',
+]);
 
 const DIRECT_CAS_ERRORS = Object.freeze({
   cas_configuration_invalid: Object.freeze({
@@ -36,7 +47,7 @@ const DIRECT_CAS_ERRORS = Object.freeze({
     stage: 'credential_encrypt',
   }),
   cas_interactive_verification_required: Object.freeze({
-    message: '本次登录需要在清华认证页面完成验证码或二次验证。',
+    message: '清华认证返回了需要进一步验证的页面。',
     status: 409,
     stage: 'credential_submit',
   }),
@@ -154,13 +165,72 @@ function isDirectCasErrorCode(value) {
   return typeof value === 'string' && Object.hasOwn(DIRECT_CAS_ERRORS, value);
 }
 
-function createDirectCasError(code, stage) {
+function ownValue(value, key) {
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return undefined;
+  return Object.getOwnPropertyDescriptor(value, key)?.value;
+}
+
+function normalizeVerification(value) {
+  // Never copy page text, arbitrary input names, URLs, values or adapter diagnostics.
+  const indicators = [];
+  let kind = 'unclassified';
+  try {
+    const supplied = ownValue(value, 'indicators');
+    const safe = new Set();
+    if (Array.isArray(supplied)) {
+      for (let index = 0; index < Math.min(supplied.length, 32); index += 1) {
+        const indicator = ownValue(supplied, String(index));
+        if (typeof indicator === 'string' && VERIFICATION_INDICATORS.includes(indicator))
+          safe.add(indicator);
+      }
+    }
+    indicators.push(...VERIFICATION_INDICATORS.filter((indicator) => safe.has(indicator)));
+    const proposed = ownValue(value, 'kind');
+    if (
+      proposed === 'image_captcha' &&
+      indicators.some((indicator) => indicator.startsWith('visible_image_captcha_'))
+    )
+      kind = 'image_captcha';
+    else if (
+      proposed === 'interactive' &&
+      indicators.some((indicator) =>
+        ['visible_interactive_prompt', 'visible_otp_input'].includes(indicator),
+      )
+    )
+      kind = 'interactive';
+  } catch {
+    // An unexpected accessor/proxy must not become a response leak or a new failure.
+    indicators.length = 0;
+  }
+  return Object.freeze({ kind, indicators: Object.freeze(indicators) });
+}
+
+function readDirectCasVerification(error) {
+  if (!VERIFICATION_CODES.has(ownValue(error, 'code'))) return null;
+  return normalizeVerification(ownValue(error, 'verification'));
+}
+
+function attachDirectCasVerification(error, verification) {
+  if (!VERIFICATION_CODES.has(ownValue(error, 'code'))) return error;
+  Object.defineProperty(error, 'verification', {
+    configurable: true,
+    enumerable: false,
+    value: normalizeVerification(verification),
+    writable: false,
+  });
+  return error;
+}
+
+function createDirectCasError(code, stage, verification) {
   const safeCode = isDirectCasErrorCode(code) ? code : 'cas_internal_error';
   const definition = DIRECT_CAS_ERRORS[safeCode];
   const error = new CampusConnectorError(safeCode, definition.message, {
     status: definition.status,
   });
-  return attachDirectCasStage(error, stage, definition.stage);
+  return attachDirectCasVerification(
+    attachDirectCasStage(error, stage, definition.stage),
+    verification,
+  );
 }
 
 function directCasRecovery(code) {
@@ -184,9 +254,11 @@ module.exports = {
   DIRECT_CAS_ERRORS,
   DIRECT_CAS_STAGES,
   attachDirectCasStage,
+  attachDirectCasVerification,
   createDirectCasError,
   directCasRecovery,
   isDirectCasErrorCode,
   normalizeDirectCasStage,
   readDirectCasStage,
+  readDirectCasVerification,
 };

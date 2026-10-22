@@ -8,6 +8,7 @@ const test = require('node:test');
 const express = require('express');
 const mysql = require('mysql2/promise');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+const { ensureRegistrationWhitelistTables } = require('./registration-whitelist');
 const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
 const {
   hashCode,
@@ -95,6 +96,7 @@ test(
     );
     await ensureTeacherAccountTables(pool);
     await ensureTeacherAccountTables(pool);
+    await ensureRegistrationWhitelistTables(pool);
     await ensureUsernameChangeTables(pool);
     await ensurePrivacyPolicySchema(pool);
     const privacyPolicyService = createPrivacyPolicyService({ pool });
@@ -459,6 +461,45 @@ test(
     const password = 'initial-teacher-password';
     const code = (email, purpose = 'bind_email') =>
       delivered.findLast((item) => item.email === email && item.purpose === purpose).code;
+    const bindingUser = async (username, email, verified = true) => {
+      const created = await call('/admin/users', 1, {
+        ...teacherBody(username),
+        ...(email ? { email } : {}),
+      });
+      assert.equal(created.status, 201);
+      const { user } = created.body;
+      if (email && verified) {
+        assert.equal(
+          (await call('/profile/email-code', user.id, { email, currentPassword: password })).status,
+          200,
+        );
+        assert.equal(
+          (
+            await call(
+              '/profile/email',
+              user.id,
+              { email, currentPassword: password, emailCode: code(email) },
+              'PATCH',
+            )
+          ).status,
+          200,
+        );
+      }
+      return user;
+    };
+    const bindingPair = async ({
+      studentId,
+      email,
+      fullName = '测试教师',
+      active = 1,
+      claimedUserId = null,
+    }) => {
+      const [inserted] = await pool.execute(
+        'INSERT INTO registration_whitelist (fingerprint, student_id, full_name, email, active, claimed_user_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [crypto.randomBytes(32).toString('hex'), studentId, fullName, email, active, claimedUserId],
+      );
+      return inserted.insertId;
+    };
     await t.test(
       'new Chinese nicknames are rejected while legacy Chinese and short accounts can recover and repair for free',
       async () => {
@@ -846,6 +887,236 @@ test(
         );
       },
     );
+    await t.test(
+      'verified explicit school mailbox pairs bind over HTTP without inventing an administrator approval',
+      async () => {
+        for (const [index, domain] of ['mails.tsinghua.edu.cn', 'tsinghua.edu.cn'].entries()) {
+          const email = `paired.alias.${index}@${domain}`;
+          const studentId = `202401080${index}`;
+          const user = await bindingUser(`auto_pair_${index}`, email);
+          const whitelistId = await bindingPair({ studentId, email });
+          const result = await call('/profile/student-id', user.id, {
+            studentId,
+            currentPassword: password,
+            role: 'admin',
+            emailVerified: true,
+          });
+          assert.equal(result.status, 200);
+          assert.equal(result.body.status, 'bound');
+          assert.equal(result.body.user.studentId, studentId);
+          assert.equal(result.body.user.role, 'teacher');
+          assert.equal(result.body.user.isAdmin, false);
+          const [[request]] = await pool.execute(
+            'SELECT * FROM account_student_requests WHERE user_id = ?',
+            [user.id],
+          );
+          assert.equal(request.status, 'approved');
+          assert.equal(request.reviewed_by, null);
+          const [[entry]] = await pool.execute(
+            'SELECT claimed_user_id FROM registration_whitelist WHERE id = ?',
+            [whitelistId],
+          );
+          assert.equal(Number(entry.claimed_user_id), user.id);
+          assert.equal((await call('/profile/identity', user.id)).body.studentId, studentId);
+          assert.equal(
+            (await call('/admin/student-id-requests', 1)).body.requests.some(
+              (item) => Number(item.userId) === user.id,
+            ),
+            false,
+          );
+        }
+      },
+    );
+
+    await t.test(
+      'unverified, unpaired, wildcard, previously claimed and different-existing identities stay pending',
+      async () => {
+        const scenarios = [
+          { verified: false },
+          { domain: 'example.test' },
+          { domain: 'sub.tsinghua.edu.cn' },
+          { pair: { email: null } },
+          { pair: { studentId: null } },
+          { pair: { fullName: '不同姓名' } },
+          { pair: { active: 0 } },
+          { pair: { claimedUserId: 1 } },
+          { existing: '2023010898' },
+        ];
+        for (const [index, scenario] of scenarios.entries()) {
+          const email = `pending.alias.${index}@${scenario.domain || 'mails.tsinghua.edu.cn'}`;
+          const studentId = `202401081${index}`;
+          const user = await bindingUser(
+            `manual_pair_${index}`,
+            email,
+            scenario.verified !== false,
+          );
+          if (scenario.existing)
+            await pool.execute('UPDATE users SET student_id = ? WHERE id = ?', [
+              scenario.existing,
+              user.id,
+            ]);
+          const whitelistId = await bindingPair({ studentId, email, ...scenario.pair });
+          const result = await call('/profile/student-id', user.id, {
+            studentId,
+            currentPassword: password,
+            emailVerified: true,
+          });
+          assert.equal(result.status, 200);
+          assert.equal(result.body.status, 'pending', JSON.stringify(scenario));
+          assert.equal(result.body.user, undefined);
+          assert.equal((await getUserById(user.id)).student_id, scenario.existing || null);
+          const [[request]] = await pool.execute(
+            'SELECT status, reviewed_by FROM account_student_requests WHERE user_id = ?',
+            [user.id],
+          );
+          assert.equal(request.status, 'pending');
+          assert.equal(request.reviewed_by, null);
+          const [[entry]] = await pool.execute(
+            'SELECT claimed_user_id FROM registration_whitelist WHERE id = ?',
+            [whitelistId],
+          );
+          assert.equal(
+            entry.claimed_user_id == null ? null : Number(entry.claimed_user_id),
+            scenario.pair?.claimedUserId || null,
+          );
+        }
+      },
+    );
+
+    await t.test(
+      'a pending explicit number completes after OTP mailbox binding and retains its original request time',
+      async () => {
+        const email = 'later.alias@mails.tsinghua.edu.cn';
+        const studentId = '2024010830';
+        const user = await bindingUser('later_verified_pair', null);
+        await bindingPair({ studentId, email });
+        const applied = await call('/profile/student-id', user.id, {
+          studentId,
+          currentPassword: password,
+        });
+        assert.equal(applied.body.status, 'pending');
+        const [[before]] = await pool.execute(
+          'SELECT requested_at FROM account_student_requests WHERE user_id = ?',
+          [user.id],
+        );
+        assert.equal(
+          (await call('/profile/email-code', user.id, { email, currentPassword: password })).status,
+          200,
+        );
+        const bound = await call(
+          '/profile/email',
+          user.id,
+          { email, currentPassword: password, emailCode: code(email) },
+          'PATCH',
+        );
+        assert.equal(bound.status, 200);
+        assert.equal(bound.body.studentBinding.status, 'bound');
+        assert.equal(bound.body.user.studentId, studentId);
+        const [[after]] = await pool.execute(
+          'SELECT status, requested_at, reviewed_by FROM account_student_requests WHERE user_id = ?',
+          [user.id],
+        );
+        assert.equal(after.status, 'approved');
+        assert.deepEqual(after.requested_at, before.requested_at);
+        assert.equal(after.reviewed_by, null);
+      },
+    );
+
+    await t.test(
+      'concurrent explicit-pair claims serialize and preserve the losing mailbox and whitelist row',
+      async () => {
+        const studentId = '2024010840';
+        const users = [];
+        const rows = [];
+        for (const index of [0, 1]) {
+          const email = `competing.alias.${index}@mails.tsinghua.edu.cn`;
+          users.push(await bindingUser(`competing_pair_${index}`, email));
+          rows.push(await bindingPair({ studentId, email }));
+        }
+        const results = await Promise.all(
+          users.map((user) =>
+            call('/profile/student-id', user.id, { studentId, currentPassword: password }),
+          ),
+        );
+        assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+        const winner = results.findIndex((result) => result.status === 200);
+        assert.equal(results[winner].body.status, 'bound');
+        for (const [index, user] of users.entries()) {
+          const stored = await getUserById(user.id);
+          assert.equal(stored.student_id, index === winner ? studentId : null);
+          const [[entry]] = await pool.execute(
+            'SELECT claimed_user_id FROM registration_whitelist WHERE id = ?',
+            [rows[index]],
+          );
+          assert.equal(
+            entry.claimed_user_id == null ? null : Number(entry.claimed_user_id),
+            index === winner ? user.id : null,
+          );
+        }
+      },
+    );
+
+    await t.test(
+      'an injected automatic-binding write conflict rolls back verified mailbox, OTP, number and whitelist ownership',
+      async () => {
+        const email = 'rollback.alias@mails.tsinghua.edu.cn';
+        const studentId = '2024010850';
+        const user = await bindingUser('rollback_verified_pair', null);
+        const whitelistId = await bindingPair({ studentId, email });
+        await call('/profile/student-id', user.id, { studentId, currentPassword: password });
+        await call('/profile/email-code', user.id, { email, currentPassword: password });
+        const emailCode = code(email);
+        observeQuery = async (sql, args) => {
+          if (
+            sql.startsWith('UPDATE registration_whitelist SET claimed_user_id') &&
+            Number(args[0]) === user.id
+          )
+            throw Object.assign(new Error('injected unique identity conflict after claim'), {
+              code: 'ER_DUP_ENTRY',
+            });
+        };
+        try {
+          const failed = await call(
+            '/profile/email',
+            user.id,
+            { email, currentPassword: password, emailCode },
+            'PATCH',
+          );
+          assert.equal(failed.status, 409);
+        } finally {
+          observeQuery = async () => {};
+        }
+        const stored = await getUserById(user.id);
+        assert.equal(stored.email, null);
+        assert.equal(stored.email_verified_at, null);
+        assert.equal(stored.student_id, null);
+        const [[otp]] = await pool.execute(
+          "SELECT used_at FROM account_identity_codes WHERE user_id = ? AND email = ? AND purpose = 'bind_email' ORDER BY id DESC LIMIT 1",
+          [user.id, email],
+        );
+        assert.equal(otp.used_at, null);
+        const [[entry]] = await pool.execute(
+          'SELECT claimed_user_id FROM registration_whitelist WHERE id = ?',
+          [whitelistId],
+        );
+        assert.equal(entry.claimed_user_id, null);
+        const [[request]] = await pool.execute(
+          'SELECT status, reviewed_by FROM account_student_requests WHERE user_id = ?',
+          [user.id],
+        );
+        assert.equal(request.status, 'pending');
+        assert.equal(request.reviewed_by, null);
+        const retry = await call(
+          '/profile/email',
+          user.id,
+          { email, currentPassword: password, emailCode },
+          'PATCH',
+        );
+        assert.equal(retry.status, 200);
+        assert.equal(retry.body.studentBinding.status, 'bound');
+      },
+    );
+
     await t.test(
       'verified-email password recovery isolates purposes and administrator reset requires proof',
       async () => {

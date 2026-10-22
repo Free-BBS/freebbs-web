@@ -438,6 +438,139 @@ test('completed student-id binding updates the automatic identity without anothe
   assert.equal(f.el.form.hidden, true);
 });
 
+test('binding the same account while its initial certification read is pending supersedes the old snapshot', async () => {
+  const initial = defer();
+  const latest = defer();
+  let reads = 0;
+  const f = await fixture('user', () => {
+    reads += 1;
+    return reads === 1 ? initial.promise : latest.promise;
+  });
+  const originalOwner = `${f.userState.uid}:${f.userState.token}`;
+  const user = { uid: f.userState.uid, studentId: '2026210001' };
+  f.userState.studentId = user.studentId;
+  f.host.dispatchEvent({ type: 'freebbs:session-change', detail: { user } });
+  f.host.dispatchEvent({ type: 'freebbs:identity-updated', detail: { user, status: 'bound' } });
+  assert.equal(`${f.userState.uid}:${f.userState.token}`, originalOwner);
+  assert.equal(reads, 2, 'the unchanged session must still fetch the newly bound identity');
+  initial.resolve({ approved: [education({ institution: '绑定前的旧快照' })], requests: [] });
+  await settle();
+  assert.equal(f.el.approved.children.length, 0);
+  assert.equal(f.el.refresh.disabled, true);
+  latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
+  await settle();
+  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
+  assert.equal(f.el.refresh.disabled, false);
+});
+
+test('a binding refresh preserves an unsent education draft and ignores a later stale manual read', async () => {
+  const stale = defer();
+  let reads = 0;
+  const f = await fixture('user', () => {
+    reads += 1;
+    if (reads === 2) return stale.promise;
+    return Promise.resolve({
+      approved: [],
+      requests: [],
+      suggestion: reads > 2 ? education({ education: 'master' }) : null,
+    });
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '尚未提交的博士院系';
+  f.el.year.value = '2024';
+  f.el.class.value = '草稿班级';
+  const refreshing = f.el.refresh.listeners.click();
+  f.host.dispatchEvent({
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  });
+  await settle();
+  assert.equal(reads, 3);
+  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  stale.resolve({ approved: [], requests: [], automatic: [] });
+  await refreshing;
+  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.kind.value, 'doctor');
+  assert.equal(f.el.institution.value, '尚未提交的博士院系');
+  assert.equal(f.el.year.value, '2024');
+  assert.equal(f.el.class.value, '草稿班级');
+  assert.equal(f.el.submit.disabled, false);
+});
+
+test('binding events during a failed certification submission coalesce into a fresh read without losing its draft', async () => {
+  const post = defer();
+  let reads = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) {
+      await post.promise;
+      throw new Error('暂时无法提交');
+    }
+    reads += 1;
+    return {
+      approved: [],
+      requests: [],
+      suggestion: reads > 1 ? education({ education: 'master' }) : null,
+    };
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '需要保留的博士院系';
+  f.el.year.value = '2025';
+  const submit = f.el.form.listeners.submit({ preventDefault() {} });
+  const binding = {
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  };
+  f.host.dispatchEvent(binding);
+  f.host.dispatchEvent(binding);
+  assert.equal(reads, 1, 'a submission defers certification refreshes until it settles');
+  post.resolve();
+  await submit;
+  await settle();
+  assert.equal(reads, 2, 'queued identity changes need one current read');
+  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.message.textContent, /暂时无法提交/);
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.kind.value, 'doctor');
+  assert.equal(f.el.institution.value, '需要保留的博士院系');
+  assert.equal(f.el.year.value, '2025');
+  assert.equal(f.el.submit.disabled, false);
+});
+
+test('binding during the read after submission invalidates that snapshot and drains the queued identity refresh', async () => {
+  const stale = defer();
+  const latest = defer();
+  let reads = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) return { message: '经历申请已提交' };
+    reads += 1;
+    if (reads === 2) return stale.promise;
+    if (reads === 3) return latest.promise;
+    return { approved: [], requests: [] };
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '已提交的博士院系';
+  f.el.year.value = '2025';
+  const submit = f.el.form.listeners.submit({ preventDefault() {} });
+  await settle();
+  assert.equal(reads, 2);
+  f.host.dispatchEvent({
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  });
+  stale.resolve({ approved: [education({ institution: '绑定前的旧快照' })], requests: [] });
+  await submit;
+  assert.equal(reads, 3);
+  assert.equal(f.el.approved.children.length, 0);
+  latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
+  await settle();
+  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
+  assert.equal(f.el.message.textContent, '经历申请已提交');
+  assert.equal(f.el.refresh.disabled, false);
+});
+
 const adminPayload = (requests) => ({ requests, total: requests.length, page: 1, pageSize: 30 });
 
 test('verified teacher deep link shows one compact identity and no repeated update form', async () => {

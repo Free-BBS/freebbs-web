@@ -8,6 +8,7 @@ const test = require('node:test');
 const express = require('express');
 const mysql = require('mysql2/promise');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+const { ensureRegistrationWhitelistTables } = require('./registration-whitelist');
 const { ensureNotificationTables, createNotificationService } = require('./notifications');
 const {
   normalizeAdminAccount,
@@ -65,6 +66,7 @@ test(
     await ensureUserCertificationTables(pool);
     await ensureUserCertificationTables(pool);
     await ensureTeacherAccountTables(pool);
+    await ensureRegistrationWhitelistTables(pool);
     await ensureNotificationTables(pool);
     await ensureUsernameChangeTables(pool);
     await ensurePrivacyPolicySchema(pool);

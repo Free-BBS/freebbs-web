@@ -13,10 +13,31 @@
   let cooldown = 0;
   let timer;
   let externalSessionChanged = false;
+  let generation = 0;
+  let loadTicket = 0;
+  function storedSessionMatches() {
+    try {
+      return (
+        typeof window.localStorage?.getItem !== 'function' ||
+        window.localStorage.getItem('free_bbs_auth_token') === app.userState.token
+      );
+    } catch {
+      return false;
+    }
+  }
   const session = () =>
-    !externalSessionChanged && app.userState.isLoggedIn
+    !externalSessionChanged &&
+    storedSessionMatches() &&
+    app.userState.isLoggedIn &&
+    app.userState.uid &&
+    app.userState.token
       ? `${app.userState.uid}:${app.userState.token}`
       : '';
+  const owns = (current, version) => current && current === session() && version === generation;
+  function updateIdentity(payload) {
+    if (!payload.user || payload.user.uid !== app.userState.uid) return;
+    window.dispatchEvent(new CustomEvent('freebbs:identity-updated', { detail: payload }));
+  }
 
   function render() {
     root.querySelectorAll('input,button').forEach((field) => {
@@ -31,9 +52,12 @@
   async function load() {
     const current = session();
     if (!current) return;
+    const version = generation;
+    loadTicket += 1;
+    const ticket = loadTicket;
     try {
       const identity = await app.callApi('/profile/identity');
-      if (current !== session()) return;
+      if (!owns(current, version) || ticket !== loadTicket) return;
       const pending = identity.studentRequest;
       status.textContent = [
         identity.email
@@ -50,24 +74,25 @@
         .join(' · ');
       if (!emailForm.elements.email.value) emailForm.elements.email.value = identity.email;
     } catch (error) {
-      if (current === session()) status.textContent = error.message;
+      if (owns(current, version) && ticket === loadTicket) status.textContent = error.message;
     }
   }
   async function run(message, work) {
     if (busy || !session()) return;
     const current = session();
+    const version = generation;
     busy = true;
     message.textContent = '处理中…';
     render();
     try {
-      const payload = await work();
-      if (current !== session()) return;
+      const payload = await work(current, version);
+      if (!owns(current, version)) return;
       message.textContent = payload.message;
       await load();
     } catch (error) {
-      if (current === session()) message.textContent = error.message;
+      if (owns(current, version)) message.textContent = error.message;
     } finally {
-      if (current === session()) {
+      if (owns(current, version)) {
         busy = false;
         render();
       }
@@ -79,8 +104,7 @@
       !emailForm.elements.currentPassword.reportValidity()
     )
       return;
-    const current = session();
-    run(emailMessage, async () => {
+    run(emailMessage, async (current, version) => {
       const payload = await app.callApi('/profile/email-code', {
         method: 'POST',
         body: JSON.stringify({
@@ -88,7 +112,7 @@
           currentPassword: emailForm.elements.currentPassword.value,
         }),
       });
-      if (current === session()) {
+      if (owns(current, version)) {
         cooldown = Date.now() + 60000;
         window.clearInterval(timer);
         timer = window.setInterval(() => {
@@ -101,30 +125,31 @@
   });
   emailForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    const current = session();
     const body = Object.fromEntries(new FormData(emailForm));
-    run(emailMessage, async () => {
+    run(emailMessage, async (current, version) => {
       const payload = await app.callApi('/profile/email', {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
-      if (current !== session()) return payload;
+      if (!owns(current, version)) return payload;
       emailForm.elements.currentPassword.value = '';
       emailForm.elements.emailCode.value = '';
-      window.dispatchEvent(new CustomEvent('freebbs:identity-updated', { detail: payload }));
+      updateIdentity(payload);
       return payload;
     });
   });
   studentForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    const current = session();
     const body = Object.fromEntries(new FormData(studentForm));
-    run(studentMessage, async () => {
+    run(studentMessage, async (current, version) => {
       const payload = await app.callApi('/profile/student-id', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      if (current === session()) studentForm.elements.currentPassword.value = '';
+      if (owns(current, version)) {
+        studentForm.elements.currentPassword.value = '';
+        if (payload.status === 'bound') updateIdentity(payload);
+      }
       return payload;
     });
   });
@@ -132,6 +157,8 @@
     const current = session();
     if (current === owner) return;
     owner = current;
+    generation += 1;
+    loadTicket += 1;
     busy = false;
     emailForm.reset();
     studentForm.reset();
@@ -154,9 +181,12 @@
     }
   });
   window.addEventListener('pagehide', () => {
-    emailForm.reset();
-    studentForm.reset();
-    window.clearInterval(timer);
+    externalSessionChanged = true;
+    sync();
+  });
+  window.addEventListener('pageshow', () => {
+    externalSessionChanged = false;
+    sync();
   });
   Promise.resolve(app.sessionReady).then(sync);
   render();

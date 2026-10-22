@@ -720,6 +720,109 @@ test('captcha containers hidden by attributes, CSS or an ancestor do not block t
   assert.ok(extractCasForm(ancestorHidden, CAS_URL));
 });
 
+test('visible verification diagnostics distinguish image, interactive and ambiguous pages without copying page data', async () => {
+  const fixtures = [
+    {
+      body: '<div id="c_code"><input name="i_captcha" value="private-code"></div>',
+      expected: {
+        kind: 'image_captcha',
+        indicators: ['visible_image_captcha_container', 'visible_image_captcha_input'],
+      },
+    },
+    {
+      body: '<form><input id="i_code" value="private-code"></form>',
+      expected: { kind: 'image_captcha', indicators: ['visible_image_captcha_input'] },
+    },
+    {
+      body: '<h2>二次验证</h2><label>短信验证码<input name="private-field-name" value="private-code"></label>',
+      expected: { kind: 'interactive', indicators: ['visible_interactive_prompt'] },
+    },
+    {
+      body: '<input autocomplete="section-school one-time-code" name="private-field-name" value="private-code">',
+      expected: { kind: 'interactive', indicators: ['visible_otp_input'] },
+    },
+    {
+      body: '<form action="https://evil.example/?ticket=private-ticket#private-fragment"><h2>安全验证</h2><input name="Cookie: private-field-name" value="private-code"><input name="短信验证码"></form>',
+      expected: { kind: 'unclassified', indicators: ['visible_verification_prompt'] },
+    },
+  ];
+  for (const fixture of fixtures) {
+    const steps = successfulSteps().slice(0, 2);
+    steps.push({
+      method: 'POST',
+      url: `https://id.tsinghua.edu.cn${CAS_CHECK_PATH}`,
+      response: htmlResponse(fixture.body),
+    });
+    const fetchImpl = createFetchSequence(steps);
+    const client = createDirectCasClient({
+      fetchImpl,
+      now: () => FIXED_NOW,
+      sm2Impl: { doEncrypt: () => 'ab'.repeat(100) },
+    });
+    await assert.rejects(client.login(LOGIN_CREDENTIALS), (error) => {
+      expectSafeError(
+        'cas_interactive_verification_required',
+        PASSWORD,
+        'credential_submit',
+      )(error);
+      assert.deepEqual(error.verification, fixture.expected);
+      assert.equal(Object.prototype.propertyIsEnumerable.call(error, 'verification'), false);
+      assert.doesNotMatch(
+        JSON.stringify({ message: error.message, verification: error.verification }),
+        /private-|evil\.example|Cookie:|<form|https:/,
+      );
+      return true;
+    });
+    fetchImpl.assertDone();
+    assert.equal(fetchImpl.calls.length, 3, 'diagnostics never start OTP or continuation requests');
+  }
+});
+
+test('initial image captcha diagnostics retain their parse stage and never submit the password', async () => {
+  const steps = successfulSteps().slice(0, 2);
+  steps[1].response = htmlResponse(casFormHtml({ captchaVisible: true }));
+  const fetchImpl = createFetchSequence(steps);
+  const client = createDirectCasClient({ fetchImpl, now: () => FIXED_NOW });
+  await assert.rejects(client.login(LOGIN_CREDENTIALS), (error) => {
+    expectSafeError('cas_interactive_verification_required', PASSWORD, 'cas_form_parse')(error);
+    assert.deepEqual(error.verification, {
+      kind: 'image_captcha',
+      indicators: ['visible_image_captcha_container', 'visible_image_captcha_input'],
+    });
+    return true;
+  });
+  fetchImpl.assertDone();
+  assert.equal(fetchImpl.calls.length, 2);
+});
+
+test('hidden fields, names, templates and secrets never become visible verification evidence', async () => {
+  const body = `
+    <input type="hidden" id="c_code" name="i_captcha" autocomplete="one-time-code" value="private-code">
+    <input name="短信验证码" value="二次验证">
+    <section hidden><input id="i_code" autocomplete="one-time-code"></section>
+    <template><h2>二次验证</h2></template>
+    <script>const labels = '短信验证码 安全验证';</script>
+    <iframe src="https://evil.example/?ticket=private-ticket#private-fragment"></iframe>`;
+  const steps = successfulSteps().slice(0, 2);
+  steps.push({
+    method: 'POST',
+    url: `https://id.tsinghua.edu.cn${CAS_CHECK_PATH}`,
+    response: htmlResponse(body),
+  });
+  const fetchImpl = createFetchSequence(steps);
+  const client = createDirectCasClient({
+    fetchImpl,
+    now: () => FIXED_NOW,
+    sm2Impl: { doEncrypt: () => 'ab'.repeat(100) },
+  });
+  await assert.rejects(client.login(LOGIN_CREDENTIALS), (error) => {
+    expectSafeError('cas_identity_response_unrecognized')(error);
+    assert.equal(Object.hasOwn(error, 'verification'), false);
+    return true;
+  });
+  fetchImpl.assertDone();
+});
+
 test('blocks redirects outside the fixed hosts before making the destination request', async () => {
   const fetchImpl = createFetchSequence([
     {

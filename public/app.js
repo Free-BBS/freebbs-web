@@ -3648,6 +3648,32 @@ async function callApi(path, options = {}) {
       typeof payload.stage === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(payload.stage)
         ? payload.stage
         : '';
+    if (
+      ['cas_interactive_verification_required', 'interactive_verification_required'].includes(
+        error.code,
+      )
+    ) {
+      const verification = payload.verification;
+      const allowedIndicators = [
+        'visible_image_captcha_container',
+        'visible_image_captcha_input',
+        'visible_interactive_prompt',
+        'visible_otp_input',
+        'visible_verification_prompt',
+      ];
+      error.verification = {
+        kind: ['image_captcha', 'interactive', 'unclassified'].includes(verification?.kind)
+          ? verification.kind
+          : 'unclassified',
+        indicators: Array.isArray(verification?.indicators)
+          ? [
+              ...new Set(
+                verification.indicators.filter((item) => allowedIndicators.includes(item)),
+              ),
+            ].slice(0, 5)
+          : [],
+      };
+    }
     throw error;
   }
 

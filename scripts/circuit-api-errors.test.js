@@ -114,3 +114,82 @@ test('backend validation messages remain actionable and no HTML body is echoed',
       error.message === '所选元件已不存在' && error.code === 'invalid_circuit_assistant_input',
   );
 });
+
+test('campus verification errors retain only the declared kind and fixed diagnostic indicators', async () => {
+  const indicators = [
+    'visible_image_captcha_container',
+    'visible_image_captcha_input',
+    'visible_interactive_prompt',
+    'visible_otp_input',
+    'visible_verification_prompt',
+  ];
+  for (const kind of ['image_captcha', 'interactive', 'unclassified']) {
+    const call = api({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        code: 'cas_interactive_verification_required',
+        stage: 'credential_submit',
+        verification: {
+          kind,
+          indicators: [
+            'https://untrusted.example/?otp=123456',
+            ...indicators,
+            indicators[0],
+            '<input value="secret">',
+            { value: 'secret-password' },
+            null,
+          ],
+          inputValue: 'secret-password',
+          html: '<input value="123456">',
+          url: 'https://untrusted.example/',
+        },
+      }),
+    });
+    await assert.rejects(call('/workbench/connectors/tsinghua/direct-login'), (error) => {
+      assert.equal(error.code, 'cas_interactive_verification_required');
+      assert.equal(error.stage, 'credential_submit');
+      assert.deepEqual(JSON.parse(JSON.stringify(error.verification)), { kind, indicators });
+      assert.doesNotMatch(JSON.stringify(error.verification), /secret|123456|https:|<input/);
+      return true;
+    });
+  }
+});
+
+test('missing or unknown verification kinds remain unclassified without inferring MFA or captcha', async () => {
+  for (const verification of [
+    undefined,
+    null,
+    'image_captcha',
+    { kind: 'sms_otp', indicators: 'visible_otp_input' },
+    { kind: '<input value="secret">', indicators: ['visible_otp_input'] },
+  ]) {
+    const call = api({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: 'interactive_verification_required', verification }),
+    });
+    await assert.rejects(call('/workbench/connectors/tsinghua/direct-login'), (error) => {
+      assert.equal(error.verification.kind, 'unclassified');
+      const expected = Array.isArray(verification?.indicators) ? ['visible_otp_input'] : [];
+      assert.deepEqual([...error.verification.indicators], expected);
+      return true;
+    });
+  }
+});
+
+test('unrelated API failures do not acquire a verification classification from arbitrary payload fields', async () => {
+  const call = api({
+    ok: false,
+    status: 503,
+    json: async () => ({
+      code: 'cas_network_error',
+      verification: { kind: 'interactive', indicators: ['visible_otp_input'] },
+    }),
+  });
+  await assert.rejects(call('/workbench/connectors/tsinghua/direct-login'), (error) => {
+    assert.equal(error.verification, undefined);
+    assert.equal(error.code, 'cas_network_error');
+    return true;
+  });
+});

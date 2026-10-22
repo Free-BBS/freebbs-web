@@ -189,6 +189,33 @@
     return '最近同步未完成，请稍后重试；如持续失败请联系管理员。';
   }
 
+  function directLoginVerification(error) {
+    const verification = error?.verification;
+    const allowedIndicators = [
+      'visible_image_captcha_container',
+      'visible_image_captcha_input',
+      'visible_interactive_prompt',
+      'visible_otp_input',
+      'visible_verification_prompt',
+    ];
+    const kind = ['image_captcha', 'interactive', 'unclassified'].includes(verification?.kind)
+      ? verification.kind
+      : 'unclassified';
+    return {
+      kind,
+      label: {
+        image_captcha: '图形验证码',
+        interactive: '交互验证',
+        unclassified: '验证类型未判别',
+      }[kind],
+      indicators: Array.isArray(verification?.indicators)
+        ? [
+            ...new Set(verification.indicators.filter((item) => allowedIndicators.includes(item))),
+          ].slice(0, 5)
+        : [],
+    };
+  }
+
   function directLoginFailureMessage(error) {
     const code =
       typeof error?.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(error.code)
@@ -197,9 +224,6 @@
     const messages = {
       cas_credentials_invalid: '请输入有效的清华账号和密码。',
       cas_credentials_rejected: '清华账号或密码不正确，请重新输入。',
-      cas_interactive_verification_required:
-        '本次登录需要验证码或二次验证，当前直接连接无法自动完成。',
-      interactive_verification_required: '本次登录需要验证码或二次验证，当前直接连接无法自动完成。',
       cas_login_unverified: '统一认证可能已经完成，但网络学堂会话验证失败，请稍后重试。',
       cas_network_error: '暂时无法访问清华统一认证，请检查网络后重试。',
       cas_timeout: '访问清华统一认证超时，请稍后重试。',
@@ -237,8 +261,13 @@
         : '';
     if (
       ['cas_interactive_verification_required', 'interactive_verification_required'].includes(code)
-    )
-      return '学校要求完成本次二次验证，请在官方页面继续。';
+    ) {
+      return {
+        image_captcha: '本次登录出现图形验证码，当前直连暂不能填写。',
+        interactive: '本次登录需要额外的交互验证，当前直连暂不能接续。',
+        unclassified: '本次登录出现额外验证，当前未能判别具体类型，直连暂不能继续。',
+      }[directLoginVerification(error).kind];
+    }
     return `${message}（诊断码：${code}${stage ? `；阶段：${stage}` : ''}）`;
   }
 
@@ -708,7 +737,15 @@
         if (elements.loginRecovery) elements.loginRecovery.hidden = false;
         if (elements.loginDiagnostic) {
           const stage = /^[a-z][a-z0-9_]{0,63}$/.test(error.stage || '') ? error.stage : '';
-          elements.loginDiagnostic.textContent = `${error.code}${stage ? ` · ${stage}` : ''}`;
+          const verification = directLoginVerification(error);
+          elements.loginDiagnostic.textContent = [
+            verification.label,
+            error.code,
+            stage,
+            ...verification.indicators,
+          ]
+            .filter(Boolean)
+            .join(' · ');
         }
         window.setTimeout(() => {
           if (

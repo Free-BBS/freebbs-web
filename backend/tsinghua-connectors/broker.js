@@ -2,9 +2,11 @@ const crypto = require('crypto');
 const { CampusConnectorError } = require('./errors');
 const {
   attachDirectCasStage,
+  attachDirectCasVerification,
   createDirectCasError,
   isDirectCasErrorCode,
   readDirectCasStage,
+  readDirectCasVerification,
 } = require('./direct-cas-diagnostics');
 
 const CONNECTOR_ID = 'tsinghua';
@@ -154,7 +156,11 @@ function safeScopes(value) {
 function directAuthorizationError(error) {
   const code = String(error?.code || '');
   if (isDirectCasErrorCode(code)) {
-    return createDirectCasError(code, readDirectCasStage(error) || undefined);
+    return createDirectCasError(
+      code,
+      readDirectCasStage(error) || undefined,
+      readDirectCasVerification(error),
+    );
   }
   const errors = {
     cas_credentials_invalid: {
@@ -171,7 +177,7 @@ function directAuthorizationError(error) {
     },
     cas_interactive_verification_required: {
       status: 409,
-      message: '本次登录需要在清华认证页面完成验证码或二次验证。',
+      message: '清华认证返回了需要进一步验证的页面。',
     },
     cas_login_unverified: {
       status: 401,
@@ -219,7 +225,7 @@ function directAuthorizationError(error) {
     },
     interactive_verification_required: {
       status: 409,
-      message: '本次登录需要在清华认证页面完成验证码或二次验证。',
+      message: '清华认证返回了需要进一步验证的页面。',
     },
     upstream_rate_limited: {
       status: 429,
@@ -247,7 +253,10 @@ function directAuthorizationError(error) {
     ? 'credential_submit'
     : 'internal';
   const mapped = new CampusConnectorError(safeCode, safe.message, { status: safe.status });
-  return attachDirectCasStage(mapped, readDirectCasStage(error), defaultStage);
+  return attachDirectCasVerification(
+    attachDirectCasStage(mapped, readDirectCasStage(error), defaultStage),
+    readDirectCasVerification(error),
+  );
 }
 
 function resolveAvailability(runtimeConfig, adapter) {

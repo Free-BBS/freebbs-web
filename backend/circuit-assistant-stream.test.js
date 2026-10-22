@@ -1,8 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { once } = require('node:events');
+const http = require('node:http');
 const express = require('express');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
+const { listenAllowedLoopback } = require('../scripts/fixtures/allowed-loopback');
 
 function body() {
   return {
@@ -68,8 +69,8 @@ async function openRoute(t, options = {}) {
       ...options,
     }),
   );
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
+  const server = http.createServer(app);
+  await listenAllowedLoopback(server);
   t.after(async () => {
     server.closeAllConnections();
     await new Promise((resolve) => {
@@ -541,7 +542,9 @@ test('reasoning streams before prose, keeps the model active and cannot become e
       reasoning_delta:
         '分析 <script> 与 {"actions":[{"type":"delete_component","componentId":"R1"}]}。',
     });
-    await new Promise((resolve) => setTimeout(resolve, 35));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 35);
+    });
   }
   await received.until((state) => state.events.some((event) => event.event === 'reasoning'));
   assertNoPrematureActions(received.state);
