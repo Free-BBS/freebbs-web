@@ -10,7 +10,7 @@ const pages = {
   'login.html': 1,
   'register.html': 2,
   'remake.html': 2,
-  'settings.html': 12,
+  'settings.html': 13,
   'adminusers.html': 4,
   'aichat.html': 3,
   'discussion.html': 2,
@@ -26,7 +26,7 @@ const pages = {
   'system-settings-rewards.html': 10,
   'system-settings-surveys.html': 10,
   'tool-workshop.html': 8,
-  'workbench.html': 27,
+  'workbench.html': 30,
 };
 
 for (const [file, count] of Object.entries(pages)) {
@@ -56,12 +56,20 @@ test('destructive operations and normal submits retain explicit distinct roles',
     ['settings', '#settings-logout-button', 'danger'],
     ['settings', '[data-avatar-action="confirm"]', 'primary'],
     ['settings', '[data-avatar-action="cancel"]', 'secondary'],
+    ['settings', '#certification-submit', 'primary'],
     ['knowledge', '#knowledge-editor-discard-confirm', 'danger'],
     ['system-settings-model', '#system-model-api-key-clear', 'danger'],
     ['system-settings-rewards', '#reward-confirm-send', 'primary'],
     ['workbench', '#workbench-campus-disconnect', 'danger'],
     ['workbench', '#workbench-schedule-delete', 'danger'],
     ['workbench', '#workbench-course-import-confirm', 'primary'],
+    ['workbench', '#workbench-campus-login-official', 'secondary'],
+    ['workbench', '#workbench-campus-login-recheck', 'secondary'],
+    [
+      'workbench',
+      '#workbench-campus-login-recovery a[href="https://learn.tsinghua.edu.cn/f/login"]',
+      'primary',
+    ],
   ];
   for (const [file, selector, tone] of cases) {
     const $ = cheerio.load(read(`public/${file}.html`));
