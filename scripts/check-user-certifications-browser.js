@@ -40,7 +40,7 @@ const { automaticCertifications } = require('../backend/user-certifications');
       await student.waitForFunction(
         () =>
           !document.getElementById('certification-refresh').disabled &&
-          document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
+          document.getElementById('certification-status').textContent.startsWith('已认证'),
       );
     };
     const adminReady = async () => {
@@ -61,6 +61,9 @@ const { automaticCertifications } = require('../backend/user-certifications');
           typeScale: 'large',
         });
         document.querySelectorAll('.personal-fold').forEach((fold) => {
+          fold.open = true;
+        });
+        document.querySelectorAll('.settings-binding-panel').forEach((fold) => {
           fold.open = true;
         });
         window.scrollTo(0, 0);
@@ -99,7 +102,7 @@ const { automaticCertifications } = require('../backend/user-certifications');
         const panels = [...document.querySelectorAll('.settings-row > *, #certifications')].map(
           measure,
         );
-        const identityForms = [...document.querySelectorAll('.settings-identity-forms > form')].map(
+        const identityForms = [...document.querySelectorAll('.settings-identity-forms form')].map(
           measure,
         );
         return {
@@ -138,7 +141,11 @@ const { automaticCertifications } = require('../backend/user-certifications');
             `${label}: ${name} matches both inner edges after padding`,
           );
         }
-        assert.equal(bounds.rows.length, 5, `${label}: settings have five shared rows`);
+        assert.equal(
+          bounds.rows.length,
+          4,
+          `${label}: settings have four shared rows after merging identity settings`,
+        );
         assert.equal(bounds.identityForms.length, 2, `${label}: two identity binding forms`);
         for (const row of bounds.rows) {
           assert.ok(
@@ -182,7 +189,7 @@ const { automaticCertifications } = require('../backend/user-certifications');
         if (width > 1180) {
           const [email, studentId] = bounds.identityForms;
           assert.ok(studentId.left > email.right, `${label}: binding forms occupy both columns`);
-          for (const edge of ['top', 'bottom', 'width'])
+          for (const edge of ['top', 'width'])
             assert.ok(
               Math.abs(email[edge] - studentId[edge]) < 1,
               `${label}: email/student-ID forms have matching ${edge}`,
@@ -201,7 +208,7 @@ const { automaticCertifications } = require('../backend/user-certifications');
     assert.equal(await student.locator('#certification-form').isVisible(), false);
     assert.match(
       await student.locator('#certification-approved').innerText(),
-      /本科身份.*学号已识别/,
+      /2021 · 清华大学电子系 · 本科生/,
     );
     assert.equal(await student.locator('#certification-approved .certification-entry').count(), 1);
     assert.equal(await student.locator('#certification-requests .certification-entry').count(), 0);
@@ -279,12 +286,21 @@ const { automaticCertifications } = require('../backend/user-certifications');
       await student.locator('#certification-approved').innerText(),
       /例示大学电子工程学院/,
     );
-    assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
+    assert.match(
+      await student.locator('#certification-approved').innerText(),
+      /2021 · 例示大学电子工程学院 · 硕士研究生/,
+    );
     await submit('master', { year: '2022', class: '乙班' });
-    assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
+    assert.match(
+      await student.locator('#certification-approved').innerText(),
+      /2021 · 例示大学电子工程学院 · 硕士研究生/,
+    );
     assert.match(await student.locator('#certification-requests').innerText(), /2022 年/);
     await review('reject', '暂保留原年级');
-    assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
+    assert.match(
+      await student.locator('#certification-approved').innerText(),
+      /2021 · 例示大学电子工程学院 · 硕士研究生/,
+    );
     for (const kind of ['doctor', 'teacher', 'company']) {
       if (kind === 'teacher') {
         if (!(await student.locator('#certification-form').isVisible()))
@@ -467,10 +483,13 @@ const { automaticCertifications } = require('../backend/user-certifications');
     const teacherPage = await recognizedPage(teacherAccount);
     await teacherPage.goto(`${origin}/settings?demo=admin&certification=teacher#certifications`);
     await teacherPage.waitForFunction(() =>
-      document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
+      document.getElementById('certification-status').textContent.startsWith('已认证'),
     );
     assert.equal(await teacherPage.locator('#certification-form').isVisible(), false);
-    assert.match(await teacherPage.locator('#certification-approved').innerText(), /教师.*已核实/);
+    assert.match(
+      await teacherPage.locator('#certification-approved').innerText(),
+      /电子工程系 · 教师/,
+    );
     assert.equal(
       await teacherPage.locator('#certification-approved .certification-entry').count(),
       1,
@@ -483,12 +502,12 @@ const { automaticCertifications } = require('../backend/user-certifications');
     const graduatePage = await recognizedPage(graduateAccount);
     await graduatePage.goto(`${origin}/settings?demo=student#certifications`);
     await graduatePage.waitForFunction(() =>
-      document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
+      document.getElementById('certification-status').textContent.startsWith('已认证'),
     );
     assert.equal(await graduatePage.locator('#certification-form').isVisible(), false);
     assert.match(
       await graduatePage.locator('#certification-approved').innerText(),
-      /硕士身份.*学号已识别/,
+      /2026 · 电子工程系 · 硕士研究生/,
     );
     await graduatePage.locator('#certification-add').click();
     assert.equal(await graduatePage.locator('#certification-kind').inputValue(), 'undergraduate');

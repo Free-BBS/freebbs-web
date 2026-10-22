@@ -204,6 +204,11 @@ test('automatic education uses only the account-bound number and never claims gr
     assert.equal(identities.length, 1);
     assert.equal(identities[0].education, education);
     assert.equal(identities[0].year, 2024);
+    assert.equal(identities[0].institution, '电子工程系');
+    assert.equal(
+      identities[0].label,
+      `2024 · 电子工程系 · ${{ undergraduate: '本科生', master: '硕士研究生', doctor: '博士研究生' }[education]}`,
+    );
     assert.equal(identities[0].source, 'bound_student_id');
     assert.equal(identities[0].automatic, true);
     assert.equal(identities[0].approvedAt, null);
@@ -226,13 +231,14 @@ test('automatic education uses only the account-bound number and never claims gr
   );
 });
 
-test('administrator-provisioned teacher identity does not guess institution or require another application', () => {
+test('administrator-provisioned teacher identity uses the platform department default without another application', () => {
   const identities = automaticCertifications({ role: 'teacher', full_name: ' 核实教师姓名 ' });
   assert.equal(identities.length, 1);
   assert.equal(identities[0].type, 'teacher');
   assert.equal(identities[0].verifiedName, '核实教师姓名');
   assert.equal(identities[0].source, 'account_role');
-  assert.equal(identities[0].institution, '');
+  assert.equal(identities[0].institution, '电子工程系');
+  assert.equal(identities[0].label, '电子工程系 · 教师');
   assert.equal(identities[0].year, null);
   assert.deepEqual(automaticCertifications({ role: 'admin', full_name: '管理员' }), []);
 });
@@ -361,6 +367,57 @@ test('bound current identity is immediately recognized without writes, while his
   assert.equal(state.requests[0].user_id, 2);
   assert.equal(state.notifications.length, 1);
   assert.equal((await service.read(2)).approved[0].year, 2019);
+});
+
+test('each recognized bound education stage is complete without a separate certification application', async () => {
+  for (const [code, stage, title] of [
+    ['01', 'undergraduate', '本科生'],
+    ['21', 'master', '硕士研究生'],
+    ['31', 'doctor', '博士研究生'],
+  ]) {
+    const { service, state } = automaticFixture({
+      id: 2,
+      student_id: `2025${code}0901`,
+      full_name: '同学',
+      username: 'student_account',
+      role: 'student',
+    });
+    const result = await service.read(2);
+    assert.deepEqual(result.managedSlots, [stage]);
+    assert.equal(result.automatic[0].label, `2025 · 电子工程系 · ${title}`);
+    assert.deepEqual(
+      result.approved,
+      [],
+      'automatic recognition does not invent a manually reviewed record',
+    );
+    await assert.rejects(
+      service.submit(2, {
+        type: 'education',
+        education: stage,
+        year: 2025,
+        institution: '用户自填不得覆盖',
+        status: 'approved',
+        automatic: true,
+      }),
+      { code: 'automatic_identity_managed', status: 409 },
+    );
+    assert.equal(state.writes.length, 0);
+    assert.equal(state.notifications.length, 0);
+  }
+  const { service, state } = automaticFixture({
+    id: 2,
+    role: 'student',
+    student_id: null,
+    full_name: '同学',
+    username: 'unbound_account',
+    email: '2025310901@mails.tsinghua.edu.cn',
+    email_verified_at: null,
+    studentId: '2025310901',
+    education: 'doctor',
+  });
+  assert.deepEqual((await service.read(2)).automatic, []);
+  assert.deepEqual((await service.read(2)).managedSlots, []);
+  assert.equal(state.writes.length, 0);
 });
 
 test('a known teacher may supplement past education but cannot request the teacher identity again', async () => {

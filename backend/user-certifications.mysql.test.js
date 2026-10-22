@@ -450,6 +450,98 @@ test(
     );
 
     await t.test(
+      'verified unique whitelist mailboxes immediately identify all three education stages without degree requests',
+      async () => {
+        const stages = [
+          ['01', 'undergraduate', '本科生'],
+          ['21', 'master', '硕士研究生'],
+          ['31', 'doctor', '博士研究生'],
+        ];
+        for (const [index, [code, education, title]] of stages.entries()) {
+          const studentId = `2025${code}090${index}`;
+          const email = `stage.alias.${index}@mails.tsinghua.edu.cn`;
+          const fullName = `校验同学${index}`;
+          const role = index === 1 ? 'teacher' : 'student';
+          const [created] = await pool.execute(
+            'INSERT INTO users (uid, username, full_name, student_id, email, password_hash, role) VALUES (?, ?, ?, NULL, ?, ?, ?)',
+            [`u_stage_${index}`, `stage_pair_${index}`, fullName, email, hash, role],
+          );
+          const userId = created.insertId;
+          const [whitelist] = await pool.execute(
+            'INSERT INTO registration_whitelist (fingerprint, student_id, full_name, email) VALUES (?, ?, ?, ?)',
+            [crypto.randomBytes(32).toString('hex'), studentId, fullName, email],
+          );
+          const before = (await request('/me/certifications', userId)).data;
+          assert.equal(
+            before.automatic.some((identity) => identity.type === 'education'),
+            false,
+          );
+          await identityService.sendBindingCode(userId, { email, currentPassword: adminPassword });
+          const supplied = codes.at(-1);
+          if (index === 0) {
+            const wrong = supplied === '000000' ? '999999' : '000000';
+            await assert.rejects(
+              identityService.bindEmail(userId, {
+                email,
+                currentPassword: adminPassword,
+                emailCode: wrong,
+              }),
+              { code: 'code_invalid' },
+            );
+            assert.equal(
+              (await request('/me/certifications', userId)).data.automatic.some(
+                (identity) => identity.type === 'education',
+              ),
+              false,
+            );
+          }
+          assert.equal(
+            (
+              await identityService.bindEmail(userId, {
+                email,
+                currentPassword: adminPassword,
+                emailCode: supplied,
+              })
+            ).studentBinding.status,
+            'bound',
+          );
+          const current = (await request('/me/certifications', userId)).data;
+          const recognized = current.automatic.find((identity) => identity.type === 'education');
+          assert.equal(recognized.education, education);
+          assert.equal(recognized.label, `2025 · 电子工程系 · ${title}`);
+          assert.ok(current.managedSlots.includes(education));
+          assert.deepEqual(current.approved, []);
+          assert.deepEqual(current.requests, []);
+          const redundant = await apply(userId, education, 2025, { institution: '自填不得覆盖' });
+          assert.equal(redundant.status, 409);
+          assert.equal(redundant.data.code, 'automatic_identity_managed');
+          const [[saved]] = await pool.execute(
+            'SELECT COUNT(*) AS count FROM user_certification_requests WHERE user_id = ?',
+            [userId],
+          );
+          assert.equal(Number(saved.count), 0);
+          const [[bindingRequest]] = await pool.execute(
+            'SELECT COUNT(*) AS count FROM account_student_requests WHERE user_id = ?',
+            [userId],
+          );
+          assert.equal(
+            Number(bindingRequest.count),
+            0,
+            'no manual binding application is fabricated',
+          );
+          const [[claimed]] = await pool.execute(
+            'SELECT claimed_user_id FROM registration_whitelist WHERE id = ?',
+            [whitelist.insertId],
+          );
+          assert.equal(Number(claimed.claimed_user_id), userId);
+          const stored = await getUserById(userId);
+          assert.equal(stored.role, role);
+          assert.equal(Number(stored.is_admin), 0);
+        }
+      },
+    );
+
+    await t.test(
       'three historical education stages coexist and replacement approval preserves previous published details',
       async () => {
         for (const stage of ['master', 'doctor']) {

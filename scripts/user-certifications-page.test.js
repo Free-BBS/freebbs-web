@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { installUserCertifications } = require('../public/user-certifications');
+const { installUserCertifications, identityLineFor } = require('../public/user-certifications');
 const { installAdminCertifications } = require('../public/admin-certifications');
 
 // A small DOM fixture for controller behavior; full browser layout is checked separately.
@@ -109,6 +109,28 @@ const education = (extra = {}) => ({
   institution: '清华大学电子系',
   className: '无11',
   ...extra,
+});
+
+test('certified identities use one concise line with entry year and actual stage', () => {
+  for (const [kind, label] of [
+    ['undergraduate', '本科生'],
+    ['master', '硕士研究生'],
+    ['doctor', '博士研究生'],
+  ])
+    assert.equal(
+      identityLineFor({
+        type: 'education',
+        education: kind,
+        year: 2025,
+        institution: '电子工程系',
+      }),
+      `2025 · 电子工程系 · ${label}`,
+    );
+  assert.equal(
+    identityLineFor({ type: 'teacher', automatic: true, verifiedName: '不重复显示的姓名' }),
+    '电子工程系 · 教师',
+  );
+  assert.equal(identityLineFor({ type: 'company', companyName: '测试企业' }), '测试企业');
 });
 
 async function fixture(kind, callApi, state = {}, location = {}) {
@@ -278,16 +300,12 @@ test('teacher deep link selects the teacher form without submitting or accepting
   assert.equal(other.fold.open, false);
 });
 
-test('certification hash opens a containing fold without changing the selected identity', async () => {
-  const f = await fixture(
-    'user',
-    async () => ({ approved: [], requests: [] }),
-    {},
-    { hash: '#certifications' },
-  );
-  assert.equal(f.fold.open, true);
-  assert.equal(f.el.kind.value, 'undergraduate');
-});
+for (const hash of ['#certifications', '#settings-identity'])
+  test(`${hash} opens a containing fold without changing the selected identity`, async () => {
+    const f = await fixture('user', async () => ({ approved: [], requests: [] }), {}, { hash });
+    assert.equal(f.fold.open, true);
+    assert.equal(f.el.kind.value, 'undergraduate');
+  });
 
 test('bound education is displayed automatically without prefilled repeat application', async () => {
   const f = await fixture('user', async () => ({
@@ -301,8 +319,8 @@ test('bound education is displayed automatically without prefilled repeat applic
   assert.equal(f.el.form.hidden, true);
   assert.equal(f.el.year.value, 2021);
   assert.equal(f.el.approved.children.length, 1);
-  assert.match(f.el.approved.textContent, /学号已识别/);
-  assert.match(f.el.approved.textContent, /2025 年入学/);
+  assert.match(f.el.approved.textContent, /2025 · 清华大学电子系 · 本科生/);
+  assert.match(f.el.approved.children[0]['aria-label'], /已自动认证/);
   assert.equal(f.el.approved.querySelectorAll('button').length, 0);
   assert.equal(f.el.requests.children.length, 2);
   assert.match(f.el.requests.textContent, /等待审核/);
@@ -336,7 +354,7 @@ test('education edits submit exact values and keep the previous approved identit
     year: 2022,
     className: '甲班',
   });
-  assert.match(f.el.approved.textContent, /2021 年/);
+  assert.match(f.el.approved.textContent, /2021 · 清华大学电子系 · 本科生/);
   assert.match(f.el.requests.textContent, /2022 年/);
   assert.equal(f.el.submit.disabled, true);
   assert.match(f.el['slot-status'].textContent, /现有认证继续有效/);
@@ -433,8 +451,8 @@ test('completed student-id binding updates the automatic identity without anothe
   f.events['freebbs:identity-updated']();
   await settle();
   assert.equal(f.el.approved.children.length, 1);
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
-  assert.match(f.el.approved.textContent, /2026 年入学/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.match(f.el.approved.textContent, /2026 · 清华大学电子系 · 硕士研究生/);
   assert.equal(f.el.form.hidden, true);
 });
 
@@ -459,7 +477,7 @@ test('binding the same account while its initial certification read is pending s
   assert.equal(f.el.refresh.disabled, true);
   latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
   await settle();
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
   assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
   assert.equal(f.el.refresh.disabled, false);
 });
@@ -487,10 +505,10 @@ test('a binding refresh preserves an unsent education draft and ignores a later 
   });
   await settle();
   assert.equal(reads, 3);
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
   stale.resolve({ approved: [], requests: [], automatic: [] });
   await refreshing;
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
   assert.equal(f.el.form.hidden, false);
   assert.equal(f.el.kind.value, 'doctor');
   assert.equal(f.el.institution.value, '尚未提交的博士院系');
@@ -529,7 +547,7 @@ test('binding events during a failed certification submission coalesce into a fr
   await submit;
   await settle();
   assert.equal(reads, 2, 'queued identity changes need one current read');
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
   assert.match(f.el.message.textContent, /暂时无法提交/);
   assert.equal(f.el.form.hidden, false);
   assert.equal(f.el.kind.value, 'doctor');
@@ -565,7 +583,7 @@ test('binding during the read after submission invalidates that snapshot and dra
   assert.equal(f.el.approved.children.length, 0);
   latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
   await settle();
-  assert.match(f.el.approved.textContent, /硕士身份.*学号已识别/);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
   assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
   assert.equal(f.el.message.textContent, '经历申请已提交');
   assert.equal(f.el.refresh.disabled, false);
@@ -602,8 +620,8 @@ test('verified teacher deep link shows one compact identity and no repeated upda
   );
   assert.equal(f.el.form.hidden, true);
   assert.equal(f.el.approved.children.length, 1);
-  assert.match(f.el.approved.textContent, /教师.*已核实/);
-  assert.match(f.el.approved.textContent, /数据库教师姓名.*已核实学校/);
+  assert.match(f.el.approved.textContent, /已核实学校 · 教师/);
+  assert.match(f.el.approved.children[0]['aria-label'], /已自动认证/);
   assert.doesNotMatch(f.el.approved.textContent, /旧称呼/);
   assert.equal(f.el.approved.querySelectorAll('button').length, 0);
 });

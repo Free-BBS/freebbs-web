@@ -32,16 +32,20 @@ function createAboutTeachersPreview() {
   for (const [id, kind, studentId] of [
     [4, 'student', '2026010101'],
     [5, 'graduate', '2026210001'],
+    [6, 'doctor', '2025310001'],
   ]) {
-    teacher.accounts.set(id, {
+    const account = teacher.addAccount({
       ...teacher.accounts.get(3),
       id,
       uid: `u_preview_${kind}`,
       username: `preview_${kind}`,
-      fullName: kind === 'graduate' ? '演示研究生' : '演示本科同学',
+      fullName:
+        kind === 'doctor' ? '演示博士同学' : kind === 'graduate' ? '演示研究生' : '演示本科同学',
       studentId,
     });
+    if (account.id !== id) throw new Error('Unexpected fictional preview account order');
   }
+  teacher.emailSuggestions.set(4, 'preview-only-student@tsinghua.edu.cn');
   const fixture = createLearningFixture();
   const assignments = new Map([[2, ['signals', 'circuits', 'math']]]);
   const writes = [];
@@ -303,11 +307,19 @@ function createAboutTeachersPreview() {
   };
   app.get(Object.keys(pages), async (req, res) => {
     let html = preparePageShell(await fs.readFile(path.join(root, pages[req.path]), 'utf8'));
-    const bootstrap = `<script>window.FREEBBS_API_BASE='/api';const demo=new URLSearchParams(location.search).get('as');const demoId={admin:1,teacher:2,unverified:3,student:4,graduate:5}[demo];if(demo==='guest'){document.cookie='freebbs_demo_account=;Path=/;Max-Age=0';localStorage.removeItem('free_bbs_auth_token');localStorage.removeItem('free_bbs_user');}else if(demoId){document.cookie='freebbs_demo_account='+demoId+';Path=/;SameSite=Strict';localStorage.setItem('free_bbs_auth_token','${TOKEN}');localStorage.removeItem('free_bbs_user');}if(!localStorage.getItem('free_bbs_theme_mode'))localStorage.setItem('free_bbs_theme_mode','light');</script>`;
+    const bootstrap = `<script>window.FREEBBS_API_BASE='/api';const demo=new URLSearchParams(location.search).get('as');const demoId={admin:1,teacher:2,unverified:3,student:4,graduate:5,doctor:6}[demo];if(demo==='guest'){document.cookie='freebbs_demo_account=;Path=/;Max-Age=0';localStorage.removeItem('free_bbs_auth_token');localStorage.removeItem('free_bbs_user');}else if(demoId){document.cookie='freebbs_demo_account='+demoId+';Path=/;SameSite=Strict';localStorage.setItem('free_bbs_auth_token','${TOKEN}');localStorage.removeItem('free_bbs_user');}if(!localStorage.getItem('free_bbs_theme_mode'))localStorage.setItem('free_bbs_theme_mode','light');</script>`;
     const notice =
-      '<details data-about-teachers-preview style="margin:12px;padding:12px;background:#143d45;color:white"><summary>关于平台与教师参与 · 本地演示，未发布</summary><p>所有账号、课程关系和意见均为内存演示，未连接生产、数据库或真实 AI。</p><p><a style="color:white" href="/about?as=guest">关于平台（访客）</a> · <a style="color:white" href="/teachers?as=teacher">教师</a> · <a style="color:white" href="/teachers?as=unverified">未认证</a> · <a style="color:white" href="/adminusers?as=admin">管理员</a></p></details>';
+      '<details data-about-teachers-preview style="margin:12px;padding:12px;background:#143d45;color:white"><summary>关于平台与教师参与 · 本地演示，未发布</summary><p>所有账号、课程关系和意见均为内存演示，未连接生产、数据库或真实 AI。</p><p>邮箱建议、验证码与绑定均为本地模拟，不修改真实白名单，不发送邮件。</p><p><a style="color:white" href="/about?as=guest">关于平台（访客）</a> · <a style="color:white" href="/teachers?as=teacher">教师</a> · <a style="color:white" href="/teachers?as=unverified">未认证</a> · <a style="color:white" href="/adminusers?as=admin">管理员</a></p></details>';
     html = html
       .replace(/<link\b[^>]*href=["']https?:\/\/[^>]*>/gi, '')
+      .replace(
+        '</head>',
+        '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"></head>',
+      )
+      .replace(
+        '</body>',
+        '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
+      )
       .replace('</head>', `${bootstrap}</head>`)
       .replace('</body>', `${notice}</body>`);
     res.type('html').send(html);

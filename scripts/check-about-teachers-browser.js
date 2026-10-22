@@ -51,7 +51,7 @@ async function main() {
     };
     stage = 'visitor about and teacher entry';
     await goto('/about?as=guest');
-    await page.locator('h1').waitFor();
+    await page.locator('main h1').waitFor();
     assert.ok(
       await page.locator('a[href="/teachers"]').count(),
       'about has teacher participation entry',
@@ -131,10 +131,10 @@ async function main() {
     );
     stage = 'automatic identity without repeated application';
     await goto('/settings?as=teacher#certifications');
-    await page.getByText('教师 · 已核实', { exact: true }).waitFor();
+    await page.getByText('电子工程系 · 教师', { exact: true }).waitFor();
     assert.equal(await page.locator('#certification-form').isVisible(), false);
     await goto('/settings?as=student#certifications');
-    await page.getByText('本科身份 · 学号已识别', { exact: true }).waitFor();
+    await page.getByText('2026 · 电子工程系 · 本科生', { exact: true }).waitFor();
     assert.equal(await page.locator('#certification-form').isVisible(), false);
     await page.locator('#certification-add').click();
     assert.equal(
@@ -152,7 +152,7 @@ async function main() {
     await page.locator('#certification-form').evaluate((form) => form.requestSubmit());
     assert.equal(preview.certificationRequests.length, requestsBeforeDuplicate);
     await goto('/settings?as=graduate#certifications');
-    await page.getByText('硕士身份 · 学号已识别', { exact: true }).waitFor();
+    await page.getByText('2026 · 电子工程系 · 硕士研究生', { exact: true }).waitFor();
     await page.locator('#certification-add').click();
     await page.locator('#certification-kind').selectOption('undergraduate');
     assert.equal(await page.locator('#certification-year').inputValue(), '');

@@ -171,8 +171,8 @@
             </a>
           </div>
           <nav class="settings-jump-links" aria-label="设置栏目">
-            <a href="#settings-form">个人资料</a><a href="#settings-identity">邮箱与学号</a
-            ><a href="#certifications">身份认证</a><a href="#settings-reading">阅读样式</a>
+            <a href="#settings-form">个人资料</a><a href="#certifications">身份认证</a
+            ><a href="#settings-reading">阅读样式</a>
           </nav>
           <section class="settings-profile" aria-label="个人设置内容">
             <div class="settings-rows">
@@ -389,104 +389,6 @@
                   ></p>
                 </section>
               </div>
-              <div class="settings-row settings-row-wide">
-                <section class="settings-form" id="settings-identity" aria-label="邮箱与学号绑定">
-                  <div class="settings-section-heading">
-                    <h2>邮箱与学号</h2>
-                    <p>
-                      教师可先使用用户名和初始密码登录，之后按需绑定。邮箱验证后可用于找回密码。
-                    </p>
-                  </div>
-                  <p id="settings-identity-status" role="status">请登录后查看绑定状态。</p>
-                  <div class="settings-identity-forms">
-                    <form id="settings-email-form">
-                      <h3>邮箱绑定</h3>
-                      <div class="settings-grid">
-                        <label class="auth-field"
-                          ><span>要绑定的邮箱</span
-                          ><input
-                            name="email"
-                            type="email"
-                            maxlength="128"
-                            autocomplete="email"
-                            required
-                        /></label>
-                        <label class="auth-field"
-                          ><span>当前密码</span
-                          ><input
-                            name="currentPassword"
-                            type="password"
-                            maxlength="128"
-                            autocomplete="current-password"
-                            required
-                        /></label>
-                      </div>
-                      <label class="auth-field"
-                        ><span>邮箱验证码</span>
-                        <div class="auth-inline">
-                          <input
-                            name="emailCode"
-                            inputmode="numeric"
-                            pattern="[0-9]{6}"
-                            maxlength="6"
-                            autocomplete="one-time-code"
-                            required
-                          /><button
-                            class="bbs-action"
-                            data-action-tone="secondary"
-                            type="button"
-                            id="settings-email-code"
-                          >
-                            发送验证码
-                          </button>
-                        </div></label
-                      >
-                      <p id="settings-email-message" role="status" aria-live="polite"></p>
-                      <button
-                        class="auth-submit bbs-action"
-                        data-action-tone="primary"
-                        type="submit"
-                      >
-                        验证并绑定邮箱
-                      </button>
-                    </form>
-                    <form id="settings-student-form">
-                      <h3>学号绑定</h3>
-                      <p>
-                        学号选填。已验证清华邮箱与已有白名单中的学号记录匹配时自动绑定，其他情况由管理员核验。绑定不会更改教学身份或管理权限。
-                      </p>
-                      <div class="settings-grid">
-                        <label class="auth-field"
-                          ><span>学号</span
-                          ><input
-                            name="studentId"
-                            inputmode="numeric"
-                            pattern="20[0-9]{8}"
-                            maxlength="10"
-                            required
-                        /></label>
-                        <label class="auth-field"
-                          ><span>当前密码</span
-                          ><input
-                            name="currentPassword"
-                            type="password"
-                            maxlength="128"
-                            autocomplete="current-password"
-                            required
-                        /></label>
-                      </div>
-                      <p id="settings-student-message" role="status" aria-live="polite"></p>
-                      <button
-                        class="auth-submit bbs-action"
-                        data-action-tone="primary"
-                        type="submit"
-                      >
-                        提交绑定
-                      </button>
-                    </form>
-                  </div>
-                </section>
-              </div>
               <div class="settings-row">
                 <form class="settings-form settings-password-form" id="settings-password-form">
                   <div class="settings-section-heading">
@@ -654,13 +556,24 @@
                     <p id="certification-status" role="status" aria-live="polite">
                       登录后查看或补充身份。
                     </p>
-                    <button
-                      type="button"
-                      id="certification-refresh"
-                      class="certification-secondary"
-                    >
-                      刷新状态
-                    </button>
+                    <div class="certification-toolbar-actions">
+                      <button
+                        type="button"
+                        id="certification-add"
+                        class="certification-secondary"
+                        hidden
+                        disabled
+                      >
+                        补充教育经历
+                      </button>
+                      <button
+                        type="button"
+                        id="certification-refresh"
+                        class="certification-secondary"
+                      >
+                        刷新状态
+                      </button>
+                    </div>
                   </div>
                   <a href="/login" id="certification-signin">登录后查看身份</a>
                   <div
@@ -668,17 +581,6 @@
                     class="certification-list"
                     aria-label="已识别或认证的身份"
                   ></div>
-                  <div class="certification-add-row">
-                    <button
-                      type="button"
-                      id="certification-add"
-                      class="certification-secondary"
-                      hidden
-                      disabled
-                    >
-                      补充教育经历
-                    </button>
-                  </div>
                   <form
                     id="certification-form"
                     class="certification-editor"
@@ -763,6 +665,122 @@
                     class="certification-list"
                     aria-label="认证申请进度"
                   ></div>
+                  <section id="settings-identity" aria-label="邮箱与学号绑定">
+                    <div class="settings-binding-heading">
+                      <h3>账号绑定</h3>
+                      <p id="settings-identity-status" role="status">请登录后查看绑定状态。</p>
+                    </div>
+                    <div class="settings-identity-forms">
+                      <details class="settings-binding-panel" id="settings-email-binding">
+                        <summary>
+                          <span class="settings-binding-title" id="settings-email-binding-title"
+                            >邮箱绑定</span
+                          ><span class="settings-binding-action" id="settings-email-summary"
+                            >读取中…</span
+                          >
+                        </summary>
+                        <form
+                          id="settings-email-form"
+                          aria-labelledby="settings-email-binding-title"
+                        >
+                          <div class="settings-grid">
+                            <label class="auth-field"
+                              ><span>要绑定的邮箱</span
+                              ><input
+                                name="email"
+                                type="email"
+                                maxlength="128"
+                                autocomplete="email"
+                                required
+                            /></label>
+                            <label class="auth-field"
+                              ><span>当前密码</span
+                              ><input
+                                name="currentPassword"
+                                type="password"
+                                maxlength="128"
+                                autocomplete="current-password"
+                                required
+                            /></label>
+                          </div>
+                          <label class="auth-field"
+                            ><span>邮箱验证码</span>
+                            <div class="auth-inline">
+                              <input
+                                name="emailCode"
+                                inputmode="numeric"
+                                pattern="[0-9]{6}"
+                                maxlength="6"
+                                autocomplete="one-time-code"
+                                required
+                              /><button
+                                class="bbs-action"
+                                data-action-tone="secondary"
+                                type="button"
+                                id="settings-email-code"
+                              >
+                                发送验证码
+                              </button>
+                            </div></label
+                          >
+                          <p class="settings-binding-note">验证后可用于找回密码。</p>
+                          <p id="settings-email-message" role="status" aria-live="polite"></p>
+                          <button
+                            class="auth-submit bbs-action"
+                            data-action-tone="primary"
+                            type="submit"
+                          >
+                            验证并绑定邮箱
+                          </button>
+                        </form>
+                      </details>
+                      <details class="settings-binding-panel" id="settings-student-binding">
+                        <summary>
+                          <span class="settings-binding-title" id="settings-student-binding-title"
+                            >学号绑定</span
+                          ><span class="settings-binding-action" id="settings-student-summary"
+                            >读取中…</span
+                          >
+                        </summary>
+                        <form
+                          id="settings-student-form"
+                          aria-labelledby="settings-student-binding-title"
+                        >
+                          <div class="settings-grid">
+                            <label class="auth-field"
+                              ><span>学号</span
+                              ><input
+                                name="studentId"
+                                inputmode="numeric"
+                                pattern="20[0-9]{8}"
+                                maxlength="10"
+                                required
+                            /></label>
+                            <label class="auth-field"
+                              ><span>当前密码</span
+                              ><input
+                                name="currentPassword"
+                                type="password"
+                                maxlength="128"
+                                autocomplete="current-password"
+                                required
+                            /></label>
+                          </div>
+                          <p class="settings-binding-note">
+                            已验证清华邮箱与已有白名单中的学号记录匹配时自动绑定，其他情况由管理员核验。绑定不会更改教学身份或管理权限。
+                          </p>
+                          <p id="settings-student-message" role="status" aria-live="polite"></p>
+                          <button
+                            class="auth-submit bbs-action"
+                            data-action-tone="primary"
+                            type="submit"
+                          >
+                            提交绑定
+                          </button>
+                        </form>
+                      </details>
+                    </div>
+                  </section>
                 </section>
               </div>
             </div>

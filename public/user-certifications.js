@@ -19,6 +19,18 @@
           .filter(Boolean)
           .join(' · ');
 
+  function identityLineFor(value) {
+    if (value.type === 'company') return value.companyName || '企业名称';
+    const institution = value.institution || (value.automatic ? '电子工程系' : '');
+    if (value.type === 'teacher') return [institution, '教师'].filter(Boolean).join(' · ');
+    const stage = {
+      undergraduate: '本科生',
+      master: '硕士研究生',
+      doctor: '博士研究生',
+    }[value.education];
+    return [value.year, institution, stage, value.className].filter(Boolean).join(' · ');
+  }
+
   function installUserCertifications({ document: doc, window: host, app }) {
     const root = doc.getElementById('certifications');
     if (!root || !app || !root.classList.contains('user-certifications')) return;
@@ -72,7 +84,11 @@
       /* Invalid queries never submit or change identity. */
     }
     function revealCertification() {
-      if (host.location?.hash !== '#certifications' && !requestedTeacher) return;
+      if (
+        !['#certifications', '#settings-identity'].includes(host.location?.hash) &&
+        !requestedTeacher
+      )
+        return;
       const fold = root.closest('.personal-fold');
       if (fold) fold.open = true;
     }
@@ -208,10 +224,15 @@
       const detail = doc.createElement('p');
       const recognized = status === 'automatic';
       let state = { approved: '已认证', pending: '等待审核', rejected: '待补充' }[status];
-      if (recognized) state = item.source === 'account_role' ? '已核实' : '学号已识别';
-      title.textContent = `${labelFor(item)} · ${state}`;
-      detail.textContent = summaryFor(item);
-      copy.append(title, detail);
+      if (recognized) state = '已自动认证';
+      const certified = recognized || status === 'approved';
+      title.textContent = certified ? identityLineFor(item) : `${labelFor(item)} · ${state}`;
+      article.setAttribute('aria-label', `${title.textContent}，${state}`);
+      copy.append(title);
+      if (!certified) {
+        detail.textContent = summaryFor(item);
+        copy.append(detail);
+      }
       if (item.reviewNote && status === 'rejected') {
         const note = doc.createElement('p');
         note.textContent = `审核说明：${item.reviewNote}`;
@@ -250,7 +271,7 @@
       el.status.textContent = '暂未添加身份。可按需补充，不影响使用平台。';
       if (pendingCount) el.status.textContent = `待审核 ${pendingCount} 项`;
       if (identities.length)
-        el.status.textContent = `已识别或认证 ${identities.length} 项${pendingCount ? ` · 待审核 ${pendingCount} 项` : ''}`;
+        el.status.textContent = `已认证 ${identities.length} 项${pendingCount ? ` · 待审核 ${pendingCount} 项` : ''}`;
       controls();
     }
     async function load({ preserveDraft = true } = {}) {
@@ -290,7 +311,10 @@
               ? {
                   ...prior,
                   ...item,
-                  institution: item.institution || prior.institution,
+                  institution:
+                    prior.institution && prior.institution !== '清华大学电子系'
+                      ? prior.institution
+                      : item.institution || prior.institution,
                   year: item.year || prior.year,
                   className: item.className || prior.className,
                 }
@@ -471,6 +495,6 @@
     controls();
   }
   if (typeof module !== 'undefined' && module.exports)
-    module.exports = { slotFor, labelFor, summaryFor, installUserCertifications };
+    module.exports = { slotFor, labelFor, summaryFor, identityLineFor, installUserCertifications };
   else installUserCertifications({ document, window, app: window.freeBbsApp });
 })();

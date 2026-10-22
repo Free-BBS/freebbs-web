@@ -21,28 +21,41 @@
   padding-top: 2px;
 }
 
-.user-certifications .certification-list {
+.user-certifications .certification-toolbar-actions {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.user-certifications .certification-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 .user-certifications .certification-entry {
-  flex: 0 1 360px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px 16px;
-  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  border-color: var(--ui-line);
 }
 
 .user-certifications .certification-entry > div {
   min-width: 0;
+  flex: 1;
 }
 
 .user-certifications .certification-entry h3 {
-  font-size: 0.96rem;
+  font: 500 0.96rem/1.7 var(--font-ui);
 }
 
 .user-certifications .certification-entry p {
@@ -85,11 +98,19 @@
   gap: 16px;
 }
 
+.user-certifications .certification-editor :is(input, select) {
+  box-sizing: border-box;
+  height: calc(1.6em + 26px);
+}
+
 .certification-editor-heading {
   display: flex;
+  grid-column: 1 / -1;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-line);
 }
 
 .certification-editor-heading h3 {
@@ -99,6 +120,8 @@
 
 body .user-certifications .auth-field {
   min-width: 0;
+  align-self: start;
+  align-content: start;
   gap: 7px;
   font: 500 0.92rem/1.7 var(--font-ui);
 }
@@ -294,6 +317,12 @@ body .user-certifications .auth-field :is(input, select) {
   justify-content: center;
   color: var(--ui-muted);
   font: 400 0.9rem/1.7 var(--font-ui);
+}
+
+@media (max-width: 900px) {
+  .user-certifications .certification-editor :is(input, select) {
+    height: calc(1.6em + 22px);
+  }
 }
 
 @media (max-width: 600px) {

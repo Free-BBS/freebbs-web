@@ -4,6 +4,12 @@ const express = require('express');
 
 const INSTITUTION = '清华大学电子系';
 const EDUCATIONS = Object.freeze({ undergraduate: '本科', master: '硕士', doctor: '博士' });
+const AUTOMATIC_INSTITUTION = '电子工程系';
+const AUTOMATIC_EDUCATIONS = Object.freeze({
+  undergraduate: '本科生',
+  master: '硕士研究生',
+  doctor: '博士研究生',
+});
 const PAGE_SIZE = 30;
 
 function certificationError(status, code, message) {
@@ -79,9 +85,11 @@ function certificationSuggestion(studentId) {
   };
 }
 
-// users.student_id is written by whitelist registration or administrator-verified
-// account binding, never by an unreviewed certification form. It establishes an
-// identity stage and entry year, not graduation, an awarded degree or enrolment now.
+// users.student_id is written by whitelist registration, verified-mailbox/explicit
+// whitelist pairing, or administrator-verified binding, never an unreviewed form.
+// Department is this platform's explicit default, not inferred from the number.
+// It establishes an identity stage and entry year, not graduation, an awarded
+// degree or enrolment now.
 function automaticCertifications(user) {
   const values = [];
   const education =
@@ -89,7 +97,8 @@ function automaticCertifications(user) {
   if (education?.type === 'education')
     values.push({
       ...education,
-      label: `${education.year} ${education.institution} ${EDUCATIONS[education.education]}身份`,
+      institution: AUTOMATIC_INSTITUTION,
+      label: `${education.year} · ${AUTOMATIC_INSTITUTION} · ${AUTOMATIC_EDUCATIONS[education.education]}`,
       automatic: true,
       source: 'bound_student_id',
       approvedAt: null,
@@ -100,10 +109,10 @@ function automaticCertifications(user) {
       type: 'teacher',
       education: null,
       year: null,
-      institution: '',
+      institution: AUTOMATIC_INSTITUTION,
       className: '',
       verifiedName,
-      label: verifiedName ? `${verifiedName} · 教师` : '教师',
+      label: `${AUTOMATIC_INSTITUTION} · 教师`,
       automatic: true,
       source: 'account_role',
       approvedAt: null,

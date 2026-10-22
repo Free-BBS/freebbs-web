@@ -8,6 +8,7 @@ const { isValidUsername, USERNAME_MESSAGE } = require('./username-policy');
 const CODE_TTL_MS = 10 * 60 * 1000;
 const CODE_ATTEMPTS = 5;
 const RESET_MESSAGE = '如果用户名与已验证邮箱匹配，验证码会发送到该邮箱，10 分钟内有效';
+const SCHOOL_EMAIL = /^[^\s@]+@(?:tsinghua\.edu\.cn|mails\.tsinghua\.edu\.cn)$/;
 
 function accountError(status, code, message) {
   return Object.assign(new Error(message), { status, code });
@@ -140,17 +141,12 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     }
   }
 
-  async function bindWhitelistedStudent(connection, user, studentId) {
+  async function verifiedWhitelistPair(connection, user, studentId) {
     const email = String(user.email || '')
       .trim()
       .toLowerCase();
-    if (
-      user.student_id ||
-      !user.email_verified_at ||
-      !/^[^\s@]+@(?:tsinghua\.edu\.cn|mails\.tsinghua\.edu\.cn)$/.test(email) ||
-      !/^20\d{8}$/.test(studentId)
-    )
-      return false;
+    if (!user.email_verified_at || !SCHOOL_EMAIL.test(email) || !/^20\d{8}$/.test(studentId))
+      return [];
     // Registration allows partially specified rows. Those wildcard permissions
     // are not proof that this mailbox belongs to this particular student number.
     const [entries] = await connection.execute(
@@ -161,28 +157,113 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
        ORDER BY id FOR UPDATE`,
       [studentId, email, String(user.full_name || '').trim()],
     );
-    if (
-      !entries.length ||
-      entries.some(
-        (entry) =>
-          entry.claimed_user_id != null && String(entry.claimed_user_id) !== String(user.id),
-      )
-    )
-      return false;
+    return entries;
+  }
+
+  const hasOtherClaim = (entries, userId) =>
+    entries.some(
+      (entry) => entry.claimed_user_id != null && String(entry.claimed_user_id) !== String(userId),
+    );
+
+  async function claimWhitelistPair(connection, userId, entries) {
+    await connection.execute(
+      `UPDATE registration_whitelist SET claimed_user_id = ?,
+       claimed_at = COALESCE(claimed_at, CURRENT_TIMESTAMP)
+       WHERE id IN (${entries.map(() => '?').join(', ')})
+         AND (claimed_user_id IS NULL OR claimed_user_id = ?)`,
+      [userId, ...entries.map((entry) => entry.id), userId],
+    );
+  }
+
+  async function bindWhitelistedStudent(connection, user, studentId) {
+    if (user.student_id) return false;
+    const entries = await verifiedWhitelistPair(connection, user, studentId);
+    if (!entries.length || hasOtherClaim(entries, user.id)) return false;
     const [[taken]] = await connection.execute(
       'SELECT id FROM users WHERE student_id = ? AND id <> ? LIMIT 1',
       [studentId, user.id],
     );
     if (taken) return false;
     await connection.execute('UPDATE users SET student_id = ? WHERE id = ?', [studentId, user.id]);
-    await connection.execute(
-      `UPDATE registration_whitelist SET claimed_user_id = ?,
-       claimed_at = COALESCE(claimed_at, CURRENT_TIMESTAMP)
-       WHERE id IN (${entries.map(() => '?').join(', ')})
-         AND (claimed_user_id IS NULL OR claimed_user_id = ?)`,
-      [user.id, ...entries.map((entry) => entry.id), user.id],
-    );
+    await claimWhitelistPair(connection, user.id, entries);
     return true;
+  }
+
+  async function claimBoundStudentMailbox(connection, user) {
+    if (!user.student_id) return;
+    const entries = await verifiedWhitelistPair(connection, user, user.student_id);
+    if (!entries.length) return;
+    if (hasOtherClaim(entries, user.id))
+      throw accountError(
+        409,
+        'whitelist_identity_conflict',
+        '该名单身份已有其他归属，邮箱未更改，请联系管理员核对',
+      );
+    await claimWhitelistPair(connection, user.id, entries);
+  }
+
+  async function suggestedWhitelistEmail(executor, user) {
+    if (!user || !/^20\d{8}$/.test(String(user.student_id || '')) || user.email_verified_at)
+      return null;
+    const [rows] = await executor.execute(
+      `SELECT email, full_name, claimed_user_id FROM registration_whitelist
+       WHERE active = 1 AND student_id IS NOT NULL AND email IS NOT NULL
+         AND BINARY student_id = BINARY ? ORDER BY id`,
+      [user.student_id],
+    );
+    const entries = rows.filter(
+      (row) =>
+        typeof row.email === 'string' &&
+        row.email.length <= 128 &&
+        row.email === row.email.trim().toLowerCase() &&
+        SCHOOL_EMAIL.test(row.email),
+    );
+    if (
+      !entries.length ||
+      hasOtherClaim(entries, user.id) ||
+      entries.some(
+        (entry) =>
+          entry.full_name != null && entry.full_name !== String(user.full_name || '').trim(),
+      )
+    )
+      return null;
+    const candidates = [...new Set(entries.map((entry) => entry.email))];
+    if (candidates.length !== 1) return null;
+    const [email] = candidates;
+    const currentEmail = String(user.email || '')
+      .trim()
+      .toLowerCase();
+    if (currentEmail && currentEmail !== email) return null;
+    const [[taken]] = await executor.execute(
+      'SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1',
+      [email, user.id],
+    );
+    return taken ? null : { email, source: 'whitelist_pair', requiresVerification: true };
+  }
+
+  async function uniqueWhitelistedStudent(connection, user) {
+    const email = String(user.email || '')
+      .trim()
+      .toLowerCase();
+    if (user.student_id || !user.email_verified_at || !SCHOOL_EMAIL.test(email)) return null;
+    const [entries] = await connection.execute(
+      `SELECT id, student_id, full_name, claimed_user_id FROM registration_whitelist
+       WHERE active = 1 AND student_id IS NOT NULL AND email IS NOT NULL
+         AND BINARY email = BINARY ? ORDER BY id FOR UPDATE`,
+      [email],
+    );
+    if (
+      !entries.length ||
+      entries.some(
+        (entry) =>
+          !/^20\d{8}$/.test(String(entry.student_id || '')) ||
+          (entry.full_name != null && entry.full_name !== String(user.full_name || '').trim()) ||
+          (entry.claimed_user_id != null && String(entry.claimed_user_id) !== String(user.id)),
+      )
+    )
+      return null;
+    const candidates = [...new Set(entries.map((entry) => entry.student_id))];
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   async function issueCode(connection, user, email, purpose) {
@@ -260,7 +341,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
 
   async function read(userId) {
     const [[user]] = await pool.execute(
-      'SELECT email, email_verified_at, student_id FROM users WHERE id = ?',
+      'SELECT id, email, email_verified_at, student_id, full_name FROM users WHERE id = ?',
       [userId],
     );
     const [[request]] = await pool.execute(
@@ -270,6 +351,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     return {
       email: user?.email || '',
       emailVerified: Boolean(user?.email_verified_at),
+      emailSuggestion: await suggestedWhitelistEmail(pool, user),
       studentId: user?.student_id || '',
       studentRequest: request ? { studentId: request.student_id, status: request.status } : null,
     };
@@ -312,18 +394,26 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
         'SELECT student_id, status FROM account_student_requests WHERE user_id = ? FOR UPDATE',
         [userId],
       );
+      const verifiedUser = { ...user, email, email_verified_at: new Date(now()) };
+      await claimBoundStudentMailbox(connection, verifiedUser);
       if (pending?.status === 'pending') {
-        const bound = await bindWhitelistedStudent(
-          connection,
-          { ...user, email, email_verified_at: new Date(now()) },
-          pending.student_id,
-        );
+        const bound = await bindWhitelistedStudent(connection, verifiedUser, pending.student_id);
         if (bound)
           await connection.execute(
             "UPDATE account_student_requests SET status = 'approved', reviewed_at = ?, reviewed_by = NULL WHERE user_id = ?",
             [new Date(now()), userId],
           );
         return { studentBinding: { status: bound ? 'bound' : 'pending' } };
+      }
+      const candidate = await uniqueWhitelistedStudent(connection, verifiedUser);
+      if (candidate && (await bindWhitelistedStudent(connection, verifiedUser, candidate))) {
+        if (pending?.student_id === candidate)
+          await connection.execute(
+            "UPDATE account_student_requests SET status = 'approved', reviewed_at = ?, reviewed_by = NULL WHERE user_id = ?",
+            [new Date(now()), userId],
+          );
+        // Successful proof is enough; no fictional manual request or reviewer is created.
+        return { studentBinding: { status: 'bound' } };
       }
       return {};
     });

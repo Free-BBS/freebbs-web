@@ -81,8 +81,38 @@ function bindingFixture(options = {}) {
         return [options.missingState ? [] : [{ id: 1 }]];
       }
       if (sql.startsWith('SELECT * FROM users')) return [[state.user]];
+      if (sql.startsWith('SELECT id, email, email_verified_at, student_id, full_name FROM users'))
+        return [[state.user]];
       if (sql.startsWith('SELECT id FROM users WHERE student_id'))
         return [options.taken ? [{ id: 99 }] : []];
+      if (sql.startsWith('SELECT id FROM users WHERE email'))
+        return [options.emailTaken ? [{ id: 99 }] : []];
+      if (sql.startsWith('SELECT email, full_name, claimed_user_id FROM registration_whitelist')) {
+        assert.doesNotMatch(sql, /FOR UPDATE/);
+        return [
+          state.entries.filter(
+            (entry) =>
+              entry.active === 1 &&
+              entry.student_id != null &&
+              entry.email != null &&
+              entry.student_id === args[0],
+          ),
+        ];
+      }
+      if (
+        sql.startsWith(
+          'SELECT id, student_id, full_name, claimed_user_id FROM registration_whitelist',
+        )
+      )
+        return [
+          state.entries.filter(
+            (entry) =>
+              entry.active === 1 &&
+              entry.student_id != null &&
+              entry.email != null &&
+              entry.email === args[0],
+          ),
+        ];
       if (sql.startsWith('SELECT id, claimed_user_id FROM registration_whitelist')) {
         assert.match(sql, /student_id IS NOT NULL AND email IS NOT NULL/);
         assert.match(sql, /BINARY student_id = BINARY \? AND BINARY email = BINARY \?/);
@@ -138,6 +168,12 @@ function bindingFixture(options = {}) {
       }
       if (sql.startsWith('SELECT student_id, status FROM account_student_requests'))
         return [[...(state.request ? [state.request] : [])]];
+      if (
+        sql.startsWith(
+          'SELECT student_id, status, requested_at, reviewed_at FROM account_student_requests',
+        )
+      )
+        return [[...(state.request ? [state.request] : [])]];
       if (sql.startsWith("UPDATE account_student_requests SET status = 'approved'")) {
         state.request.status = 'approved';
         [state.request.reviewed_at] = args;
@@ -148,12 +184,160 @@ function bindingFixture(options = {}) {
     },
   };
   const service = createAccountIdentityService({
-    pool: { getConnection: async () => connection },
+    pool: {
+      execute: (...args) => connection.execute(...args),
+      getConnection: async () => connection,
+    },
     now: () => clock,
     sendCode: async () => assert.fail('No email is sent by binding a supplied OTP'),
   });
   return { service, state, target, schoolEmail };
 }
+
+test('a bound student receives only an advisory unique mailbox suggestion with no writes or verification', async () => {
+  for (const currentEmail of [null, 'named.student@mails.tsinghua.edu.cn']) {
+    const f = bindingFixture({
+      user: { student_id: '2024010901', email: currentEmail, email_verified_at: null },
+    });
+    f.state.entries.push({ ...f.state.entries[0], id: 12, full_name: null, claimed_user_id: 8 });
+    const result = await f.service.read(8);
+    assert.deepEqual(result.emailSuggestion, {
+      email: f.schoolEmail,
+      source: 'whitelist_pair',
+      requiresVerification: true,
+    });
+    assert.equal(result.emailVerified, false);
+    assert.equal(result.email, currentEmail || '');
+    assert.equal(f.state.user.email, currentEmail);
+    assert.equal(f.state.entries[0].claimed_user_id, null);
+    assert.equal(f.state.code.used_at, null);
+    assert.equal(f.state.commits, 0);
+    assert.ok(f.state.queries.every(({ sql }) => sql.startsWith('SELECT')));
+    assert.equal(
+      f.state.queries.some(({ sql }) => sql.includes('FOR UPDATE')),
+      false,
+    );
+  }
+});
+
+test('mailbox suggestions refuse wrong sources, conflicts, ambiguity and existing user choices', async () => {
+  const cases = [
+    { user: { student_id: null }, request: { student_id: '2024010901', status: 'pending' } },
+    { user: { email: 'chosen@example.test', email_verified_at: null } },
+    { user: { email: 'named.student@mails.tsinghua.edu.cn', email_verified_at: new Date() } },
+    { entry: { student_id: null } },
+    { entry: { student_id: '2024310999' } },
+    { entry: { email: null } },
+    { entry: { email: 'student@example.test' } },
+    { entry: { email: 'student@mails.tsinghua.edu.cn.evil.test' } },
+    { entry: { full_name: '不同的姓名' } },
+    { entry: { active: 0 } },
+    { entry: { claimed_user_id: 99 } },
+    { emailTaken: true },
+    { extra: { email: 'second@tsinghua.edu.cn' } },
+  ];
+  for (const value of cases) {
+    const f = bindingFixture({
+      ...value,
+      user: { student_id: '2024010901', email: null, email_verified_at: null, ...value.user },
+    });
+    Object.assign(f.state.entries[0], value.entry || {});
+    if (value.extra) f.state.entries.push({ ...f.state.entries[0], id: 12, ...value.extra });
+    assert.equal((await f.service.read(8)).emailSuggestion, null, JSON.stringify(value));
+    assert.equal(f.state.commits, 0);
+  }
+  const split = bindingFixture({
+    user: { student_id: '2024010901', email: null, email_verified_at: null },
+  });
+  split.state.entries[0].email = null;
+  split.state.entries.push({
+    ...split.state.entries[0],
+    id: 12,
+    student_id: null,
+    email: split.schoolEmail,
+  });
+  assert.equal(
+    (await split.service.read(8)).emailSuggestion,
+    null,
+    'separate student and mailbox rows cannot be joined into evidence',
+  );
+});
+
+test('OTP for an already bound student claims only the exact pair and preserves the number and other claims', async () => {
+  const f = bindingFixture({
+    user: { student_id: '2024010901', email: null, email_verified_at: null },
+  });
+  f.state.entries.push({
+    ...f.state.entries[0],
+    id: 12,
+    student_id: '2024310999',
+    claimed_user_id: 99,
+  });
+  assert.deepEqual(
+    await f.service.bindEmail(8, {
+      email: f.schoolEmail,
+      currentPassword: bindingPassword,
+      emailCode: bindingCode,
+    }),
+    {},
+  );
+  assert.equal(f.state.user.student_id, f.target);
+  assert.equal(f.state.user.email, f.schoolEmail);
+  assert.ok(f.state.user.email_verified_at);
+  assert.equal(f.state.entries[0].claimed_user_id, 8);
+  assert.equal(f.state.entries[1].claimed_user_id, 99);
+  assert.equal(f.state.request, null);
+  assert.equal(f.state.user.role, 'teacher');
+  assert.equal((await f.service.read(8)).emailSuggestion, null);
+});
+
+test('a conflicting exact-pair claim rolls back the existing mailbox, OTP and every identity change', async () => {
+  const originalVerified = new Date('2026-10-01T00:00:00Z');
+  const f = bindingFixture({
+    user: {
+      student_id: '2024010901',
+      email: 'previous@example.test',
+      email_verified_at: originalVerified,
+    },
+  });
+  f.state.entries[0].claimed_user_id = 99;
+  await assert.rejects(
+    f.service.bindEmail(8, {
+      email: f.schoolEmail,
+      currentPassword: bindingPassword,
+      emailCode: bindingCode,
+    }),
+    { status: 409, code: 'whitelist_identity_conflict' },
+  );
+  assert.equal(f.state.user.email, 'previous@example.test');
+  assert.deepEqual(f.state.user.email_verified_at, originalVerified);
+  assert.equal(f.state.user.student_id, f.target);
+  assert.equal(f.state.code.used_at, null);
+  assert.equal(f.state.entries[0].claimed_user_id, 99);
+  assert.equal(f.state.commits, 0);
+  assert.equal(f.state.rollbacks, 1);
+});
+
+test('an expired suggestion or absent pair does not block an explicitly requested ordinary OTP mailbox binding', async () => {
+  const f = bindingFixture({
+    user: { student_id: '2024010901', email: null, email_verified_at: null },
+  });
+  assert.ok((await f.service.read(8)).emailSuggestion);
+  f.state.entries[0].active = 0;
+  assert.deepEqual(
+    await f.service.bindEmail(8, {
+      email: f.schoolEmail,
+      currentPassword: bindingPassword,
+      emailCode: bindingCode,
+    }),
+    {},
+  );
+  assert.equal(f.state.user.email, f.schoolEmail);
+  assert.ok(f.state.user.email_verified_at);
+  assert.equal(f.state.user.student_id, f.target);
+  assert.equal(f.state.entries[0].claimed_user_id, null);
+  assert.equal(f.state.request, null);
+});
 
 test('verified school mailboxes bind only their explicitly paired unclaimed or same-owner whitelist identity', async () => {
   for (const claimed of [null, 8]) {
@@ -311,7 +495,7 @@ test('a pending student request can complete only after its explicitly paired sc
   assert.equal(f.state.entries[0].claimed_user_id, 8);
 });
 
-test('incorrect OTP, unpaired pending identities and absent student requests never silently bind an identity', async () => {
+test('incorrect OTP and unpaired pending identities never silently bind an identity', async () => {
   const request = { user_id: 8, student_id: '2024010901', status: 'pending' };
   const wrong = bindingFixture({ user: { email: null, email_verified_at: null }, request });
   await assert.rejects(
@@ -339,6 +523,9 @@ test('incorrect OTP, unpaired pending identities and absent student requests nev
   assert.ok(unmatched.state.user.email_verified_at);
   assert.equal(unmatched.state.user.student_id, null);
   assert.equal(unmatched.state.request.status, 'pending');
+});
+
+test('a verified unique mailbox pair binds without requiring a student application or inventing a review', async () => {
   const absent = bindingFixture({ user: { email: null, email_verified_at: null } });
   assert.deepEqual(
     await absent.service.bindEmail(8, {
@@ -346,10 +533,106 @@ test('incorrect OTP, unpaired pending identities and absent student requests nev
       currentPassword: bindingPassword,
       emailCode: bindingCode,
     }),
-    {},
+    { studentBinding: { status: 'bound' } },
   );
-  assert.equal(absent.state.user.student_id, null);
+  assert.equal(absent.state.user.student_id, absent.target);
   assert.equal(absent.state.request, null);
+  assert.equal(absent.state.entries[0].claimed_user_id, 8);
+});
+
+test('mailbox discovery refuses ambiguous, claimed and mismatched rows and keeps an unmatched pending target', async () => {
+  for (const conflict of [
+    { student_id: '2024210902' },
+    { claimed_user_id: 99 },
+    { full_name: '另一位同学' },
+  ]) {
+    const f = bindingFixture({ user: { email: null, email_verified_at: null } });
+    f.state.entries.push({ ...f.state.entries[0], id: 12, ...conflict });
+    assert.deepEqual(
+      await f.service.bindEmail(8, {
+        email: f.schoolEmail,
+        currentPassword: bindingPassword,
+        emailCode: bindingCode,
+      }),
+      {},
+    );
+    assert.equal(f.state.user.student_id, null);
+    assert.equal(f.state.request, null);
+    assert.equal(f.state.entries[0].claimed_user_id, null);
+    assert.ok(
+      f.state.user.email_verified_at,
+      'the mailbox proof succeeds independently of an ambiguous number',
+    );
+  }
+  const pending = bindingFixture({
+    user: { email: null, email_verified_at: null },
+    request: { user_id: 8, student_id: '2024310999', status: 'pending' },
+  });
+  assert.deepEqual(
+    await pending.service.bindEmail(8, {
+      email: pending.schoolEmail,
+      currentPassword: bindingPassword,
+      emailCode: bindingCode,
+    }),
+    { studentBinding: { status: 'pending' } },
+  );
+  assert.equal(pending.state.request.student_id, '2024310999');
+  assert.equal(pending.state.request.status, 'pending');
+  assert.equal(pending.state.user.student_id, null);
+});
+
+test('explicit student choices produce the same binding before or after OTP when a mailbox has two valid numbers', async () => {
+  for (const numberFirst of [true, false]) {
+    const f = bindingFixture({ user: { email: null, email_verified_at: null } });
+    f.state.entries.push({ ...f.state.entries[0], id: 12, student_id: '2024210902' });
+    if (numberFirst) {
+      assert.deepEqual(
+        await f.service.requestStudentId(8, {
+          studentId: f.target,
+          currentPassword: bindingPassword,
+        }),
+        { status: 'pending' },
+      );
+    }
+    const email = await f.service.bindEmail(8, {
+      email: f.schoolEmail,
+      currentPassword: bindingPassword,
+      emailCode: bindingCode,
+    });
+    if (numberFirst) {
+      assert.deepEqual(email, { studentBinding: { status: 'bound' } });
+      assert.equal(
+        f.state.queries.some(({ sql }) =>
+          sql.startsWith(
+            'SELECT id, student_id, full_name, claimed_user_id FROM registration_whitelist',
+          ),
+        ),
+        false,
+        'a declared number is checked precisely, never replaced by whole-mailbox discovery',
+      );
+    } else {
+      assert.deepEqual(
+        email,
+        {},
+        'without an explicit choice an ambiguous mailbox must not pick a number',
+      );
+      assert.deepEqual(
+        await f.service.requestStudentId(8, {
+          studentId: f.target,
+          currentPassword: bindingPassword,
+        }),
+        { status: 'bound' },
+      );
+    }
+    assert.equal(f.state.user.student_id, f.target);
+    assert.equal(f.state.request.student_id, f.target);
+    assert.equal(f.state.request.status, 'approved');
+    assert.equal(f.state.request.reviewed_by, null);
+    assert.equal(f.state.entries[0].claimed_user_id, 8);
+    assert.equal(f.state.entries[1].claimed_user_id, null);
+    assert.equal(f.state.user.role, 'teacher');
+    assert.equal(f.state.user.is_admin, 0);
+  }
 });
 
 test('a uniqueness race while completing a pending request rolls back mailbox changes, OTP consumption and claims together', async () => {

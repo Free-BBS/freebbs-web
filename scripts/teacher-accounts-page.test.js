@@ -52,6 +52,11 @@ async function fixture(callApi) {
   const emailMessage = { textContent: '' };
   const studentMessage = { textContent: '' };
   const send = field();
+  const refresh = field();
+  const emailBinding = { open: false };
+  const studentBinding = { open: false };
+  const emailSummary = { textContent: '' };
+  const studentSummary = { textContent: '' };
   const root = {
     querySelector: (selector) =>
       ({
@@ -61,6 +66,10 @@ async function fixture(callApi) {
         '#settings-email-message': emailMessage,
         '#settings-student-message': studentMessage,
         '#settings-email-code': send,
+        '#settings-email-binding': emailBinding,
+        '#settings-student-binding': studentBinding,
+        '#settings-email-summary': emailSummary,
+        '#settings-student-summary': studentSummary,
       })[selector],
     querySelectorAll: () => [
       ...Object.values(email.elements),
@@ -73,6 +82,7 @@ async function fixture(callApi) {
   const userState = { uid: 'u_teacher', token: 'token_one', isLoggedIn: true };
   const stored = new Map([['free_bbs_auth_token', userState.token]]);
   const window = {
+    location: { hash: '#certifications' },
     localStorage: {
       getItem: (key) => stored.get(key) ?? null,
       setItem: (key, value) => stored.set(key, String(value)),
@@ -95,7 +105,10 @@ async function fixture(callApi) {
     fs.readFileSync(path.join(__dirname, '../public/account-identity.js'), 'utf8'),
     {
       window,
-      document: { getElementById: () => root },
+      document: {
+        getElementById: (id) =>
+          ({ 'settings-identity': root, 'certification-refresh': refresh })[id],
+      },
       Date,
       Promise,
       CustomEvent: function FixtureEvent(type, options) {
@@ -120,6 +133,11 @@ async function fixture(callApi) {
     email,
     student,
     send,
+    refresh,
+    emailBinding,
+    studentBinding,
+    emailSummary,
+    studentSummary,
     status,
     emailMessage,
     studentMessage,
@@ -129,6 +147,136 @@ async function fixture(callApi) {
     window,
   };
 }
+
+test('a unique whitelist email is only prefilled and still requires explicit OTP verification', async () => {
+  const writes = [];
+  const f = await fixture(async (route, options) => {
+    if (options) writes.push({ route, options });
+    return {
+      email: '',
+      emailVerified: false,
+      studentId: '2025310001',
+      emailSuggestion: {
+        email: 'preview-only@tsinghua.edu.cn',
+        source: 'whitelist_pair',
+        requiresVerification: true,
+      },
+    };
+  });
+  assert.equal(f.email.elements.email.value, 'preview-only@tsinghua.edu.cn');
+  assert.equal(f.emailSummary.textContent, '名单邮箱待验证');
+  assert.equal(f.emailBinding.open, true);
+  assert.match(f.emailMessage.textContent, /验证后完成绑定/);
+  assert.match(f.status.textContent, /邮箱：未绑定/);
+  assert.deepEqual(writes, [], 'reading a suggestion sends neither a code nor a binding request');
+  assert.equal(f.dispatched.length, 0, 'a suggestion does not certify or change the identity');
+});
+
+test('a late whitelist suggestion never overrides typed or deliberately cleared email drafts', async () => {
+  for (const draft of ['my-choice@example.test', '']) {
+    let finish;
+    const pending = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const f = await fixture(async () => pending);
+    f.email.elements.email.value = draft;
+    f.email.elements.email.listeners.input();
+    finish({
+      email: '',
+      emailSuggestion: {
+        email: 'preview-only@tsinghua.edu.cn',
+        source: 'whitelist_pair',
+        requiresVerification: true,
+      },
+    });
+    await settle();
+    assert.equal(f.email.elements.email.value, draft);
+    assert.equal(f.emailBinding.open, false);
+  }
+});
+
+test('refresh status discovers newly imported email suggestions without replacing another mailbox', async () => {
+  let suggestion = null;
+  const f = await fixture(async () => ({ email: '', emailSuggestion: suggestion }));
+  assert.equal(f.email.elements.email.value, '');
+  suggestion = {
+    email: 'new-list@tsinghua.edu.cn',
+    source: 'whitelist_pair',
+    requiresVerification: true,
+  };
+  f.refresh.listeners.click();
+  await settle();
+  assert.equal(f.email.elements.email.value, 'new-list@tsinghua.edu.cn');
+  for (const existing of [
+    { email: 'already@example.test', emailVerified: true },
+    { email: 'pending@example.test', emailVerified: false },
+  ]) {
+    const other = await fixture(async () => ({ ...existing, emailSuggestion: suggestion }));
+    assert.equal(other.email.elements.email.value, existing.email);
+    assert.equal(other.emailBinding.open, false);
+  }
+});
+
+test('malformed or untrusted email suggestions never prefill an identity', async () => {
+  for (const suggestion of [
+    { email: 'not-school@example.test', source: 'whitelist_pair', requiresVerification: true },
+    {
+      email: 'bad@tsinghua.edu.cn.evil.test',
+      source: 'whitelist_pair',
+      requiresVerification: true,
+    },
+    { email: 'preview@tsinghua.edu.cn', source: 'pending_student_id', requiresVerification: true },
+    { email: 'preview@tsinghua.edu.cn', source: 'whitelist_pair', requiresVerification: false },
+  ]) {
+    const f = await fixture(async () => ({ email: '', emailSuggestion: suggestion }));
+    assert.equal(f.email.elements.email.value, '');
+    assert.equal(f.emailBinding.open, false);
+  }
+});
+
+test('binding editors stay collapsed on reads; legacy links open them without resetting a draft', async () => {
+  const f = await fixture(async () => ({
+    email: 'preview@tsinghua.edu.cn',
+    emailVerified: true,
+    studentId: '2025310001',
+  }));
+  assert.equal(f.emailSummary.textContent, '已验证');
+  assert.equal(f.studentSummary.textContent, '已绑定');
+  assert.equal(f.emailBinding.open, false);
+  assert.equal(f.studentBinding.open, false);
+  f.email.elements.currentPassword.value = 'local-draft';
+  f.window.location.hash = '#settings-identity';
+  f.events.hashchange();
+  assert.equal(f.emailBinding.open, true);
+  assert.equal(f.studentBinding.open, true);
+  assert.equal(f.email.elements.currentPassword.value, 'local-draft');
+  f.window.location.hash = '#certifications';
+  f.events.hashchange();
+  assert.equal(f.emailBinding.open, true, 'ordinary navigation does not erase a user choice');
+  f.userState.isLoggedIn = false;
+  f.events['freebbs:session-change']();
+  assert.equal(f.emailBinding.open, false);
+  assert.equal(f.studentBinding.open, false);
+  assert.equal(f.emailSummary.textContent, '未登录');
+  assert.equal(f.email.elements.currentPassword.value, '');
+});
+
+test('an asynchronous binding error is visible even when its editor was collapsed while waiting', async () => {
+  let fail;
+  const pending = new Promise((_, reject) => {
+    fail = reject;
+  });
+  const f = await fixture(async (_route, options) =>
+    options ? pending : { email: '', studentId: '' },
+  );
+  f.send.listeners.click();
+  assert.equal(f.emailBinding.open, true);
+  f.emailBinding.open = false;
+  fail(new Error('测试验证失败'));
+  await settle();
+  assert.equal(f.emailBinding.open, true);
+  assert.equal(f.emailMessage.textContent, '测试验证失败');
+});
 
 test('email and student submissions capture the real form values before busy state disables inputs', async () => {
   const requests = [];
