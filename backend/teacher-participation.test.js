@@ -326,6 +326,9 @@ test('workspace hides inactive courses and limits feedback to 20 owned contribut
   assert.equal(result.feedback[0].courseSlug, 'signals');
   assert.equal(result.feedback[0].pointId, 'SS-01-01');
   assert.equal(result.feedback[0].response, '');
+  const feedbackRead = state.queries.find(({ sql }) => sql.startsWith('SELECT e.id'));
+  assert.match(feedbackRead.sql, /n\.course_id = e\.course_id/);
+  assert.match(feedbackRead.sql, /CAST\(n\.node_id AS BINARY\) = CAST\(e\.node_id AS BINARY\)/);
   assert.doesNotMatch(
     JSON.stringify(result),
     /OTHER_PERSON_PRIVATE|OWN_PRIVATE|INACTIVE_COURSE|reviewed_by|email|student_id/,

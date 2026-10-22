@@ -106,12 +106,14 @@ function createMysqlTeacherParticipationStore(pool, { now = () => Date.now() } =
         [user.is_admin ? 1 : 0, userId, userId],
       );
       // Only explicitly submitted opinions owned by this account, never other people's notes.
+      // Canonical ASCII IDs also join safely across legacy UTF-8 and current ascii_bin tables.
       const [feedback] = await pool.execute(
         `SELECT e.id, c.slug AS course_slug, c.name AS course_name,
                 e.node_id, n.title AS point_title, e.title, e.content, e.excerpt,
                 e.category, e.status, e.review_response, e.updated_at, e.document_version
          FROM learning_entries e JOIN courses c ON c.id = e.course_id
-         LEFT JOIN course_map_nodes n ON n.course_id = e.course_id AND n.node_id = e.node_id
+         LEFT JOIN course_map_nodes n ON n.course_id = e.course_id
+           AND CAST(n.node_id AS BINARY) = CAST(e.node_id AS BINARY)
          WHERE e.user_id = ? AND e.kind = 'contribution' AND c.is_active = 1
          ORDER BY e.id DESC LIMIT 20`,
         [userId],

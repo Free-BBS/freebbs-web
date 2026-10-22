@@ -58,13 +58,26 @@ test(
     await pool.query(`CREATE TABLE course_map_nodes (
       course_id BIGINT NOT NULL, node_id VARCHAR(120) NOT NULL,
       title VARCHAR(160) NOT NULL, PRIMARY KEY (course_id, node_id)
-    ) ENGINE=InnoDB`);
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await pool.query(`CREATE TABLE course_material_managers (
       course_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
       PRIMARY KEY (course_id, user_id)
     ) ENGINE=InnoDB`);
     await ensureUserCertificationTables(pool);
     await ensureLearningWorkspaceTables(pool);
+    // Historical course tables and learning entries need not share a collation.
+    await pool.query(`ALTER TABLE learning_entries MODIFY node_id
+      VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL`);
+    const [nodeColumns] = await pool.execute(
+      `SELECT TABLE_NAME, COLLATION_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('course_map_nodes', 'learning_entries')
+       AND COLUMN_NAME = 'node_id' ORDER BY TABLE_NAME`,
+      [database],
+    );
+    assert.deepEqual(
+      nodeColumns.map((column) => column.COLLATION_NAME),
+      ['utf8mb4_unicode_ci', 'utf8mb4_general_ci'],
+    );
     await ensureTeacherParticipationTables(pool);
     await ensureTeacherParticipationTables(pool);
     await pool.execute(
@@ -159,7 +172,9 @@ test(
     assert.equal((await call('/admin/users/2/teaching-courses', 2)).status, 403);
     assert.equal((await call('/teacher/workspace', 4)).data.eligible, false);
     assert.equal((await assign(2, ['signals'])).status, 200);
-    const initial = (await call('/teacher/workspace', 2)).data;
+    const initialResponse = await call('/teacher/workspace', 2);
+    assert.equal(initialResponse.status, 200, JSON.stringify(initialResponse.data));
+    const initial = initialResponse.data;
     assert.equal(initial.eligible, true);
     assert.deepEqual(initial.courses, [
       { slug: 'signals', name: '信号与系统', code: 'SS', canEditMaterials: false },
@@ -199,6 +214,12 @@ test(
     assert.equal(feedback[0].pointTitle, '卷积');
     assert.equal(feedback[0].status, 'pending');
     assert.doesNotMatch(JSON.stringify(feedback), /PRIVATE|OTHER_PERSON/);
+    // Current published knowledge IDs use ascii_bin; the same join must support it.
+    await pool.query(`ALTER TABLE course_map_nodes MODIFY node_id
+      VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL`);
+    const productionLayout = await call('/teacher/workspace', 2);
+    assert.equal(productionLayout.status, 200, JSON.stringify(productionLayout.data));
+    assert.equal(productionLayout.data.feedback[0].pointTitle, '卷积');
     const [[managers]] = await pool.execute(
       'SELECT COUNT(*) AS count FROM course_material_managers',
     );
