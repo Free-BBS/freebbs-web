@@ -22,6 +22,8 @@ done
 node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js scripts/development-migration-boundary.test.js
 node --check scripts/map-bridge-configure.js
 node --test scripts/map-bridge-configure.test.js scripts/map-bridge-configure-workflow.test.js
+node --check scripts/moderation-access-check.js
+node --test scripts/moderation-access-check.test.js
 node --check server.js
 node --check public/page-transitions.js
 node --check public/publish.js
