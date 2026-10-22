@@ -648,11 +648,11 @@
                 >
                   <div class="settings-section-heading">
                     <h2 id="certifications-title">身份认证</h2>
-                    <p>学历、教师身份与企业名称经管理员审核后显示；认证不会改变账号权限。</p>
+                    <p>已绑定学号的身份自动识别，其他教育经历与身份可按需补充。</p>
                   </div>
                   <div class="certification-toolbar">
                     <p id="certification-status" role="status" aria-live="polite">
-                      请登录后申请认证。
+                      登录后查看或补充身份。
                     </p>
                     <button
                       type="button"
@@ -662,29 +662,45 @@
                       刷新状态
                     </button>
                   </div>
-                  <a href="/login" id="certification-signin">登录后申请认证</a>
+                  <a href="/login" id="certification-signin">登录后查看身份</a>
                   <div
                     id="certification-approved"
                     class="certification-list"
-                    aria-label="已认证身份"
+                    aria-label="已识别或认证的身份"
                   ></div>
-                  <div id="certification-suggestion" class="certification-suggestion" hidden>
-                    <p id="certification-suggestion-copy"></p>
+                  <div class="certification-add-row">
                     <button
                       type="button"
-                      id="certification-use-suggestion"
+                      id="certification-add"
                       class="certification-secondary"
+                      hidden
+                      disabled
                     >
-                      使用学号识别信息
+                      补充教育经历
                     </button>
                   </div>
-                  <form id="certification-form">
+                  <form
+                    id="certification-form"
+                    class="certification-editor"
+                    hidden
+                    aria-labelledby="certification-editor-title"
+                  >
+                    <div class="certification-editor-heading">
+                      <h3 id="certification-editor-title">补充身份信息</h3>
+                      <button
+                        type="button"
+                        id="certification-cancel"
+                        class="certification-entry-action"
+                      >
+                        收起
+                      </button>
+                    </div>
                     <label class="auth-field"
-                      ><span>申请身份</span
+                      ><span>补充哪段经历或身份</span
                       ><select id="certification-kind" name="kind">
-                        <option value="undergraduate">本科生</option>
-                        <option value="master">硕士研究生</option>
-                        <option value="doctor">博士研究生</option>
+                        <option value="undergraduate">本科经历</option>
+                        <option value="master">硕士经历</option>
+                        <option value="doctor">博士经历</option>
                         <option value="teacher">教师</option>
                         <option value="company">企业名称</option>
                       </select></label
@@ -694,7 +710,7 @@
                         ><span>学校与院系</span
                         ><input
                           id="certification-institution"
-                          value="清华大学电子系"
+                          placeholder="例如：清华大学电子工程系"
                           maxlength="128"
                           required
                       /></label>
@@ -731,11 +747,17 @@
                       /></label>
                     </div>
                     <p id="certification-slot-status" class="certification-help"></p>
-                    <p id="certification-message" role="status" aria-live="polite"></p>
-                    <button type="submit" class="auth-submit" id="certification-submit" disabled>
+                    <button
+                      type="submit"
+                      class="bbs-action"
+                      data-action-tone="primary"
+                      id="certification-submit"
+                      disabled
+                    >
                       提交认证申请
                     </button>
                   </form>
+                  <p id="certification-message" role="status" aria-live="polite"></p>
                   <div
                     id="certification-requests"
                     class="certification-list"

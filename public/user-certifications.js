@@ -1,5 +1,6 @@
 (() => {
-  const EDUCATIONS = { undergraduate: '本科生', master: '硕士研究生', doctor: '博士研究生' };
+  const EDUCATIONS = { undergraduate: '本科身份', master: '硕士身份', doctor: '博士身份' };
+  const KINDS = [...Object.keys(EDUCATIONS), 'teacher', 'company'];
   function slotFor(value) {
     if (value?.type === 'company' || value?.type === 'teacher') return value.type;
     return value?.type === 'education' && EDUCATIONS[value.education] ? value.education : '';
@@ -12,7 +13,7 @@
       : [
           value.type === 'teacher' ? value.verifiedName : '',
           value.institution,
-          value.year ? `${value.year} 年` : '',
+          value.year ? `${value.year} 年${value.type === 'teacher' ? '' : '入学'}` : '',
           value.className,
         ]
           .filter(Boolean)
@@ -39,9 +40,9 @@
       'message',
       'submit',
       'requests',
-      'suggestion',
-      'suggestion-copy',
-      'use-suggestion',
+      'add',
+      'cancel',
+      'editor-title',
     ];
     const el = Object.fromEntries(
       ids.map((name) => [name, doc.getElementById(`certification-${name}`)]),
@@ -55,143 +56,273 @@
     let loading = false;
     let saving = false;
     let approved = [];
+    let automatic = [];
     let requests = [];
-    let suggestion = null;
+    let managedSlots = new Set();
     let fullName = '';
+    let formOpen = false;
+    let activeKind = 'undergraduate';
+    const drafts = new Map();
     let requestedTeacher = false;
     try {
       requestedTeacher =
         new URLSearchParams(host.location?.search || '').get('certification') === 'teacher';
     } catch {
-      /* A malformed query must not change certification or submit a request. */
+      /* Invalid queries never submit or change identity. */
     }
     function revealCertification() {
       if (host.location?.hash !== '#certifications' && !requestedTeacher) return;
       const fold = root.closest('.personal-fold');
       if (fold) fold.open = true;
     }
+    function storedSessionMatches() {
+      try {
+        return (
+          typeof host.localStorage?.getItem !== 'function' ||
+          host.localStorage.getItem('free_bbs_auth_token') === app.userState.token
+        );
+      } catch {
+        return false;
+      }
+    }
     const session = () =>
-      !externalChange && app.userState.isLoggedIn && app.userState.uid && app.userState.token
+      !externalChange &&
+      storedSessionMatches() &&
+      app.userState.isLoggedIn &&
+      app.userState.uid &&
+      app.userState.token
         ? `${app.userState.uid}:${app.userState.token}`
         : '';
     const owns = (key, epoch) => key === session() && epoch === generation;
     const pendingFor = (kind) =>
-      requests.find((item) => item.status === 'pending' && slotFor(item) === kind);
+      requests.find(
+        (item) =>
+          item.status === 'pending' &&
+          item.requiresReview !== false &&
+          !managedSlots.has(kind) &&
+          slotFor(item) === kind,
+      );
     const approvedFor = (kind) => approved.find((item) => slotFor(item) === kind);
-
+    const availableKinds = () => KINDS.filter((kind) => !managedSlots.has(kind));
+    const nextSupplement = () =>
+      availableKinds().find(
+        (kind) => EDUCATIONS[kind] && !approvedFor(kind) && !pendingFor(kind),
+      ) ||
+      availableKinds().find((kind) => !approvedFor(kind) && !pendingFor(kind)) ||
+      availableKinds()[0];
     function controls() {
       const company = el.kind.value === 'company';
       const locked = !session() || !ready || loading || saving;
       const pending = pendingFor(el.kind.value);
+      const managed = managedSlots.has(el.kind.value);
+      el.form.hidden = !formOpen || !session();
       el['education-fields'].hidden = company;
       el['company-fields'].hidden = !company;
-      el['year-label'].textContent =
-        el.kind.value === 'teacher' ? '入学或任职年份（选填）' : '入学年份';
-      el.year.required = el.kind.value !== 'teacher';
-      el.form.querySelectorAll('input,select,button').forEach((field) => {
-        field.disabled = locked || Boolean(pending && field !== el.kind);
-      });
+      el['year-label'].textContent = el.kind.value === 'teacher' ? '相关年份（选填）' : '入学年份';
+      el.year.required = !company && el.kind.value !== 'teacher';
+      for (const field of el.form.querySelectorAll('input,select,button'))
+        field.disabled =
+          locked ||
+          !formOpen ||
+          Boolean((pending || managed) && field !== el.kind && field !== el.cancel);
       for (const name of ['institution', 'year', 'class']) el[name].disabled ||= company;
       el.company.disabled ||= !company;
       el.company.required = company;
-      el.submit.disabled = locked || Boolean(pending);
-      el.submit.textContent = pending
-        ? '等待审核'
-        : approvedFor(el.kind.value)
-          ? '申请更新认证'
-          : '提交认证申请';
-      el['slot-status'].textContent = pending
-        ? `此身份已有待审核申请。${approvedFor(el.kind.value) ? '审核期间现有认证继续有效。' : '通过前不会显示为已认证。'}`
-        : approvedFor(el.kind.value)
-          ? '提交修改申请后，原认证会保留到新申请通过。'
-          : '提交后由管理员核实，审核通过后生效。';
+      for (const option of el.kind.querySelectorAll('option')) {
+        option.disabled = managedSlots.has(option.value);
+        option.hidden = option.disabled;
+      }
+      el.submit.disabled = locked || !formOpen || managed || Boolean(pending);
+      el.submit.textContent = approvedFor(el.kind.value) ? '提交修改申请' : '提交认证申请';
+      el['slot-status'].textContent = approvedFor(el.kind.value)
+        ? '审核期间保留原认证。'
+        : '提交后由管理员核实。';
+      if (pending) {
+        el.submit.textContent = '等待审核';
+        el['slot-status'].textContent =
+          `此身份已有待审核申请。${approvedFor(el.kind.value) ? '审核期间现有认证继续有效。' : ''}`;
+      }
       if (el.kind.value === 'teacher' && ready)
         el['slot-status'].textContent +=
-          ` 教师认证牌将公开账号姓名${fullName ? `“${fullName}”` : ''}；如需更正姓名，请先联系管理员。`;
+          ` 教师认证牌将公开账号姓名${fullName ? `“${fullName}”` : ''}；更正姓名请联系管理员。`;
       el.refresh.disabled = !session() || loading || saving;
-      el['use-suggestion'].disabled = locked;
+      el.add.hidden = !session();
+      el.add.disabled = locked || !availableKinds().length;
+      el.add.setAttribute('aria-expanded', String(formOpen));
+      el.add.setAttribute('aria-controls', 'certification-form');
+      el.add.textContent = availableKinds().some(
+        (kind) => EDUCATIONS[kind] && !approvedFor(kind) && !pendingFor(kind),
+      )
+        ? '补充教育经历'
+        : '补充其他身份';
       el.signin.hidden = Boolean(session());
+      for (const list of [el.approved, el.requests])
+        for (const button of list.querySelectorAll('button')) button.disabled = locked;
     }
-
-    function selectKind(useSuggestion = false) {
-      const candidate = useSuggestion
-        ? suggestion
-        : pendingFor(el.kind.value) || approvedFor(el.kind.value);
-      if (useSuggestion && candidate) el.kind.value = slotFor(candidate);
-      el.institution.value = candidate?.institution || '清华大学电子系';
-      el.year.value = candidate?.year || new Date().getUTCFullYear();
+    function captureDraft(kind = activeKind) {
+      drafts.set(kind, {
+        institution: el.institution.value,
+        year: el.year.value,
+        className: el.class.value,
+        companyName: el.company.value,
+      });
+    }
+    function selectKind() {
+      const candidate =
+        drafts.get(el.kind.value) ||
+        pendingFor(el.kind.value) ||
+        approvedFor(el.kind.value) ||
+        requests.find((item) => item.status === 'rejected' && slotFor(item) === el.kind.value);
+      activeKind = el.kind.value;
+      el.institution.value = candidate?.institution || '';
+      el.year.value = candidate?.year || '';
       el.year.max = String(new Date().getUTCFullYear() + 1);
       el.class.value = candidate?.className || '';
       el.company.value = candidate?.companyName || '';
+      el['editor-title'].textContent = '补充身份信息';
+      if (pendingFor(activeKind)) el['editor-title'].textContent = '申请详情';
+      if (approvedFor(activeKind)) el['editor-title'].textContent = '修改认证信息';
       controls();
     }
-
+    function openEditor(kind) {
+      if (!session() || !ready || loading || saving || managedSlots.has(kind)) return;
+      if (formOpen) captureDraft();
+      el.kind.value = kind;
+      formOpen = true;
+      el.message.textContent = '';
+      selectKind();
+      el.kind.focus?.({ preventScroll: true });
+    }
+    function closeEditor({ preserve = true } = {}) {
+      if (preserve && formOpen) captureDraft();
+      formOpen = false;
+      controls();
+    }
     function entry(item, status) {
       const article = doc.createElement('article');
       article.className = 'certification-entry';
       article.dataset.status = status;
+      const copy = doc.createElement('div');
       const title = doc.createElement('h3');
-      title.textContent = `${labelFor(item)} · ${status === 'approved' ? '已认证' : status === 'pending' ? '等待审核' : '未通过'}`;
       const detail = doc.createElement('p');
+      const recognized = status === 'automatic';
+      let state = { approved: '已认证', pending: '等待审核', rejected: '待补充' }[status];
+      if (recognized) state = item.source === 'account_role' ? '已核实' : '学号已识别';
+      title.textContent = `${labelFor(item)} · ${state}`;
       detail.textContent = summaryFor(item);
-      article.append(title, detail);
+      copy.append(title, detail);
       if (item.reviewNote && status === 'rejected') {
         const note = doc.createElement('p');
         note.textContent = `审核说明：${item.reviewNote}`;
-        article.append(note);
+        copy.append(note);
+      }
+      article.append(copy);
+      if (!recognized && !managedSlots.has(slotFor(item))) {
+        const button = doc.createElement('button');
+        button.type = 'button';
+        button.className = 'certification-entry-action';
+        button.textContent = { approved: '修改', pending: '查看', rejected: '重新申请' }[status];
+        button.setAttribute('aria-label', `${button.textContent}${labelFor(item)}认证`);
+        button.setAttribute('aria-controls', 'certification-form');
+        button.disabled = loading || saving || !session();
+        button.addEventListener('click', () => openEditor(slotFor(item)));
+        article.append(button);
       }
       return article;
     }
-
     function render() {
-      el.approved.replaceChildren(...approved.map((item) => entry(item, 'approved')));
-      el.requests.replaceChildren(
-        ...requests
-          .filter((item) => ['pending', 'rejected'].includes(item.status))
-          .map((item) => entry(item, item.status)),
+      const identities = [
+        ...automatic,
+        ...approved.filter((item) => !managedSlots.has(slotFor(item))),
+      ];
+      el.approved.replaceChildren(
+        ...identities.map((item) => entry(item, item.automatic ? 'automatic' : 'approved')),
       );
-      el.suggestion.hidden = !suggestion;
-      el['suggestion-copy'].textContent = suggestion
-        ? `已绑定学号识别为${labelFor(suggestion)}，${summaryFor(suggestion)}。请核对后提交，仍需管理员审核。`
-        : '';
-      el.status.textContent = `已认证 ${approved.length} 项 · 待审核 ${requests.filter((item) => item.status === 'pending').length} 项`;
+      const visibleRequests = requests.filter(
+        (item) =>
+          ['pending', 'rejected'].includes(item.status) &&
+          item.requiresReview !== false &&
+          !managedSlots.has(slotFor(item)),
+      );
+      el.requests.replaceChildren(...visibleRequests.map((item) => entry(item, item.status)));
+      const pendingCount = visibleRequests.filter((item) => item.status === 'pending').length;
+      el.status.textContent = '暂未添加身份。可按需补充，不影响使用平台。';
+      if (pendingCount) el.status.textContent = `待审核 ${pendingCount} 项`;
+      if (identities.length)
+        el.status.textContent = `已识别或认证 ${identities.length} 项${pendingCount ? ` · 待审核 ${pendingCount} 项` : ''}`;
       controls();
     }
-
-    async function load({ preserveDraft = false } = {}) {
+    async function load({ preserveDraft = true } = {}) {
       const key = session();
       const epoch = generation;
       if (!key) return;
+      if (preserveDraft && formOpen) captureDraft();
       loadTicket += 1;
       const ticket = loadTicket;
       const first = !ready;
       loading = true;
-      el.status.textContent = '正在读取认证状态…';
+      el.status.textContent = '正在读取身份信息…';
       controls();
       try {
         const payload = await app.callApi('/me/certifications');
         if (!owns(key, epoch) || ticket !== loadTicket) return;
         if (!Array.isArray(payload.approved) || !Array.isArray(payload.requests))
-          throw new Error('认证状态读取失败，请刷新重试。');
+          throw new Error('身份信息读取失败，请刷新重试。');
         approved = payload.approved.filter(
           (item) => slotFor(item) && (!item.status || item.status === 'approved'),
         );
         requests = payload.requests.filter((item) => slotFor(item));
         fullName = typeof payload.fullName === 'string' ? payload.fullName.trim() : '';
-        suggestion =
-          slotFor(payload.suggestion) && payload.suggestion.type !== 'company'
-            ? payload.suggestion
-            : null;
+        // Old servers expose bound education as a suggestion, never proof of teacher identity.
+        const legacy =
+          !Array.isArray(payload.automatic) &&
+          payload.suggestion?.type === 'education' &&
+          slotFor(payload.suggestion)
+            ? [{ ...payload.suggestion, automatic: true, source: 'bound_student_id' }]
+            : [];
+        automatic = (Array.isArray(payload.automatic) ? payload.automatic : legacy)
+          .filter((item) => slotFor(item) && item.automatic === true)
+          .map((item) => {
+            const prior = item.type === 'teacher' ? approvedFor('teacher') : null;
+            return prior
+              ? {
+                  ...prior,
+                  ...item,
+                  institution: item.institution || prior.institution,
+                  year: item.year || prior.year,
+                  className: item.className || prior.className,
+                }
+              : item;
+          });
+        managedSlots = new Set([
+          ...(Array.isArray(payload.managedSlots)
+            ? payload.managedSlots.filter((kind) => KINDS.includes(kind))
+            : []),
+          ...automatic.map(slotFor),
+        ]);
         ready = true;
-        if (first && requestedTeacher) el.kind.value = 'teacher';
-        if (!preserveDraft || first) selectKind(first && Boolean(suggestion) && !requestedTeacher);
+        if (managedSlots.has(el.kind.value)) closeEditor({ preserve: false });
+        if (!availableKinds().includes(el.kind.value)) el.kind.value = availableKinds()[0] || '';
+        if (
+          first &&
+          requestedTeacher &&
+          !approvedFor('teacher') &&
+          !managedSlots.has('teacher') &&
+          !pendingFor('teacher')
+        ) {
+          el.kind.value = 'teacher';
+          formOpen = true;
+        }
+        if (!preserveDraft || first || formOpen) selectKind();
         render();
         host.dispatchEvent(
-          new host.CustomEvent('freebbs:certifications-updated', { detail: { approved } }),
+          new host.CustomEvent('freebbs:certifications-updated', {
+            detail: { approved, automatic },
+          }),
         );
       } catch (error) {
         if (owns(key, epoch) && ticket === loadTicket)
-          el.status.textContent = error.message || '认证状态读取失败，请刷新重试。';
+          el.status.textContent = error.message || '身份信息读取失败，请刷新重试。';
       } finally {
         if (owns(key, epoch) && ticket === loadTicket) {
           loading = false;
@@ -199,7 +330,6 @@
         }
       }
     }
-
     function sync() {
       const key = session();
       if (key === owner) return;
@@ -208,34 +338,41 @@
       ready = false;
       loading = false;
       saving = false;
+      formOpen = false;
       approved = [];
+      automatic = [];
       requests = [];
-      suggestion = null;
+      managedSlots = new Set();
       fullName = '';
+      drafts.clear();
       el.form.reset();
       el.approved.replaceChildren();
       el.requests.replaceChildren();
-      el.suggestion.hidden = true;
-      el['suggestion-copy'].textContent = '';
       el.message.textContent = '';
-      el.status.textContent = '请登录后申请认证。';
+      el.status.textContent = '登录后查看或补充身份。';
       selectKind();
-      if (key) load();
+      if (key) load({ preserveDraft: false });
     }
-
     el.kind.addEventListener('change', () => {
+      captureDraft();
       el.message.textContent = '';
       selectKind();
     });
-    el.refresh.addEventListener('click', load);
-    el['use-suggestion'].addEventListener('click', () => selectKind(true));
+    el.refresh.addEventListener('click', () => load({ preserveDraft: true }));
+    el.add.addEventListener('click', () => openEditor(nextSupplement()));
+    el.cancel.addEventListener('click', () => {
+      closeEditor();
+      el.add.focus?.();
+    });
     el.form.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (
+        !formOpen ||
         !ready ||
         loading ||
         saving ||
         !session() ||
+        managedSlots.has(el.kind.value) ||
         pendingFor(el.kind.value) ||
         !el.form.reportValidity()
       )
@@ -243,6 +380,7 @@
       const key = session();
       const epoch = generation;
       const kind = el.kind.value;
+      captureDraft();
       const body =
         kind === 'company'
           ? { type: 'company', companyName: el.company.value.trim() }
@@ -262,13 +400,16 @@
           body: JSON.stringify(body),
         });
         if (!owns(key, epoch)) return;
-        await load();
+        drafts.delete(kind);
+        formOpen = false;
+        await load({ preserveDraft: false });
         if (owns(key, epoch))
-          el.message.textContent = payload.message || '申请已提交，等待管理员审核。';
+          el.message.textContent = payload.message || '申请已提交，等待管理员核实。';
       } catch (error) {
         if (owns(key, epoch)) {
-          if (error.status === 409) await load();
-          if (owns(key, epoch)) el.message.textContent = error.message || '提交失败，请重试。';
+          if (error.status === 409) await load({ preserveDraft: true });
+          if (owns(key, epoch))
+            el.message.textContent = error.message || '提交失败，填写内容已保留，请重试。';
         }
       } finally {
         if (owns(key, epoch)) {
@@ -320,7 +461,6 @@
     Promise.resolve(app.sessionReady).then(sync);
     controls();
   }
-
   if (typeof module !== 'undefined' && module.exports)
     module.exports = { slotFor, labelFor, summaryFor, installUserCertifications };
   else installUserCertifications({ document, window, app: window.freeBbsApp });

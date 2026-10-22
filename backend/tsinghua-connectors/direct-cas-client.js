@@ -1,5 +1,6 @@
 /* eslint-disable max-classes-per-file, no-cond-assign, no-control-regex */
 
+const { load } = require('cheerio');
 const { CampusConnectorError } = require('./errors');
 const {
   attachDirectCasStage,
@@ -204,14 +205,7 @@ function extractLearnCsrfToken(learnHtml) {
 }
 
 function captchaIsVisible(html) {
-  const source = String(html || '');
-  const container = source.match(/<[^>]+\bid\s*=\s*["']c_code["'][^>]*>/i);
-  if (!container) return false;
-  const attributes = parseAttributes(container[0]);
-  const classes = String(attributes.class || '')
-    .split(/\s+/)
-    .filter(Boolean);
-  return !classes.includes('hidden');
+  return visibleIdentityPage(html).captchaVisible;
 }
 
 function extractCasForm(html, pageUrl) {
@@ -617,8 +611,7 @@ function requireSm2() {
   }
 }
 
-function identityNoteIsVisible(attributesSource) {
-  const attributes = parseAttributes(attributesSource);
+function identityAttributesAreVisible(attributes) {
   const classes = String(attributes.class || '')
     .split(/\s+/)
     .filter(Boolean);
@@ -630,29 +623,46 @@ function identityNoteIsVisible(attributesSource) {
     String(attributes['aria-hidden'] || '').toLowerCase() === 'true' ||
     classes.includes('hidden') ||
     classes.includes('d-none') ||
-    /(?:^|;)display:none(?:;|$)/.test(style) ||
-    /(?:^|;)visibility:hidden(?:;|$)/.test(style)
+    /(?:^|;)display:none(?:!important)?(?:;|$)/.test(style) ||
+    /(?:^|;)visibility:hidden(?:!important)?(?:;|$)/.test(style)
   );
+}
+
+function visibleIdentityPage(html) {
+  const $ = load(String(html || ''));
+  $('script, style, template, noscript, iframe, object, embed, dialog:not([open])').remove();
+  $('details:not([open])').each((_index, element) => {
+    $(element)
+      .contents()
+      .each((_childIndex, child) => {
+        if (child.type !== 'tag' || child.tagName !== 'summary') $(child).remove();
+      });
+  });
+  $('*').each((_index, element) => {
+    if (!identityAttributesAreVisible(element.attribs || {})) $(element).remove();
+  });
+  const plain = (value) =>
+    String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  return {
+    captchaVisible: $('#c_code').length > 0,
+    noteText: plain($('#c_note').text()),
+    text: plain($.root().text()),
+  };
 }
 
 function classifyIdentityPage(html) {
   const source = String(html || '');
-  const note = source.match(
-    /<([a-z][\w:-]*)\b([^>]*\bid\s*=\s*["']c_note["'][^>]*)>([\s\S]*?)<\/\1\s*>/i,
-  );
-  const noteText =
-    note && identityNoteIsVisible(note[2])
-      ? decodeHtml(note[3])
-          .replace(/<[^>]*>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-      : '';
-
-  if (captchaIsVisible(source) || /短信验证码|动态口令|二次认证|双重认证|安全验证/.test(source)) {
+  const visible = visibleIdentityPage(source);
+  if (visible.captchaVisible) {
     return safeError('cas_interactive_verification_required');
   }
-  if (/\bBAD_CREDENTIALS\b/.test(source) || /用户名或密码|账号或密码/.test(noteText)) {
+  if (/\bBAD_CREDENTIALS\b/.test(source) || /用户名或密码|账号或密码/.test(visible.noteText)) {
     return safeError('cas_credentials_rejected');
+  }
+  if (/短信验证码|动态口令|二次认证|二次验证|双重认证|多因子认证|安全验证/.test(visible.text)) {
+    return safeError('cas_interactive_verification_required');
   }
   return safeError('cas_identity_response_unrecognized', 'credential_submit');
 }

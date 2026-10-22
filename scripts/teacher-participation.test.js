@@ -54,6 +54,10 @@ class Element {
     this.scrolled = true;
   }
 
+  focus() {
+    this.focused = true;
+  }
+
   matches(selector) {
     if (selector === '.admin-user-row[data-user-id]')
       return this.className === 'admin-user-row' && Boolean(this.dataset.userId);
@@ -105,6 +109,7 @@ async function fixture(kind, callApi, user = {}) {
           'courses-status',
           'courses',
           'feedback-section',
+          'feedback-course',
           'feedback-status',
           'feedback',
         ]
@@ -204,7 +209,7 @@ test('unverified teacher gets no private course or feedback cards', async () => 
 });
 test('verified empty state links to existing materials without inventing courses', async () => {
   const f = await fixture('teacher', async () => workspace());
-  assert.match(f.el['courses-status'].textContent, /暂未关联/);
+  assert.match(f.el['courses-status'].textContent, /暂未分配/);
   assert.match(f.el['feedback-status'].textContent, /还没有意见/);
   assert.equal(f.el.courses.children.length, 0);
   assert.equal(f.el['courses-section'].hidden, false);
@@ -249,6 +254,137 @@ test('failed read is visible and explicit refresh retries', async () => {
   await settle();
   assert.equal(calls, 2);
   assert.match(f.el.status.textContent, /测试教师/);
+});
+
+const managedCourses = [
+  { slug: 'signals', name: '信号与系统', code: 'SS' },
+  { slug: 'circuits', name: '电路原理', code: 'EC' },
+  { slug: 'math', name: '微积分', code: 'MA' },
+];
+const ownFeedback = [
+  {
+    courseSlug: 'signals',
+    courseName: '信号与系统',
+    pointId: 'SS-01-01',
+    title: '信号建议',
+    content: '信号正文补充',
+    status: 'pending',
+  },
+  {
+    courseSlug: 'circuits',
+    courseName: '电路原理',
+    pointId: 'EC-01-01',
+    title: '电路建议',
+    content: '电路例题补充',
+    status: 'handled',
+    response: '课程组已回复',
+  },
+];
+
+test('three assigned courses stay visible and their opinion shortcuts filter only owned recent entries', async () => {
+  let calls = 0;
+  const f = await fixture('teacher', async () => {
+    calls += 1;
+    return workspace({ courses: managedCourses, feedback: ownFeedback });
+  });
+  assert.equal(f.el.courses.children.length, 3);
+  assert.match(f.el['courses-status'].textContent, /管理员已分配 3 门课程/);
+  assert.equal(f.el['feedback-course'].children.length, 4);
+  assert.equal(f.el['feedback-course'].value, '');
+  assert.equal(f.el.feedback.children.length, 2);
+  assert.equal(f.el.certify.href, '/settings#certifications');
+  for (const course of managedCourses) {
+    const card = f.el.courses.children.find((element) => element.dataset.course === course.slug);
+    assert.ok(card, course.slug);
+    assert.equal(card.querySelector('a').href, `/course?course=${course.slug}`);
+    assert.equal(card.querySelector('button').dataset.teacherFeedbackCourse, course.slug);
+    assert.equal(card.querySelector('button')['aria-label'], `查看我的意见：${course.name}`);
+  }
+  f.el['feedback-course'].value = 'signals';
+  f.el['feedback-course'].listeners.change();
+  assert.equal(f.el.feedback.children.length, 1);
+  assert.match(f.el.feedback.textContent, /信号建议/);
+  assert.doesNotMatch(f.el.feedback.textContent, /电路建议/);
+  const noOpinions = f.el.courses.children.find((card) => card.dataset.course === 'math');
+  noOpinions.querySelector('button').listeners.click();
+  assert.equal(f.el['feedback-course'].value, 'math');
+  assert.equal(f.el.feedback.children.length, 0);
+  assert.match(f.el['feedback-status'].textContent, /近期本人意见中，暂没有「微积分」的记录/);
+  assert.equal(f.el['feedback-section'].scrolled, true);
+  assert.equal(f.el['feedback-course'].focused, true);
+  f.el['feedback-course'].value = '';
+  f.el['feedback-course'].listeners.change();
+  assert.equal(f.el.feedback.children.length, 2);
+  assert.equal(calls, 1, 'local filtering never writes or fetches another person’s opinions');
+});
+
+test('refresh preserves an available course choice and resets a removed course without a stale empty result', async () => {
+  let payload = workspace({ courses: managedCourses, feedback: ownFeedback });
+  const f = await fixture('teacher', async () => payload);
+  f.el['feedback-course'].value = 'signals';
+  f.el['feedback-course'].listeners.change();
+  payload = workspace({
+    courses: managedCourses,
+    feedback: [{ ...ownFeedback[0], title: '更新后的信号意见' }],
+  });
+  f.el.refresh.listeners.click();
+  await settle();
+  assert.equal(f.el['feedback-course'].value, 'signals');
+  assert.match(f.el.feedback.textContent, /更新后的信号意见/);
+  payload = workspace({
+    courses: [managedCourses[2]],
+    feedback: [{ courseSlug: 'math', title: '数学意见' }],
+  });
+  f.el.refresh.listeners.click();
+  await settle();
+  assert.equal(f.el['feedback-course'].value, '');
+  assert.match(f.el.feedback.textContent, /数学意见/);
+  assert.doesNotMatch(f.el['feedback-status'].textContent, /信号/);
+});
+
+test('account switching and logout erase the course filter and ignore stale opinion shortcut references', async () => {
+  const delayed = deferred();
+  let calls = 0;
+  const f = await fixture('teacher', async () => {
+    calls += 1;
+    return calls === 1
+      ? workspace({ courses: managedCourses, feedback: ownFeedback })
+      : delayed.promise;
+  });
+  const oldShortcut = f.el.courses.children[0].querySelector('button');
+  f.el['feedback-course'].value = 'circuits';
+  f.el['feedback-course'].listeners.change();
+  f.userState.uid = 'new_teacher';
+  f.userState.token = 'new_token';
+  f.events['freebbs:session-change']();
+  assert.equal(f.el['feedback-course'].value, '');
+  assert.equal(f.el['feedback-course'].children.length, 0);
+  assert.equal(f.el.feedback.children.length, 0);
+  oldShortcut.listeners.click();
+  assert.equal(
+    f.el.feedback.children.length,
+    0,
+    'old actions cannot render while the new owner loads',
+  );
+  delayed.resolve(
+    workspace({
+      courses: [managedCourses[2]],
+      feedback: [{ courseSlug: 'math', title: '新账号意见' }],
+    }),
+  );
+  await settle();
+  assert.equal(f.el['feedback-course'].value, '');
+  assert.match(f.el.feedback.textContent, /新账号意见/);
+  assert.doesNotMatch(f.el.feedback.textContent, /信号建议|电路建议/);
+  oldShortcut.listeners.click();
+  assert.match(f.el.feedback.textContent, /新账号意见/);
+  f.userState.isLoggedIn = false;
+  f.userState.token = '';
+  f.events['freebbs:session-change']();
+  assert.equal(f.el['feedback-course'].value, '');
+  assert.equal(f.el['feedback-course'].children.length, 0);
+  assert.equal(f.el['feedback-course'].disabled, true);
+  assert.equal(f.el.feedback.children.length, 0);
 });
 test('logout and cross-tab switch clear private cards and ignore late old-account data', async () => {
   const delayed = deferred();
@@ -297,6 +433,35 @@ test('admin uses a real account row and isolated GET/PUT with explicit confirmat
   assert.equal(f.el.confirmed.checked, false);
   assert.match(f.el.status.textContent, /角色、余额与资料编辑权限未改动/);
 });
+
+test('administrator can assign twenty courses but cannot accidentally submit a twenty-first', async () => {
+  const calls = [];
+  const courses = Array.from({ length: 21 }, (_, index) => ({
+    slug: `course-${index}`,
+    name: `课程 ${index + 1}`,
+  }));
+  const f = await fixture('admin', async (route, options) => {
+    calls.push({ route, options });
+    return options
+      ? { courseSlugs: JSON.parse(options.body).courseSlugs }
+      : { eligible: true, courses, courseSlugs: [] };
+  });
+  await f.open();
+  const inputs = f.el.options.querySelectorAll('input');
+  for (const input of inputs) {
+    input.checked = true;
+  }
+  f.el.confirmed.checked = true;
+  f.el.form.listeners.submit({ preventDefault() {} });
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.match(f.el.status.textContent, /最多分配 20 门课程/);
+  inputs[20].checked = false;
+  f.el.form.listeners.submit({ preventDefault() {} });
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(JSON.parse(calls[1].options.body).courseSlugs.length, 20);
+});
 test('admin read failures can retry, unverified identity cannot save, and logout clears selected user', async () => {
   let calls = 0;
   const f = await fixture('admin', async () => {
@@ -314,7 +479,7 @@ test('admin read failures can retry, unverified identity cannot save, and logout
   f.userState.isLoggedIn = false;
   f.events['freebbs:session-change']();
   assert.equal(f.root.hidden, true);
-  assert.equal(f.el.name.textContent, '关联任教课程');
+  assert.equal(f.el.name.textContent, '分配管理课程');
   assert.equal(f.el.options.children.length, 0);
 });
 test('admin ignores an old account response after a session change', async () => {
@@ -353,12 +518,12 @@ test('revoked teachers keep a confirmed clear-only action, never a new assignmen
   assert.equal(f.el.form.hidden, false);
   assert.equal(f.el.options.children.length, 1);
   assert.equal(f.el.options.querySelector('input').disabled, true);
-  assert.equal(f.el.save.textContent, '清除旧关联');
+  assert.equal(f.el.save.textContent, '清除旧分配');
   f.el.confirmed.checked = true;
   f.el.form.listeners.submit({ preventDefault() {} });
   await settle();
   assert.deepEqual(JSON.parse(calls[1].options.body), { courseSlugs: [], identityConfirmed: true });
-  assert.match(f.el.status.textContent, /旧任教关联已清除/);
+  assert.match(f.el.status.textContent, /旧课程分配已清除/);
 });
 
 for (const kind of ['teacher', 'admin']) {
@@ -419,6 +584,9 @@ test('teacher routes and styles use the shared shell and no automatic AI or publ
   assert.match(html, /href="\/login\?next=%2Fteachers"/);
   assert.match(html, /\/settings\?certification=teacher#certifications/);
   assert.match(html, /teacher-participation\.css/);
+  assert.match(html, /我管理的课程/);
+  assert.doesNotMatch(html, /我的任教课程/);
+  assert.match(html, /id="teacher-feedback-course"/);
   assert.doesNotMatch(html, /src="\/[^" ]*(?:aichat|learning-companion)/);
   assert.match(admin, /admin-teaching-courses\.js/);
   for (const match of html.matchAll(/(?:src|href)="(\/[^"?]+\.(?:js|css|webp|png|svg))"/g))

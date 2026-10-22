@@ -285,6 +285,58 @@ test('direct login requires authentication, explicit consent, and a narrow JSON 
   assert.equal(accepted.response.headers.get('cache-control'), 'no-store');
 });
 
+test('interactive verification returns only fixed official recovery, not a reusable or shared browser session', async (t) => {
+  let observedRequest;
+  const baseUrl = await startServer(
+    t,
+    createBroker({
+      async connectDirect() {
+        const error = new CampusConnectorError(
+          'cas_interactive_verification_required',
+          '本次登录需要在清华认证页面完成验证码或二次验证。',
+          { status: 409 },
+        );
+        error.recovery = {
+          officialUrl: 'https://evil.example/?ticket=upstream-private',
+          canResumeHere: true,
+        };
+        throw error;
+      },
+    }),
+    {
+      observeRequest(request) {
+        observedRequest = request;
+      },
+    },
+  );
+  const { response, payload } = await requestJson(`${baseUrl}/direct-login`, {
+    method: 'POST',
+    body: {
+      username: '2026000000',
+      password: 'one-time-secret',
+      fingerprint: FINGERPRINT,
+      consent: true,
+    },
+  });
+  assert.equal(response.status, 409);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(payload.recovery, {
+    action: 'official_verification',
+    officialUrl: 'https://id.tsinghua.edu.cn/do/off/ui/auth/login',
+    helpUrl:
+      'https://its.tsinghua.edu.cn/1wzcycejdh_content.jsp?urltype=news.NewsContentUrl&wbnewsid=4000&wbtreeid=1771',
+    canResumeHere: false,
+    retryable: false,
+    browserSessionShared: false,
+  });
+  assert.deepEqual(observedRequest.body, {});
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /one-time-secret|2026000000|upstream-private|evil\.example/,
+  );
+  assert.doesNotMatch(JSON.stringify(payload), new RegExp(FINGERPRINT, 'i'));
+});
+
 test('direct login removes every parsed field from a rejected request body', async (t) => {
   let observedRequest = null;
   const baseUrl = await startServer(t, createBroker(), {

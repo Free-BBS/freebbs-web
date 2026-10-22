@@ -6,6 +6,7 @@ const path = require('node:path');
 // eslint-disable-next-line import/no-dynamic-require
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { createIdentityUsabilityPreview } = require('./preview-identity-usability');
+const { automaticCertifications } = require('../backend/user-certifications');
 
 (async () => {
   const preview = await createIdentityUsabilityPreview();
@@ -39,7 +40,7 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
       await student.waitForFunction(
         () =>
           !document.getElementById('certification-refresh').disabled &&
-          document.getElementById('certification-status').textContent.startsWith('已认证'),
+          document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
       );
     };
     const adminReady = async () => {
@@ -197,14 +198,12 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     };
     await student.goto(`${origin}/settings?demo=student`);
     await studentReady();
-    assert.equal(await student.locator('#certification-kind').inputValue(), 'undergraduate');
-    assert.equal(await student.locator('#certification-year').inputValue(), '2021');
-    assert.equal(
-      await student.locator('#certification-institution').inputValue(),
-      '清华大学电子系',
+    assert.equal(await student.locator('#certification-form').isVisible(), false);
+    assert.match(
+      await student.locator('#certification-approved').innerText(),
+      /本科身份.*学号已识别/,
     );
-    assert.match(await student.locator('#certification-suggestion').innerText(), /已绑定学号/);
-    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 0);
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 1);
     assert.equal(await student.locator('#certification-requests .certification-entry').count(), 0);
     // Empty certifications are the common first visit and previously left a blank right column.
     for (const width of [1440, 1920, 1024, 768, 390, 320])
@@ -222,7 +221,14 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     );
 
     const submit = async (kind, values = {}) => {
+      if (!(await student.locator('#certification-form').isVisible()))
+        await student.locator('#certification-add').click();
       await student.locator('#certification-kind').selectOption(kind);
+      if (
+        ['undergraduate', 'master', 'doctor'].includes(kind) &&
+        !(await student.locator('#certification-year').inputValue())
+      )
+        await student.locator('#certification-year').fill('2021');
       for (const [name, value] of Object.entries(values))
         await student.locator(`#certification-${name}`).fill(value);
       await student.locator('#certification-submit').click();
@@ -251,8 +257,8 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
       await student.locator('#certification-refresh').click();
       await studentReady();
     };
-    await submit('undergraduate', { institution: '例示大学电子工程学院', class: '甲班' });
-    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 0);
+    await submit('master', { institution: '例示大学电子工程学院', class: '甲班' });
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 1);
     assert.match(await student.locator('#certification-requests').innerText(), /等待审核/);
     assert.ok(
       preview.notices.some(
@@ -261,26 +267,28 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     );
     await review('reject', '请核对院系信息');
     assert.match(await student.locator('#certification-requests').innerText(), /请核对院系信息/);
-    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 0);
-    await submit('undergraduate', {
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 1);
+    await submit('master', {
       institution: '例示大学电子工程学院',
       year: '2021',
       class: '甲班',
     });
     await review('approve');
-    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 1);
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 2);
     assert.match(
       await student.locator('#certification-approved').innerText(),
       /例示大学电子工程学院/,
     );
     assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
-    await submit('undergraduate', { year: '2022', class: '乙班' });
+    await submit('master', { year: '2022', class: '乙班' });
     assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
     assert.match(await student.locator('#certification-requests').innerText(), /2022 年/);
     await review('reject', '暂保留原年级');
     assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
-    for (const kind of ['master', 'doctor', 'teacher', 'company']) {
+    for (const kind of ['doctor', 'teacher', 'company']) {
       if (kind === 'teacher') {
+        if (!(await student.locator('#certification-form').isVisible()))
+          await student.locator('#certification-add').click();
         await student.locator('#certification-kind').selectOption(kind);
         assert.match(
           await student.locator('#certification-slot-status').innerText(),
@@ -404,6 +412,8 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     assert.ok(
       (await student.locator('#certification-requests .certification-entry').count()) >= 10,
     );
+    if (!(await student.locator('#certification-form').isVisible()))
+      await student.locator('#certification-add').click();
     await student.locator('#certification-kind').selectOption('company');
     assert.equal(await student.locator('#certification-education-fields').isVisible(), false);
     assert.equal(await student.locator('#certification-company-fields').isVisible(), true);
@@ -418,9 +428,90 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
           );
       }
     }
+    // New read-model contracts use the real recognition helper with fictional accounts.
+    const recognizedPage = async (account) => {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+      await context.route('**/*', (route) =>
+        new URL(route.request().url()).origin === origin ? route.continue() : route.abort(),
+      );
+      await context.route('**/api/me/certifications', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        const response = await route.fetch();
+        const payload = await response.json();
+        const automatic = automaticCertifications({
+          role: account.role,
+          student_id: account.studentId,
+          full_name: account.fullName,
+        });
+        const managedSlots = automatic.map((item) => item.education || item.type);
+        return route.fulfill({
+          response,
+          json: {
+            ...payload,
+            automatic,
+            managedSlots,
+            suggestion: null,
+            requests: payload.requests.map((item) => ({
+              ...item,
+              requiresReview:
+                item.status === 'pending' && !managedSlots.includes(item.education || item.type),
+            })),
+          },
+        });
+      });
+      const page = await context.newPage();
+      page.on('pageerror', (error) => errors.push(error.message));
+      return page;
+    };
+    const teacherAccount = preview.teacher.accounts.get(1);
+    const teacherPage = await recognizedPage(teacherAccount);
+    await teacherPage.goto(`${origin}/settings?demo=admin&certification=teacher#certifications`);
+    await teacherPage.waitForFunction(() =>
+      document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
+    );
+    assert.equal(await teacherPage.locator('#certification-form').isVisible(), false);
+    assert.match(await teacherPage.locator('#certification-approved').innerText(), /教师.*已核实/);
+    assert.equal(
+      await teacherPage.locator('#certification-approved .certification-entry').count(),
+      1,
+    );
+    for (const width of [1440, 390])
+      for (const theme of ['light', 'dark'])
+        await inspectLayout(teacherPage, width, theme, 'teacher-identity-compact');
+    const graduateAccount = preview.teacher.accounts.get(2);
+    graduateAccount.studentId = '2026210001';
+    const graduatePage = await recognizedPage(graduateAccount);
+    await graduatePage.goto(`${origin}/settings?demo=student#certifications`);
+    await graduatePage.waitForFunction(() =>
+      document.getElementById('certification-status').textContent.startsWith('已识别或认证'),
+    );
+    assert.equal(await graduatePage.locator('#certification-form').isVisible(), false);
+    assert.match(
+      await graduatePage.locator('#certification-approved').innerText(),
+      /硕士身份.*学号已识别/,
+    );
+    await graduatePage.locator('#certification-add').click();
+    assert.equal(await graduatePage.locator('#certification-kind').inputValue(), 'undergraduate');
+    assert.equal(await graduatePage.locator('#certification-institution').inputValue(), '');
+    assert.equal(await graduatePage.locator('#certification-year').inputValue(), '');
+    assert.equal(
+      await graduatePage
+        .locator('#certification-kind option[value="master"]')
+        .evaluate((option) => option.disabled),
+      true,
+    );
+    for (const width of [1440, 390])
+      for (const theme of ['light', 'dark'])
+        await inspectLayout(graduatePage, width, theme, 'graduate-supplements-undergraduate');
+    await teacherPage
+      .locator('#certifications')
+      .screenshot({ path: path.join(output, 'teacher-identity-panel.png') });
+    await graduatePage
+      .locator('#certifications')
+      .screenshot({ path: path.join(output, 'graduate-history-panel.png') });
     assert.deepEqual(errors, [], `browser errors: ${errors.join('; ')}`);
     console.log(
-      `Certification UI passed: suggestion, reject/approve, retained identity, five slots, public teacher names and school details, notification, ASCII usernames, empty/populated aligned settings rows, ${checked} responsive/theme views. Screenshots: ${output}`,
+      `Certification UI passed: automatic bound identity, compact opt-in editor, reject/approve, retained identity, five slots, public teacher names and school details, notification, ASCII usernames, aligned settings rows, ${checked} responsive/theme views. Screenshots: ${output}`,
     );
   } finally {
     await browser?.close();

@@ -9,6 +9,7 @@ const { patchScript } = require('./preview-home');
 const { preparePageShell } = require('../page-shell');
 const { createTeacherParticipationRouter } = require('../backend/teacher-participation');
 const { policy } = require('../backend/privacy-policy');
+const { automaticCertifications } = require('../backend/user-certifications');
 const {
   createLearningPreviewApi,
   createLearningFixture,
@@ -26,14 +27,29 @@ function createAboutTeachersPreview() {
     username: 'preview_unverified',
     fullName: '演示未认证账号',
     role: 'student',
+    studentId: null,
   });
+  for (const [id, kind, studentId] of [
+    [4, 'student', '2026010101'],
+    [5, 'graduate', '2026210001'],
+  ]) {
+    teacher.accounts.set(id, {
+      ...teacher.accounts.get(3),
+      id,
+      uid: `u_preview_${kind}`,
+      username: `preview_${kind}`,
+      fullName: kind === 'graduate' ? '演示研究生' : '演示本科同学',
+      studentId,
+    });
+  }
   const fixture = createLearningFixture();
-  const assignments = new Map([[2, ['signals']]]);
+  const assignments = new Map([[2, ['signals', 'circuits', 'math']]]);
   const writes = [];
   const certificationRequests = [];
   const courses = [
     { slug: 'signals', name: '信号与系统', code: 'SS' },
     { slug: 'circuits', name: '电路原理', code: 'EC' },
+    { slug: 'math', name: '高等微积分', code: 'CAL' },
   ];
   const identity = (req) =>
     req.headers.authorization === `Bearer ${TOKEN}`
@@ -166,8 +182,15 @@ function createAboutTeachersPreview() {
   app.get('/api/me/certifications', (req, res) => {
     const user = identity(req);
     if (!user) return res.status(401).json({ message: '请登录' });
+    const automatic = automaticCertifications({
+      role: user.role,
+      full_name: user.fullName,
+      student_id: user.studentId,
+    });
     return res.json({
       fullName: user.fullName,
+      automatic,
+      managedSlots: automatic.map((item) => item.education || item.type),
       approved:
         user.role === 'teacher'
           ? [
@@ -186,6 +209,17 @@ function createAboutTeachersPreview() {
   app.post('/api/me/certifications', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
+    const managed = automaticCertifications({
+      role: user.role,
+      full_name: user.fullName,
+      student_id: user.studentId,
+    });
+    const slot = req.body.type === 'education' ? req.body.education : req.body.type;
+    if (managed.some((item) => (item.education || item.type) === slot))
+      return res.status(409).json({
+        code: 'automatic_identity_managed',
+        message: '此身份已由账号绑定信息识别，无需重复申请。',
+      });
     certificationRequests.push({
       ...req.body,
       userId: user.id,
@@ -269,7 +303,7 @@ function createAboutTeachersPreview() {
   };
   app.get(Object.keys(pages), async (req, res) => {
     let html = preparePageShell(await fs.readFile(path.join(root, pages[req.path]), 'utf8'));
-    const bootstrap = `<script>window.FREEBBS_API_BASE='/api';const demo=new URLSearchParams(location.search).get('as');const demoId={admin:1,teacher:2,unverified:3}[demo];if(demo==='guest'){document.cookie='freebbs_demo_account=;Path=/;Max-Age=0';localStorage.removeItem('free_bbs_auth_token');localStorage.removeItem('free_bbs_user');}else if(demoId){document.cookie='freebbs_demo_account='+demoId+';Path=/;SameSite=Strict';localStorage.setItem('free_bbs_auth_token','${TOKEN}');localStorage.removeItem('free_bbs_user');}if(!localStorage.getItem('free_bbs_theme_mode'))localStorage.setItem('free_bbs_theme_mode','light');</script>`;
+    const bootstrap = `<script>window.FREEBBS_API_BASE='/api';const demo=new URLSearchParams(location.search).get('as');const demoId={admin:1,teacher:2,unverified:3,student:4,graduate:5}[demo];if(demo==='guest'){document.cookie='freebbs_demo_account=;Path=/;Max-Age=0';localStorage.removeItem('free_bbs_auth_token');localStorage.removeItem('free_bbs_user');}else if(demoId){document.cookie='freebbs_demo_account='+demoId+';Path=/;SameSite=Strict';localStorage.setItem('free_bbs_auth_token','${TOKEN}');localStorage.removeItem('free_bbs_user');}if(!localStorage.getItem('free_bbs_theme_mode'))localStorage.setItem('free_bbs_theme_mode','light');</script>`;
     const notice =
       '<details data-about-teachers-preview style="margin:12px;padding:12px;background:#143d45;color:white"><summary>关于平台与教师参与 · 本地演示，未发布</summary><p>所有账号、课程关系和意见均为内存演示，未连接生产、数据库或真实 AI。</p><p><a style="color:white" href="/about?as=guest">关于平台（访客）</a> · <a style="color:white" href="/teachers?as=teacher">教师</a> · <a style="color:white" href="/teachers?as=unverified">未认证</a> · <a style="color:white" href="/adminusers?as=admin">管理员</a></p></details>';
     html = html

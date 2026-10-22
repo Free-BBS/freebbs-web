@@ -98,7 +98,7 @@
               刷新状态
             </button>
           </div>
-          <p id="teacher-status" role="status" aria-live="polite">登录后可查看身份和任教课程。</p>
+          <p id="teacher-status" role="status" aria-live="polite">登录后可查看身份和分配的课程。</p>
           <div class="teacher-actions">
             <a
               class="bbs-action"
@@ -113,7 +113,7 @@
             <a href="/staff">没有账号？联系工作组核实开通</a>
           </div>
           <p class="teacher-help">
-            教师认证经管理员核实后展示。任教课程单独关联，不会自动获得资料编辑权限。
+            课程由管理员分配，可阅读资料、提交意见和查看回复。身份认证不改变既有账号权限。
           </p>
         </section>
         <section
@@ -122,7 +122,7 @@
           aria-labelledby="teacher-courses-title"
           hidden
         >
-          <div class="teacher-panel-heading"><h2 id="teacher-courses-title">我的任教课程</h2></div>
+          <div class="teacher-panel-heading"><h2 id="teacher-courses-title">我管理的课程</h2></div>
           <p class="teacher-help" id="teacher-courses-status"></p>
           <div id="teacher-courses" class="teacher-courses"></div>
         </section>
@@ -152,8 +152,18 @@
         >
           <div class="teacher-panel-heading">
             <h2 id="teacher-feedback-title">我的意见与回复</h2>
+            <label class="teacher-feedback-filter">
+              <span id="teacher-feedback-course-label">课程</span>
+              <select
+                id="teacher-feedback-course"
+                aria-labelledby="teacher-feedback-course-label"
+                disabled
+              >
+                <option value="">全部课程</option>
+              </select>
+            </label>
           </div>
-          <p class="teacher-help" id="teacher-feedback-status"></p>
+          <p class="teacher-help" id="teacher-feedback-status" role="status" aria-live="polite"></p>
           <div id="teacher-feedback" class="teacher-feedback"></div>
         </section>
       </main>

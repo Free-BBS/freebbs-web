@@ -85,6 +85,35 @@
   min-height: 44px;
   align-items: center;
 }
+.teacher-course-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.teacher-course-actions .bbs-action {
+  padding-inline: 8px;
+  font-size: 0.9rem;
+}
+.teacher-feedback-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  font-size: 0.9rem;
+  color: var(--ui-muted);
+}
+.teacher-feedback-filter select {
+  min-height: 44px;
+  min-width: 150px;
+  max-width: min(280px, 65vw);
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+}
 .teacher-guide {
   padding-left: 24px;
   margin-bottom: 0;
@@ -140,7 +169,7 @@
   background: var(--ui-surface-soft, var(--ui-surface));
   border: 1px solid var(--ui-line);
 }
-.teacher-main :is(a, button):focus-visible,
+.teacher-main :is(a, button, select):focus-visible,
 .admin-teaching-courses :is(a, button, input):focus-visible {
   outline: 3px solid var(--ui-focus);
   outline-offset: 3px;

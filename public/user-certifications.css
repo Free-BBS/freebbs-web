@@ -11,6 +11,125 @@
   min-width: 0;
 }
 
+.user-certifications .settings-section-heading p {
+  max-width: 48em;
+  margin-top: 8px;
+  font: 400 0.92rem/1.8 var(--font-ui);
+}
+
+.user-certifications .certification-toolbar {
+  padding-top: 2px;
+}
+
+.user-certifications .certification-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.user-certifications .certification-entry {
+  flex: 0 1 360px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 16px;
+  padding: 14px 16px;
+  background: transparent;
+  border-color: var(--ui-line);
+}
+
+.user-certifications .certification-entry > div {
+  min-width: 0;
+}
+
+.user-certifications .certification-entry h3 {
+  font-size: 0.96rem;
+}
+
+.user-certifications .certification-entry p {
+  margin-top: 5px;
+  font-size: 0.86rem;
+}
+
+.certification-entry-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -7px -8px -7px 0;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-accent);
+  font: 500 0.88rem/1.6 var(--font-ui);
+  cursor: pointer;
+}
+
+.certification-entry-action:hover {
+  background: var(--ui-surface-soft);
+}
+
+.certification-entry-action:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.user-certifications .certification-editor {
+  width: 100%;
+  max-width: 720px;
+  padding: 20px;
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: var(--ui-surface-soft);
+  gap: 16px;
+}
+
+.certification-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.certification-editor-heading h3 {
+  margin: 0;
+  font: 600 1rem/1.7 var(--font-ui);
+}
+
+body .user-certifications .auth-field {
+  min-width: 0;
+  gap: 7px;
+  font: 500 0.92rem/1.7 var(--font-ui);
+}
+
+body .user-certifications .auth-field :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  color: var(--ui-text);
+  background: var(--ui-input, var(--ui-surface));
+  font: 400 1rem/1.6 var(--font-ui);
+}
+
+.user-certifications .settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.user-certifications #certification-submit {
+  justify-self: start;
+  width: auto;
+  min-height: 44px;
+}
+
+.user-certifications #certification-message:empty {
+  display: none;
+}
+
 .certification-toolbar,
 .certification-admin-heading,
 .certification-admin-toolbar,
@@ -178,6 +297,18 @@
 }
 
 @media (max-width: 600px) {
+  .user-certifications .certification-editor {
+    padding: 16px;
+  }
+
+  .user-certifications .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .user-certifications .certification-entry {
+    flex-basis: 100%;
+  }
+
   .admin-certifications {
     padding: 16px;
   }

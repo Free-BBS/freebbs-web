@@ -497,6 +497,22 @@ test('continues current absolute and relative Learn success callbacks through ro
   }
 });
 
+test('a complete verified success page may contain inactive MFA templates without becoming an error', async () => {
+  const steps = successfulRoamingSteps();
+  steps[2].response = htmlResponse(`<!doctype html>
+    <h1>认证成功</h1><a href="${ROAMING_URL}">继续网络学堂</a>
+    <template><section>二次验证<input name="smsCode"></section></template>
+    <section hidden><div id="c_code">安全验证</div></section>
+    <script>window.localizedLabels = { sms: '短信验证码' };</script>`);
+  const fetchImpl = createFetchSequence(steps);
+  const result = await createDirectCasClient({ fetchImpl, now: () => FIXED_NOW }).login(
+    LOGIN_CREDENTIALS,
+  );
+  assert.ok(result.opaqueGrant);
+  assert.ok(fetchImpl.calls.some((call) => call.url === SEMESTER_VERIFICATION_URL));
+  fetchImpl.assertDone();
+});
+
 test('gives session-only grants a server-side hard expiry', async () => {
   const fetchImpl = createFetchSequence(
     successfulSteps({
@@ -603,6 +619,105 @@ test('ignores hidden default notices but recognizes the fixed credential failure
     await assert.rejects(client.login(LOGIN_CREDENTIALS), expectSafeError(fixture.code));
     fetchImpl.assertDone();
   }
+});
+
+test('hidden verification templates and scripts never override a visible password rejection', async () => {
+  const hidden = [
+    '<script>window.labels = "短信验证码 安全验证 二次认证"</script>',
+    '<style>.safe::after { content: "安全验证" }</style>',
+    '<template><section>二次验证</section></template>',
+    '<noscript>短信验证码</noscript>',
+    '<dialog>二次验证<input name="smsCode"></dialog>',
+    '<details><summary>帮助</summary><section>短信验证码</section></details>',
+    '<section hidden>二次验证</section>',
+    '<section aria-hidden="true">双重认证</section>',
+    '<section class="hidden"><span>多因子认证</span></section>',
+    '<section class="d-none">安全验证</section>',
+    '<section style="display: none !important">短信验证码</section>',
+    '<section style="visibility:hidden!important"><div>动态口令</div></section>',
+  ];
+  for (const template of hidden) {
+    const steps = successfulSteps().slice(0, 2);
+    steps.push({
+      method: 'POST',
+      url: `https://id.tsinghua.edu.cn${CAS_CHECK_PATH}`,
+      response: htmlResponse(`<p id="c_note">用户名或密码不正确</p>${template}`),
+    });
+    const fetchImpl = createFetchSequence(steps);
+    const client = createDirectCasClient({
+      fetchImpl,
+      now: () => FIXED_NOW,
+      sm2Impl: { doEncrypt: () => 'ab'.repeat(100) },
+    });
+    await assert.rejects(
+      client.login(LOGIN_CREDENTIALS),
+      expectSafeError('cas_credentials_rejected'),
+    );
+    fetchImpl.assertDone();
+  }
+});
+
+test('verification classification requires visible content and respects hidden ancestors', async () => {
+  const fixtures = [
+    {
+      body: '<script>const text = "安全验证";</script>',
+      code: 'cas_identity_response_unrecognized',
+    },
+    {
+      body: '<dialog>二次验证<input name="smsCode"></dialog><details><summary>帮助</summary><section>短信验证码</section></details>',
+      code: 'cas_identity_response_unrecognized',
+    },
+    {
+      body: '<section hidden><p id="c_note">用户名或密码不正确</p><div id="c_code">安全验证</div></section>',
+      code: 'cas_identity_response_unrecognized',
+    },
+    {
+      body: '<section role="dialog"><h2>二次验证</h2><label>短信验证码<input name="code"></label></section>',
+      code: 'cas_interactive_verification_required',
+    },
+    { body: `<iframe src="${ROAMING_URL}"></iframe>`, code: 'cas_identity_response_unrecognized' },
+    {
+      body: `<script>window.location.href = '${ROAMING_URL}';</script>`,
+      code: 'cas_identity_response_unrecognized',
+    },
+  ];
+  for (const fixture of fixtures) {
+    const steps = successfulSteps().slice(0, 2);
+    steps.push({
+      method: 'POST',
+      url: `https://id.tsinghua.edu.cn${CAS_CHECK_PATH}`,
+      response: htmlResponse(fixture.body),
+    });
+    const fetchImpl = createFetchSequence(steps);
+    const client = createDirectCasClient({
+      fetchImpl,
+      now: () => FIXED_NOW,
+      sm2Impl: { doEncrypt: () => 'ab'.repeat(100) },
+    });
+    await assert.rejects(client.login(LOGIN_CREDENTIALS), expectSafeError(fixture.code));
+    fetchImpl.assertDone();
+    assert.equal(
+      fetchImpl.calls.length,
+      3,
+      'no guessed OTP endpoints or repeated password submissions',
+    );
+  }
+});
+
+test('captcha containers hidden by attributes, CSS or an ancestor do not block the password form', () => {
+  const html = casFormHtml({ captchaVisible: true });
+  for (const replacement of [
+    '<div id="c_code" hidden>',
+    '<div id="c_code" aria-hidden="true">',
+    '<div id="c_code" style="display:none!important">',
+    '<div id="c_code" class="d-none">',
+  ]) {
+    assert.ok(extractCasForm(html.replace(/<div id="c_code"[^>]*>/, replacement), CAS_URL));
+  }
+  const ancestorHidden = html
+    .replace(/<div id="c_code"[^>]*>/, '<div hidden><div id="c_code">')
+    .replace('</div>\n    </form>', '</div></div>\n    </form>');
+  assert.ok(extractCasForm(ancestorHidden, CAS_URL));
 });
 
 test('blocks redirects outside the fixed hosts before making the destination request', async () => {

@@ -776,6 +776,43 @@ test('direct CAS mode stores only an encrypted verified session grant', async ()
   assert.doesNotMatch(JSON.stringify(status), new RegExp(FINGERPRINT, 'iu'));
 });
 
+test('interactive verification during reconnect preserves the existing grant, generation and cached sync', async () => {
+  const { broker, adapter, store } = createDirectBroker();
+  const credentials = {
+    userId: 7,
+    username: '2026000000',
+    password: 'one-time-password',
+    fingerprint: FINGERPRINT,
+  };
+  await broker.connectDirect(credentials);
+  const connection = store.connections.get('7:tsinghua-learn');
+  connection.status = 'active_verified';
+  connection.last_successful_sync_at = new Date('2026-08-02T07:00:00.000Z');
+  store.runs.set('csr_previous', {
+    userId: 7,
+    provider: 'tsinghua-learn',
+    connector_generation: connection.generation,
+    status: 'succeeded',
+    result_counts: { courses: 3, homework: 7 },
+  });
+  const snapshot = JSON.stringify({ connections: [...store.connections], runs: [...store.runs] });
+  adapter.authenticateDirect = async () => {
+    throw Object.assign(new Error('private-upstream-page password=must-not-leak'), {
+      code: 'cas_interactive_verification_required',
+    });
+  };
+  await assert.rejects(broker.connectDirect(credentials), (error) => {
+    assert.equal(error.code, 'cas_interactive_verification_required');
+    assert.equal(error.status, 409);
+    assert.doesNotMatch(error.message, /private-upstream-page|must-not-leak/);
+    return true;
+  });
+  assert.equal(
+    JSON.stringify({ connections: [...store.connections], runs: [...store.runs] }),
+    snapshot,
+  );
+});
+
 test('natural credential expiry atomically clears identity and cancels old sync work once', async () => {
   const { broker, clock, store } = createDirectBroker();
   await broker.connectDirect({

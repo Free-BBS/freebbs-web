@@ -48,7 +48,7 @@
     function clear() {
       ready = false;
       clearingOnly = false;
-      el.save.textContent = '保存任教关联';
+      el.save.textContent = '保存课程分配';
       el.options.replaceChildren();
       el.confirmed.checked = false;
       el.form.hidden = true;
@@ -64,10 +64,10 @@
         button.type = 'button';
         button.className = 'admin-button admin-button-secondary admin-teaching-open';
         button.dataset.teachingUser = card.dataset.userId;
-        button.textContent = '任教课程';
+        button.textContent = '分配课程';
         button.setAttribute(
           'aria-label',
-          `${card.querySelector('[data-admin-summary-name]')?.textContent || '此用户'}的任教课程`,
+          `${card.querySelector('[data-admin-summary-name]')?.textContent || '此用户'}的课程分配`,
         );
         heading.append(button);
       });
@@ -81,7 +81,7 @@
       const key = session();
       busy = true;
       clear();
-      el.status.textContent = '正在读取任教课程…';
+      el.status.textContent = '正在读取课程分配…';
       controls();
       try {
         const payload = await app.callApi(`/admin/users/${id}/teaching-courses`);
@@ -120,13 +120,13 @@
           });
         ready = true;
         el.form.hidden = false;
-        el.save.textContent = clearingOnly ? '清除旧关联' : '保存任教关联';
+        el.save.textContent = clearingOnly ? '清除旧分配' : '保存课程分配';
         if (clearingOnly)
-          el.status.textContent = `此账号已无核实的教师身份，仍有 ${payload.courseSlugs.length} 门旧关联。这里只能核实后清空，不能新增或修改关联。`;
+          el.status.textContent = `此账号已无核实的教师身份，仍有 ${payload.courseSlugs.length} 门旧分配。这里只能核实后清空，不能新增或修改。`;
         else
           el.status.textContent = payload.courses.length
-            ? '勾选任教课程；全部取消可移除关联。此处不会修改角色、余额或课程资料编辑权限。'
-            : '目前没有可关联的课程。';
+            ? '可为老师分配多门课程，最多 20 门；全部取消可移除分配。不会修改角色、余额、资料编辑或审核权限。'
+            : '目前没有可分配的课程。';
       } catch (error) {
         if (owns(key, epoch, ticket, id))
           el.status.textContent = `${error.message || '课程读取失败'} 点击“重新读取”重试。`;
@@ -142,7 +142,7 @@
       if (!button || !session() || busy) return;
       const card = button.closest('.admin-user-row');
       const name = card?.querySelector('[data-admin-summary-name]')?.textContent || '此用户';
-      el.name.textContent = `${name}的任教课程`;
+      el.name.textContent = `${name}的课程分配`;
       root.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
       load(button.dataset.teachingUser);
     });
@@ -161,8 +161,12 @@
         : [...el.options.querySelectorAll('input')]
             .filter((input) => input.checked)
             .map((input) => input.value);
+      if (courseSlugs.length > 20) {
+        el.status.textContent = '最多分配 20 门课程，请取消多余课程后再保存。';
+        return;
+      }
       busy = true;
-      el.status.textContent = '正在保存任教关联…';
+      el.status.textContent = '正在保存课程分配…';
       controls();
       try {
         const payload = await app.callApi(`/admin/users/${id}/teaching-courses`, {
@@ -177,10 +181,11 @@
           input.checked = saved.has(input.value);
         }
         el.confirmed.checked = false;
-        el.status.textContent = '任教课程已保存。账号角色、余额与资料编辑权限未改动。';
+        el.status.textContent =
+          '课程分配已保存。账号角色、余额与资料编辑权限未改动，审核权限也不变。';
         if (clearingOnly) {
           clear();
-          el.status.textContent = '旧任教关联已清除。';
+          el.status.textContent = '旧课程分配已清除。';
         }
       } catch (error) {
         if (owns(key, epoch, ticket, id))
@@ -201,8 +206,10 @@
       target = '';
       clear();
       root.hidden = !key;
-      el.name.textContent = '关联任教课程';
-      el.status.textContent = key ? '在下方账号列表点击“任教课程”，再核实关联。' : '';
+      el.name.textContent = '分配管理课程';
+      el.status.textContent = key
+        ? '在下方账号列表点击“分配课程”，再选择老师可集中查看的课程。'
+        : '';
       linkButtons();
     }
     if (host.MutationObserver)

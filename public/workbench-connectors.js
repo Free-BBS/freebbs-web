@@ -19,6 +19,10 @@
     loginClose: document.getElementById('workbench-campus-login-close'),
     loginCancel: document.getElementById('workbench-campus-login-cancel'),
     loginSubmit: document.getElementById('workbench-campus-login-submit'),
+    loginRecovery: document.getElementById('workbench-campus-login-recovery'),
+    loginOfficial: document.getElementById('workbench-campus-login-official'),
+    loginRecheck: document.getElementById('workbench-campus-login-recheck'),
+    loginDiagnostic: document.getElementById('workbench-campus-login-diagnostic'),
   };
 
   if (!app || !elements.state) return;
@@ -30,6 +34,8 @@
   let currentConnector = null;
   let directLoginAbortController = null;
   let directLoginPending = false;
+  let directLoginVerificationRequired = false;
+  let directLoginEpoch = 0;
   let autoSyncRequested = false;
   let observedToken = null;
   let lastForegroundRefreshAt = 0;
@@ -193,6 +199,7 @@
       cas_credentials_rejected: '清华账号或密码不正确，请重新输入。',
       cas_interactive_verification_required:
         '本次登录需要验证码或二次验证，当前直接连接无法自动完成。',
+      interactive_verification_required: '本次登录需要验证码或二次验证，当前直接连接无法自动完成。',
       cas_login_unverified: '统一认证可能已经完成，但网络学堂会话验证失败，请稍后重试。',
       cas_network_error: '暂时无法访问清华统一认证，请检查网络后重试。',
       cas_timeout: '访问清华统一认证超时，请稍后重试。',
@@ -228,6 +235,10 @@
       typeof error?.stage === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(error.stage)
         ? error.stage
         : '';
+    if (
+      ['cas_interactive_verification_required', 'interactive_verification_required'].includes(code)
+    )
+      return '学校要求完成本次二次验证，请在官方页面继续。';
     return `${message}（诊断码：${code}${stage ? `；阶段：${stage}` : ''}）`;
   }
 
@@ -275,12 +286,32 @@
     ].forEach((element) => {
       if (element) element.disabled = directLoginPending;
     });
+    if (directLoginVerificationRequired) {
+      [
+        elements.loginUsername,
+        elements.loginPassword,
+        elements.loginConsent,
+        elements.loginSubmit,
+      ].forEach((element) => {
+        if (element) element.disabled = true;
+      });
+    }
     if (elements.loginSubmit) {
-      elements.loginSubmit.textContent = directLoginPending ? '正在连接…' : '同意并连接';
+      elements.loginSubmit.dataset.verificationRequired = String(directLoginVerificationRequired);
+      elements.loginSubmit.textContent = directLoginPending
+        ? '正在连接…'
+        : directLoginVerificationRequired
+          ? '需要校方验证'
+          : '同意并连接';
     }
   }
 
   function resetDirectLoginForm() {
+    directLoginEpoch += 1;
+    directLoginVerificationRequired = false;
+    if (elements.loginRecovery) elements.loginRecovery.hidden = true;
+    if (elements.loginDiagnostic) elements.loginDiagnostic.textContent = '';
+    if (elements.loginRecheck) elements.loginRecheck.disabled = false;
     elements.loginForm?.reset();
     if (elements.loginPassword) elements.loginPassword.value = '';
     setDirectLoginStatus('');
@@ -590,7 +621,13 @@
 
   async function submitDirectLogin(event) {
     event.preventDefault();
-    if (directLoginPending || !isLoggedIn() || !elements.loginForm) return;
+    if (
+      directLoginPending ||
+      directLoginVerificationRequired ||
+      !isLoggedIn() ||
+      !elements.loginForm
+    )
+      return;
     if (
       !isDirectCasConfiguration(currentConnector?.configuration) ||
       !hasRequiredDirectCasSafeguards(currentConnector)
@@ -610,7 +647,14 @@
     }
 
     const requestController = new AbortController();
+    const requestOwner = getOwnerKey();
+    const requestToken = app.userState?.token;
     directLoginAbortController = requestController;
+    const ownsLogin = () =>
+      getOwnerKey() === requestOwner &&
+      app.userState?.token === requestToken &&
+      directLoginAbortController === requestController &&
+      !requestController.signal.aborted;
     setDirectLoginLoading(true);
     setDirectLoginStatus('正在生成本次认证所需的一次性兼容设备指纹…', 'loading');
 
@@ -621,10 +665,12 @@
           throw new Error('CAS fingerprint generator is unavailable');
         }
         fingerprint = await fingerprintGenerator.generate();
+        if (!ownsLogin()) return;
         if (!/^[0-9a-f]{32}$/.test(fingerprint)) {
           throw new Error('CAS fingerprint is invalid');
         }
       } catch {
+        if (!ownsLogin()) return;
         setDirectLoginStatus('无法生成本次认证所需的设备指纹，账号和密码未提交。', 'failed');
         return;
       }
@@ -640,6 +686,7 @@
       password = '';
 
       await loginRequest;
+      if (!ownsLogin()) return;
       setMessage('清华账号已连接；密码已从页面清除，会话 Cookie 已在服务端加密保存。', 'succeeded');
       closeDirectLoginDialog({ abort: false });
       autoSyncRequested = false;
@@ -647,18 +694,81 @@
       window.dispatchEvent(new CustomEvent('freebbs:workbench-refresh'));
     } catch (error) {
       password = '';
+      if (!ownsLogin()) return;
       if (elements.loginPassword) elements.loginPassword.value = '';
       if (error?.name === 'AbortError') return;
       setDirectLoginStatus(directLoginFailureMessage(error), 'failed');
-      window.setTimeout(() => elements.loginPassword?.focus(), 0);
+      if (
+        ['cas_interactive_verification_required', 'interactive_verification_required'].includes(
+          error?.code,
+        )
+      ) {
+        directLoginVerificationRequired = true;
+        if (elements.loginConsent) elements.loginConsent.checked = false;
+        if (elements.loginRecovery) elements.loginRecovery.hidden = false;
+        if (elements.loginDiagnostic) {
+          const stage = /^[a-z][a-z0-9_]{0,63}$/.test(error.stage || '') ? error.stage : '';
+          elements.loginDiagnostic.textContent = `${error.code}${stage ? ` · ${stage}` : ''}`;
+        }
+        window.setTimeout(() => {
+          if (
+            directLoginVerificationRequired &&
+            getOwnerKey() === requestOwner &&
+            app.userState?.token === requestToken
+          )
+            elements.loginOfficial?.focus();
+        }, 0);
+      } else {
+        window.setTimeout(() => {
+          if (
+            getOwnerKey() === requestOwner &&
+            app.userState?.token === requestToken &&
+            elements.loginDialog?.open &&
+            !directLoginPending &&
+            !directLoginVerificationRequired
+          )
+            elements.loginPassword?.focus();
+        }, 0);
+      }
     } finally {
       password = '';
       fingerprint = '';
       if (directLoginAbortController === requestController) {
         directLoginAbortController = null;
+        setDirectLoginLoading(false);
+        if (elements.loginPassword) elements.loginPassword.value = '';
       }
-      setDirectLoginLoading(false);
-      if (elements.loginPassword) elements.loginPassword.value = '';
+    }
+  }
+
+  async function recheckBrowserAuthorization() {
+    if (!directLoginVerificationRequired || !isLoggedIn() || elements.loginRecheck?.disabled)
+      return;
+    const owner = getOwnerKey();
+    const token = app.userState?.token;
+    const epoch = directLoginEpoch;
+    const owns = () =>
+      owner === getOwnerKey() &&
+      token === app.userState?.token &&
+      epoch === directLoginEpoch &&
+      directLoginVerificationRequired;
+    if (elements.loginRecheck) elements.loginRecheck.disabled = true;
+    try {
+      const payload = await app.callApi('/workbench/connectors/tsinghua/status', { method: 'GET' });
+      if (!owns()) return;
+      const linked = ['active_verified', 'active_unverified'].includes(
+        payload.connector?.connection?.status,
+      );
+      setDirectLoginStatus(
+        linked
+          ? '本站已有连接记录，可关闭此窗口查看工作台同步状态。'
+          : '本站尚未获得新的授权。校方页面可以继续使用，但登录状态不会自动共享到本站。',
+        linked ? 'connected' : 'verification_required',
+      );
+    } catch {
+      if (owns()) setDirectLoginStatus('暂时无法核对本站连接，请稍后手动检查。', 'failed');
+    } finally {
+      if (owns() && elements.loginRecheck) elements.loginRecheck.disabled = false;
     }
   }
 
@@ -750,6 +860,7 @@
   elements.loginForm?.addEventListener('submit', submitDirectLogin);
   elements.loginClose?.addEventListener('click', () => closeDirectLoginDialog());
   elements.loginCancel?.addEventListener('click', () => closeDirectLoginDialog());
+  elements.loginRecheck?.addEventListener('click', recheckBrowserAuthorization);
   elements.loginDialog?.addEventListener('cancel', (event) => {
     event.preventDefault();
     closeDirectLoginDialog();

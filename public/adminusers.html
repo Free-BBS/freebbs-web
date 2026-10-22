@@ -337,13 +337,13 @@
                   <h2 id="admin-certifications-title">身份认证审核</h2>
                   <p>核实申请人身份后批准；通过前保留账号已有的认证身份。</p>
                 </div>
-                <strong id="admin-certification-pending">待审核 0 条</strong>
+                <strong id="admin-certification-pending">未关闭 0 条</strong>
               </header>
               <div class="certification-admin-toolbar">
                 <label class="auth-field"
                   ><span>申请状态</span
                   ><select id="admin-certification-filter">
-                    <option value="pending">待审核</option>
+                    <option value="pending">未关闭</option>
                     <option value="approved">已批准</option>
                     <option value="rejected">未通过</option>
                   </select></label
@@ -383,7 +383,7 @@
               hidden
             >
               <div class="teacher-panel-heading">
-                <h2 id="teaching-name">关联任教课程</h2>
+                <h2 id="teaching-name">分配管理课程</h2>
                 <button
                   id="teaching-refresh"
                   type="button"
@@ -396,12 +396,12 @@
               <p id="teaching-status" role="status" aria-live="polite"></p>
               <form id="teaching-form" hidden>
                 <fieldset>
-                  <legend>任教课程</legend>
+                  <legend>管理员分配的课程（最多 20 门）</legend>
                   <div id="teaching-options"></div>
                 </fieldset>
                 <label
                   ><input id="teaching-confirmed" type="checkbox" /><span
-                    >已核实本次任教关联的设置或清除；这里只设置课程关联，不授予资料编辑权限。</span
+                    >已核实本次课程分配或取消；老师可阅读资料、提交意见和查看回复，不额外授予编辑或审核权限。</span
                   ></label
                 >
                 <button
@@ -410,7 +410,7 @@
                   type="submit"
                   disabled
                 >
-                  保存任教关联
+                  保存课程分配
                 </button>
               </form>
             </section>

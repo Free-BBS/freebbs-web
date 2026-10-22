@@ -36,7 +36,33 @@ test('teacher preview serves real local entry pages and never broadens fixture p
     await fetch(`${origin}/api/teacher/workspace`, { headers: headers(2) })
   ).json();
   assert.equal(teacher.eligible, true);
+  assert.equal(teacher.courses.length, 3);
   assert.equal(teacher.courses[0].canEditMaterials, false);
+  const studentIdentity = await (
+    await fetch(`${origin}/api/me/certifications`, { headers: headers(4) })
+  ).json();
+  assert.deepEqual(studentIdentity.managedSlots, ['undergraduate']);
+  assert.equal(studentIdentity.automatic[0].education, 'undergraduate');
+  const graduateIdentity = await (
+    await fetch(`${origin}/api/me/certifications`, { headers: headers(5) })
+  ).json();
+  assert.deepEqual(graduateIdentity.managedSlots, ['master']);
+  assert.equal(graduateIdentity.automatic[0].education, 'master');
+  assert.equal(
+    (
+      await fetch(`${origin}/api/me/certifications`, {
+        method: 'POST',
+        headers: { ...headers(4), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'education',
+          education: 'undergraduate',
+          institution: '不应重复申请',
+        }),
+      })
+    ).status,
+    409,
+  );
+  assert.equal(preview.certificationRequests.length, 0);
   const unverified = await (
     await fetch(`${origin}/api/teacher/workspace`, { headers: headers(3) })
   ).json();

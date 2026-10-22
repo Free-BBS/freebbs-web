@@ -163,11 +163,29 @@ function createDirectCasError(code, stage) {
   return attachDirectCasStage(error, stage, definition.stage);
 }
 
+function directCasRecovery(code) {
+  if (
+    !['cas_interactive_verification_required', 'interactive_verification_required'].includes(code)
+  )
+    return null;
+  // These are public official pages, never a per-user challenge URL or service ticket.
+  return {
+    action: 'official_verification',
+    officialUrl: 'https://id.tsinghua.edu.cn/do/off/ui/auth/login',
+    helpUrl:
+      'https://its.tsinghua.edu.cn/1wzcycejdh_content.jsp?urltype=news.NewsContentUrl&wbnewsid=4000&wbtreeid=1771',
+    canResumeHere: false,
+    retryable: false,
+    browserSessionShared: false,
+  };
+}
+
 module.exports = {
   DIRECT_CAS_ERRORS,
   DIRECT_CAS_STAGES,
   attachDirectCasStage,
   createDirectCasError,
+  directCasRecovery,
   isDirectCasErrorCode,
   normalizeDirectCasStage,
   readDirectCasStage,

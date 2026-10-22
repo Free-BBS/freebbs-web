@@ -71,13 +71,20 @@ async function main() {
       document.getElementById('teacher-status').textContent.includes('教师身份已核实'),
     );
     assert.match(await page.locator('#teacher-courses').innerText(), /信号与系统/);
+    assert.equal(await page.locator('#teacher-courses-title').innerText(), '我管理的课程');
+    assert.equal(await page.locator('#teacher-courses article').count(), 3);
+    await page.locator('[data-teacher-feedback-course="math"]').click();
+    assert.equal(await page.locator('#teacher-feedback-course').inputValue(), 'math');
+    assert.equal(await page.locator('#teacher-feedback article').count(), 0);
+    assert.match(await page.locator('#teacher-feedback-status').innerText(), /近期本人意见中/);
+    await page.locator('#teacher-feedback-course').selectOption('');
     assert.match(await page.locator('#teacher-feedback').innerText(), /本地演示：补充卷积变量解释/);
     assert.match(await page.locator('#teacher-feedback').innerText(), /课程组回复/);
     assert.equal(
       await page.locator('#teacher-feedback a').getAttribute('href'),
       '/knowledge?course=signals&point=SS-01-01&view=reading&tool=contribute',
     );
-    await page.locator('#teacher-courses a').click();
+    await page.locator('#teacher-courses a').first().click();
     await page.waitForURL(`${origin}/course?course=signals`);
     await page.locator('[data-course-map-page]').waitFor();
     await goto('/knowledge?course=signals&point=SS-01-01&view=reading&tool=contribute');
@@ -122,6 +129,37 @@ async function main() {
     report.checks.push(
       'Unverified teacher reaches preselected teacher certification without automatic submission',
     );
+    stage = 'automatic identity without repeated application';
+    await goto('/settings?as=teacher#certifications');
+    await page.getByText('教师 · 已核实', { exact: true }).waitFor();
+    assert.equal(await page.locator('#certification-form').isVisible(), false);
+    await goto('/settings?as=student#certifications');
+    await page.getByText('本科身份 · 学号已识别', { exact: true }).waitFor();
+    assert.equal(await page.locator('#certification-form').isVisible(), false);
+    await page.locator('#certification-add').click();
+    assert.equal(
+      await page
+        .locator('#certification-kind option[value="undergraduate"]')
+        .evaluate((option) => option.disabled && option.hidden),
+      true,
+    );
+    await page.locator('#certification-kind').focus();
+    await page.keyboard.press('Home');
+    assert.notEqual(await page.locator('#certification-kind').inputValue(), 'undergraduate');
+    const requestsBeforeDuplicate = preview.certificationRequests.length;
+    await page.locator('#certification-kind').selectOption('undergraduate');
+    assert.equal(await page.locator('#certification-submit').isDisabled(), true);
+    await page.locator('#certification-form').evaluate((form) => form.requestSubmit());
+    assert.equal(preview.certificationRequests.length, requestsBeforeDuplicate);
+    await goto('/settings?as=graduate#certifications');
+    await page.getByText('硕士身份 · 学号已识别', { exact: true }).waitFor();
+    await page.locator('#certification-add').click();
+    await page.locator('#certification-kind').selectOption('undergraduate');
+    assert.equal(await page.locator('#certification-year').inputValue(), '');
+    assert.equal(await page.locator('#certification-institution').inputValue(), '');
+    report.checks.push(
+      'Teacher identity stays compact; bound student identities skip duplicate requests and history fields start blank',
+    );
     stage = 'admin standalone course association';
     await goto('/adminusers?as=admin');
     await page.locator('[data-user-id="2"] [data-teaching-user]').waitFor({ state: 'visible' });
@@ -129,10 +167,11 @@ async function main() {
     await page.locator('#teaching-form').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#teaching-save').isEnabled(), false);
     await page.locator('#teaching-options input[value="circuits"]').check();
+    await page.locator('#teaching-options input[value="math"]').uncheck();
     await page.locator('#teaching-confirmed').check();
     await page.locator('#teaching-save').click();
     await page.waitForFunction(() =>
-      document.getElementById('teaching-status').textContent.includes('任教课程已保存'),
+      document.getElementById('teaching-status').textContent.includes('课程分配已保存'),
     );
     assert.deepEqual(preview.assignments.get(2), ['signals', 'circuits']);
     assert.equal(preview.writes.length, 1);
@@ -157,12 +196,12 @@ async function main() {
     await goto('/adminusers?as=admin');
     await page.locator('[data-user-id="2"] [data-teaching-user]').waitFor({ state: 'visible' });
     await page.locator('[data-user-id="2"] [data-teaching-user]').click();
-    await page.getByRole('button', { name: '清除旧关联', exact: true }).waitFor();
+    await page.getByRole('button', { name: '清除旧分配', exact: true }).waitFor();
     assert.equal(await page.locator('#teaching-options input:not(:disabled)').count(), 0);
     await page.locator('#teaching-confirmed').check();
     await page.locator('#teaching-save').click();
     await page.waitForFunction(() =>
-      document.getElementById('teaching-status').textContent.includes('旧任教关联已清除'),
+      document.getElementById('teaching-status').textContent.includes('旧课程分配已清除'),
     );
     assert.deepEqual(preview.assignments.get(2), []);
     preview.teacher.accounts.get(2).role = 'teacher';
