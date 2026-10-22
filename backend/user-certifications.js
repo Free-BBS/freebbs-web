@@ -4,6 +4,12 @@ const express = require('express');
 
 const INSTITUTION = '清华大学电子系';
 const EDUCATIONS = Object.freeze({ undergraduate: '本科', master: '硕士', doctor: '博士' });
+const AUTOMATIC_INSTITUTION = '电子工程系';
+const AUTOMATIC_EDUCATIONS = Object.freeze({
+  undergraduate: '本科生',
+  master: '硕士研究生',
+  doctor: '博士研究生',
+});
 const PAGE_SIZE = 30;
 
 function certificationError(status, code, message) {
@@ -77,6 +83,54 @@ function certificationSuggestion(studentId) {
     institution: INSTITUTION,
     className: '',
   };
+}
+
+// users.student_id is written by whitelist registration, verified-mailbox/explicit
+// whitelist pairing, or administrator-verified binding, never an unreviewed form.
+// Department is this platform's explicit default, not inferred from the number.
+// It establishes an identity stage and entry year, not graduation, an awarded
+// degree or enrolment now.
+function automaticCertifications(user) {
+  const values = [];
+  const education =
+    typeof user?.student_id === 'string' ? certificationSuggestion(user.student_id) : null;
+  if (education?.type === 'education')
+    values.push({
+      ...education,
+      institution: AUTOMATIC_INSTITUTION,
+      label: `${education.year} · ${AUTOMATIC_INSTITUTION} · ${AUTOMATIC_EDUCATIONS[education.education]}`,
+      automatic: true,
+      source: 'bound_student_id',
+      approvedAt: null,
+    });
+  if (user?.role === 'teacher') {
+    const verifiedName = String(user.full_name || '').trim();
+    values.push({
+      type: 'teacher',
+      education: null,
+      year: null,
+      institution: AUTOMATIC_INSTITUTION,
+      className: '',
+      verifiedName,
+      label: `${AUTOMATIC_INSTITUTION} · 教师`,
+      automatic: true,
+      source: 'account_role',
+      approvedAt: null,
+    });
+  }
+  return values;
+}
+
+const isAutomaticallyManaged = (user, slot) =>
+  automaticCertifications(user).some((identity) => (identity.education || identity.type) === slot);
+
+function rejectAutomaticallyManaged(user, slot) {
+  if (isAutomaticallyManaged(user, slot))
+    throw certificationError(
+      409,
+      'automatic_identity_managed',
+      '此身份已由账号绑定信息识别，无需重复申请；信息有误请联系管理员核实。',
+    );
 }
 
 function serializeCertification(row) {
@@ -247,20 +301,30 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
   }
 
   async function read(userId) {
-    const [[user]] = await pool.execute('SELECT student_id, full_name FROM users WHERE id = ?', [
-      userId,
-    ]);
+    const [[user]] = await pool.execute(
+      'SELECT student_id, full_name, role FROM users WHERE id = ?',
+      [userId],
+    );
     const approved = await readApprovedCertifications(pool, [userId]);
     const [requests] = await pool.execute(
       'SELECT * FROM user_certification_requests WHERE user_id = ? ORDER BY id DESC LIMIT 20',
       [userId],
     );
+    const automatic = automaticCertifications(user);
+    const managedSlots = automatic.map((identity) => identity.education || identity.type);
     return {
       approved: approved.get(Number(userId)) || [],
-      requests: requests.map(serializeRequest),
+      automatic,
+      managedSlots,
+      requests: requests.map((request) => ({
+        ...serializeRequest(request),
+        ...(request.status === 'pending'
+          ? { requiresReview: !managedSlots.includes(request.slot) }
+          : {}),
+      })),
       studentId: user?.student_id || null,
       fullName: user?.full_name || '',
-      suggestion: certificationSuggestion(user?.student_id),
+      suggestion: null,
     };
   }
 
@@ -268,10 +332,11 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
     const values = normalizeCertification(body, now());
     return transaction(async (connection) => {
       const [[user]] = await connection.execute(
-        'SELECT id, username, full_name FROM users WHERE id = ? FOR UPDATE',
+        'SELECT id, username, full_name, student_id, role FROM users WHERE id = ? FOR UPDATE',
         [userId],
       );
       if (!user) throw certificationError(401, 'user_missing', '用户不存在，请重新登录');
+      rejectAutomaticallyManaged(user, values.slot);
       const [[pending]] = await connection.execute(
         "SELECT id FROM user_certification_requests WHERE user_id = ? AND slot = ? AND status = 'pending' LIMIT 1 FOR UPDATE",
         [userId, values.slot],
@@ -327,7 +392,7 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       parameters,
     );
     const [rows] = await pool.execute(
-      `SELECT r.*, u.uid AS user_uid, u.username, u.full_name FROM user_certification_requests r JOIN users u ON u.id = r.user_id ${where} ORDER BY r.id DESC LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
+      `SELECT r.*, u.uid AS user_uid, u.username, u.full_name, u.student_id, u.role FROM user_certification_requests r JOIN users u ON u.id = r.user_id ${where} ORDER BY r.id DESC LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
       parameters,
     );
     const approved = await readApprovedCertifications(
@@ -341,6 +406,9 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
         userUid: row.user_uid,
         username: row.username,
         fullName: row.full_name,
+        ...(row.status === 'pending'
+          ? { requiresReview: !isAutomaticallyManaged(row, row.slot) }
+          : {}),
         currentApproved:
           approved
             .get(Number(row.user_id))
@@ -372,7 +440,7 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       throw certificationError(403, 'self_review_forbidden', '不能审核自己的身份申请');
     return transaction(async (connection) => {
       const [users] = await connection.execute(
-        'SELECT id, username, is_admin FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+        'SELECT id, username, full_name, student_id, role, is_admin FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
         [adminId, userId],
       );
       const admin = users.find((user) => Number(user.id) === Number(adminId));
@@ -384,6 +452,11 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       if (!request || Number(request.user_id) !== userId || request.status !== 'pending')
         throw certificationError(409, 'request_not_pending', '该申请已处理，请刷新');
       const approved = body.action === 'approve';
+      if (approved)
+        rejectAutomaticallyManaged(
+          users.find((user) => Number(user.id) === userId),
+          request.slot,
+        );
       if (approved)
         await connection.execute(
           `INSERT INTO user_certifications (user_id, slot, year, institution, class_name, company_name, approved_at, approved_by, source_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE year = VALUES(year), institution = VALUES(institution), class_name = VALUES(class_name), company_name = VALUES(company_name), approved_at = VALUES(approved_at), approved_by = VALUES(approved_by), source_request_id = VALUES(source_request_id)`,
@@ -502,6 +575,7 @@ module.exports = {
   EDUCATIONS,
   normalizeCertification,
   certificationSuggestion,
+  automaticCertifications,
   serializeCertification,
   identityBadges,
   ensureUserCertificationTables,

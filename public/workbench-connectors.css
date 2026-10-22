@@ -337,3 +337,36 @@ body.workbench-page .workbench-campus-login-dialog[open] {
     width: 100%;
   }
 }
+
+body.workbench-page .workbench-campus-login-recovery[hidden] {
+  display: none;
+}
+body.workbench-page .workbench-campus-login-recovery {
+  padding: 18px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: 400 0.94rem/1.8 var(--font-ui);
+}
+body.workbench-page .workbench-campus-login-recovery h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+body.workbench-page .workbench-campus-login-recovery p {
+  margin-block: 10px;
+}
+body.workbench-page .workbench-campus-login-recovery > div {
+  display: flex;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+body.workbench-page .workbench-campus-login-recovery a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+body.workbench-page #workbench-campus-login-submit[data-verification-required='true'] {
+  cursor: not-allowed;
+}

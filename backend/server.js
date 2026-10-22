@@ -162,6 +162,10 @@ const {
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
 const {
+  createTeacherParticipationRouter,
+  ensureTeacherParticipationTables,
+} = require('./teacher-participation');
+const {
   normalizeCertification,
   approveEnterpriseCertification,
   syncEnterpriseCertification,
@@ -3042,6 +3046,7 @@ app.use(
   '/api',
   createUserCertificationRouter({ service: certificationService, requireAuth, requireAdmin }),
 );
+app.use('/api', createTeacherParticipationRouter({ pool, requireAuth, requireAdmin }));
 app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
@@ -6870,6 +6875,7 @@ async function start() {
   await ensureDiscussionTables();
   await ensureCourseMapTables(pool);
   await ensureWorkbenchTables(pool);
+  await ensureTeacherParticipationTables(pool);
   await ensureCampusConnectorTables(pool);
   await ensureAiDialogTables();
   await ensureAiDialogExportAudit(pool);

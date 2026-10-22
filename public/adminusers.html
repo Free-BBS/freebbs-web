@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="/registration-whitelist.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/admin-navigation.css" />
+    <link rel="stylesheet" href="/teacher-participation.css" />
   </head>
   <body class="adminusers-page admin-settings-detail-page">
     <div class="page-shell page-shell-settings">
@@ -336,13 +337,13 @@
                   <h2 id="admin-certifications-title">身份认证审核</h2>
                   <p>核实申请人身份后批准；通过前保留账号已有的认证身份。</p>
                 </div>
-                <strong id="admin-certification-pending">待审核 0 条</strong>
+                <strong id="admin-certification-pending">未关闭 0 条</strong>
               </header>
               <div class="certification-admin-toolbar">
                 <label class="auth-field"
                   ><span>申请状态</span
                   ><select id="admin-certification-filter">
-                    <option value="pending">待审核</option>
+                    <option value="pending">未关闭</option>
                     <option value="approved">已批准</option>
                     <option value="rejected">未通过</option>
                   </select></label
@@ -374,6 +375,44 @@
                   下一页
                 </button>
               </div>
+            </section>
+            <section
+              id="admin-teaching-courses"
+              class="admin-teaching-courses"
+              aria-labelledby="teaching-name"
+              hidden
+            >
+              <div class="teacher-panel-heading">
+                <h2 id="teaching-name">分配管理课程</h2>
+                <button
+                  id="teaching-refresh"
+                  type="button"
+                  class="admin-button admin-button-secondary"
+                  disabled
+                >
+                  重新读取
+                </button>
+              </div>
+              <p id="teaching-status" role="status" aria-live="polite"></p>
+              <form id="teaching-form" hidden>
+                <fieldset>
+                  <legend>管理员分配的课程（最多 20 门）</legend>
+                  <div id="teaching-options"></div>
+                </fieldset>
+                <label
+                  ><input id="teaching-confirmed" type="checkbox" /><span
+                    >已核实本次课程分配或取消；老师可阅读资料、提交意见和查看回复，不额外授予编辑或审核权限。</span
+                  ></label
+                >
+                <button
+                  id="teaching-save"
+                  class="admin-button admin-button-primary"
+                  type="submit"
+                  disabled
+                >
+                  保存课程分配
+                </button>
+              </form>
             </section>
             <section class="admin-directory-toolbar" aria-label="筛选用户">
               <label class="admin-user-search" for="admin-user-search">
@@ -499,6 +538,7 @@
     <script src="/admin-ai-dialog-export.js"></script>
     <script src="/admin-account-credentials.js"></script>
     <script src="/admin-certifications.js"></script>
+    <script src="/admin-teaching-courses.js"></script>
     <script src="/learning-analytics.js?v=20261011-records-4"></script>
     <script src="/learning-research.js?v=20261011-research-2"></script>
     <script src="/notifications.js"></script>

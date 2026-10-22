@@ -6,7 +6,7 @@
     teacher: '教师',
     company: '企业名称',
   };
-  const STATES = { pending: '等待审核', approved: '已批准', rejected: '未通过' };
+  const STATES = { pending: '未关闭', approved: '已批准', rejected: '未通过' };
   const kindFor = (value) => (value?.type === 'education' ? value.education : value?.type);
   const summaryFor = (value) =>
     value?.type === 'company'
@@ -30,6 +30,8 @@
       ]),
     );
     if (Object.values(el).some((node) => !node)) return;
+    for (const option of el.filter.querySelectorAll('option'))
+      if (option.value === 'pending') option.textContent = '未关闭';
     let owner = '';
     let generation = 0;
     let loadTicket = 0;
@@ -60,16 +62,22 @@
         const card = field.closest('.certification-review');
         field.disabled = locked || card.dataset.self === 'true';
         if (field.dataset.reviewAction === 'approve')
-          field.disabled ||= !card.querySelector('[data-identity-confirmed]').checked;
+          field.disabled ||=
+            card.dataset.requiresReview === 'false' ||
+            !card.querySelector('[data-identity-confirmed]')?.checked;
       });
     }
 
     async function review(item, card, action) {
-      if (loading || reviewing || !session()) return;
+      if (loading || reviewing || !session() || item.userUid === app.userState.uid) return;
       const confirmed = card.querySelector('[data-identity-confirmed]');
       const notes = card.querySelector('textarea');
       const message = card.querySelector('[data-review-message]');
-      if (action === 'approve' && !confirmed.checked) {
+      if (action === 'approve' && item.requiresReview === false) {
+        message.textContent = '此身份已由账号识别，无需重复认证。可关闭旧申请。';
+        return;
+      }
+      if (action === 'approve' && !confirmed?.checked) {
         message.textContent = '请先勾选已核实身份。';
         return;
       }
@@ -87,7 +95,7 @@
             body: JSON.stringify({
               action,
               reviewNote: notes.value.trim(),
-              identityConfirmed: confirmed.checked,
+              identityConfirmed: Boolean(confirmed?.checked),
             }),
           },
         );
@@ -115,11 +123,17 @@
     }
 
     function cardFor(item) {
+      const key = session();
+      const epoch = generation;
       const card = doc.createElement('article');
       card.className = 'certification-review';
       card.dataset.self = String(item.userUid === app.userState.uid);
+      const recognized = item.status === 'pending' && item.requiresReview === false;
+      card.dataset.requiresReview = String(!recognized);
       const title = doc.createElement('h3');
-      title.textContent = `${LABELS[kindFor(item)]} · ${STATES[item.status]}`;
+      let state = STATES[item.status];
+      if (item.status === 'pending') state = recognized ? '已由账号识别' : '等待审核';
+      title.textContent = `${LABELS[kindFor(item)]} · ${state}`;
       const applicant = doc.createElement('p');
       applicant.textContent = [item.fullName, item.username, item.userUid]
         .filter(Boolean)
@@ -135,8 +149,14 @@
       }
       if (item.currentApproved) {
         const current = doc.createElement('p');
-        current.textContent = `当前有效认证：${summaryFor(item.currentApproved)}；新申请通过后更新。`;
+        current.textContent = `当前有效认证：${summaryFor(item.currentApproved)}${recognized ? '。' : '；新申请通过后更新。'}`;
         card.append(current);
+      }
+      if (recognized) {
+        const explanation = doc.createElement('p');
+        explanation.textContent =
+          '无需重复认证。关闭旧申请不会更改账号已识别身份，也不会删除申请记录。';
+        card.append(explanation);
       }
       if (item.status !== 'pending') {
         if (item.reviewNote) {
@@ -149,11 +169,14 @@
       const noteLabel = doc.createElement('label');
       noteLabel.className = 'auth-field';
       const noteTitle = doc.createElement('span');
-      noteTitle.textContent = '审核说明（选填）';
+      noteTitle.textContent = recognized ? '关闭说明（选填）' : '审核说明（选填）';
       const notes = doc.createElement('textarea');
       notes.rows = 2;
       notes.maxLength = 500;
-      notes.placeholder = '未通过时可说明需要补充或更正的信息';
+      notes.placeholder = recognized
+        ? '例如：已由账号身份识别，无需重复认证'
+        : '未通过时可说明需要补充或更正的信息';
+      if (recognized) notes.value = '已由账号身份识别，无需重复认证。';
       noteLabel.append(noteTitle, notes);
       const confirmation = doc.createElement('label');
       confirmation.className = 'certification-confirmation';
@@ -172,19 +195,27 @@
       message.setAttribute('aria-live', 'polite');
       const actions = doc.createElement('div');
       actions.className = 'certification-review-actions';
-      for (const [action, text] of [
-        ['approve', '批准认证'],
-        ['reject', '不予通过'],
-      ]) {
+      const reviewActions = recognized
+        ? [['reject', '关闭旧申请']]
+        : [
+            ['approve', '批准认证'],
+            ['reject', '不予通过'],
+          ];
+      for (const [action, text] of reviewActions) {
         const button = doc.createElement('button');
         button.type = 'button';
         button.dataset.reviewAction = action;
         button.textContent = text;
-        button.addEventListener('click', () => review(item, card, action));
+        button.addEventListener('click', () => {
+          if (!owns(key, epoch)) return;
+          return review(item, card, action);
+        });
         actions.append(button);
       }
       check.addEventListener('change', controls);
-      card.append(noteLabel, confirmation, message, actions);
+      card.append(noteLabel);
+      if (!recognized) card.append(confirmation);
+      card.append(message, actions);
       if (card.dataset.self === 'true') message.textContent = '自己的认证申请需由其他管理员审核。';
       return card;
     }
@@ -219,11 +250,12 @@
           (item) => LABELS[kindFor(item)] && STATES[item.status],
         );
         el.list.replaceChildren(...items.map(cardFor));
-        el.pending.textContent = `待审核 ${pending?.total ?? total} 条`;
+        el.pending.textContent = `未关闭 ${pending?.total ?? total} 条`;
         el.page.textContent = `第 ${page} / ${Math.max(1, Math.ceil(total / pageSize))} 页`;
+        const description = status === 'all' ? '' : STATES[status];
         el.status.textContent = items.length
-          ? `共 ${total} 条${STATES[status]}申请`
-          : `暂无${STATES[status]}申请。`;
+          ? `共 ${total} 条${description}申请`
+          : `暂无${description}申请。`;
         ready = true;
       } catch (error) {
         if (owns(key, epoch) && ticket === loadTicket) {
@@ -254,7 +286,7 @@
       el.list.replaceChildren();
       el.status.textContent = '';
       el.page.textContent = '';
-      el.pending.textContent = '待审核 0 条';
+      el.pending.textContent = '未关闭 0 条';
       root.hidden = !key;
       controls();
       if (key) load();

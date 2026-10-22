@@ -13,6 +13,7 @@ function createTeacherAccountsPreviewApi() {
   const passwords = new Map();
   const codes = new Map();
   const requests = new Map();
+  const emailSuggestions = new Map();
   function setPassword(id, password) {
     const salt = randomBytes(16).toString('hex');
     passwords.set(id, { salt, hash: digest(password, salt) });
@@ -73,6 +74,14 @@ function createTeacherAccountsPreviewApi() {
         emailVerified: user.emailVerified,
         studentId: user.studentId,
         studentRequest: requests.get(user.id) || null,
+        emailSuggestion:
+          !user.email && !user.emailVerified && emailSuggestions.has(user.id)
+            ? {
+                email: emailSuggestions.get(user.id),
+                source: 'whitelist_pair',
+                requiresVerification: true,
+              }
+            : null,
       });
     if (route === '/api/profile/email-code' && method === 'POST') {
       if (!validPassword(user.id, body.currentPassword)) return fail('当前密码错误', 403);
@@ -267,6 +276,6 @@ function createTeacherAccountsPreviewApi() {
       });
     return null;
   }
-  return { handle, accounts, requests };
+  return { handle, accounts, requests, addAccount, emailSuggestions };
 }
 module.exports = { createTeacherAccountsPreviewApi, DEMO_CODE, DEMO_PASSWORD };

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="在 FREE BBS 体验课程资料、了解学习方式，并向课程组提出建议。"
+    />
+    <title>教师参与 | FREE BBS</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/site-info.css" />
+    <link rel="stylesheet" href="/teacher-participation.css" />
+  </head>
+  <body class="site-info-page teacher-participation-page">
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE BBS 首页"
+          ><span class="brand-mark">FREE<br />BBS</span></a
+        >
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  /><span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  /><span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">访客</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status"></div>
+          </div>
+        </nav>
+      </header>
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+      <main class="main-content teacher-main" data-teacher-participation>
+        <header class="teacher-intro">
+          <p class="teacher-eyebrow" lang="en">TEACHERS &amp; FREE BBS</p>
+          <h1>从一门熟悉的课，体验另一种学习方式。</h1>
+          <p>
+            以学习者视角阅读课程资料，体验知识点之间的联系；发现值得补充的地方，直接把建议交给课程组。
+          </p>
+          <div class="teacher-actions">
+            <a class="bbs-action" data-action-tone="primary" href="/world">先看看学习世界</a>
+            <a href="/about">了解平台</a>
+          </div>
+        </header>
+        <section class="teacher-panel teacher-account" aria-labelledby="teacher-account-title">
+          <div class="teacher-panel-heading">
+            <h2 id="teacher-account-title">教师身份</h2>
+            <button
+              type="button"
+              class="bbs-action"
+              data-action-tone="secondary"
+              id="teacher-refresh"
+              hidden
+            >
+              刷新状态
+            </button>
+          </div>
+          <p id="teacher-status" role="status" aria-live="polite">登录后可查看身份和分配的课程。</p>
+          <div class="teacher-actions">
+            <a
+              class="bbs-action"
+              data-action-tone="primary"
+              id="teacher-signin"
+              href="/login?next=%2Fteachers"
+              >已有账号，登录</a
+            >
+            <a id="teacher-certify" href="/settings?certification=teacher#certifications" hidden
+              >申请或查看教师认证</a
+            >
+            <a href="/staff">没有账号？联系工作组核实开通</a>
+          </div>
+          <p class="teacher-help">
+            课程由管理员分配，可阅读资料、提交意见和查看回复。身份认证不改变既有账号权限。
+          </p>
+        </section>
+        <section
+          class="teacher-panel"
+          id="teacher-courses-section"
+          aria-labelledby="teacher-courses-title"
+          hidden
+        >
+          <div class="teacher-panel-heading"><h2 id="teacher-courses-title">我管理的课程</h2></div>
+          <p class="teacher-help" id="teacher-courses-status"></p>
+          <div id="teacher-courses" class="teacher-courses"></div>
+        </section>
+        <section class="teacher-panel" aria-labelledby="teacher-feedback-guide">
+          <h2 id="teacher-feedback-guide">读到哪里，就在哪里提意见</h2>
+          <ol class="teacher-guide">
+            <li>
+              <strong>进入课程</strong><span>从章节目录找到知识点，阅读正文和知识起源。</span>
+            </li>
+            <li>
+              <strong>留下建议</strong
+              ><span
+                >开启批注，选中原文后点“纠错”。这时仍是私人批注，需另点“提交课程组”并确认才会发送；也可在“参与共建”填写改进建议或投稿资料。</span
+              >
+            </li>
+            <li>
+              <strong>查看回复</strong
+              ><span>建议交由课程组处理，不直接改动已发布正文。登录后可在下方查看自己的提交。</span>
+            </li>
+          </ol>
+        </section>
+        <section
+          class="teacher-panel"
+          id="teacher-feedback-section"
+          aria-labelledby="teacher-feedback-title"
+          hidden
+        >
+          <div class="teacher-panel-heading">
+            <h2 id="teacher-feedback-title">我的意见与回复</h2>
+            <label class="teacher-feedback-filter">
+              <span id="teacher-feedback-course-label">课程</span>
+              <select
+                id="teacher-feedback-course"
+                aria-labelledby="teacher-feedback-course-label"
+                disabled
+              >
+                <option value="">全部课程</option>
+              </select>
+            </label>
+          </div>
+          <p class="teacher-help" id="teacher-feedback-status" role="status" aria-live="polite"></p>
+          <div id="teacher-feedback" class="teacher-feedback"></div>
+        </section>
+      </main>
+      <footer class="site-footer site-footer-compact">
+        <nav class="footer-links" aria-label="关于平台">
+          <a href="/about">关于 FREE BBS</a><a href="/staff">FREE BBS 工作人员名单</a
+          ><a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
+            >清华大学电子系</a
+          ><a href="https://www.eesast.com">电子系学生科协</a>
+        </nav>
+        <div class="footer-meta">
+          <p>© 2026-2027 FREE BBS 工作组</p>
+          <p>京ICP备2025155858号-2</p>
+        </div>
+      </footer>
+    </div>
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
+    <script src="/app.js"></script>
+    <script src="/teacher-participation.js"></script>
+    <script src="/notifications.js"></script>
+  </body>
+</html>

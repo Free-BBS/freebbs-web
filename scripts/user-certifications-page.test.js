@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { installUserCertifications } = require('../public/user-certifications');
+const { installUserCertifications, identityLineFor } = require('../public/user-certifications');
 const { installAdminCertifications } = require('../public/admin-certifications');
 
 // A small DOM fixture for controller behavior; full browser layout is checked separately.
@@ -111,8 +111,34 @@ const education = (extra = {}) => ({
   ...extra,
 });
 
-async function fixture(kind, callApi, state = {}) {
+test('certified identities use one concise line with entry year and actual stage', () => {
+  for (const [kind, label] of [
+    ['undergraduate', '本科生'],
+    ['master', '硕士研究生'],
+    ['doctor', '博士研究生'],
+  ])
+    assert.equal(
+      identityLineFor({
+        type: 'education',
+        education: kind,
+        year: 2025,
+        institution: '电子工程系',
+      }),
+      `2025 · 电子工程系 · ${label}`,
+    );
+  assert.equal(
+    identityLineFor({ type: 'teacher', automatic: true, verifiedName: '不重复显示的姓名' }),
+    '电子工程系 · 教师',
+  );
+  assert.equal(identityLineFor({ type: 'company', companyName: '测试企业' }), '测试企业');
+});
+
+async function fixture(kind, callApi, state = {}, location = {}) {
   const root = new Element();
+  const fold = new Element();
+  fold.className = 'personal-fold';
+  fold.open = false;
+  fold.append(root);
   root.className = `${kind}-certifications`;
   root.hidden = kind === 'admin';
   const ids =
@@ -135,13 +161,13 @@ async function fixture(kind, callApi, state = {}) {
           'message',
           'submit',
           'requests',
-          'suggestion',
-          'suggestion-copy',
-          'use-suggestion',
+          'add',
+          'cancel',
+          'editor-title',
         ]
       : ['pending', 'filter', 'refresh', 'status', 'list', 'prev', 'next', 'page'];
   const inputs = new Set(['institution', 'year', 'class', 'company']);
-  const buttons = new Set(['refresh', 'submit', 'use-suggestion', 'prev', 'next']);
+  const buttons = new Set(['refresh', 'submit', 'add', 'cancel', 'prev', 'next']);
   const el = Object.fromEntries(
     ids.map((id) => [
       id,
@@ -161,7 +187,12 @@ async function fixture(kind, callApi, state = {}) {
   if (kind === 'user') {
     el.kind.value = 'undergraduate';
     el.kind.defaultValue = 'undergraduate';
-    el.form.append(el.kind, el['education-fields'], el['company-fields'], el.submit);
+    for (const kindName of ['undergraduate', 'master', 'doctor', 'teacher', 'company']) {
+      const option = new Element('option');
+      option.value = kindName;
+      el.kind.append(option);
+    }
+    el.form.append(el.kind, el['education-fields'], el['company-fields'], el.submit, el.cancel);
     el['education-fields'].append(el.institution, el.year, el.class);
     el['company-fields'].append(el.company);
     root.append(
@@ -177,12 +208,19 @@ async function fixture(kind, callApi, state = {}) {
               'company-fields',
               'company',
               'submit',
+              'cancel',
             ].includes(id),
         )
         .map((id) => el[id]),
     );
   } else {
     el.filter.value = 'pending';
+    for (const value of ['pending', 'approved', 'rejected', 'all']) {
+      const option = new Element('option');
+      option.value = value;
+      option.textContent = value === 'pending' ? '待审核' : value;
+      el.filter.append(option);
+    }
     root.append(...Object.values(el));
   }
   const events = {};
@@ -196,6 +234,7 @@ async function fixture(kind, callApi, state = {}) {
   };
   const app = { userState, callApi, sessionReady: Promise.resolve() };
   const host = {
+    location,
     CustomEvent: function FixtureEvent(type, options) {
       this.type = type;
       this.detail = options.detail;
@@ -222,10 +261,53 @@ async function fixture(kind, callApi, state = {}) {
     app,
   });
   await settle();
-  return { root, el, events, dispatched, userState };
+  return { root, fold, el, events, dispatched, userState, host };
 }
 
-test('bound student suggestion prefills editable fields; only approved identities appear verified', async () => {
+function openEditor(f, kind = 'undergraduate') {
+  const { el } = f;
+  el.add.listeners.click();
+  el.kind.value = kind;
+  el.kind.listeners.change();
+}
+
+test('teacher deep link selects the teacher form without submitting or accepting other query kinds', async () => {
+  const routes = [];
+  const payload = { approved: [], requests: [], suggestion: education(), fullName: '教师本人' };
+  const f = await fixture(
+    'user',
+    async (route, options) => {
+      routes.push({ route, options });
+      return payload;
+    },
+    {},
+    { search: '?certification=teacher', hash: '#certifications' },
+  );
+  assert.equal(f.el.kind.value, 'teacher');
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.year.required, false);
+  assert.equal(f.fold.open, true);
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0].options, undefined);
+  const other = await fixture(
+    'user',
+    async () => payload,
+    {},
+    { search: '?certification=company' },
+  );
+  assert.equal(other.el.kind.value, 'master');
+  assert.equal(other.el.form.hidden, true);
+  assert.equal(other.fold.open, false);
+});
+
+for (const hash of ['#certifications', '#settings-identity'])
+  test(`${hash} opens a containing fold without changing the selected identity`, async () => {
+    const f = await fixture('user', async () => ({ approved: [], requests: [] }), {}, { hash });
+    assert.equal(f.fold.open, true);
+    assert.equal(f.el.kind.value, 'undergraduate');
+  });
+
+test('bound education is displayed automatically without prefilled repeat application', async () => {
   const f = await fixture('user', async () => ({
     approved: [education(), education({ status: 'pending', education: 'doctor' })],
     requests: [
@@ -234,15 +316,17 @@ test('bound student suggestion prefills editable fields; only approved identitie
     ],
     suggestion: education({ year: 2025, className: '' }),
   }));
-  assert.equal(f.el.year.value, 2025);
-  assert.equal(f.el.institution.disabled, false);
+  assert.equal(f.el.form.hidden, true);
+  assert.equal(f.el.year.value, 2021);
   assert.equal(f.el.approved.children.length, 1);
+  assert.match(f.el.approved.textContent, /2025 · 清华大学电子系 · 本科生/);
+  assert.match(f.el.approved.children[0]['aria-label'], /已自动认证/);
+  assert.equal(f.el.approved.querySelectorAll('button').length, 0);
   assert.equal(f.el.requests.children.length, 2);
   assert.match(f.el.requests.textContent, /等待审核/);
   assert.match(f.el.requests.textContent, /<script>bad\(\)<\/script>/);
   assert.equal(f.el.requests.querySelectorAll('script').length, 0);
-  f.el.kind.value = 'master';
-  f.el.kind.listeners.change();
+  openEditor(f, 'master');
   assert.equal(f.el.submit.disabled, true);
   assert.equal(f.el.kind.disabled, false);
   assert.equal(f.el.year.disabled, true);
@@ -258,6 +342,7 @@ test('education edits submit exact values and keep the previous approved identit
     requests = [education({ ...posts[0], status: 'pending' })];
     return { message: '已提交' };
   });
+  f.el.approved.querySelector('button').listeners.click();
   f.el.institution.value = '另一所大学电子工程学院';
   f.el.year.value = '2022';
   f.el.class.value = '甲班';
@@ -269,7 +354,7 @@ test('education edits submit exact values and keep the previous approved identit
     year: 2022,
     className: '甲班',
   });
-  assert.match(f.el.approved.textContent, /2021 年/);
+  assert.match(f.el.approved.textContent, /2021 · 清华大学电子系 · 本科生/);
   assert.match(f.el.requests.textContent, /2022 年/);
   assert.equal(f.el.submit.disabled, true);
   assert.match(f.el['slot-status'].textContent, /现有认证继续有效/);
@@ -281,16 +366,15 @@ test('teacher can omit year and company submits no hidden education fields', asy
     if (options) posts.push(JSON.parse(options.body));
     return options ? {} : { approved: [], requests: [], fullName: '张亦驰' };
   });
-  f.el.kind.value = 'teacher';
-  f.el.kind.listeners.change();
+  openEditor(f, 'teacher');
+  f.el.institution.value = '清华大学电子系';
   f.el.year.value = '';
   assert.equal(f.el.year.required, false);
   assert.match(f.el['slot-status'].textContent, /公开账号姓名“张亦驰”/);
   assert.match(f.el['slot-status'].textContent, /更正姓名.*联系管理员/);
   await f.el.form.listeners.submit({ preventDefault() {} });
   assert.deepEqual(posts[0], { type: 'teacher', institution: '清华大学电子系', className: '' });
-  f.el.kind.value = 'company';
-  f.el.kind.listeners.change();
+  openEditor(f, 'company');
   f.el.company.value = '例示电子有限公司';
   assert.equal(f.el.institution.disabled, true);
   assert.equal(f.el.company.disabled, false);
@@ -339,6 +423,7 @@ test('cross-tab logout blocks a late submit and BFCache restore loads the curren
     read += 1;
     return Promise.resolve({ approved: [education()], requests: [] });
   });
+  openEditor(f);
   const submit = f.el.form.listeners.submit({ preventDefault() {} });
   f.events.storage({ key: 'free_bbs_auth_token' });
   assert.equal(f.el.approved.children.length, 0);
@@ -350,27 +435,289 @@ test('cross-tab logout blocks a late submit and BFCache restore loads the curren
   f.events.pageshow({ persisted: true });
   await settle();
   assert.equal(read, 2);
-  assert.equal(f.el.submit.disabled, false);
+  assert.equal(f.el.submit.disabled, true);
+  assert.equal(f.el.form.hidden, true);
 });
 
-test('a completed student-id binding refreshes the backend suggestion on the same settings page', async () => {
+test('completed student-id binding updates the automatic identity without another application', async () => {
   let bound = false;
   const f = await fixture('user', async () => ({
     approved: [],
     requests: [],
     suggestion: bound ? education({ education: 'master', year: 2026 }) : null,
   }));
-  assert.equal(f.el.suggestion.hidden, true);
+  assert.equal(f.el.approved.children.length, 0);
   bound = true;
   f.events['freebbs:identity-updated']();
   await settle();
-  assert.equal(f.el.suggestion.hidden, false);
-  f.el['use-suggestion'].listeners.click();
-  assert.equal(f.el.kind.value, 'master');
-  assert.equal(f.el.year.value, 2026);
+  assert.equal(f.el.approved.children.length, 1);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.match(f.el.approved.textContent, /2026 · 清华大学电子系 · 硕士研究生/);
+  assert.equal(f.el.form.hidden, true);
+});
+
+test('binding the same account while its initial certification read is pending supersedes the old snapshot', async () => {
+  const initial = defer();
+  const latest = defer();
+  let reads = 0;
+  const f = await fixture('user', () => {
+    reads += 1;
+    return reads === 1 ? initial.promise : latest.promise;
+  });
+  const originalOwner = `${f.userState.uid}:${f.userState.token}`;
+  const user = { uid: f.userState.uid, studentId: '2026210001' };
+  f.userState.studentId = user.studentId;
+  f.host.dispatchEvent({ type: 'freebbs:session-change', detail: { user } });
+  f.host.dispatchEvent({ type: 'freebbs:identity-updated', detail: { user, status: 'bound' } });
+  assert.equal(`${f.userState.uid}:${f.userState.token}`, originalOwner);
+  assert.equal(reads, 2, 'the unchanged session must still fetch the newly bound identity');
+  initial.resolve({ approved: [education({ institution: '绑定前的旧快照' })], requests: [] });
+  await settle();
+  assert.equal(f.el.approved.children.length, 0);
+  assert.equal(f.el.refresh.disabled, true);
+  latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
+  await settle();
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
+  assert.equal(f.el.refresh.disabled, false);
+});
+
+test('a binding refresh preserves an unsent education draft and ignores a later stale manual read', async () => {
+  const stale = defer();
+  let reads = 0;
+  const f = await fixture('user', () => {
+    reads += 1;
+    if (reads === 2) return stale.promise;
+    return Promise.resolve({
+      approved: [],
+      requests: [],
+      suggestion: reads > 2 ? education({ education: 'master' }) : null,
+    });
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '尚未提交的博士院系';
+  f.el.year.value = '2024';
+  f.el.class.value = '草稿班级';
+  const refreshing = f.el.refresh.listeners.click();
+  f.host.dispatchEvent({
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  });
+  await settle();
+  assert.equal(reads, 3);
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  stale.resolve({ approved: [], requests: [], automatic: [] });
+  await refreshing;
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.kind.value, 'doctor');
+  assert.equal(f.el.institution.value, '尚未提交的博士院系');
+  assert.equal(f.el.year.value, '2024');
+  assert.equal(f.el.class.value, '草稿班级');
+  assert.equal(f.el.submit.disabled, false);
+});
+
+test('binding events during a failed certification submission coalesce into a fresh read without losing its draft', async () => {
+  const post = defer();
+  let reads = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) {
+      await post.promise;
+      throw new Error('暂时无法提交');
+    }
+    reads += 1;
+    return {
+      approved: [],
+      requests: [],
+      suggestion: reads > 1 ? education({ education: 'master' }) : null,
+    };
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '需要保留的博士院系';
+  f.el.year.value = '2025';
+  const submit = f.el.form.listeners.submit({ preventDefault() {} });
+  const binding = {
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  };
+  f.host.dispatchEvent(binding);
+  f.host.dispatchEvent(binding);
+  assert.equal(reads, 1, 'a submission defers certification refreshes until it settles');
+  post.resolve();
+  await submit;
+  await settle();
+  assert.equal(reads, 2, 'queued identity changes need one current read');
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.match(f.el.message.textContent, /暂时无法提交/);
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.kind.value, 'doctor');
+  assert.equal(f.el.institution.value, '需要保留的博士院系');
+  assert.equal(f.el.year.value, '2025');
+  assert.equal(f.el.submit.disabled, false);
+});
+
+test('binding during the read after submission invalidates that snapshot and drains the queued identity refresh', async () => {
+  const stale = defer();
+  const latest = defer();
+  let reads = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) return { message: '经历申请已提交' };
+    reads += 1;
+    if (reads === 2) return stale.promise;
+    if (reads === 3) return latest.promise;
+    return { approved: [], requests: [] };
+  });
+  openEditor(f, 'doctor');
+  f.el.institution.value = '已提交的博士院系';
+  f.el.year.value = '2025';
+  const submit = f.el.form.listeners.submit({ preventDefault() {} });
+  await settle();
+  assert.equal(reads, 2);
+  f.host.dispatchEvent({
+    type: 'freebbs:identity-updated',
+    detail: { user: { uid: f.userState.uid, studentId: '2026210001' }, status: 'bound' },
+  });
+  stale.resolve({ approved: [education({ institution: '绑定前的旧快照' })], requests: [] });
+  await submit;
+  assert.equal(reads, 3);
+  assert.equal(f.el.approved.children.length, 0);
+  latest.resolve({ approved: [], requests: [], suggestion: education({ education: 'master' }) });
+  await settle();
+  assert.match(f.el.approved.textContent, /硕士研究生/);
+  assert.doesNotMatch(f.el.approved.textContent, /旧快照/);
+  assert.equal(f.el.message.textContent, '经历申请已提交');
+  assert.equal(f.el.refresh.disabled, false);
 });
 
 const adminPayload = (requests) => ({ requests, total: requests.length, page: 1, pageSize: 30 });
+
+test('verified teacher deep link shows one compact identity and no repeated update form', async () => {
+  const teacher = {
+    type: 'teacher',
+    institution: '已核实学校',
+    year: 2020,
+    verifiedName: '旧称呼',
+  };
+  const f = await fixture(
+    'user',
+    async () => ({
+      approved: [teacher],
+      requests: [],
+      automatic: [
+        {
+          type: 'teacher',
+          automatic: true,
+          source: 'account_role',
+          verifiedName: '数据库教师姓名',
+          institution: '',
+          year: null,
+        },
+      ],
+      managedSlots: ['teacher'],
+    }),
+    { role: 'teacher' },
+    { search: '?certification=teacher', hash: '#certifications' },
+  );
+  assert.equal(f.el.form.hidden, true);
+  assert.equal(f.el.approved.children.length, 1);
+  assert.match(f.el.approved.textContent, /已核实学校 · 教师/);
+  assert.match(f.el.approved.children[0]['aria-label'], /已自动认证/);
+  assert.doesNotMatch(f.el.approved.textContent, /旧称呼/);
+  assert.equal(f.el.approved.querySelectorAll('button').length, 0);
+});
+
+test('automatic current identity cannot be re-applied and historical education starts blank', async () => {
+  let posts = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) posts += 1;
+    return {
+      approved: [education({ education: 'master' })],
+      automatic: [
+        {
+          ...education({ education: 'master', year: 2026 }),
+          automatic: true,
+          source: 'bound_student_id',
+        },
+      ],
+      managedSlots: ['master'],
+      requests: [education({ education: 'master', status: 'pending', requiresReview: false })],
+    };
+  });
+  assert.equal(f.el.form.hidden, true);
+  assert.equal(f.el.requests.children.length, 0);
+  assert.doesNotMatch(f.el.status.textContent, /待审核/);
+  f.el.add.listeners.click();
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.kind.value, 'undergraduate');
+  assert.equal(f.el.institution.value, '');
+  assert.equal(f.el.year.value, '');
+  const managed = f.el.kind.querySelectorAll('option').find((option) => option.value === 'master');
+  assert.equal(managed.disabled, true);
+  f.el.kind.value = 'master';
+  f.el.kind.listeners.change();
+  await f.el.form.listeners.submit({ preventDefault() {} });
+  assert.equal(posts, 0);
+});
+
+test('closing and reopening keeps the unsent experience draft without posting', async () => {
+  let posts = 0;
+  const f = await fixture('user', async (_route, options) => {
+    if (options) posts += 1;
+    return { approved: [], requests: [], automatic: [], managedSlots: [] };
+  });
+  assert.equal(f.el.form.hidden, true);
+  openEditor(f);
+  f.el.institution.value = '曾经就读的学校';
+  f.el.year.value = '2018';
+  f.el.cancel.listeners.click();
+  assert.equal(f.el.form.hidden, true);
+  f.el.add.listeners.click();
+  assert.equal(f.el.institution.value, '曾经就读的学校');
+  assert.equal(f.el.year.value, '2018');
+  assert.equal(posts, 0);
+});
+
+test('temporary read errors and failed submissions keep the compact editor and draft recoverable', async () => {
+  let fail = false;
+  const f = await fixture('user', async (_route, options) => {
+    if (options || fail) throw new Error('暂时连接失败');
+    return { approved: [], requests: [] };
+  });
+  openEditor(f);
+  f.el.institution.value = '尚未提交的学校';
+  f.el.year.value = '2019';
+  await f.el.form.listeners.submit({ preventDefault() {} });
+  assert.equal(f.el.form.hidden, false);
+  assert.equal(f.el.institution.value, '尚未提交的学校');
+  assert.match(f.el.message.textContent, /暂时连接失败/);
+  fail = true;
+  await f.el.refresh.listeners.click();
+  assert.equal(f.el.institution.value, '尚未提交的学校');
+  assert.match(f.el.status.textContent, /暂时连接失败/);
+});
+
+test('BFCache never revives a frozen certification identity after token loss, replacement or unreadable storage', async () => {
+  for (const token of [null, 'other_token', 'unreadable']) {
+    let reads = 0;
+    const f = await fixture('user', async () => {
+      reads += 1;
+      return { approved: [education({ institution: '不应恢复的旧身份' })], requests: [] };
+    });
+    f.events.pagehide();
+    f.host.localStorage = {
+      getItem() {
+        if (token === 'unreadable') throw new Error('storage unavailable');
+        return token;
+      },
+    };
+    f.events.pageshow({ persisted: true });
+    await settle();
+    assert.equal(reads, 1);
+    assert.equal(f.el.approved.children.length, 0);
+    assert.equal(f.el.form.hidden, true);
+    assert.doesNotMatch(f.root.textContent, /不应恢复的旧身份/);
+  }
+});
 
 test('teacher approval names the account identity that will become public', async () => {
   const f = await fixture(
@@ -429,6 +776,151 @@ test('a teacher with isAdmin can review; self-review uses uid and approval requi
   assert.equal(f.dispatched[0].type, 'freebbs:certifications-reviewed');
 });
 
+test('recognized pending identities offer only an explicit close action and never imply another approval', async () => {
+  const posts = [];
+  let closed = false;
+  const f = await fixture(
+    'admin',
+    async (route, options) => {
+      if (!options)
+        return adminPayload(
+          closed
+            ? []
+            : [
+                education({
+                  id: 8,
+                  userUid: 'recognized_student',
+                  status: 'pending',
+                  requiresReview: false,
+                  currentApproved: education({ institution: '此前人工核实学校' }),
+                }),
+              ],
+        );
+      posts.push({ route, body: JSON.parse(options.body) });
+      closed = true;
+      return { message: '旧申请已关闭' };
+    },
+    { uid: 'admin_uid', role: 'teacher', isAdmin: true },
+  );
+  const card = f.el.list.children[0];
+  assert.match(card.textContent, /已由账号识别/);
+  assert.match(card.textContent, /无需重复认证/);
+  assert.match(card.textContent, /不会删除申请记录/);
+  assert.match(card.textContent, /此前人工核实学校/);
+  assert.doesNotMatch(card.textContent, /批准认证|新申请通过后更新|等待审核/);
+  assert.equal(card.querySelector('[data-identity-confirmed]'), null);
+  assert.equal(card.querySelectorAll('button').length, 1);
+  const close = card.querySelector('button');
+  assert.equal(close.dataset.reviewAction, 'reject');
+  assert.equal(close.textContent, '关闭旧申请');
+  assert.equal(close.disabled, false);
+  assert.equal(f.el.pending.textContent, '未关闭 1 条');
+  assert.equal(f.el.filter.children[0].textContent, '未关闭');
+  assert.equal(posts.length, 0, 'reading a recognized identity never mutates its old request');
+  await close.listeners.click();
+  assert.deepEqual(posts, [
+    {
+      route: '/admin/certifications/8/review',
+      body: {
+        action: 'reject',
+        reviewNote: '已由账号身份识别，无需重复认证。',
+        identityConfirmed: false,
+      },
+    },
+  ]);
+  assert.equal(f.el.list.children.length, 0);
+  assert.equal(f.el.pending.textContent, '未关闭 0 条');
+});
+
+test('admin unclosed counts stay honest across pagination and all-status views', async () => {
+  const f = await fixture(
+    'admin',
+    async (route) => {
+      if (route.includes('status=all'))
+        return { ...adminPayload([education({ id: 5, status: 'approved' })]), total: 90 };
+      return {
+        ...adminPayload([education({ id: 8, status: 'pending', requiresReview: false })]),
+        total: 33,
+      };
+    },
+    { role: 'teacher', isAdmin: true },
+  );
+  assert.equal(f.el.pending.textContent, '未关闭 33 条');
+  assert.equal(f.el.status.textContent, '共 33 条未关闭申请');
+  assert.equal(f.el.next.disabled, false);
+  f.el.filter.value = 'all';
+  f.el.filter.listeners.change();
+  await settle();
+  assert.equal(f.el.pending.textContent, '未关闭 33 条');
+  assert.equal(f.el.status.textContent, '共 90 条申请');
+  assert.doesNotMatch(f.el.status.textContent, /undefined|待审核/);
+});
+
+test('closing recognized requests preserves self-review and stale-account action guards', async () => {
+  const posts = [];
+  const requests = [
+    education({ id: 8, userUid: 'other_uid', status: 'pending', requiresReview: false }),
+    education({ id: 9, userUid: 'admin_uid', status: 'pending', requiresReview: false }),
+  ];
+  const f = await fixture(
+    'admin',
+    async (_route, options) => {
+      if (!options) return adminPayload(requests);
+      posts.push(JSON.parse(options.body));
+      return {};
+    },
+    { uid: 'admin_uid', role: 'teacher', isAdmin: true },
+  );
+  const [other, self] = f.el.list.children;
+  assert.equal(self.querySelector('button').disabled, true);
+  await self.querySelector('button').listeners.click();
+  assert.equal(posts.length, 0);
+  const oldClose = other.querySelector('button');
+  f.userState.uid = 'second_admin';
+  f.userState.token = 'second_token';
+  f.events['freebbs:session-change']();
+  await settle();
+  await oldClose.listeners.click();
+  assert.equal(posts.length, 0, 'detached old-account actions never act as the new administrator');
+  const currentClose = f.el.list.children[0].querySelector('button');
+  f.userState.isAdmin = false;
+  f.events['freebbs:session-change']();
+  await currentClose.listeners.click();
+  assert.equal(posts.length, 0);
+  assert.equal(f.root.hidden, true);
+  assert.equal(f.el.list.children.length, 0);
+});
+
+test('a late close result cannot restore applicants or feedback after logout', async () => {
+  const result = defer();
+  const f = await fixture(
+    'admin',
+    async (_route, options) =>
+      options
+        ? result.promise
+        : adminPayload([
+            education({
+              id: 8,
+              userUid: 'private_applicant',
+              status: 'pending',
+              requiresReview: false,
+            }),
+          ]),
+    { uid: 'admin_uid', role: 'teacher', isAdmin: true },
+  );
+  const saving = f.el.list.children[0].querySelector('button').listeners.click();
+  f.userState.isLoggedIn = false;
+  f.userState.token = '';
+  f.events['freebbs:session-change']();
+  result.resolve({ message: '不应恢复的旧审核结果' });
+  await saving;
+  await settle();
+  assert.equal(f.root.hidden, true);
+  assert.equal(f.el.list.children.length, 0);
+  assert.equal(f.el.pending.textContent, '未关闭 0 条');
+  assert.doesNotMatch(f.root.textContent, /private_applicant|不应恢复/);
+});
+
 test('admin permission revocation clears applicants and ignores outstanding reads', async () => {
   const pending = defer();
   const f = await fixture('admin', () => pending.promise, {
@@ -476,8 +968,7 @@ test('repeated same-page certification notifications refresh each controller wit
     userReads += 1;
     return { approved: userReads > 1 ? [education()] : [], requests: [] };
   });
-  user.el.kind.value = 'doctor';
-  user.el.kind.listeners.change();
+  openEditor(user, 'doctor');
   user.el.institution.value = '尚未提交的学校院系';
   user.el.year.value = '2024';
   user.el.class.value = '草稿班级';

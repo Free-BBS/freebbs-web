@@ -14,6 +14,7 @@ const vendorDir = path.join(__dirname, 'node_modules');
 const developmentDir = path.join(__dirname, 'development', 'apps', 'web', 'dist');
 const pageRoutes = new Map([
   ['/about', '/about.html'],
+  ['/teachers', '/teachers.html'],
   ['/staff', '/staff.html'],
   ['/laboratory', '/laboratory.html'],
   ['/code-lab', '/code-lab.html'],
@@ -60,6 +61,7 @@ const pageRoutes = new Map([
 ]);
 const htmlRedirects = new Map([
   ['/about.html', '/about'],
+  ['/teachers.html', '/teachers'],
   ['/staff.html', '/staff'],
   ['/laboratory.html', '/laboratory'],
   ['/code-lab.html', '/code-lab'],

@@ -1,7 +1,11 @@
 const express = require('express');
 const { asCampusConnectorError } = require('./errors');
 const { safeCallbackResult } = require('./broker');
-const { readDirectCasStage } = require('./direct-cas-diagnostics');
+const {
+  readDirectCasStage,
+  readDirectCasVerification,
+  directCasRecovery,
+} = require('./direct-cas-diagnostics');
 
 const CALLBACK_PARAMETER_NAMES = new Set(['code', 'ticket', 'error', 'error_description']);
 const AUTHORIZATION_CORRELATION_COOKIE = 'freebbs_tsinghua_authorization';
@@ -251,10 +255,14 @@ function createCampusConnectorRouter({
       } catch (error) {
         const safeError = asCampusConnectorError(error);
         const stage = readDirectCasStage(safeError) || 'internal';
+        const recovery = directCasRecovery(safeError.code);
+        const verification = readDirectCasVerification(safeError);
         response.status(safeError.status).json({
           code: safeError.code,
           message: safeError.message,
           stage,
+          ...(recovery ? { recovery } : {}),
+          ...(verification ? { verification } : {}),
         });
       } finally {
         clearDirectLoginValues(request, credentials);

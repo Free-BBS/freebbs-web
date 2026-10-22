@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const test = require('node:test');
 const { createCampusConnectorBroker } = require('./broker');
+const { createDirectCasError, readDirectCasVerification } = require('./direct-cas-diagnostics');
 
 const FINGERPRINT = '0123456789abcdef0123456789abcdef';
 
@@ -774,6 +775,135 @@ test('direct CAS mode stores only an encrypted verified session grant', async ()
     errors: [],
   });
   assert.doesNotMatch(JSON.stringify(status), new RegExp(FINGERPRINT, 'iu'));
+});
+
+test('interactive verification during reconnect preserves the existing grant, generation and cached sync', async () => {
+  const { broker, adapter, store } = createDirectBroker();
+  const credentials = {
+    userId: 7,
+    username: '2026000000',
+    password: 'one-time-password',
+    fingerprint: FINGERPRINT,
+  };
+  await broker.connectDirect(credentials);
+  const connection = store.connections.get('7:tsinghua-learn');
+  connection.status = 'active_verified';
+  connection.last_successful_sync_at = new Date('2026-08-02T07:00:00.000Z');
+  store.runs.set('csr_previous', {
+    userId: 7,
+    provider: 'tsinghua-learn',
+    connector_generation: connection.generation,
+    status: 'succeeded',
+    result_counts: { courses: 3, homework: 7 },
+  });
+  const snapshot = JSON.stringify({ connections: [...store.connections], runs: [...store.runs] });
+  adapter.authenticateDirect = async () => {
+    throw Object.assign(new Error('private-upstream-page password=must-not-leak'), {
+      code: 'cas_interactive_verification_required',
+    });
+  };
+  await assert.rejects(broker.connectDirect(credentials), (error) => {
+    assert.equal(error.code, 'cas_interactive_verification_required');
+    assert.equal(error.status, 409);
+    assert.doesNotMatch(error.message, /private-upstream-page|must-not-leak/);
+    assert.deepEqual(error.verification, { kind: 'unclassified', indicators: [] });
+    return true;
+  });
+  assert.equal(
+    JSON.stringify({ connections: [...store.connections], runs: [...store.runs] }),
+    snapshot,
+  );
+});
+
+test('broker rebuilds both verification codes with only bounded allowlisted evidence', async () => {
+  for (const code of [
+    'cas_interactive_verification_required',
+    'interactive_verification_required',
+  ]) {
+    const { broker, adapter, store } = createDirectBroker();
+    adapter.authenticateDirect = async () => {
+      throw Object.assign(new Error('private-upstream-page'), {
+        code,
+        verification: {
+          kind: 'image_captcha',
+          indicators: [
+            'visible_image_captcha_input',
+            'private-field-name',
+            'https://evil.example/?ticket=private-ticket',
+            'visible_image_captcha_input',
+          ],
+          knownVisibleInputs: ['Cookie: private-field-name'],
+          url: 'https://evil.example/?ticket=private-ticket',
+          html: '<input value="private-code">',
+        },
+      });
+    };
+    await assert.rejects(
+      broker.connectDirect({
+        userId: 7,
+        username: '2026000000',
+        password: 'private-password',
+        fingerprint: FINGERPRINT,
+      }),
+      (error) => {
+        assert.equal(error.code, code);
+        assert.deepEqual(error.verification, {
+          kind: 'image_captcha',
+          indicators: ['visible_image_captcha_input'],
+        });
+        assert.doesNotMatch(
+          JSON.stringify({ message: error.message, verification: error.verification }),
+          /private-|evil\.example|Cookie|https:/,
+        );
+        return true;
+      },
+    );
+    assert.equal(store.connections.size, 0);
+    assert.equal(store.runs.size, 0);
+  }
+});
+
+test('verification metadata ignores accessors, excessive arrays and unsupported claims', () => {
+  let accessorReads = 0;
+  const accessor = {
+    get kind() {
+      accessorReads += 1;
+      throw new Error('private-getter-secret');
+    },
+    get indicators() {
+      accessorReads += 1;
+      throw new Error('private-getter-secret');
+    },
+  };
+  const excessive = Array.from({ length: 32 }, () => 'private-field-name');
+  excessive.push('visible_otp_input');
+  for (const candidate of [
+    null,
+    'https://evil.example/?ticket=private-ticket',
+    { kind: 'interactive', indicators: ['private-field-name'] },
+    { kind: 'image_captcha', indicators: ['visible_otp_input'] },
+    { kind: 'interactive', indicators: excessive },
+    accessor,
+  ]) {
+    const error = createDirectCasError(
+      'cas_interactive_verification_required',
+      undefined,
+      candidate,
+    );
+    const verification = readDirectCasVerification(error);
+    assert.equal(verification.kind, 'unclassified');
+    assert.ok(verification.indicators.length <= 5);
+    assert.equal(Object.isFrozen(verification), true);
+    assert.equal(Object.isFrozen(verification.indicators), true);
+    assert.doesNotMatch(JSON.stringify(verification), /private-|evil\.example/);
+  }
+  assert.equal(accessorReads, 0);
+  const unrelated = createDirectCasError('cas_credentials_rejected', undefined, {
+    kind: 'interactive',
+    indicators: ['visible_otp_input'],
+  });
+  assert.equal(readDirectCasVerification(unrelated), null);
+  assert.equal(Object.hasOwn(unrelated, 'verification'), false);
 });
 
 test('natural credential expiry atomically clears identity and cancels old sync work once', async () => {

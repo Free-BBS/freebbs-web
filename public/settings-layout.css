@@ -94,15 +94,90 @@ body.settings-page .settings-rows p:empty {
 body.settings-page .settings-identity-forms {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 24px;
+  align-items: start;
+  gap: 14px;
   min-width: 0;
 }
 
-body.settings-page #settings-identity .settings-identity-forms > form {
+body.settings-page #certifications > #settings-identity {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--ui-line);
+}
+
+body.settings-page .settings-binding-heading {
+  display: grid;
+  gap: 6px;
+}
+
+body.settings-page #settings-identity-status {
   margin: 0;
-  padding: 0;
+  color: var(--ui-text);
+  font: 400 0.9rem/1.8 var(--font-ui);
+}
+
+body.settings-page .settings-binding-panel {
+  min-width: 0;
   border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+body.settings-page .settings-binding-panel > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 12px 0;
+  box-sizing: border-box;
+  list-style: none;
+  color: var(--ui-text);
+  font: 600 0.96rem/1.6 var(--font-ui);
+  cursor: pointer;
+}
+
+body.settings-page .settings-binding-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.settings-page .settings-binding-panel > summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin: -4px 2px 0 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+body.settings-page .settings-binding-panel > summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: -3px;
+}
+
+body.settings-page .settings-binding-action {
+  margin-left: auto;
+  color: var(--ui-muted);
+  font: 400 0.84rem/1.6 var(--font-ui);
+}
+
+body.settings-page .settings-binding-panel[open] > summary::after {
+  margin-top: 4px;
+  transform: rotate(225deg);
+}
+
+body.settings-page #settings-identity .settings-binding-panel > form {
+  margin: 0;
+  padding: 0 0 16px;
+  border: 0;
+  align-content: start;
+}
+
+body.settings-page #settings-identity .auth-field {
+  align-self: start;
   align-content: start;
 }
 
@@ -111,10 +186,10 @@ body.settings-page #settings-identity h3 {
   font: 600 1.05rem/1.6 var(--font-ui);
 }
 
-body.settings-page #settings-student-form > p {
+body.settings-page #settings-identity .settings-binding-note {
   margin: 0;
   color: var(--ui-muted);
-  font: 400 0.9rem/1.8 var(--font-ui);
+  font: 400 0.86rem/1.8 var(--font-ui);
 }
 
 body.settings-page :is(#settings-form, #settings-identity, #certifications, #settings-reading) {
@@ -134,20 +209,11 @@ body.settings-page :is(#settings-form, #settings-identity, #certifications, #set
   body.settings-page #certification-form > :is(p, button) {
     grid-column: 1 / -1;
   }
-
-  body.settings-page #certifications .certification-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1180px) {
   body.settings-page :is(.settings-row, .settings-identity-forms) {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  body.settings-page #settings-identity #settings-student-form {
-    border-top: 1px solid var(--ui-line);
-    padding-top: 24px;
   }
 }
 

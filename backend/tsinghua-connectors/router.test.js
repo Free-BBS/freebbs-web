@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const express = require('express');
 const { CampusConnectorError } = require('./errors');
+const { createCampusConnectorBroker } = require('./broker');
 const {
   AUTHORIZATION_CALLBACK_PATH,
   AUTHORIZATION_CORRELATION_COOKIE,
@@ -283,6 +284,131 @@ test('direct login requires authentication, explicit consent, and a narrow JSON 
   assert.doesNotMatch(JSON.stringify(accepted.payload), /one-time-secret|2026000000/u);
   assert.doesNotMatch(JSON.stringify(accepted.payload), new RegExp(FINGERPRINT, 'iu'));
   assert.equal(accepted.response.headers.get('cache-control'), 'no-store');
+});
+
+test('interactive verification returns only fixed official recovery, not a reusable or shared browser session', async (t) => {
+  let observedRequest;
+  const baseUrl = await startServer(
+    t,
+    createBroker({
+      async connectDirect() {
+        const error = new CampusConnectorError(
+          'cas_interactive_verification_required',
+          '本次登录需要在清华认证页面完成验证码或二次验证。',
+          { status: 409 },
+        );
+        error.recovery = {
+          officialUrl: 'https://evil.example/?ticket=upstream-private',
+          canResumeHere: true,
+        };
+        throw error;
+      },
+    }),
+    {
+      observeRequest(request) {
+        observedRequest = request;
+      },
+    },
+  );
+  const { response, payload } = await requestJson(`${baseUrl}/direct-login`, {
+    method: 'POST',
+    body: {
+      username: '2026000000',
+      password: 'one-time-secret',
+      fingerprint: FINGERPRINT,
+      consent: true,
+    },
+  });
+  assert.equal(response.status, 409);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(payload.recovery, {
+    action: 'official_verification',
+    officialUrl: 'https://id.tsinghua.edu.cn/do/off/ui/auth/login',
+    helpUrl:
+      'https://its.tsinghua.edu.cn/1wzcycejdh_content.jsp?urltype=news.NewsContentUrl&wbnewsid=4000&wbtreeid=1771',
+    canResumeHere: false,
+    retryable: false,
+    browserSessionShared: false,
+  });
+  assert.deepEqual(payload.verification, { kind: 'unclassified', indicators: [] });
+  assert.deepEqual(observedRequest.body, {});
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /one-time-secret|2026000000|upstream-private|evil\.example/,
+  );
+  assert.doesNotMatch(JSON.stringify(payload), new RegExp(FINGERPRINT, 'i'));
+});
+
+test('verification diagnostics survive adapter and broker boundaries without reflecting arbitrary evidence', async (t) => {
+  const cases = [
+    {
+      kind: 'image_captcha',
+      indicators: ['visible_image_captcha_container'],
+      expectedKind: 'image_captcha',
+    },
+    {
+      kind: 'interactive',
+      indicators: ['visible_interactive_prompt', 'visible_otp_input'],
+      expectedKind: 'interactive',
+    },
+    { kind: 'interactive', indicators: [], expectedKind: 'unclassified' },
+    {
+      kind: 'https://evil.example/?ticket=private-ticket',
+      indicators: ['visible_verification_prompt'],
+      expectedKind: 'unclassified',
+    },
+  ];
+  for (const fixture of cases) {
+    const broker = createCampusConnectorBroker({
+      store: {
+        completeDirectConnection: async () => assert.fail('verification cannot persist a grant'),
+      },
+      vault: {},
+      runtimeConfig: { state: 'direct_cas', adapterId: 'fixture-direct' },
+      adapter: {
+        id: 'fixture-direct',
+        authenticateDirect: async () => {
+          throw Object.assign(new Error('private-upstream-page'), {
+            code: 'cas_interactive_verification_required',
+            verification: {
+              kind: fixture.kind,
+              indicators: [
+                ...fixture.indicators,
+                'private-field-name',
+                'https://evil.example/?ticket=private-ticket',
+              ],
+              knownVisibleInputs: ['Cookie: private-field-name'],
+              html: '<input value="private-code">',
+              url: 'https://evil.example/?ticket=private-ticket#private-fragment',
+            },
+            recovery: { officialUrl: 'https://evil.example/?ticket=private-ticket' },
+          });
+        },
+      },
+    });
+    const baseUrl = await startServer(t, broker);
+    const { response, payload } = await requestJson(`${baseUrl}/direct-login`, {
+      method: 'POST',
+      body: {
+        username: '2026000000',
+        password: 'private-password',
+        fingerprint: FINGERPRINT,
+        consent: true,
+      },
+    });
+    assert.equal(response.status, 409);
+    assert.deepEqual(payload.verification, {
+      kind: fixture.expectedKind,
+      indicators: fixture.indicators,
+    });
+    assert.equal(payload.recovery.officialUrl, 'https://id.tsinghua.edu.cn/do/off/ui/auth/login');
+    assert.equal(payload.recovery.canResumeHere, false);
+    assert.equal(payload.recovery.browserSessionShared, false);
+    assert.doesNotMatch(
+      JSON.stringify(payload),
+      /private-|evil\.example|knownVisibleInputs|Cookie:|2026000000/,
+    );
+  }
 });
 
 test('direct login removes every parsed field from a rejected request body', async (t) => {

@@ -544,6 +544,7 @@ function activityReturnPath() {
     if (!value) return '';
     const next = new URL(value, window.location.origin);
     const allowed =
+      next.pathname === '/teachers' ||
       next.pathname === '/publish' ||
       next.pathname === '/moderation' ||
       next.pathname === '/surveys' ||

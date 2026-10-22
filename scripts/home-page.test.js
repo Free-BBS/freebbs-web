@@ -75,8 +75,10 @@ test('homepage links to independent about and staff pages without obsolete foldi
     assert.ok(html.includes(`href="/${route}"`));
     const page = fs.readFileSync(path.join(root, 'public', `${route}.html`), 'utf8');
     if (route === 'about') {
-      assert.match(page, /建设中 · 暂未开放/);
-      assert.match(page, /development-construction-bbs-v2\.webp/);
+      assert.doesNotMatch(page, /建设中 · 暂未开放/);
+      assert.match(page, /自主学习、独立判断、协作共建、敢于创新/);
+      assert.match(page, /about-freebbs-system-20261022\.svg/);
+      assert.match(page, /href="\/teachers"/);
       assert.match(page, /href="\/guide"/);
     } else {
       assert.doesNotMatch(page, /建设中 · 暂未开放/);

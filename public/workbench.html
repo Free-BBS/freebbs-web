@@ -1307,6 +1307,53 @@
               role="alert"
               aria-live="assertive"
             ></p>
+            <section
+              id="workbench-campus-login-recovery"
+              class="workbench-campus-login-recovery"
+              aria-labelledby="workbench-campus-login-recovery-title"
+              hidden
+            >
+              <h3 id="workbench-campus-login-recovery-title">需要额外验证</h3>
+              <p>当前直连暂不能接续这一步。请勿反复提交密码；已有连接和已导入安排不会因此删除。</p>
+              <p>可在校方页面查看验证提示。另开页面完成验证，不代表本站会自动获得该登录状态。</p>
+              <div>
+                <a
+                  class="bbs-action"
+                  data-action-tone="primary"
+                  href="https://learn.tsinghua.edu.cn/f/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >前往网络学堂登录 ↗</a
+                >
+                <a
+                  id="workbench-campus-login-official"
+                  class="bbs-action"
+                  data-action-tone="secondary"
+                  href="https://id.tsinghua.edu.cn/do/off/ui/auth/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >打开清华认证 ↗</a
+                >
+                <a
+                  href="https://its.tsinghua.edu.cn/1wzcycejdh_content.jsp?urltype=news.NewsContentUrl&amp;wbnewsid=4000&amp;wbtreeid=1771"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >校方验证说明 ↗</a
+                >
+                <button
+                  id="workbench-campus-login-recheck"
+                  type="button"
+                  class="bbs-action"
+                  data-action-tone="secondary"
+                >
+                  返回后检查本站连接
+                </button>
+              </div>
+              <details>
+                <summary>连接诊断</summary>
+                <code id="workbench-campus-login-diagnostic"></code>
+              </details>
+            </section>
             <footer>
               <button
                 class="workbench-secondary-action bbs-action"
@@ -1336,7 +1383,7 @@
     <script src="/academic-calendar.js?v=20260929-shared-calendar-2"></script>
     <script src="/request-runtime.js"></script>
     <script src="/ui-state.js"></script>
-    <script src="/app.js?v=20260929-calendar-1"></script>
+    <script src="/app.js?v=20261022-verification-kind-2"></script>
     <dialog
       id="homework-dialog"
       class="workbench-homework-dialog"
@@ -1418,7 +1465,7 @@
     <script src="/workbench-course-calendar.js?v=20260929-confirmed-import-1"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
     <script src="/tsinghua-cas-fingerprint.js"></script>
-    <script src="/workbench-connectors.js?v=20261008-homework-sync-1"></script>
+    <script src="/workbench-connectors.js?v=20261022-verification-kind-2"></script>
     <script src="/notifications.js"></script>
     <script src="/mobile-personal.js?v=20260930-overview-1"></script>
   </body>
