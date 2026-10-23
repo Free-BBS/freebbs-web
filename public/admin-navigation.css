@@ -4,7 +4,8 @@ body.admin-settings-detail-page {
   --admin-navigation-height: 60px;
 }
 
-body.admin-settings-detail-page .main-content {
+/* Keep this clearance when the server appends the desktop and mobile shell styles. */
+body.admin-settings-detail-page .page-shell main.main-content {
   padding-top: calc(124px + var(--admin-navigation-height)) !important;
 }
 
@@ -41,7 +42,7 @@ html:has(body.admin-settings-detail-page) {
     --admin-navigation-top: calc(120px + env(safe-area-inset-top, 0px));
   }
 
-  body.admin-settings-detail-page .main-content {
+  body.admin-settings-detail-page .page-shell main.main-content {
     padding-top: calc(196px + env(safe-area-inset-top, 0px)) !important;
   }
 
