@@ -30,10 +30,11 @@ test(
     assert.equal(path.dirname(path.resolve(privateDir)), path.resolve(os.tmpdir()));
     assert.ok(path.basename(privateDir).startsWith('freebbs-moderation-test-'));
     t.after(() => fs.rm(privateDir, { recursive: true, force: true }));
-    await pool.query(`CREATE TABLE users (id BIGINT PRIMARY KEY, username VARCHAR(64) NOT NULL,
+    await pool.query(`CREATE TABLE users (id BIGINT PRIMARY KEY, uid VARCHAR(32) UNIQUE,
+    username VARCHAR(64) NOT NULL, role ENUM('student','ta','teacher','admin') DEFAULT 'student',
     is_admin TINYINT NOT NULL DEFAULT 0, full_name VARCHAR(64), student_id VARCHAR(10)) ENGINE=InnoDB`);
     await pool.query(
-      "INSERT INTO users(id,username,is_admin) VALUES (1,'admin',1),(2,'author',0),(3,'reader',0),(4,'reviewer',1)",
+      "INSERT INTO users(id,uid,username,is_admin) VALUES (1,'u_test_mod_admin','admin',1),(2,'u_test_mod_author','author',0),(3,'u_test_mod_reader','reader',0),(4,'u_test_mod_reviewer','reviewer',1)",
     );
     await pool.query(`CREATE TABLE community_notifications (id BIGINT PRIMARY KEY AUTO_INCREMENT,
     recipient_id BIGINT NOT NULL, actor_id BIGINT NULL, kind VARCHAR(24), title VARCHAR(160),

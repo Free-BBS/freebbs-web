@@ -50,6 +50,7 @@ describe('current sports match supervisors', () => {
   it.each([
     'counselor.youth_league_secretary',
     'counselor.youth_league',
+    'counselor.student_development',
     'student_union.executive_president',
     'student_union.presidium',
   ] as const)('lets %s update and delete another user’s match', async (role) => {
@@ -62,7 +63,6 @@ describe('current sports match supervisors', () => {
   it.each([
     'counselor.innovation',
     'counselor.practice',
-    'counselor.student_development',
     'science_association.chair',
     'department.sports_member',
   ] as const)('does not let %s update another user’s match', async (role) => {
@@ -71,6 +71,27 @@ describe('current sports match supervisors', () => {
       status: 403,
     });
   });
+  it.each(['scoped', 'expired'] as const)(
+    'does not give a %s student-development counselor global match authority',
+    async (state) => {
+      const { store, service, actor, assignment, match } = await fixture(
+        'counselor.student_development',
+      );
+      await store.roleAssignments.update(
+        assignment.id,
+        state === 'scoped'
+          ? { scope: { type: 'department', id: 'youth_league.freshman' } }
+          : { expiresAt: '2000-01-01T00:00:00.000Z' },
+      );
+      const before = await store.sportsMatches.get(match.id);
+      await expect(service.updateMatch(actor, match.id, { result: 'wrong' })).rejects.toMatchObject(
+        {
+          status: 403,
+        },
+      );
+      expect(await store.sportsMatches.get(match.id)).toEqual(before);
+    },
+  );
   it.each([
     'assignment',
     'expiry',

@@ -48,7 +48,7 @@ describe('publisher department metadata', () => {
     { role: 'student_union.presidium' as const, count: 4 },
     { role: 'counselor.practice' as const, count: 1 },
     { role: 'counselor.student_development' as const, count: 2 },
-    { role: 'counselor.innovation' as const, count: 6 },
+    { role: 'counselor.innovation' as const, count: 5 },
     { role: 'department.arts_member' as const, count: 1 },
   ])('restricts $role publisher choices to $count covered departments', async ({ role, count }) => {
     actor.roles = [role];
@@ -57,6 +57,9 @@ describe('publisher department metadata', () => {
     expect(options).toHaveLength(count + 1);
     expect(options.map((item) => item.getAttribute('value'))).not.toContain(
       'media_center.creative',
+    );
+    expect(options.map((item) => item.getAttribute('value'))).not.toContain(
+      'science_association.office',
     );
   });
   it('does not give retained platform role strings global publisher choices', async () => {
