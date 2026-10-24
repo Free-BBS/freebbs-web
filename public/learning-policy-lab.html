@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>学习链实验 · FREE BBS</title>
+    <link rel="stylesheet" href="/learning-policy-lab.css?v=purpose-level-v1" />
+    <script src="/learning-policy.js?v=20261017-needs-flow-1" defer></script>
+    <script src="/learning-policy-lab.js?v=purpose-level-v1" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#policy-plan">跳到学习链</a>
+    <header class="lab-header">
+      <a href="/world">← 学习世界</a>
+      <span>FREE BBS · 学习链实验</span>
+      <a id="course-directory" href="/course?course=signals">完整课程目录 ↗</a>
+    </header>
+    <main>
+      <section class="lab-intro" aria-labelledby="lab-title">
+        <p class="eyebrow">同一份资料，不同的起点</p>
+        <h1 id="lab-title">这次主要想做什么？</h1>
+        <p>
+          选目的和当前熟悉程度，试一条可调整的学习链。你可以直接查阅、跳过或暂停，不必完成整条链。
+        </p>
+        <p class="lab-boundary">
+          可调整的学习建议原型 ·
+          四个入口可以交叉、随时切换，不是固定人群。不改变原偏好、个人路径、正式成绩或星级。
+        </p>
+      </section>
+      <div class="lab-layout">
+        <aside class="lab-setup" aria-label="本次学习设置">
+          <form id="policy-form">
+            <h2>本次设置</h2>
+            <label for="policy-course">课程</label>
+            <select id="policy-course" name="course">
+              <option value="signals">信号与系统</option>
+              <option value="math">微积分</option>
+              <option value="circuits">电路</option>
+            </select>
+            <label for="policy-search">找知识点</label>
+            <input
+              id="policy-search"
+              type="search"
+              placeholder="名称或知识点 ID"
+              autocomplete="off"
+            />
+            <label for="policy-point">知识点</label>
+            <select id="policy-point" name="point" required>
+              <option value="">正在读取公开目录…</option>
+            </select>
+            <p id="material-status" role="status" class="small"></p>
+            <button id="material-retry" type="button" hidden>重新读取材料</button>
+            <fieldset>
+              <legend>这一次的目的</legend>
+              <label class="choice"
+                ><input type="radio" name="purpose" value="learn" checked /><span
+                  >理解知识<small>概念、条件与解释</small></span
+                ></label
+              >
+              <label class="choice"
+                ><input type="radio" name="purpose" value="practice" /><span
+                  >练习解题<small>尝试、提示与订正</small></span
+                ></label
+              >
+              <label class="choice"
+                ><input type="radio" name="purpose" value="review" /><span
+                  >复习知识<small>回忆、查缺与复查</small></span
+                ></label
+              >
+              <label class="choice"
+                ><input type="radio" name="purpose" value="explore" /><span
+                  >探索研究<small>联系、应用与新问题</small></span
+                ></label
+              >
+            </fieldset>
+            <label for="policy-level">当前熟悉程度（自述）</label>
+            <select id="policy-level" name="level" required>
+              <option value="new">第一次接触</option>
+              <option value="familiar">略有了解</option>
+              <option value="basic">基本掌握</option>
+              <option value="advanced">自认为已熟练掌握</option>
+            </select>
+            <p class="small">只调整建议支架，不由自评直接定题目难度，也不认证能力。</p>
+            <button id="policy-apply" class="primary" type="submit" disabled>试用这条学习链</button>
+          </form>
+          <p id="identity-status" role="status" class="small">正在确认保存范围；不影响查阅。</p>
+          <details class="lab-details">
+            <summary>这些建议怎样使用？</summary>
+            <p>
+              四个主要目的 × 四档当前熟悉程度形成 16
+              条可调整的初始建议，不把人固定分类，也不要求按一条路线学完。它们有理论设计依据，不等于已证明更有效；可根据真实使用不断改进。
+            </p>
+            <p>
+              本原型不读取私人笔记、聊天或作答正文，不自动采集研究反馈。只有你明确应用的设置与本人勾选会隔离保存在本机；账号未确认时仅在当前页面保留。
+            </p>
+          </details>
+        </aside>
+        <section id="policy-plan" class="lab-plan" aria-labelledby="plan-title" tabindex="-1">
+          <div id="plan-empty" class="empty-state">
+            <h2 id="plan-title">先选一个今天关心的知识点</h2>
+            <p>公开课程材料读取完成后，即可试用。所有建议都可以跳过，原课程阅读不受影响。</p>
+          </div>
+          <div id="plan-content" hidden></div>
+        </section>
+      </div>
+    </main>
+    <dialog id="max-question-dialog" aria-labelledby="max-question-title">
+      <form method="dialog">
+        <button class="dialog-close" aria-label="关闭" value="close">×</button>
+      </form>
+      <h2 id="max-question-title">把问题带给 Max</h2>
+      <p class="small">
+        本实验目的会随链接带到当前知识页的
+        Max；问题草稿可编辑，明确发送才调用。以上为本地开发，线上尚未部署。
+      </p>
+      <label for="max-question-text">问题草稿</label>
+      <textarea id="max-question-text" rows="8"></textarea>
+      <div class="dialog-actions">
+        <button id="max-copy" type="button" class="primary">复制问题</button
+        ><a id="max-open-reader" href="/course?course=signals" target="_blank" rel="noopener"
+          >打开原页面的 Max ↗</a
+        >
+      </div>
+      <p id="max-copy-status" role="status" class="small"></p>
+    </dialog>
+  </body>
+</html>

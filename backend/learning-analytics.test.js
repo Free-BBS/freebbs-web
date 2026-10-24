@@ -497,7 +497,7 @@ test('explicit starting point, goal and path recording uses the default policy a
   assert.equal((await call('POST', '/events', choiceEvent())).status, 201);
   for (const metadata of [
     { action: 'learning_start_set', level: 'expert' },
-    { action: 'learning_start_set', level: 'new', goal: 'review' },
+    { action: 'learning_start_set', level: 'new', goal: 'unknown-goal' },
     { action: 'learning_start_set', level: 'new', goal: 'private motivation' },
     { action: 'learning_start_set', level: 'new', pathType: 'custom' },
     { action: 'learning_start_set', goal: 'concepts' },
@@ -510,6 +510,22 @@ test('explicit starting point, goal and path recording uses the default policy a
     assert.equal((await call('POST', '/events', choiceEvent({ metadata }))).status, 400);
   assert.equal(store.rows.length, 1);
   assert.equal((await call('POST', '/events', choiceEvent({ type: 'navigation' }))).status, 400);
+});
+
+test('four normal learning purposes retain their exact meaning in accepted process records', async (t) => {
+  const { call, store } = await fixture(t);
+  for (const goal of ['concepts', 'practice', 'review', 'explore']) {
+    const result = await call(
+      'POST',
+      '/events',
+      choiceEvent({ metadata: { action: 'learning_start_set', level: 'familiar', goal } }),
+    );
+    assert.equal(result.status, 201);
+  }
+  assert.deepEqual(
+    store.rows.map((row) => row.metadata_json.goal),
+    ['concepts', 'practice', 'review', 'explore'],
+  );
 });
 
 test('person can inspect corrected starting points while admin cohorts retain the first explicit choice', async (t) => {

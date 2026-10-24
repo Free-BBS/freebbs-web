@@ -13,13 +13,39 @@ test('six tools preserve existing names with readable collapsed labels', () => {
   Object.values(labels).forEach((value) => assert.ok(value[1].length >= 2));
 });
 
-test('path time labels describe suggested effort and a pause honestly belongs to this page', () => {
+test('mobile course return owns a reserved navigation strip above tools, below Max, without changing desktop placement', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../public/knowledge.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.css'), 'utf8');
+  assert.match(
+    html,
+    /<nav class="knowledge-return-bar" aria-label="返回课程">[\s\S]*?id="knowledge-course-link"/,
+  );
+  const mobile = css.slice(css.indexOf('@media (max-width: 620px)'));
+  assert.match(
+    mobile,
+    /\.knowledge-page \.knowledge-return-bar\s*\{[^}]*position: fixed;[^}]*height: calc\(72px[^}]*z-index: 276;[^}]*background: var\(--learning-surface\)/,
+  );
+  assert.match(
+    mobile,
+    /html:has\(body\.knowledge-page\)\s*\{[^}]*scroll-padding-block-start: calc\(72px/,
+  );
+  assert.match(
+    mobile,
+    /\.knowledge-return-bar \.course-material-back strong\s*\{[^}]*display: inline/,
+  );
+  assert.doesNotMatch(
+    css.slice(0, css.indexOf('@media (max-width: 620px)')),
+    /knowledge-return-bar/,
+  );
+});
+
+test('path time labels describe suggested effort and a pause honestly belongs to this path', () => {
   const source = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.js'), 'utf8');
   const render = source.slice(
     source.indexOf('  function renderPlan('),
     source.indexOf('  async function savePlan('),
   );
-  assert.match(render, /本页已暂停，准备好时可继续这条路径/);
+  assert.match(render, /这条路径已暂停，准备好时可继续/);
   assert.match(render, /建议投入 \$\{step\.minutes\} 分钟/);
   assert.match(render, /待做步骤建议投入/);
   assert.doesNotMatch(render, /剩余约|想继续时再回来/);
@@ -37,6 +63,9 @@ test('the read-only temporary goal stays on this page and clears for an unready 
   const window = {};
   vm.runInNewContext(source.slice(start, end), { state, app, window });
   assert.equal(window.FreeBbsLearningWorkspace.currentGoal(), 'explore');
+  state.planGoal = 'review';
+  assert.equal(window.FreeBbsLearningWorkspace.currentGoal(), 'review');
+  state.planGoal = 'explore';
   state.ready = false;
   assert.equal(window.FreeBbsLearningWorkspace.currentGoal(), '');
   state.ready = true;
@@ -57,7 +86,7 @@ test('the read-only temporary goal stays on this page and clears for an unready 
   );
 });
 
-test('pausing is presentation-only, preserves path edits and drafts, and is reversible without awarding completion', () => {
+test('pausing preserves path edits and drafts, pauses the local path timer and is reversible without awarding completion', () => {
   const source = fs.readFileSync(path.join(__dirname, '../public/knowledge-workspace.js'), 'utf8');
   const code = source.slice(
     source.indexOf('  function setPlanPaused('),
@@ -76,9 +105,16 @@ test('pausing is presentation-only, preserves path edits and drafts, and is reve
   };
   const preserved = JSON.stringify({ ...state, planPaused: undefined });
   let renders = 0;
+  const events = [];
   const sandbox = {
     state,
     app: { userState: { uid: 'student', token: 'session' } },
+    window: {},
+    page: { dispatchEvent: (event) => events.push(event) },
+    CustomEvent: function CustomEvent(type, options) {
+      this.type = type;
+      this.detail = options.detail;
+    },
     renderPlan() {
       renders += 1;
     },
@@ -91,9 +127,12 @@ test('pausing is presentation-only, preserves path edits and drafts, and is reve
   assert.equal(state.planPaused, false);
   assert.equal(JSON.stringify({ ...state, planPaused: undefined }), preserved);
   assert.equal(renders, 2);
+  assert.equal(events[0].type, 'knowledge:path-pause');
+  assert.equal(events[0].detail.paused, true);
+  assert.equal(events[1].detail.paused, false);
   assert.doesNotMatch(
     code,
-    /callApi|localStorage|dispatchEvent|recordLearning|completed\s*=|skipped\s*=|resetNote/,
+    /callApi|localStorage|recordLearning|completed\s*=|skipped\s*=|resetNote/,
   );
   sandbox.app.userState.token = 'new-session';
   assert.equal(sandbox.setPlanPaused(true), false);
@@ -198,6 +237,9 @@ test('origin-only annotation steps open a real annotation layer and retain that 
   assert.equal(query.get('focus'), 'origin');
   assert.equal(query.get('annotation'), 'origin');
   assert.equal(query.get('tool'), 'content');
+  sandbox.navigateStep({ tool: 'content', taskId: 'view-overview' });
+  assert.equal(events.at(-1).detail.view, 'overview');
+  assert.equal(events.at(-1).detail.tool, 'content');
   assert.doesNotMatch(code, /callApi|submitChatPrompt|sendMessage/);
 });
 test('next steps are editable structured suggestions driven by current course evidence', () => {
@@ -348,6 +390,9 @@ test('thinking questions open Max drafts only and are removed during session res
       children: [],
       events: {},
       classList: { toggle: () => {} },
+      setAttribute(name, attributeValue) {
+        this[name] = attributeValue;
+      },
       replaceChildren() {
         this.children = [];
       },
@@ -376,6 +421,7 @@ test('thinking questions open Max drafts only and are removed during session res
     'plan-steps',
     'plan-total',
     'plan-save',
+    'plan-reset',
   ])
     elements.set(`learning-${id}`, element('div'));
   const questions = ['能用自己的话解释吗？', '哪些条件需要注意？', '与什么概念有关？'];
@@ -576,6 +622,7 @@ test('switching accounts immediately clears private path text and the collapsed 
     app: { userState: { uid: 'other', token: 'other-token' } },
     page: { querySelectorAll: () => [] },
     root: { querySelectorAll: () => [] },
+    document: { getElementById: () => null },
     el,
     resetNote() {},
     syncContributionForm() {},

@@ -154,7 +154,8 @@
     return null;
   }
 
-  // The course owns one teaching sequence in its IDs; academic edges are separate.
+  // Adjacent catalog entries are a browsing convenience, not a unique published
+  // learning path or a prerequisite claim. The route can have real branches.
   function sequenceNode(map, node, direction = 'next') {
     const parse = (entry) => {
       const id = string(object(entry).id, 120);
@@ -323,61 +324,44 @@
     const practiceQuestions = list(input.practiceQuestions).filter((entry) =>
       identifier(object(entry).id),
     );
-    const selectedGoal = ['concepts', 'practice', 'explore'].includes(input.activeGoal)
-      ? input.activeGoal
-      : '';
     const preference = object(input.learningStartPreference);
     const strategies =
       root.FreeBbsLearningStrategies ||
       (typeof module !== 'undefined' && module.exports ? require('./learning-strategies') : null);
     const validPreference = strategies?.normalizePreference(preference);
+    const selectedGoal =
+      typeof input.activeGoal === 'string' &&
+      Object.hasOwn(strategies?.GOALS || {}, input.activeGoal)
+        ? input.activeGoal
+        : '';
     const build = (goal = '') => {
-      const effectiveGoal =
-        goal ||
-        validPreference?.goal ||
-        strategies?.recommendedGoal(validPreference?.level || 'new');
-      const practice = practiceQuestions.filter((entry) => entry.assessmentRole !== 'exploration');
-      const candidates =
-        effectiveGoal === 'explore'
-          ? practiceQuestions.filter((entry) => entry.assessmentRole === 'exploration')
-          : [...practice, ...officialQuestions];
-      const suggestedDifficulty = {
-        new: 'basic',
-        familiar: 'basic',
-        basic: 'standard',
-        advanced: 'challenge',
-      }[validPreference?.level || 'new'];
-      const question =
-        candidates.find((entry) => entry.difficulty === suggestedDifficulty) || candidates[0];
-      const strategy =
-        strategies?.buildStrategy(
-          {
-            level: validPreference?.level || 'new',
-            goal: goal || validPreference?.goal || '',
-          },
-          {
-            nodeTitle: string(node.title, 120),
-            hasContent,
-            hasOrigin,
-            hasRelations,
-            hasQuestions: Boolean(question),
-            questionId: identifier(question?.id),
-            // A learning goal is practice intent, not consent to a formal submission.
-            // Published selftest items can also be attempted in nonofficial practice mode.
-            quizView: 'practice',
-          },
-        ) || null;
-      if (!strategy || validPreference) return strategy;
-      // The conservative default chooses scaffolding, not a student's self-report.
-      // Keep its plan/key/difficulty intact and only correct the explanatory copy.
-      return {
-        ...strategy,
-        reason: `${strategies.GOALS[strategy.goal]} · 起点未设置`,
-        hint: strategy.hint.replace(
-          `学习起点为学生自述“${strategies.LEVELS[strategy.level]}”，非测评结论，不代表本知识点能力。`,
-          '学习起点未设置；采用保守默认支架，不推断熟悉程度。',
-        ),
+      const questions = [
+        ...practiceQuestions.filter((entry) => entry.assessmentRole !== 'exploration'),
+        ...officialQuestions,
+        ...practiceQuestions.filter((entry) => entry.assessmentRole === 'exploration'),
+      ];
+      const options = {
+        nodeTitle: string(node.title, 120),
+        hasContent,
+        hasOrigin,
+        hasRelations,
+        hasOverview: input.hasOverview === true,
+        hasWorkedExample: input.hasWorkedExample === true,
+        hasQuestions: questions.length > 0,
+        questions,
+        documentVersion: identifier(input.documentVersion ?? node.documentVersion ?? node.revision),
+        // Only current, version-matched formal attempts reach the shared policy.
+        // The document fingerprint must match; question versions may be published strings such as 1.0.
+        trustedEvidence: { source: 'authenticated_current_version', attempts },
       };
+      if (!validPreference)
+        return goal ? strategies?.buildIntentStrategy?.(goal, options) || null : null;
+      return (
+        strategies?.buildStrategy(
+          { level: validPreference.level, goal: goal || validPreference.goal || '' },
+          options,
+        ) || null
+      );
     };
     // A saved, deliberately chosen goal is still the learner's choice after a
     // reload. A recommended goal inferred only from familiarity is not one.
@@ -417,7 +401,7 @@
       if (next)
         alternatives.push({
           id: 'alternative-next',
-          title: '开始下一知识点',
+          title: '按目录继续',
           description: string(next.title, 80),
           tool: 'content',
           point: identifier(next.id),
@@ -658,8 +642,8 @@
       const advance = next
         ? step(
             'read-next',
-            '开始下一知识点',
-            string(next.title, 80) || '沿课程图谱的学习顺序继续。',
+            '按目录继续',
+            string(next.title, 80) || '按课程目录继续查阅。',
             'content',
             10,
             next.id,

@@ -1,4 +1,4 @@
-/* Optional course preferences guide help; they never gate learning or assess ability. */
+/* Course preferences guide help; they never gate learning or assess ability. */
 (function exposeLearningStart(root) {
   const BASE = 'free_bbs_learning_start_v1';
   const TICKETS = 'free_bbs_learning_start_ticket_v1';
@@ -15,6 +15,7 @@
   const GOALS = [
     ['concepts', '理解知识'],
     ['practice', '练习解题'],
+    ['review', '复习知识'],
     ['explore', '探索研究'],
   ];
   function normalizePreference(value) {
@@ -69,11 +70,13 @@
     let selected = null;
     let confirmed = false;
     let editing = false;
+    let deferred = false;
     let digest = null;
     let ticketAvailable = sessionStorageAvailable;
     let persistenceScope = 'page';
     let generation = 0;
     const pagePreferences = new Map();
+    const deferredCourses = new Set();
     const signature = () => {
       const state = userState();
       return JSON.stringify([state?.isLoggedIn, state?.uid, state?.token]);
@@ -102,6 +105,7 @@
       selected = null;
       confirmed = false;
       editing = false;
+      deferred = false;
       digest = null;
       persistenceScope = 'page';
       ticketAvailable = sessionStorageAvailable;
@@ -135,6 +139,7 @@
         }
       }
       confirmed = Boolean(selected);
+      deferred = !confirmed && deferredCourses.has(pageKey());
       return true;
     }
     identity = signature();
@@ -154,6 +159,7 @@
           valid: Boolean(course && valid() && digest),
           confirmed,
           editing,
+          deferred,
           persistenceAvailable: persistenceScope !== 'page',
           persistenceScope,
           preference: valid() ? normalizePreference(selected) : null,
@@ -194,8 +200,18 @@
         selected = next;
         confirmed = true;
         editing = false;
+        deferred = false;
         persistenceScope = nextScope;
         pagePreferences.set(pageKey(), { preference: next, scope: nextScope });
+        generation += 1;
+        return true;
+      },
+      defer(expectedGeneration = generation) {
+        if (confirmed || !course || !digest || !valid() || expectedGeneration !== generation)
+          return false;
+        deferredCourses.add(pageKey());
+        deferred = true;
+        editing = false;
         generation += 1;
         return true;
       },
@@ -230,6 +246,7 @@
         selected = null;
         confirmed = false;
         editing = false;
+        deferred = false;
         digest = null;
       },
       currentPreference: () => (valid() && confirmed ? normalizePreference(selected) : null),
@@ -286,7 +303,6 @@
     authStorageUnavailable: !local.available,
     userState: () => app.userState,
   });
-  let dialog = null;
   let knowledgeContext = null;
   let renderedState = null;
   let updateGeneration = 0;
@@ -327,9 +343,7 @@
     if (className) item.className = className;
     return item;
   }
-  function render() {
-    if (dialog?.open) dialog.close();
-    dialog = null;
+  function render({ focusEditor = false, restoreFocus = false } = {}) {
     const state = controller.snapshot();
     renderedState = state;
     host.replaceChildren();
@@ -352,104 +366,143 @@
       }
       return;
     }
-    const adjust = element(
-      'button',
-      state.confirmed ? '调整学习起点' : '设置学习起点（可选）',
-      'learning-start-adjust',
-    );
-    adjust.type = 'button';
-    adjust.addEventListener('click', () => {
-      if (controller.snapshot().generation !== state.generation) return;
-      if (controller.adjust()) render();
-    });
-    host.append(adjust);
-    if (state.confirmed) {
-      const levelLabel = LEVELS.find(([key]) => key === state.preference.level)?.[1];
-      const goalLabel = GOALS.find(([key]) => key === state.preference.goal)?.[1];
-      host.append(
-        element('span', [levelLabel, goalLabel].filter(Boolean).join(' · '), 'learning-start-note'),
+    if (state.confirmed || state.deferred) {
+      const summary = element('div', undefined, 'learning-start-summary');
+      const levelLabel = LEVELS.find(([key]) => key === state.preference?.level)?.[1];
+      const goalLabel = GOALS.find(([key]) => key === state.preference?.goal)?.[1];
+      summary.append(
+        element(
+          'span',
+          state.confirmed
+            ? [goalLabel, levelLabel].filter(Boolean).join(' · ')
+            : '按自己的节奏学习',
+          'learning-start-current',
+        ),
       );
+      const adjust = element('button', '调整学习方式', 'learning-start-adjust');
+      adjust.type = 'button';
+      adjust.addEventListener('click', () => {
+        if (controller.snapshot().generation !== state.generation) return;
+        if (controller.adjust()) render({ focusEditor: true });
+      });
+      summary.append(adjust);
+      host.append(summary);
       const scopeLabels = {
         browser: '偏好已保存在本机浏览器。',
         tab: '偏好仅保存在当前标签页。',
         page: '偏好仅在当前页面生效，未持久保存。',
       };
-      host.append(element('span', scopeLabels[state.persistenceScope], 'learning-start-note'));
-    } else
-      host.append(
-        element('span', '可直接阅读、做题或探索，需要时再设置建议偏好。', 'learning-start-note'),
-      );
-    if (!state.editing) return;
-    dialog = element('dialog', undefined, 'learning-start-dialog');
-    dialog.setAttribute('aria-label', '设置学习建议偏好');
-    function cancelEditing() {
-      if (controller.cancel(state.generation)) render();
+      if (state.confirmed)
+        host.append(element('span', scopeLabels[state.persistenceScope], 'learning-start-note'));
+      if (!state.editing) {
+        if (restoreFocus) adjust.focus?.({ preventScroll: true });
+        return;
+      }
     }
-    dialog.addEventListener('cancel', cancelEditing);
-    dialog.append(
-      element('h3', '设置学习建议偏好'),
-      element('p', '这是你的自评，只用于讲解与下一步建议；可随时关闭。', 'learning-start-note'),
+    const editor = element('section', undefined, 'learning-start-editor');
+    editor.setAttribute('aria-label', '选择学习方式');
+    function cancelEditing() {
+      const changed = state.editing
+        ? controller.cancel(state.generation)
+        : controller.defer(state.generation);
+      if (changed) render({ restoreFocus: true });
+    }
+    editor.addEventListener('keydown', (event) => {
+      if (
+        event.key !== 'Escape' ||
+        event.isComposing ||
+        event.defaultPrevented ||
+        event.target?.closest?.('select, option')
+      )
+        return;
+      event.preventDefault();
+      cancelEditing();
+    });
+    editor.append(
+      element('h3', state.confirmed ? '调整学习方式' : '这次想怎么学？'),
+      element('p', '熟悉程度只帮助调整建议，随时可以改；也可以直接阅读。', 'learning-start-note'),
     );
     const choices = element('div', undefined, 'learning-start-choices');
-    function choice(title, name, values, defaultValue) {
-      const label = element('label');
-      const select = element('select');
-      select.name = name;
-      select.dataset.learningStartChoice = name;
-      if (name === 'level') select.required = true;
-      const blank = element('option', name === 'level' ? '请选择' : '使用推荐目标');
-      blank.value = '';
-      select.append(blank);
-      values.forEach(([value, text]) => {
-        const option = element('option', text);
-        option.value = value;
-        select.append(option);
-      });
-      select.value = state.preference?.[name] ?? defaultValue;
-      label.append(element('span', title), select);
-      choices.append(label);
-      return select;
-    }
-    const level = choice('熟悉程度', 'level', LEVELS, '');
-    const goal = choice('这次目标（可选）', 'goal', GOALS, '');
-    function showSuggestedGoal() {
-      const suggested = strategies?.recommendedGoal(level.value);
-      goal.children[0].textContent = suggested
-        ? `建议：${GOALS.find(([key]) => key === suggested)?.[1]}`
-        : '使用推荐目标';
-    }
-    showSuggestedGoal();
-    const actions = element('div', undefined, 'learning-start-actions');
-    const apply = element('button', '保存偏好', 'learning-start-apply');
-    apply.type = 'button';
-    apply.disabled = !level.value;
-    level.addEventListener('change', () => {
-      apply.disabled = !level.value;
-      showSuggestedGoal();
+    const goals = element('fieldset', undefined, 'learning-start-goals');
+    goals.append(element('legend', '这次目的'));
+    let chosenGoal = state.preference?.goal || '';
+    const goalInputs = GOALS.map(([value, text]) => {
+      const label = element('label', undefined, 'learning-start-goal');
+      const input = element('input');
+      input.type = 'radio';
+      input.name = 'learning-start-goal';
+      input.value = value;
+      input.checked = value === chosenGoal;
+      input.dataset.learningStartChoice = 'goal';
+      label.append(input, element('span', text));
+      goals.append(label);
+      return input;
     });
-    const cancel = element('button', state.confirmed ? '取消' : '暂不设置', 'learning-start-exit');
+    const levelLabel = element('label', undefined, 'learning-start-level');
+    const level = element('select');
+    level.name = 'level';
+    level.required = true;
+    level.dataset.learningStartChoice = 'level';
+    const blank = element('option', '请选择熟悉程度');
+    blank.value = '';
+    level.append(blank);
+    LEVELS.forEach(([value, text]) => {
+      const option = element('option', text);
+      option.value = value;
+      level.append(option);
+    });
+    level.value = state.preference?.level || '';
+    levelLabel.append(element('span', '目前对这门课'), level);
+    choices.append(goals, levelLabel);
+    const actions = element('div', undefined, 'learning-start-actions');
+    const apply = element('button', '按这个方式学习', 'learning-start-apply');
+    apply.type = 'button';
+    function updateApply() {
+      apply.disabled = !level.value || !chosenGoal;
+    }
+    updateApply();
+    level.addEventListener('change', updateApply);
+    goalInputs.forEach((input) => {
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        chosenGoal = input.value;
+        updateApply();
+      });
+    });
+    const cancel = element(
+      'button',
+      state.confirmed ? '取消' : '先直接学习',
+      'learning-start-exit',
+    );
     cancel.type = 'button';
     cancel.addEventListener('click', cancelEditing);
     const status = element('span', '', 'learning-start-status');
     status.setAttribute('role', 'status');
     apply.addEventListener('click', () => {
-      if (controller.confirm({ level: level.value, goal: goal.value }, state.generation)) {
-        render();
+      if (!chosenGoal || !level.value) {
+        status.textContent = '请选择这次目的和熟悉程度。';
+        return;
+      }
+      if (controller.confirm({ level: level.value, goal: chosenGoal }, state.generation)) {
+        render({ restoreFocus: true });
         emitChange();
         recordAppliedChoice();
       } else if (controller.snapshot().generation === state.generation)
-        status.textContent = '请选择熟悉程度。';
+        status.textContent = '学习状态已变化，请重新调整。';
     });
     actions.append(apply, cancel, status);
-    dialog.append(choices, actions);
-    host.append(dialog);
-    dialog.showModal();
+    editor.append(choices, actions);
+    host.append(editor);
+    if (focusEditor) {
+      const first = goalInputs.find((input) => input.checked) || goalInputs[0];
+      first?.focus?.({ preventScroll: true });
+    }
   }
   function renderMatchesCurrent() {
     const state = controller.snapshot();
     return (
       renderedState &&
-      ['generation', 'valid', 'confirmed', 'editing', 'courseKnown', 'status'].every(
+      ['generation', 'valid', 'confirmed', 'editing', 'deferred', 'courseKnown', 'status'].every(
         (key) => renderedState[key] === state[key],
       )
     );

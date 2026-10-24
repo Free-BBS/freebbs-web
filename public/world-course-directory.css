@@ -1,0 +1,74 @@
+/* A quiet direct route alongside, not instead of, the knowledge-island orbit. */
+body.world-page .world-course-directory {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  max-width: 100%;
+  margin-top: 8px;
+}
+
+body.world-page .world-course-directory[hidden] {
+  display: none;
+}
+
+body.world-page #world-course-directory-title {
+  color: var(--ui-muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+body.world-page .world-course-directory ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.world-page .world-course-directory li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.world-page .world-course-directory-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 0.94rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+body.world-page .world-course-directory-link:hover {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface-soft);
+  color: var(--ui-accent);
+}
+
+body.world-page .world-course-directory-link:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  body.world-page .world-course-directory {
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  body.world-page #world-course-directory-title {
+    flex-basis: 100%;
+  }
+}

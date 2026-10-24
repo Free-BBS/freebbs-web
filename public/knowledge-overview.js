@@ -192,8 +192,9 @@
     }
     return info;
   }
-  function createDrawer({ app, courseSlug }) {
+  function createDrawer({ app, courseSlug, getReturnTo }) {
     const dialog = element('dialog', 'knowledge-overview-drawer');
+    if (typeof dialog.showModal !== 'function' || typeof dialog.close !== 'function') return null;
     dialog.id = 'course-knowledge-overview';
     dialog.setAttribute('aria-labelledby', 'course-knowledge-overview-title');
     const header = element('header', 'knowledge-overview-drawer-header');
@@ -229,6 +230,13 @@
     let showRelations = null;
     let currentId = '';
     let chapterOverview = false;
+    let onDismiss = null;
+    function rememberDirectory() {
+      const query = new URLSearchParams(study.getAttribute('href')?.split('?')[1] || '');
+      window.FreeBbsCourseNavigation?.remember?.(query.get('returnTo'), courseSlug);
+    }
+    study.addEventListener('click', rememberDirectory);
+    study.addEventListener('auxclick', rememberDirectory);
     close.addEventListener('click', () => dialog.close());
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
@@ -247,10 +255,34 @@
         dialog.close();
     });
     dialog.addEventListener('close', () => {
-      if (!dialog.open && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+      if (dialog.open) return;
+      const dismiss = onDismiss;
+      onDismiss = null;
+      // Native close releases modality before its queued event runs. A learner
+      // may already have focused another point or input; that newer action owns
+      // focus and must not be replaced by an old trigger or reopened catalog.
+      const active = document.activeElement;
+      if (
+        active?.isConnected &&
+        active !== document.body &&
+        active !== returnFocus &&
+        !dialog.contains(active)
+      )
+        return;
+      if (dismiss) {
+        try {
+          if (dismiss() !== false) return;
+        } catch {
+          // If the originating catalog has gone away, retain ordinary trigger focus.
+        }
+      }
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
     });
     relation.addEventListener('click', () => {
+      onDismiss = null;
+      returnFocus = null;
       if (chapterOverview) {
+        rememberDirectory();
         window.location.assign(`${study.href}#knowledge-chapter-network`);
         return;
       }
@@ -259,15 +291,27 @@
       dialog.close();
       callback?.(id);
     });
-    async function open(node, course, trigger, onRelations) {
+    async function open(node, course, trigger, onRelations, options) {
       requestId += 1;
       const id = requestId;
       currentId = node.id;
       chapterOverview = Boolean(window.FreeBbsLearningContent?.isChapterNode(node));
       relation.textContent = chapterOverview ? '查看章节知识网络' : '查看知识关系';
       showRelations = onRelations;
+      onDismiss = typeof options?.onDismiss === 'function' ? options.onDismiss : null;
       returnFocus = trigger || document.activeElement;
-      study.href = `/knowledge?${new URLSearchParams({ course: courseSlug, point: node.id, view: 'reading' })}`;
+      const studyQuery = new URLSearchParams({
+        course: courseSlug,
+        point: node.id,
+        view: 'reading',
+      });
+      try {
+        const returnTo = window.FreeBbsCourseNavigation?.encode?.(getReturnTo?.(), courseSlug);
+        if (returnTo) studyQuery.set('returnTo', returnTo);
+      } catch {
+        // Returning context is a convenience, never a prerequisite for opening the material.
+      }
+      study.href = `/knowledge?${studyQuery}`;
       relation.hidden = !onRelations;
       originals.hidden = true;
       originals.open = false;

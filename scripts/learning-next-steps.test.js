@@ -686,10 +686,10 @@ test('the standalone browser export does not depend on DOM, storage or a chat cl
   );
 });
 
-test('all twelve familiarity and goal combinations produce the shared strategy without implying assessment success', () => {
+test('all sixteen familiarity and goal combinations produce the shared strategy without implying assessment success', () => {
   const { buildStrategy } = require('../public/learning-strategies');
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const goal of ['concepts', 'practice', 'explore']) {
+    for (const goal of ['concepts', 'practice', 'review', 'explore']) {
       const learningStartPreference = { level, goal };
       const result = recommend(context({ learningStartPreference }));
       const strategy = buildStrategy(learningStartPreference, {
@@ -734,12 +734,15 @@ test('default goal follows self-described familiarity, while unknown preferences
   }
 });
 
-test('an active goal without a valid self-report names the unknown start while retaining conservative scaffolding', () => {
-  const goals = { concepts: '理解知识', practice: '练习解题', explore: '探索研究' };
+test('an active goal without a valid self-report stays unknown and uses a purpose-only suggestion', () => {
+  const goals = {
+    concepts: '理解知识',
+    practice: '练习解题',
+    review: '复习知识',
+    explore: '探索研究',
+  };
   for (const [activeGoal, label] of Object.entries(goals)) {
-    const defaultPlan = recommend(
-      context({ activeGoal, learningStartPreference: { level: 'new', goal: activeGoal } }),
-    );
+    const unknownPlan = recommend(context({ activeGoal }));
     for (const learningStartPreference of [
       undefined,
       null,
@@ -750,19 +753,24 @@ test('an active goal without a valid self-report names the unknown start while r
       const input = context({ activeGoal, learningStartPreference });
       const snapshot = JSON.stringify(input);
       const result = recommend(input);
-      assert.equal(result.reason, `${label} · 起点未设置`);
+      assert.match(result.reason, /^起点未设置，可按需选择解释或提示。/);
+      assert.equal(
+        result.reason.includes(label),
+        false,
+        'The reason adds guidance instead of repeating the title',
+      );
       assert.equal(result.strategy.reason, result.reason);
       assert.match(result.strategy.hint, /^学习起点未设置/);
       assert.doesNotMatch(result.strategy.hint, /学生自述|第一次学/);
       assert.match(result.strategy.hint, /非正式自测题|不是正式自测题/);
       assert.match(result.strategy.hint, /不限制资料或判定星级/);
-      assert.equal(result.strategy.key, defaultPlan.strategy.key);
-      assert.equal(result.strategy.level, defaultPlan.strategy.level);
-      assert.equal(result.label, defaultPlan.label);
-      assert.deepEqual(result.steps, defaultPlan.steps);
-      assert.deepEqual(result.questions, defaultPlan.questions);
-      assert.deepEqual(result.presentation, defaultPlan.presentation);
-      assert.deepEqual(result.evidence, defaultPlan.evidence);
+      assert.equal(result.strategy.key, `unspecified:${activeGoal}`);
+      assert.equal(result.strategy.level, '');
+      assert.equal(result.label, label);
+      assert.deepEqual(result.steps, unknownPlan.steps);
+      assert.deepEqual(result.questions, unknownPlan.questions);
+      assert.deepEqual(result.presentation, unknownPlan.presentation);
+      assert.deepEqual(result.evidence, unknownPlan.evidence);
       assert.equal(JSON.stringify(input), snapshot);
     }
   }
@@ -770,7 +778,7 @@ test('an active goal without a valid self-report names the unknown start while r
 
 test('a deliberate self-report keeps its original reason and hint when a same-page goal is chosen', () => {
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const activeGoal of ['concepts', 'practice', 'explore']) {
+    for (const activeGoal of ['concepts', 'practice', 'review', 'explore']) {
       const selected = recommend(
         context({ activeGoal, learningStartPreference: { level, goal: '' } }),
       );
@@ -793,7 +801,7 @@ test('unknown-start wording never replaces current formal evidence or saved-path
   ]) {
     const result = recommend({ ...base, recentAttempts });
     assert.match(result.reason, reason);
-    assert.equal(result.strategy.reason, '探索研究 · 起点未设置');
+    assert.match(result.strategy.reason, /^起点未设置，可按需选择解释或提示。/);
     assert.doesNotMatch(result.strategy.hint, /学生自述|第一次学/);
   }
   const existingPath = [
@@ -809,7 +817,7 @@ test('unknown-start wording never replaces current formal evidence or saved-path
 
 test('an explicit saved goal survives failure while the formal evidence and correction remain visible', () => {
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const goal of ['concepts', 'practice', 'explore']) {
+    for (const goal of ['concepts', 'practice', 'review', 'explore']) {
       const learningStartPreference = { level, goal };
       const failed = recommend(
         context({ learningStartPreference, recentAttempts: [attempt({ verdict: 'fail' })] }),
@@ -867,10 +875,10 @@ test('an inferred goal is not an active choice and may still prioritize correcti
   }
 });
 
-test('failed and pending formal questions each remain actionable alongside all twelve explicit goals', () => {
+test('failed and pending formal questions each remain actionable alongside all sixteen explicit goals', () => {
   const second = { ...question, id: 'q2' };
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const goal of ['concepts', 'practice', 'explore']) {
+    for (const goal of ['concepts', 'practice', 'review', 'explore']) {
       const result = recommend(
         context({
           questions: [question, second],
@@ -1070,7 +1078,7 @@ test('a restored explicit exploration goal is not duplicated or overwritten on a
 
 test('formal completion offers the real next point without replacing an explicitly chosen goal', () => {
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const goal of ['concepts', 'practice', 'explore']) {
+    for (const goal of ['concepts', 'practice', 'review', 'explore']) {
       const result = recommend(
         context({ learningStartPreference: { level, goal }, recentAttempts: [attempt()] }),
       );
@@ -1079,7 +1087,7 @@ test('formal completion offers the real next point without replacing an explicit
       assert.equal(result.label, result.strategy.label);
       assert.deepEqual(result.steps, normalizePath(result.strategy.steps));
       assert.equal(result.presentation.primary.id, result.steps[0].id);
-      assert.equal(result.presentation.alternatives[0].title, '开始下一知识点');
+      assert.equal(result.presentation.alternatives[0].title, '按目录继续');
       assert.equal(result.presentation.alternatives[0].point, unrelated.id);
       assert.equal(result.presentation.alternatives[0].description, unrelated.title);
       assert.match(result.reason, /当前正式自测已通过/);
@@ -1134,7 +1142,8 @@ test('explicit exploration leaves a saved twenty-step chain and its completion m
     }),
   );
   assert.deepEqual(result.steps, normalizePath(existingPath));
-  assert.equal(result.presentation.primary.view, 'relations');
+  assert.equal(result.presentation.primary.tool, 'content');
+  assert.match(result.presentation.primary.title, /可检验的问题/);
   assert.equal(result.evidence.failed, true);
   assert.equal(result.presentation.chain.length, 20);
 });
@@ -1188,7 +1197,7 @@ test('saved paths retain valid navigation anchors and discard unknown views or u
   assert.equal(unsafe.view, undefined);
 });
 
-test('real suggested tasks consider estimated difficulty without inserting exploration into ordinary practice or shrinking selftests', () => {
+test('self-described familiarity never mechanically assigns question difficulty or shrinks formal selftests', () => {
   const questions = [
     { ...question, id: 'formal-standard', difficulty: 'standard' },
     { ...question, id: 'formal-challenge', difficulty: 'challenge' },
@@ -1205,8 +1214,8 @@ test('real suggested tasks consider estimated difficulty without inserting explo
   for (const [level, id, quizView] of [
     ['new', 'practice-basic', 'practice'],
     ['familiar', 'practice-basic', 'practice'],
-    ['basic', 'formal-standard', 'practice'],
-    ['advanced', 'formal-challenge', 'practice'],
+    ['basic', 'practice-basic', 'practice'],
+    ['advanced', 'practice-basic', 'practice'],
   ]) {
     const result = recommend(
       context({
@@ -1236,7 +1245,7 @@ test('real suggested tasks consider estimated difficulty without inserting explo
 
 test('optional learning goals never silently turn a suggested exercise into a formal selftest', () => {
   for (const level of ['new', 'familiar', 'basic', 'advanced']) {
-    for (const goal of ['concepts', 'practice', 'explore']) {
+    for (const goal of ['concepts', 'practice', 'review', 'explore']) {
       const result = recommend(context({ learningStartPreference: { level, goal } }));
       for (const step of result.strategy.steps.filter((item) => item.tool === 'feedback')) {
         assert.equal(step.quizView, 'practice');
@@ -1252,5 +1261,116 @@ test('optional learning goals never silently turn a suggested exercise into a fo
       );
       assert.equal(context().questions.length, 1, 'Formal question collection was not reduced');
     }
+  }
+});
+
+test('only current version-matched formal evidence can inform a question label, never self-report alone', () => {
+  const documentVersion = 'd'.repeat(64);
+  const questionVersion = '1.0';
+  const formal = [
+    { id: 'formal-basic', official: true, difficulty: 'basic', questionVersion },
+    { id: 'formal-standard', official: true, difficulty: 'standard', questionVersion },
+  ];
+  const practiceQuestions = [
+    { id: 'practice-basic', assessmentRole: 'practice', difficulty: 'basic' },
+    { id: 'practice-standard', assessmentRole: 'practice', difficulty: 'standard' },
+    { id: 'explore-challenge', assessmentRole: 'exploration', difficulty: 'challenge' },
+  ];
+  const base = context({
+    node: { ...node, documentVersion },
+    questions: formal,
+    practiceQuestions,
+  });
+  const currentPass = attempt({
+    questionId: 'formal-basic',
+    documentVersion,
+    questionVersion,
+  });
+  for (const level of ['new', 'familiar', 'basic', 'advanced']) {
+    const preference = { level, goal: 'practice' };
+    const uncalibrated = recommend({ ...base, learningStartPreference: preference });
+    assert.equal(
+      uncalibrated.steps.find((entry) => entry.tool === 'feedback').questionId,
+      'practice-basic',
+    );
+    const supported = recommend({
+      ...base,
+      learningStartPreference: preference,
+      currentAttempts: [currentPass],
+    });
+    assert.equal(
+      supported.steps.find((entry) => entry.tool === 'feedback').questionId,
+      'practice-standard',
+    );
+    const metadata = supported.strategy.modules.find((entry) => entry.moduleId === 'practice');
+    assert.equal(metadata.questionBasis, 'current_question_evidence');
+    for (const currentAttempts of [
+      [{ ...currentPass, official: false }],
+      [{ ...currentPass, documentVersion: 'f'.repeat(64) }],
+      [{ ...currentPass, questionVersion: 'f'.repeat(64) }],
+      [{ ...currentPass, status: 'pending_review', verdict: null }],
+    ]) {
+      const unsupported = recommend({
+        ...base,
+        learningStartPreference: preference,
+        currentAttempts,
+      });
+      assert.equal(
+        unsupported.steps.find((entry) => entry.tool === 'feedback').questionId,
+        'practice-basic',
+      );
+    }
+  }
+  assert.deepEqual(
+    base.questions,
+    formal,
+    'Selection never mutates the formal question denominator',
+  );
+});
+
+test('review is a distinct remembered intention and keeps existing paths and progress exactly intact', () => {
+  const existingPath = [
+    {
+      id: 'old-practice',
+      title: '我的做题步骤',
+      tool: 'feedback',
+      quizView: 'practice',
+      completed: true,
+      minutes: 8,
+    },
+    { id: 'old-reading', title: '按需查阅', tool: 'content', skipped: true, minutes: 4 },
+  ];
+  const original = JSON.stringify(existingPath);
+  for (const level of ['new', 'familiar', 'basic', 'advanced']) {
+    const review = recommend(context({ learningStartPreference: { level, goal: 'review' } }));
+    assert.equal(review.intentGoal, 'review');
+    assert.equal(review.strategy.goal, 'review');
+    assert.equal(review.strategy.coreStepCount, 3);
+    assert.equal(review.strategy.modules[0].moduleId, 'retrieve');
+    const saved = recommend(
+      context({
+        existingPath,
+        learningStartPreference: { level, goal: 'practice' },
+        activeGoal: 'review',
+      }),
+    );
+    assert.deepEqual(saved.steps, normalizePath(existingPath));
+    assert.equal(saved.intentGoal, 'review');
+    assert.match(saved.presentation.primary.title, /回忆/);
+  }
+  assert.equal(JSON.stringify(existingPath), original);
+  const unknown = recommend(context({ activeGoal: 'not-a-purpose' }));
+  assert.equal(unknown.intentGoal, '');
+  assert.equal(unknown.strategy, undefined);
+});
+
+test('exploration starts with the actual question and relationship route while formal selftests stay directly accessible', () => {
+  for (const level of ['new', 'familiar', 'basic', 'advanced']) {
+    const plan = recommend(context({ learningStartPreference: { level, goal: 'explore' } }));
+    assert.equal(plan.strategy.modules[0].moduleId, 'explore');
+    assert.equal(plan.presentation.primary.id, plan.steps[0].id);
+    assert.ok(plan.strategy.modules.slice(1).every((entry) => entry.optional));
+    assert.ok(plan.presentation.alternatives.some((entry) => entry.id === 'direct-selftest'));
+    assert.ok(plan.steps.every((entry) => entry.completed === false && entry.skipped === false));
   }
 });

@@ -12028,7 +12028,7 @@ async function loadMaxGuide() {
   loadMaxGuide.modules ||= new Map();
   const modules = loadMaxGuide.modules;
   const loadScript = (source) => {
-    const versionedSource = `${source}?v=20261008-1`;
+    const versionedSource = `${source}?v=${source === '/max-guide-stations.js' ? '20261016-route-2' : '20261008-1'}`;
     if (modules.has(versionedSource)) return modules.get(versionedSource);
     const pending = new Promise((resolve, reject) => {
       const script = document.createElement('script');

@@ -19,6 +19,7 @@ const {
 } = require('../backend/onboarding');
 const { ONBOARDING_REWARD_AMOUNTS } = require('../backend/onboarding-reward');
 const catalog = require('../public/data/shop-items.json');
+const privacyPolicy = require('../public/privacy-policy.json');
 
 const PREVIEW_PAGES = {
   '/': 'index.html',
@@ -172,6 +173,7 @@ function createOnboardingPreview({
   extraApi: additionalApi = null,
   transformHtml: additionalTransform = null,
   learningFixture = null,
+  learningContextRows = null,
 } = {}) {
   const resolveCourse = (slug) =>
     learningFixture?.course.slug === slug
@@ -297,7 +299,25 @@ function createOnboardingPreview({
         const additionalResult = await additionalApi(context);
         if (additionalResult) return additionalResult;
       }
-      const { route, method, body, url, store } = context;
+      const { route, method, body, url, store, headers } = context;
+      if (route === '/api/privacy-policy/status') {
+        // Only this verified synthetic account has a fixture status. This is not
+        // a real user's consent receipt, and never calls the production service.
+        if (!identity({ headers })) return result({ message: '仅限已验证的本地模拟账号' }, 401);
+        if (method !== 'GET') return result({ message: '本地隐私状态仅支持读取' }, 405);
+        return result({
+          version: privacyPolicy.version,
+          contentHash: privacyPolicy.contentHash,
+          accepted: true,
+          requiresFullPolicy: false,
+          acceptedAt: null,
+          previewOnly: true,
+          simulatedAcceptance: true,
+          message: '本地模拟账号的预置确认状态，不代表真实用户已同意或保存确认记录。',
+        });
+      }
+      if (route === '/api/privacy-policy/accept')
+        return result({ message: '本地预览不接受或保存真实隐私确认' }, 405);
       if (route === '/api/tools' && method === 'GET') return result({ tools: [] });
       if (route === '/api/development/v1/me')
         return result({ message: '本地模拟账号未连接独立发展端' }, 403);
@@ -547,7 +567,7 @@ function createOnboardingPreview({
   const identity = (request) =>
     request.headers.authorization === `Bearer ${TOKEN}` ? previewUser : null;
   const learning = createLearningPreviewApi({
-    contextRows: learningContexts,
+    contextRows: Array.isArray(learningContextRows) ? learningContextRows : learningContexts,
     previewUsers: [previewUser],
     managers: [],
     identity,
@@ -577,6 +597,23 @@ function createOnboardingPreview({
       }
     }
     const route = req.url.split('?')[0];
+    if (route === '/api/privacy-policy') {
+      const host = `127.0.0.1:${preview.server.address().port}`;
+      const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+      if (
+        req.headers.host !== host ||
+        (req.headers.origin && req.headers.origin !== `http://${host}`)
+      ) {
+        res.writeHead(403, headers);
+        return res.end(JSON.stringify({ message: 'Loopback preview only' }));
+      }
+      if (!['GET', 'HEAD'].includes(req.method)) {
+        res.writeHead(405, { ...headers, Allow: 'GET, HEAD' });
+        return res.end(JSON.stringify({ message: '本地公开政策仅支持读取' }));
+      }
+      res.writeHead(200, headers);
+      return res.end(req.method === 'HEAD' ? undefined : JSON.stringify(privacyPolicy));
+    }
     if (
       /^\/api\/learning(?:[/-]|$)/.test(route) ||
       (learningFixture && route === '/api/ai/knowledge/chat')

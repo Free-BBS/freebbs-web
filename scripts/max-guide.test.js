@@ -800,11 +800,28 @@ test('course guide preparation cannot navigate away while the real map API is pe
   });
   assert.deepEqual(requests, ['/courses/math/map']);
   const step = STEPS.find((entry) => entry.id === 'course-directory');
+  assert.equal(
+    step.action,
+    undefined,
+    'The route introduction never selects a point while loading',
+  );
   for (const action of step.prepare) {
     assert.equal(doc.querySelector(action.whenMissing), null, 'map has not rendered yet');
     const control = controls.get(action.selector.replace(/^#/, ''));
-    assert.ok(control, `preparation must use an existing view control: ${action.selector}`);
-    control.click();
+    if (control) control.click();
+    else {
+      // The only dynamic preparation control is the already-open overview's
+      // close button. It is absent while loading; the engine must wait/skip,
+      // never substitute the native /world anchor or an unbound route button.
+      assert.equal(action.selector, '#course-knowledge-overview[open] [aria-label="关闭学习概览"]');
+      assert.equal(doc.querySelector(action.selector), null);
+      const overviewSource = fs.readFileSync(
+        nodePath.join(__dirname, '../public/knowledge-overview.js'),
+        'utf8',
+      );
+      assert.match(overviewSource, /close\.setAttribute\('aria-label', '关闭学习概览'\)/);
+      assert.match(overviewSource, /close\.addEventListener\('click', \(\) => dialog\.close\(\)\)/);
+    }
   }
   assert.equal(location.pathname, '/course', 'loading must never click the /world fallback link');
   assert.equal(location.searchParams.get('course'), 'math');
@@ -813,17 +830,25 @@ test('course guide preparation cannot navigate away while the real map API is pe
 
 test('course overview readiness distinguishes the rendered directory from a focused map or empty canvas', () => {
   const step = STEPS.find((entry) => entry.id === 'course-directory');
+  assert.equal(step.target, '.course-learning-route');
+  assert.deepEqual(step.prepare, [
+    {
+      selector: '#course-knowledge-overview[open] [aria-label="关闭学习概览"]',
+      whenMissing: 'body:not(:has(#course-knowledge-overview[open])) .course-learning-route',
+    },
+  ]);
+  assert.notEqual(step.target, '#course-map-canvas', 'the empty loading shell is not a ready map');
+  const archived = LEGACY_V4_STEPS.find((entry) => entry.id === 'course-directory');
   assert.equal(
-    step.target,
+    archived.target,
     '.course-structure-picker, .course-map-directory-layout:has(.course-map-directory-panel)',
   );
-  assert.deepEqual(step.prepare, [
+  assert.deepEqual(archived.prepare, [
     {
       selector: '#course-map-reset-view',
       whenMissing: '.course-structure-picker, .course-map-directory-panel',
     },
   ]);
-  assert.notEqual(step.target, '#course-map-canvas', 'the empty loading shell is not a ready map');
 });
 
 test('station actions and preparation are restricted to an audited read-only view allowlist', () => {
@@ -842,6 +867,8 @@ test('station actions and preparation are restricted to an audited read-only vie
     '.course-structure-details .course-structure-primary, .course-map-focus-center [data-reader-node-id]',
     '.course-structure-details .course-structure-primary, [data-course-map-arrow-help-toggle]',
     '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
+    '#course-knowledge-overview[open] [aria-label="关闭学习概览"]',
+    '.course-learning-route [data-course-route-node-id], .course-direct-find [data-course-point-id]',
     '[data-course-map-arrow-help-toggle]',
     '#knowledge-return-overview',
     '#knowledge-start-reading',

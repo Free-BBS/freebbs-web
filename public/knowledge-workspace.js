@@ -40,6 +40,11 @@
     practiceQuestions: [],
     resources: [],
     planGoal: '',
+    workflow: null,
+    workflowScope: '',
+    workflowDraft: '',
+    workflowSelected: false,
+    workflowNavigating: false,
     contributionAnchor: null,
     uid: '',
     token: '',
@@ -80,14 +85,94 @@
       state.ready &&
       state.uid === (app.userState?.uid || '') &&
       state.token === (app.userState?.token || '') &&
-      ['concepts', 'practice', 'explore'].includes(state.planGoal)
+      ['concepts', 'practice', 'review', 'explore'].includes(state.planGoal)
       ? state.planGoal
       : '';
   }
   // A read-only, same-page intention; it is not a saved preference or ability estimate.
-  window.FreeBbsLearningWorkspace = { currentGoal: currentPlanGoal };
+  function learningWorkflowScope() {
+    const preference = window.FreeBbsLearningStart?.currentPreference?.();
+    const goal = currentPlanGoal() || preference?.goal;
+    if (
+      state.stale ||
+      !state.ready ||
+      state.uid !== (app.userState?.uid || '') ||
+      state.token !== (app.userState?.token || '') ||
+      !window.FreeBbsLearningWorkflow?.createSession({ goal, level: preference?.level })
+    )
+      return null;
+    return {
+      goal,
+      level: preference.level,
+      key: JSON.stringify([
+        state.uid,
+        state.token,
+        state.course?.slug,
+        state.node?.id,
+        state.node?.documentVersion || '',
+        goal,
+        preference.level,
+      ]),
+    };
+  }
+  function ensureLearningWorkflow() {
+    const scope = learningWorkflowScope();
+    if (!scope || scope.key !== state.workflowScope) {
+      state.workflow = scope ? window.FreeBbsLearningWorkflow.createSession(scope) : null;
+      state.workflowScope = scope?.key || '';
+      state.workflowDraft = '';
+      state.workflowSelected = false;
+    }
+    return state.workflow;
+  }
+  function currentLearningStep() {
+    const scope = learningWorkflowScope();
+    if (!scope || scope.key !== state.workflowScope || !state.workflowSelected) return null;
+    const step = window.FreeBbsLearningWorkflow.stepContext(state.workflow);
+    return step
+      ? {
+          ...step,
+          status: step.phase === 'finished' ? 'finished' : state.planPaused ? 'paused' : 'active',
+        }
+      : null;
+  }
+  window.FreeBbsLearningWorkspace = {
+    currentGoal: currentPlanGoal,
+    currentStep: currentLearningStep,
+  };
   function sessionMessage(message) {
     el('session').textContent = message || (loggedIn() ? '' : '登录后可保存学习记录。');
+  }
+  function notifyLearningStep() {
+    renderWorkflowStrip();
+    page.dispatchEvent(new CustomEvent('knowledge:learning-step-change'));
+  }
+  function renderWorkflowStrip() {
+    const host = document.getElementById('learning-workflow-strip');
+    if (!host) return;
+    const step = currentLearningStep();
+    host.replaceChildren();
+    show(
+      host,
+      Boolean(step && ['review', 'explore'].includes(step.goal) && state.tool !== 'continue'),
+    );
+    if (host.hidden || !step) return;
+    const goal = step.goal === 'review' ? '复习' : '探索';
+    const label = window.FreeBbsLearningPolicy?.MODULES?.[step.moduleId]?.title || goal;
+    host.append(text('span', `${goal} · ${step.status === 'finished' ? '本次已结束' : label}`));
+    const back = text('button', `回到本次${goal}`);
+    back.type = 'button';
+    back.addEventListener('click', () => requestTool('continue'));
+    host.append(back);
+    if (step.status === 'active') {
+      const finish = text('button', step.goal === 'review' ? '已理顺，结束本次' : '先到这里');
+      finish.type = 'button';
+      finish.addEventListener('click', () => {
+        applyWorkflowAction({ type: step.goal === 'review' ? 'review-clear' : 'finish' });
+        requestTool('continue');
+      });
+      host.append(finish);
+    }
   }
   function status(form, message) {
     form.querySelector('[role="status"]').textContent = message;
@@ -105,6 +190,10 @@
   }
   function switchTool(tool, { focus = false, restore = true, preserveView = false } = {}) {
     if (!labels[tool]) return;
+    if (window.FreeBbsLearningWorkflow && !state.workflowNavigating) {
+      ensureLearningWorkflow();
+      state.workflowSelected = tool === 'continue';
+    }
     if (
       tool === 'notes' &&
       state.ready &&
@@ -123,6 +212,7 @@
       if (readingTools.includes(state.tool)) state.positions.content = scrollPosition();
     }
     state.tool = tool;
+    if (window.FreeBbsLearningWorkflow) notifyLearningStep();
     page.dataset.learningTool = tool;
     show(root, tool !== 'content' && tool !== 'notes');
     document.querySelectorAll('[data-knowledge-tool]').forEach((button) => {
@@ -725,6 +815,166 @@
       }),
     );
   }
+  function workflowStrategy() {
+    const session = ensureLearningWorkflow();
+    if (!session) return null;
+    const context = window.freeBbsKnowledge?.getLearningContext?.() || {};
+    const map = context.map || {};
+    return (
+      window.FreeBbsLearningStrategies?.buildStrategy(session, {
+        nodeTitle: state.node.title,
+        hasContent: window.FreeBbsLearningNextSteps?.hasReadableContent(state.node),
+        hasOrigin: Boolean(window.FreeBbsLearningContent?.originMarkdown?.(state.node.sections)),
+        hasOverview: Boolean(
+          state.node.summary?.trim() ||
+          state.node.sections?.basicInfoMarkdown?.trim() ||
+          state.node.sections?.applicationsMarkdown?.trim(),
+        ),
+        hasRelations:
+          Array.isArray(map.edges) &&
+          map.edges.some(
+            (edge) =>
+              edge.source !== edge.target && [edge.source, edge.target].includes(state.node.id),
+          ),
+        questions: [...state.practiceQuestions, ...state.questions],
+        documentVersion: state.node.documentVersion,
+      }) || null
+    );
+  }
+  function workflowStep(moduleId) {
+    const strategy = workflowStrategy();
+    const entry = strategy?.modules.find((item) => item.moduleId === moduleId);
+    if (entry?.available) return strategy.steps.find((item) => item.id === entry.stepId);
+    if (
+      ['read', 'repair'].includes(moduleId) &&
+      window.FreeBbsLearningNextSteps?.hasReadableContent(state.node)
+    )
+      return { tool: 'content', view: 'reading', title: '查阅相关原文' };
+    if (moduleId === 'practice') {
+      const question = [...state.practiceQuestions, ...state.questions].find(
+        (item) => item.assessmentRole !== 'exploration',
+      );
+      if (question)
+        return {
+          tool: 'feedback',
+          quizView: 'practice',
+          questionId: question.id,
+          title: '尝试一道已有题',
+        };
+    }
+    return null;
+  }
+  function focusWorkflowStep(step, moduleId = '') {
+    const session = ensureLearningWorkflow();
+    if (!session) return;
+    const metadata = state.plan?.strategy?.modules?.find((item) => item.stepId === step.id);
+    let selected = moduleId || metadata?.moduleId;
+    if (!selected) {
+      if (step.tool === 'feedback') selected = step.quizView === 'mistakes' ? 'repair' : 'practice';
+      else if (step.tool === 'notes') selected = 'reflect';
+      else if (step.tool === 'content')
+        selected =
+          step.view === 'origin' ? 'origin' : step.taskId === 'view-overview' ? 'overview' : 'read';
+    }
+    if (!selected) {
+      state.workflowSelected = false;
+      notifyLearningStep();
+      return;
+    }
+    if (session.phase === 'finished')
+      state.workflow = window.FreeBbsLearningWorkflow.reduceSession(session, { type: 'resume' });
+    state.workflow = window.FreeBbsLearningWorkflow.reduceSession(state.workflow, {
+      type: 'choose-module',
+      moduleId: selected,
+    });
+    state.workflowSelected = true;
+    notifyLearningStep();
+  }
+  function chooseWorkflowModule(moduleId) {
+    if (!ensureLearningWorkflow()) return;
+    if (state.planPaused) setPlanPaused(false);
+    if (state.workflow.goal === 'explore')
+      state.workflow = window.FreeBbsLearningWorkflow.reduceSession(state.workflow, {
+        type: 'set-question',
+        question: state.workflowDraft,
+      });
+    const step = workflowStep(moduleId);
+    const intended = step || { tool: 'discussion', taskId: 'ask-max' };
+    state.workflowNavigating = true;
+    try {
+      focusWorkflowStep(intended, moduleId);
+      if (moduleId === 'explore' || !step) openInteraction('max');
+      else navigateStepTarget(step);
+    } finally {
+      state.workflowNavigating = false;
+    }
+    renderWorkflowStrip();
+  }
+  function applyWorkflowAction(action) {
+    if (!ensureLearningWorkflow()) return;
+    if (state.planPaused && action.type === 'resume') setPlanPaused(false);
+    state.workflow = window.FreeBbsLearningWorkflow.reduceSession(state.workflow, action);
+    state.workflowSelected = true;
+    notifyLearningStep();
+    renderPlan();
+    document.querySelector('#learning-workflow-card h3')?.focus({ preventScroll: true });
+    if (action.type === 'review-check') {
+      const transfer = workflowStep('transfer');
+      const moduleId =
+        state.workflow.moduleId === 'transfer' &&
+        transfer?.tool === 'feedback' &&
+        transfer.questionId
+          ? 'transfer'
+          : 'practice';
+      if (workflowStep(moduleId)) chooseWorkflowModule(moduleId);
+    }
+  }
+  function renderLearningWorkflow(container) {
+    const session = ensureLearningWorkflow();
+    if (!session || !window.FreeBbsLearningWorkflowPanel) return false;
+    const strategy = workflowStrategy();
+    const modules = (strategy?.modules || []).map((item) => ({
+      moduleId: item.moduleId,
+      title: window.FreeBbsLearningPolicy?.MODULES?.[item.moduleId]?.title || '',
+      available: item.available,
+    }));
+    const rendered = window.FreeBbsLearningWorkflowPanel.render(
+      container,
+      {
+        session,
+        questionDraft: state.workflowDraft,
+        paused: state.planPaused && session.phase !== 'finished',
+        hasPractice: [workflowStep('practice'), workflowStep('transfer')].some(
+          (step) => step?.tool === 'feedback' && step.questionId,
+        ),
+        hasContent: Boolean(window.FreeBbsLearningNextSteps?.hasReadableContent(state.node)),
+        modules,
+      },
+      {
+        action: applyWorkflowAction,
+        module: chooseWorkflowModule,
+        draft: (value) => {
+          state.workflowDraft = value;
+        },
+        ask: (prompt) => {
+          if (!ensureLearningWorkflow()) return;
+          if (state.workflow.goal === 'explore')
+            state.workflow = window.FreeBbsLearningWorkflow.reduceSession(state.workflow, {
+              type: 'set-question',
+              question: state.workflowDraft,
+            });
+          state.workflowSelected = true;
+          notifyLearningStep();
+          openInteraction('max', prompt);
+        },
+      },
+    );
+    if (rendered && state.tool === 'continue') {
+      state.workflowSelected = true;
+      notifyLearningStep();
+    }
+    return rendered;
+  }
   function refreshPlan(reset = false) {
     if (!state.ready || !window.FreeBbsLearningNextSteps) return;
     if ((state.planDirty || state.planPaused) && !reset) return;
@@ -747,6 +997,11 @@
       questions: state.questions,
       practiceQuestions: state.practiceQuestions,
       resources: state.resources,
+      hasOverview: Boolean(
+        state.node.summary?.trim() ||
+        state.node.sections?.basicInfoMarkdown?.trim() ||
+        state.node.sections?.applicationsMarkdown?.trim(),
+      ),
       hasOrigin: Boolean(window.FreeBbsLearningContent?.originMarkdown?.(state.node.sections)),
       activeGoal: state.planGoal,
       documentVersion: state.node.documentVersion,
@@ -768,6 +1023,10 @@
     )
       return false;
     state.planPaused = Boolean(paused);
+    if (window.FreeBbsLearningWorkflow) notifyLearningStep();
+    page.dispatchEvent(
+      new CustomEvent('knowledge:path-pause', { detail: { paused: state.planPaused } }),
+    );
     renderPlan();
     return true;
   }
@@ -808,8 +1067,9 @@
           ? { documentVersion: state.node.documentVersion }
           : {}),
       });
-    if (step.goal && ['concepts', 'practice', 'explore'].includes(step.goal)) {
+    if (step.goal && ['concepts', 'practice', 'review', 'explore'].includes(step.goal)) {
       state.planGoal = step.goal;
+      page.dispatchEvent(new CustomEvent('knowledge:goal-change'));
       if (!state.planDirty) {
         refreshPlan();
         const next = state.plan?.presentation?.primary;
@@ -820,6 +1080,16 @@
     navigateStep(step);
   }
   function navigateStep(step) {
+    if (window.FreeBbsLearningWorkflow) focusWorkflowStep(step);
+    state.workflowNavigating = true;
+    try {
+      navigateStepTarget(step);
+    } finally {
+      state.workflowNavigating = false;
+    }
+    if (window.FreeBbsLearningWorkflow) renderWorkflowStrip();
+  }
+  function navigateStepTarget(step) {
     if (step.point && step.point !== state.node.id) {
       const target = new URLSearchParams({
         course: state.course.slug,
@@ -854,7 +1124,7 @@
         new CustomEvent('knowledge:navigate', {
           detail: {
             tool: step.tool,
-            view: step.view || 'reading',
+            view: step.taskId === 'view-overview' ? 'overview' : step.view || 'reading',
             quizView: step.quizView,
             questionId: step.questionId,
             taskId: step.taskId,
@@ -868,7 +1138,7 @@
     if (!state.plan) return;
     el('plan-title').textContent = state.plan.label;
     el('plan-reason').textContent = state.planPaused
-      ? '本页已暂停，准备好时可继续这条路径。'
+      ? '这条路径已暂停，准备好时可继续。'
       : state.plan.reason;
     el('plan-tip').textContent = state.plan.tip;
     const list = el('plan-steps');
@@ -892,7 +1162,10 @@
     const current =
       state.plan.presentation || window.FreeBbsLearningNextSteps.presentation(state.plan);
     summary.replaceChildren();
-    if (current.primary) {
+    const workflowRendered = Boolean(
+      window.FreeBbsLearningWorkflowPanel && renderLearningWorkflow(summary),
+    );
+    if (!workflowRendered && current.primary) {
       const step = current.primary;
       const main = text('article', '', 'learning-plan-primary');
       main.append(
@@ -919,8 +1192,8 @@
         main.append(done);
       }
       summary.append(main);
-    } else summary.append(text('p', '这条路径已处理完，可回看或换个方向。'));
-    if (current.alternatives.length) {
+    } else if (!workflowRendered) summary.append(text('p', '这条路径已处理完，可回看或换个方向。'));
+    if (!workflowRendered && current.alternatives.length) {
       const alternatives = text('div', '', 'learning-plan-alternatives');
       alternatives.append(text('span', '也可以'));
       current.alternatives.slice(0, 2).forEach((step) => {
@@ -947,7 +1220,11 @@
     });
     direct.append(shortcuts);
     summary.append(direct);
-    el('plan-editor-heading').textContent = `完整路径（${state.plan.steps.length} 步，可调整）`;
+    el('plan-editor-heading').textContent = workflowRendered
+      ? state.planRecord
+        ? '已保存的路径（保留不变）'
+        : '可选资料与路径调整'
+      : `完整路径（${state.plan.steps.length} 步，可调整）`;
     el('plan-chain').textContent = state.plan.steps
       .map((step) => `${step.completed ? '✓ ' : step.skipped ? '已跳过 ' : ''}${step.title}`)
       .join(' → ');
@@ -1042,9 +1319,11 @@
       });
       list.append(item);
     });
-    el('plan-total').textContent = state.planPaused
-      ? '本页暂停中'
-      : `待做步骤建议投入 ${state.plan.steps.filter((step) => !step.completed && !step.skipped).reduce((sum, step) => sum + step.minutes, 0)} 分钟`;
+    el('plan-total').textContent = workflowRendered
+      ? ''
+      : state.planPaused
+        ? '本页暂停中'
+        : `待做步骤建议投入 ${state.plan.steps.filter((step) => !step.completed && !step.skipped).reduce((sum, step) => sum + step.minutes, 0)} 分钟`;
     let pause = el('plan-pause');
     if (!pause && el('plan-reset')) {
       pause = text('button', '先停一下');
@@ -1056,6 +1335,7 @@
     if (pause) {
       pause.textContent = state.planPaused ? '继续这条路径' : '先停一下';
       pause.setAttribute('aria-pressed', String(Boolean(state.planPaused)));
+      show(pause, !workflowRendered || state.workflow?.phase !== 'finished');
     }
     let prompts = el('plan-prompts');
     if (!prompts) {
@@ -1069,7 +1349,7 @@
           .filter((question) => typeof question === 'string' && question.trim())
           .slice(0, 3)
       : [];
-    show(prompts, questions.length > 0);
+    show(prompts, !workflowRendered && questions.length > 0);
     if (questions.length) {
       prompts.append(text('summary', '可选思考问题'));
       questions.forEach((question) => {
@@ -1083,6 +1363,8 @@
       });
     }
     el('plan-save').disabled = state.busy || !state.plan.steps.length;
+    show(el('plan-save'), !workflowRendered || state.planDirty || Boolean(state.planRecord));
+    show(el('plan-reset'), !workflowRendered || state.planDirty || Boolean(state.planRecord));
   }
   async function savePlan() {
     if (!loggedIn()) {
@@ -1291,6 +1573,16 @@
     state.practiceQuestions = [];
     state.resources = [];
     state.planGoal = '';
+    state.workflow = null;
+    state.workflowScope = '';
+    state.workflowDraft = '';
+    state.workflowSelected = false;
+    state.workflowNavigating = false;
+    const workflowStrip = el('workflow-strip');
+    if (workflowStrip) {
+      workflowStrip.replaceChildren();
+      show(workflowStrip, false);
+    }
     state.contributionAnchor = null;
     state.positions = {};
     state.previousTool = null;
@@ -1358,6 +1650,10 @@
     }),
   );
   page.addEventListener('knowledge:view-change', (event) => {
+    if (window.FreeBbsLearningWorkflow && !state.workflowNavigating && state.tool !== 'continue') {
+      state.workflowSelected = false;
+      notifyLearningStep();
+    }
     if (event.detail?.activateContent && state.tool !== 'content')
       switchTool('content', { preserveView: true, restore: false });
     else if (state.tool !== 'content' && state.tool !== 'notes') {
@@ -1417,6 +1713,10 @@
         oldNode?.documentVersion !== state.node.documentVersion ||
         oldNode?.id !== state.node.id
       ) {
+        if (window.FreeBbsLearningWorkflow) {
+          ensureLearningWorkflow();
+          notifyLearningStep();
+        }
         resetReviewQueue(oldNode?.id === state.node.id);
         if (state.ready && loggedIn()) loadReview();
       }
@@ -1456,6 +1756,11 @@
     )
       return;
     state.planGoal = '';
+    if (window.FreeBbsLearningWorkflow) {
+      ensureLearningWorkflow();
+      notifyLearningStep();
+    }
+    page.dispatchEvent(new CustomEvent('knowledge:goal-change'));
     refreshPlan();
   });
   page.addEventListener('knowledge:annotation-save', (event) => saveAnnotation(event.detail));
@@ -1738,6 +2043,7 @@
     if (
       state.busy ||
       state.planDirty ||
+      (state.workflowDraft?.trim() && state.workflow?.phase !== 'finished') ||
       state.reviewSaving.size ||
       [...state.reviewDrafts.values()].some((reply) => String(reply).trim()) ||
       el('annotation-comment')?.value.trim() ||

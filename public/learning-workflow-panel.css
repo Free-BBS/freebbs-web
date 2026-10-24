@@ -1,0 +1,163 @@
+.learning-workflow-panel {
+  box-sizing: border-box;
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid var(--learning-line, var(--ui-line, #c9dcdf));
+  border-inline-start: 4px solid var(--ui-accent, #075d68);
+  border-radius: 16px;
+  background: var(--learning-surface, var(--ui-surface, #fff));
+  color: var(--learning-ink, var(--ui-text, #173e46));
+}
+.learning-workflow-panel h3,
+.learning-workflow-panel p {
+  margin: 0;
+}
+.learning-workflow-panel h3 {
+  font-size: 1.18rem;
+  line-height: 1.6;
+}
+.learning-workflow-panel .learning-workflow-caption {
+  color: var(--ui-muted, #65747a);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+.learning-workflow-question {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  font-size: 1rem;
+}
+.learning-workflow-question textarea {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 80px;
+  padding: 10px 12px;
+  border: 1px solid var(--learning-line, var(--ui-line, #c9dcdf));
+  border-radius: 10px;
+  background: var(--learning-surface, var(--ui-surface, #fff));
+  color: inherit;
+  font: inherit;
+  line-height: 1.65;
+  resize: vertical;
+}
+.learning-workflow-question textarea::placeholder {
+  color: var(--ui-muted, #65747a);
+  opacity: 1;
+}
+.learning-workflow-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+.learning-workflow-panel button,
+.learning-workflow-resources summary {
+  box-sizing: border-box;
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--learning-line, var(--ui-line, #c9dcdf));
+  border-radius: 9px;
+  background: var(--learning-surface, var(--ui-surface, #fff));
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-align: start;
+  cursor: pointer;
+}
+.learning-workflow-panel button:active {
+  transform: none;
+}
+.learning-workflow-panel button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.learning-workflow-panel button.learning-workflow-primary {
+  border-color: var(--action-primary, #0b5f6c);
+  background: var(--action-primary, #0b5f6c);
+  color: var(--action-primary-text, #fff);
+}
+.learning-workflow-panel button.learning-workflow-primary:hover {
+  background: var(--action-primary-hover, #084c57);
+}
+.learning-workflow-panel button:focus-visible,
+.learning-workflow-panel textarea:focus-visible,
+.learning-workflow-resources summary:focus-visible {
+  outline: 2px solid var(--ui-focus, #167d89);
+  outline-offset: 3px;
+}
+.learning-workflow-resources {
+  min-inline-size: 0;
+}
+.learning-workflow-resources summary {
+  inline-size: fit-content;
+}
+.learning-workflow-resources[open] > .learning-workflow-actions {
+  margin-block-start: 10px;
+}
+#learning-workflow-strip {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-inline-size: 0;
+  margin-block: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--learning-line, var(--ui-line, #c9dcdf));
+  border-radius: 12px;
+  background: var(--learning-soft, var(--ui-surface-soft, #edf5f5));
+  color: var(--learning-ink, var(--ui-text, #173e46));
+  font-size: 1rem;
+  line-height: 1.6;
+}
+#learning-workflow-strip[hidden] {
+  display: none !important;
+}
+#learning-workflow-strip > span {
+  flex: 1 1 180px;
+  overflow-wrap: anywhere;
+}
+#learning-workflow-strip button {
+  box-sizing: border-box;
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--learning-line, var(--ui-line, #c9dcdf));
+  border-radius: 9px;
+  background: var(--learning-surface, var(--ui-surface, #fff));
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+#learning-workflow-strip button:focus-visible {
+  outline: 2px solid var(--ui-focus, #167d89);
+  outline-offset: 3px;
+}
+#learning-workflow-strip button:active {
+  transform: none;
+}
+body.theme-dark .learning-workflow-panel .learning-workflow-caption,
+body.theme-dark .learning-workflow-question textarea::placeholder,
+[data-theme='dark'] .learning-workflow-panel .learning-workflow-caption,
+[data-theme='dark'] .learning-workflow-question textarea::placeholder {
+  color: var(--ui-muted, #b3c4ca);
+}
+@media (max-width: 540px) {
+  .learning-workflow-panel {
+    padding: 16px;
+  }
+  .learning-workflow-actions {
+    align-items: stretch;
+  }
+  .learning-workflow-panel button {
+    flex: 1 1 auto;
+  }
+}

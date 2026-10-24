@@ -40,6 +40,7 @@ const {
   companionPreference,
 } = require('../backend/learning-companion');
 const { promptHintFromPreference } = require('../public/learning-start');
+const { buildPolicy, MODULES } = require('../public/learning-policy');
 
 const root = path.resolve(__dirname, '..');
 const publicRoot = path.join(root, 'public');
@@ -212,10 +213,10 @@ function createSimulatedLearningChat({ identity, assessmentStore, learningStore,
     }
     req.body.trustedCompanionContext = trustedContext;
     req.body.trustedCompanionHint = companionHint(trustedContext);
-    const strategy = promptHintFromPreference(
-      companionPreference(trustedContext),
-      trustedContext.resources,
-    );
+    const learningPolicy = trustedContext.learningPolicyContext;
+    const strategy = learningPolicy
+      ? companionHint(trustedContext)
+      : promptHintFromPreference(companionPreference(trustedContext), trustedContext.resources);
     req.body.trustedStrategyHint = strategy;
     const concern = req.body.question.includes('下一步学习建议');
     let answer =
@@ -230,6 +231,39 @@ function createSimulatedLearningChat({ identity, assessmentStore, learningStore,
                   ? '可以从模型边界探索：零状态、线性和时不变假设分别起什么作用？先对照官方正文，再尝试构造一个不满足条件的例子。没有验证的类比只作为待检验问题。'
                   : '先核对当前题目的条件，再独立尝试。需要时可请求一个步骤提示，完成后对照解析和常见误区。'
             }\n\n当前页面与右侧 Max 使用同一套学习选择。${strategy ? '模拟服务已接收受控策略。' : '尚未提供确认后的起点。'}正式判分不由此回答决定。`;
+    if (learningPolicy) {
+      const plan = buildPolicy(learningPolicy, trustedContext.resources);
+      const current = trustedContext.learningStepContext;
+      const moduleId = current?.moduleId || learningPolicy.module;
+      const step = plan.steps.find((item) => item.moduleId === moduleId);
+      const outsideSignals = trustedContext.courseSlug !== 'signals';
+      answer = `**${outsideSignals ? '本地模拟入口' : '本地模拟回答'}（不是实时 AI）**\n\n当前课程：「${trustedContext.courseName}」；知识点：「${trustedContext.knowledgePointTitle}」。本次学习方向：${plan.title}。${step ? `主动进入：${step.title}。` : '可以直接提出你现在的问题。'}\n\n建议的辅助方式：${plan.support}${!outsideSignals && learningPolicy.purpose === 'explore' ? '可从模型边界探索：核对条件、反例、联系和验证方向。' : ''}${step?.note ? `\n\n${step.note}` : ''}\n\n模拟服务已接收当前学习选择、课程资料与本人记录；熟悉程度是本人自述，不是能力诊断。${outsideSignals ? '本入口不提供该课程的专业教学回答，不宣称学习效果。' : ''}正式判分和星标不由此回答决定。`;
+      if (current) {
+        const outcomes = { unknown: '尚未说明', gap: '有一个缺口', clear: '暂时已理顺' };
+        const states = { active: '进行中', paused: '已暂停', finished: '本次已结束' };
+        const phases = {
+          path: '按需学习',
+          recall: '回忆定位',
+          repair: '定点查漏',
+          check: '按需核对',
+          question: '明确问题',
+          investigate: '查证探索',
+          finished: '本次结束',
+        };
+        answer += `\n\n已接收本次具体步骤：${MODULES[current.moduleId].title}；阶段：${phases[current.phase]}；状态：${states[current.status]}；本人过程自述：${outcomes[current.outcome]}。这不是能力认证。`;
+        if (learningPolicy.purpose === 'review' && current.outcome === 'clear')
+          answer +=
+            '\n\n你表示这次已理顺，可以就此结束；也可以自行选择一道题核对，不要求重读正文或完成整组题。';
+        if (learningPolicy.purpose === 'explore')
+          answer += current.question
+            ? '\n\n接下来围绕你本次写的问题，先澄清范围、已有依据和一个可检验的下一步；按需查资料，不先要求读正文或做题。'
+            : '\n\n可以从自己关心的问题、联系或边界出发；正文和练习都是按需使用的工具，不是前置条件。';
+        if (current.status === 'paused')
+          answer += '\n\n这条链已暂停；只回应你这次主动提出的需求，不催促继续。';
+        else if (current.status === 'finished')
+          answer += '\n\n本次已结束，可以停在这里；有新的问题时再继续即可。';
+      }
+    }
     const personalCount = trustedContext.personalLearningContent?.records?.length || 0;
     if (personalCount)
       answer += `\n\n模拟服务已接收你在本知识点保存的 ${personalCount} 条笔记、批注或作答资料。这里仅验证本人资料传递，不表示真实 AI 已诊断掌握程度。`;

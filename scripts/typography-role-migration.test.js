@@ -156,7 +156,7 @@ test('map geometry, formula/code fonts, graphic glyphs and iOS focus sizing rema
   );
   assert.equal(
     declaration('knowledge-workspace.css', '.chapter-network text', 'font'),
-    '16px var(--font-ui)',
+    '18px var(--font-ui)',
   );
   assert.equal(declaration('site-search.css', '.site-search-form input', 'font-size'), '16px');
   assert.equal(

@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const learningPolicy = require('../public/learning-policy');
 
 const root = path.join(__dirname, '..');
 const knowledgeSource = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
@@ -15,12 +16,12 @@ function knowledgeSlice(start, end) {
 }
 
 // Run the production request and send controllers with a deterministic stream, not a real AI.
-function knowledgeChatHarness(stream) {
+function knowledgeChatHarness(stream, { goal = 'practice' } = {}) {
   const input = { value: '请解释卷积' };
   const state = {
     course: { name: '信号与系统' },
     node: { id: 'SS-01-01', title: '卷积', summary: '系统响应', markdown: '# 卷积正文' },
-    learningTask: { mode: 'practice' },
+    learningTask: { tool: 'feedback', quizView: 'practice' },
     chatSending: false,
     chatMessages: [{ role: 'user', content: '之前的问题' }],
     chatSelectionDraft: input.value,
@@ -34,9 +35,12 @@ function knowledgeChatHarness(stream) {
     courseSlug: 'signals',
     nodeId: state.node.id,
     chatGeneration: 0,
+    URLSearchParams,
     window: {
-      FreeBbsLearningWorkspace: { currentGoal: () => '夯实基础' },
-      FreeBbsLearningStart: { currentPreference: () => ({ familiarity: 'first_time' }) },
+      location: { search: '' },
+      FreeBbsLearningPolicy: learningPolicy,
+      FreeBbsLearningWorkspace: { currentGoal: () => goal },
+      FreeBbsLearningStart: { currentPreference: () => ({ level: 'new', goal: 'concepts' }) },
     },
     app: {
       userState: { token: 'test-session' },
@@ -137,8 +141,13 @@ test('课程回复使用 RAG 流式内容，并携带当前知识点和学习起
       knowledgePointTitle: '卷积',
       knowledgePointSummary: '系统响应',
       knowledgePointMarkdown: '# 卷积正文',
-      learningStartPreference: { familiarity: 'first_time' },
-      learningTask: { mode: 'practice', goal: '夯实基础' },
+      learningStartPreference: { level: 'new', goal: 'concepts' },
+      learningTask: { tool: 'feedback', quizView: 'practice', goal: 'practice' },
+      learningPolicyContext: {
+        policyVersion: learningPolicy.POLICY_VERSION,
+        purpose: 'practice',
+        level: 'new',
+      },
     },
   });
   const answer = '服务端检索结果：卷积描述系统响应。';
@@ -152,6 +161,22 @@ test('课程回复使用 RAG 流式内容，并携带当前知识点和学习起
   assert.equal(fixture.events.at(-1).detail.answer, answer);
   assert.equal(fixture.input.value, '');
   assert.equal(fixture.state.chatSending, false);
+});
+
+test('RAG 不把任意文案或非法值当作正规学习目的，保留合法课程起点', async () => {
+  for (const goal of ['夯实基础', '__proto__', ['practice'], { purpose: 'review' }]) {
+    const fixture = knowledgeChatHarness(async (onDelta) => onDelta('真实流式响应'), { goal });
+    await fixture.send(fixture.input.value);
+    const context = fixture.requests[0].context;
+    assert.equal(Object.hasOwn(context.learningTask, 'goal'), false);
+    assert.deepEqual(context.learningStartPreference, { level: 'new', goal: 'concepts' });
+    assert.deepEqual(context.learningPolicyContext, {
+      policyVersion: learningPolicy.POLICY_VERSION,
+      purpose: 'learn',
+      level: 'new',
+    });
+    assert.equal(fixture.messages.at(-1).content, '真实流式响应');
+  }
 });
 
 for (const scenario of [
