@@ -134,7 +134,7 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
       ),
       threeLevelGroup(
         'youth_league.freshman',
-        '新生组',
+        '办公室·新生组',
         'youth_league.freshman',
         ['副书记', '组长', '组员'],
         ['deputy_secretary', 'leader', 'member'],
@@ -150,6 +150,13 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
         'youth_league.practice',
         '实践组',
         'youth_league.practice',
+        ['副书记', '组长', '组员'],
+        ['deputy_secretary', 'leader', 'member'],
+      ),
+      threeLevelGroup(
+        'youth_league.research',
+        '调研组',
+        'youth_league.research',
         ['副书记', '组长', '组员'],
         ['deputy_secretary', 'leader', 'member'],
       ),
@@ -202,12 +209,11 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
         options: [option('science_association.chair', '科协主席')],
       },
       ...[
-        ['office', '办公室'],
         ['software', '软件部'],
         ['hardware', '硬件部'],
-        ['training', '学培部'],
+        ['training', '学习培养部'],
         ['project', '项目部'],
-        ['planning', '策划部'],
+        ['planning', '智能策划部'],
       ].map(([key, label]) =>
         threeLevelGroup(
           `science_association.${key}`,
@@ -217,6 +223,12 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
           ['vice_chair', 'minister', 'member'],
         ),
       ),
+      {
+        id: 'science_association.finance',
+        label: '兼任岗位',
+        selection: 'toggle',
+        options: [option('science_association.office.vice_chair', '科协经费负责人')],
+      },
     ],
   },
   {
@@ -260,6 +272,7 @@ const catalogOptions = DEVELOPMENT_IDENTITY_SECTIONS.flatMap(({ groups }) =>
 
 export const DEVELOPMENT_IDENTITY_ROLE_KEYS: readonly RoleKey[] = [
   'platform.admin',
+  'platform.learning_admin',
   ...catalogOptions.map(({ roleKey }) => roleKey),
 ];
 
@@ -283,7 +296,12 @@ export type IdentitySelectionValidation =
 export function identityOrganizationForRole(
   roleKey: RoleKey,
 ): DevelopmentIdentitySection['id'] | null {
-  if (roleKey.endsWith('.finance') || roleKey.startsWith('platform.')) return null;
+  if (
+    roleKey.endsWith('.finance') ||
+    roleKey === 'science_association.office.vice_chair' ||
+    roleKey.startsWith('platform.')
+  )
+    return null;
   if (roleKey.startsWith('counselor.')) return 'counselors';
   if (
     roleKey.startsWith('student_union.') ||
@@ -341,7 +359,8 @@ export function identityGroupForRole(roleKey: RoleKey): DevelopmentIdentityGroup
 export function identityLabels(roles: readonly RoleKey[]): string[] {
   const selected = new Set(roles);
   const labels: string[] = [];
-  if (selected.has('platform.admin')) labels.push('平台管理员');
+  if (selected.has('platform.learning_admin')) labels.push('学习端管理员');
+  if (selected.has('platform.admin')) labels.push('发展端管理员');
   for (const { roleKey, label } of catalogOptions) {
     if (!selected.has(roleKey)) continue;
     const group = groupByRole.get(roleKey);
@@ -354,6 +373,8 @@ export function identityLabels(roles: readonly RoleKey[]): string[] {
       labels.push(label);
     } else if (group.id === 'tms.position') {
       labels.push(`TMS ${label}`);
+    } else if (group.id === 'science_association.finance') {
+      labels.push(label);
     } else if (group.id === 'student_union.finance') {
       labels.push(`学生会${label}`);
     } else if (group.id === 'youth_league.finance') {

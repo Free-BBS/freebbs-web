@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 
 import type { ApiEnvelope, DevelopmentRewardProvider } from '@freebbs-development/contracts';
-import { ACTIVITY_CONTENT_BODY_MAX_BYTES } from '@freebbs-development/contracts';
+import {
+  ACTIVITY_CONTENT_BODY_MAX_BYTES,
+  platformRootAdminUids,
+} from '@freebbs-development/contracts';
 import { loadEnvironment, type AuthMode } from './config/env.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import { createAuthMiddleware } from './core/auth/auth-middleware.js';
@@ -29,6 +32,9 @@ import {
   type LearningSurveyResolver,
 } from './modules/events/workspace-activity.js';
 import { createFinanceRouter } from './modules/finance/router.js';
+import { createFinanceTrackingRouter } from './modules/finance/tracking-router.js';
+import { financeDataDirectory } from './modules/finance/data-directory.js';
+import { DEFAULT_FINANCE_DEPARTMENTS } from './modules/finance/default-departments.js';
 import { createFestivalRouter } from './modules/festival/router.js';
 import { createGrowthRouter } from './modules/growth/router.js';
 import {
@@ -92,6 +98,8 @@ export interface CreateAppOptions {
   learningSurveyResolver?: LearningSurveyResolver;
   developmentRewardProvider?: DevelopmentRewardProvider;
   systemSettingsDirectory?: string;
+  financeDirectory?: string;
+  publicUploadDirectory?: string;
   learningAchievementProvider?: LearningAchievementProvider;
   developmentMapTokenDigest?: string;
 }
@@ -157,8 +165,8 @@ export function createApp(options: CreateAppOptions = {}) {
     authClient: resolveAuthClient(authMode, options),
     mode: authMode,
     store,
-    allowedUids: previewAllowedUids,
     userDirectory: options.userDirectory,
+    rootAdminUids: platformRootAdminUids(environmentSource.PLATFORM_ROOT_ADMIN_UIDS),
   });
   const allowedOrigins = new Set(
     options.allowedOrigins ?? parseAllowedOrigins(environmentSource.ALLOWED_ORIGINS),
@@ -456,6 +464,46 @@ export function createApp(options: CreateAppOptions = {}) {
       authenticate,
       uploadDirectory:
         options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/finance/tracking`,
+    async (_request, _response, next) => {
+      const module = (await store.modules.list({ query: 'finance' })).find(
+        (record) => record.moduleId === 'finance',
+      );
+      if (!module?.enabled || module.status !== 'enabled') {
+        next(new HttpError(503, 'module_disabled', '财务模块暂未开放'));
+        return;
+      }
+      next();
+    },
+    createFinanceTrackingRouter({
+      authenticate: async (headers) => {
+        const result = await authenticate(headers);
+        if (result.status !== 200) return result;
+        const subject = (await store.subjects.list({ query: result.user.uid })).find(
+          ({ uid }) => uid === result.user.uid,
+        );
+        if (subject?.status !== 'active') {
+          throw new HttpError(403, 'finance_subject_inactive', '该账号的财务访问已停用');
+        }
+        return result;
+      },
+      authMode,
+      nodeEnvironment: environment.nodeEnv,
+      directory: financeDataDirectory({
+        directory: options.financeDirectory ?? environmentSource.FINANCE_DATA_DIR,
+        nodeEnvironment: environment.nodeEnv,
+        publicDirectories: [
+          options.publicUploadDirectory,
+          options.festivalUploadDirectory ?? environmentSource.FESTIVAL_UPLOAD_DIR,
+          options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+          options.sportsUploadDirectory,
+        ].filter((path): path is string => Boolean(path)),
+      }),
+      defaultDepartments: DEFAULT_FINANCE_DEPARTMENTS,
+      getSharedTeams: () => store.sportsTeams.list(),
     }),
   );
   app.use(`${API_BASE_PATH}/finance`, createFinanceRouter({ store, authenticate }));

@@ -46,6 +46,50 @@ test('SQL, feature JSON and uploads survive verified staging without replacing r
   });
 });
 
+test('private financial records and grants survive verified staging in their own root', async () => {
+  await fixture(async (options) => {
+    const finance = join(options.root, 'private-finance');
+    await mkdir(join(finance, 'finance-tracking'), { recursive: true });
+    const ledger = JSON.stringify({
+      id: 'finance-tracking',
+      grants: [{ uid: 'responsible-student', departmentIds: ['organization'] }],
+      claims: [{ id: 'claim-1', payeeStudentId: 'test-student-id', amountCents: 15000 }],
+    });
+    await writeFile(join(finance, 'finance-tracking', 'ledger.json'), ledger);
+    await createSnapshot({
+      ...options,
+      directories: { collections: options.storage, finance },
+    });
+    const manifest = await verifySnapshot(options.output);
+    assert.deepEqual(manifest.roots, ['collections', 'finance']);
+    const target = join(options.root, 'staged');
+    await stageSnapshot(options.output, target);
+    assert.equal(
+      await readFile(join(target, 'finance/finance-tracking/ledger.json'), 'utf8'),
+      ledger,
+    );
+    assert.equal(await readFile(join(finance, 'finance-tracking/ledger.json'), 'utf8'), ledger);
+    await writeFile(join(options.output, 'finance/finance-tracking/ledger.json'), '{}');
+    await assert.rejects(verifySnapshot(options.output), /checksum/);
+  });
+});
+
+test('refuses finance storage nested in upload roots or containing those roots', async () => {
+  await fixture(async (options) => {
+    const nested = join(options.storage, 'finance');
+    await mkdir(nested);
+    for (const finance of [nested, options.storage, options.root]) {
+      await assert.rejects(
+        createSnapshot({
+          ...options,
+          directories: { collections: options.storage, finance },
+        }),
+        /Finance storage must be separate/,
+      );
+    }
+  });
+});
+
 test('requires stopped writes and separate targets, rejects live lock directories', async () => {
   await fixture(async (options) => {
     const directories = { collections: options.storage };

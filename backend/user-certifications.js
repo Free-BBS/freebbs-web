@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const { projectMainSiteAuthority, isMainSiteRootAdminUid } = require('./development-integration');
 
 const INSTITUTION = '清华大学电子系';
 const EDUCATIONS = Object.freeze({ undergraduate: '本科', master: '硕士', doctor: '博士' });
@@ -228,7 +229,12 @@ async function syncEnterpriseCertification(
   );
 }
 
-function createUserCertificationService({ pool, notifications, now = Date.now }) {
+function createUserCertificationService({
+  pool,
+  notifications,
+  now = Date.now,
+  resolvePlatformAuthority,
+}) {
   async function transaction(work) {
     const connection = await pool.getConnection();
     try {
@@ -372,11 +378,21 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       throw certificationError(403, 'self_review_forbidden', '不能审核自己的身份申请');
     return transaction(async (connection) => {
       const [users] = await connection.execute(
-        'SELECT id, username, is_admin FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+        'SELECT id, uid, username, role, is_admin FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
         [adminId, userId],
       );
-      const admin = users.find((user) => Number(user.id) === Number(adminId));
+      const admin = await projectMainSiteAuthority(
+        users.find((user) => Number(user.id) === Number(adminId)),
+        resolvePlatformAuthority,
+      );
       if (!admin?.is_admin) throw certificationError(403, 'admin_required', '需要管理员权限');
+      const target = users.find((user) => Number(user.id) === userId);
+      if (isMainSiteRootAdminUid(target?.uid) && !admin.rootAdmin)
+        throw certificationError(
+          403,
+          'platform_root_immutable',
+          '普通管理员不能修改最高管理员的身份',
+        );
       const [[request]] = await connection.execute(
         'SELECT * FROM user_certification_requests WHERE id = ? FOR UPDATE',
         [requestId],

@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const { hashPassword, verifyPasswordAsync } = require('../backend/password');
 const { clientIpForBackend } = require('../proxy-client-ip');
 const { policy, createPrivacyPolicyService } = require('../backend/privacy-policy');
+const { projectMainSiteAuthority } = require('../backend/development-integration');
 
 const privacyAcknowledgement = {
   privacyAccepted: true,
@@ -119,6 +120,8 @@ test('production login requires valid credentials and current policy acknowledge
       },
     },
     verifyPasswordAsync,
+    projectMainSiteAuthority,
+    developmentRuntime: null,
     privacyPolicyService: unconfirmedPrivacyPolicyService(),
     loginRateLimiter: {
       consumeIp: async () => ({ allowed: true }),
@@ -148,6 +151,7 @@ test('production login requires valid credentials and current policy acknowledge
     password: 'correct',
     ...privacyAcknowledgement,
   });
+  assert.equal(signedIn.code, 200);
   assert.equal(signedIn.payload.token, 'verified-token');
   assert.equal(signedIn.payload.privacyPolicy.accepted, false);
   assert.equal(signedIn.payload.privacyPolicy.requiresFullPolicy, true);
@@ -221,6 +225,8 @@ test('login rejects repeated guesses before password verification and accepts lo
       return password === 'correct';
     },
     privacyPolicyService: unconfirmedPrivacyPolicyService(),
+    projectMainSiteAuthority,
+    developmentRuntime: null,
     toUserProfile: (row) => ({ username: row.username }),
     issueToken: () => 'verified-token',
   });
@@ -263,7 +269,9 @@ test('login rejects repeated guesses before password verification and accepts lo
   assert.equal(hashes, 5);
   assert.equal(lookups, 6);
   now = 60_001;
-  assert.equal((await call('reader@example.test', 'correct')).payload.token, 'verified-token');
+  const signedIn = await call('reader@example.test', 'correct');
+  assert.equal(signedIn.code, 200);
+  assert.equal(signedIn.payload.token, 'verified-token');
   assert.equal((await call('reader', 'wrong')).code, 401);
 });
 

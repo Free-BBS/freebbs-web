@@ -1,16 +1,23 @@
 const { canReadPost } = require('./discussion-visibility');
+const { projectMainSiteAuthority } = require('./development-integration');
 
 const fail = (message, status = 409) => Object.assign(new Error(message), { status });
 
 // Called only inside the decision transaction. Pending drafts never enter the
 // public discussion tables, so existing readers cannot expose an unreviewed draft.
-function createModerationPublisher({ createPostPid, awardMagnetic, notifications }) {
+function createModerationPublisher({
+  createPostPid,
+  awardMagnetic,
+  notifications,
+  resolvePlatformAuthority,
+}) {
   return async function publishSubmission(connection, submission) {
     const { kind, authorId, payload } = submission;
-    const [[author]] = await connection.execute(
-      'SELECT id, username, full_name, student_id, is_admin FROM users WHERE id = ? FOR SHARE',
+    const [[authorRow]] = await connection.execute(
+      'SELECT id, uid, role, username, full_name, student_id, is_admin FROM users WHERE id = ? FOR SHARE',
       [authorId],
     );
+    const author = await projectMainSiteAuthority(authorRow, resolvePlatformAuthority);
     if (!author) throw fail('作者账号已不存在，不能发布');
 
     if (kind === 'post') {

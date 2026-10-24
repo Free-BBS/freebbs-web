@@ -13,6 +13,10 @@ export interface UserContext {
   roles: RoleKey[];
   /** Trusted authorization result for a current public:* platform.admin assignment. */
   readonly businessAdmin?: boolean;
+  /** Trusted current learning-platform administrator projection. */
+  readonly learningAdmin?: boolean;
+  /** Server-only UID/configuration decision; ordinary role grants cannot confer root. */
+  readonly rootAdmin?: boolean;
   tags: PermissionTag[];
   readonly mainSiteAdmin?: boolean;
   developmentAccess?: 'member' | 'lead';

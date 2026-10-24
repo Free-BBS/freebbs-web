@@ -6,6 +6,7 @@ import {
 } from '@freebbs-development/contracts';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
+import { ManagementNavigation } from '../../components/ManagementNavigation.js';
 import { createApiClient, type ApiClient } from '../../core/api/client.js';
 import { IdentitySettings } from './IdentitySettings.js';
 import { OrganizationSettings } from './OrganizationSettings.js';
@@ -27,7 +28,8 @@ function ReadonlyPreview({ active, children }: { active: boolean; children: Reac
 export function SystemSettingsPage({
   client: suppliedClient,
 }: { client?: Pick<ApiClient, 'request'> } = {}) {
-  const readonly = useOptionalAuth()?.user?.previewing === true;
+  const user = useOptionalAuth()?.user;
+  const readonly = user?.previewing === true;
   const client = useMemo(() => suppliedClient ?? createApiClient(), [suppliedClient]);
   const [data, setData] = useState<SystemSettingsBootstrap | null>(null);
   const [error, setError] = useState('');
@@ -85,10 +87,10 @@ export function SystemSettingsPage({
     );
   }
   return (
-    <section className="module-page system-settings-page" aria-label="发展端系统设置">
+    <section className="module-page system-settings-page" aria-label="人员与组织管理">
+      <ManagementNavigation user={user} />
       <ModulePageHeader
-        kicker="DEVELOPMENT SETTINGS"
-        title="系统设置"
+        title="人员与组织"
         description="维护组织身份与业务配置，发送通知、发放奖励并查看操作记录。"
       />
       {readonly ? (

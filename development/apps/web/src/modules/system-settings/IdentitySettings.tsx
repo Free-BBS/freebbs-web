@@ -1,6 +1,7 @@
 import {
   systemSettingsIdentityLabels,
   systemSettingsIdentitySections,
+  ROOT_MANAGED_ROLE_KEYS,
   type DevelopmentAssignableRole,
   type DevelopmentDirectoryFilters,
   type Page,
@@ -39,6 +40,8 @@ export function IdentitySettings({
   readonly?: boolean;
 }) {
   const auth = useOptionalAuth();
+  const canManageProtectedAppointments =
+    auth?.user?.rootAdmin === true && auth.user.previewing !== true;
   const [users, setUsers] = useState(initial.users);
   const [source, setSource] = useState<SystemSettingsUser | null>(initial.users[0] ?? null);
   const [draft, setDraft] = useState<SystemSettingsUser | null>(initial.users[0] ?? null);
@@ -63,8 +66,8 @@ export function IdentitySettings({
   );
   const labelsForRoles = (roles: readonly RoleKey[]) =>
     systemSettingsIdentityLabels(roles, initial.organizations);
-  const platformAdminName =
-    initial.organizations.roles.find(({ key }) => key === 'platform.admin')?.name ?? '平台管理员';
+  const platformAdminName = labelsForRoles(['platform.admin'])[0] ?? '发展端管理员';
+  const learningAdminName = labelsForRoles(['platform.learning_admin'])[0] ?? '学习端管理员';
   function select(user: SystemSettingsUser | null) {
     setSource(user);
     setDraft(user ? structuredClone(user) : null);
@@ -251,6 +254,34 @@ export function IdentitySettings({
               </div>
             </header>
             <fieldset className="settings-edit-fields" disabled={saving || loading}>
+              {!canManageProtectedAppointments ? (
+                <p className="form-note">
+                  管理员、团委书记、团委辅导员和学发辅导员身份由最高管理员任命；如需调整，请联系最高管理员。其余组织岗位和队长可正常维护。
+                </p>
+              ) : null}
+              {draft.legacyLearningAdmin ? (
+                <p className="form-note">学习端原有管理员 · 来自主站原有管理员设置，只读保留。</p>
+              ) : null}
+              <label className="identity-toggle-card">
+                <span>
+                  <strong>{learningAdminName}</strong>
+                  <small>
+                    额外任命学习端管理员，不授予发展端管理权限；取消勾选不会撤销学习端原有管理员来源。
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={draft.roles.includes('platform.learning_admin')}
+                  disabled={readonly || !canManageProtectedAppointments}
+                  onChange={(event) =>
+                    patch({
+                      roles: event.currentTarget.checked
+                        ? [...draft.roles, 'platform.learning_admin']
+                        : draft.roles.filter((role) => role !== 'platform.learning_admin'),
+                    })
+                  }
+                />
+              </label>
               <label className="identity-toggle-card">
                 <span>
                   <strong>{platformAdminName}</strong>
@@ -259,7 +290,7 @@ export function IdentitySettings({
                 <input
                   type="checkbox"
                   checked={draft.roles.includes('platform.admin')}
-                  disabled={readonly}
+                  disabled={readonly || !canManageProtectedAppointments}
                   onChange={(event) =>
                     patch({
                       roles: event.currentTarget.checked
@@ -285,6 +316,7 @@ export function IdentitySettings({
                     }
                     labelsForRoles={labelsForRoles}
                     readonly={readonly}
+                    readonlyRoleKeys={canManageProtectedAppointments ? [] : ROOT_MANAGED_ROLE_KEYS}
                   />
                 ))}
               </div>

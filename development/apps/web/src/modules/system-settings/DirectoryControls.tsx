@@ -72,9 +72,9 @@ export function DirectoryFilters({
         </select>
       </label>
       <label>
-        准入筛选
+        发展端身份
         <select
-          aria-label="准入筛选"
+          aria-label="发展端身份"
           value={value.admission ?? ''}
           onChange={(event) =>
             onChange({
@@ -85,9 +85,7 @@ export function DirectoryFilters({
           }
         >
           <option value="">全部用户</option>
-          <option value="admitted">已开放发展端</option>
-          <option value="not_admitted">尚未准入</option>
-          <option value="member">普通准入</option>
+          <option value="member">普通成员</option>
           <option value="lead">发展端负责人</option>
         </select>
       </label>

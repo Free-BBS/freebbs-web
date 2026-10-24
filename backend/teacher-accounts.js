@@ -4,6 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const { hashPassword, verifyPasswordAsync } = require('./password');
 const { isValidUsername, USERNAME_MESSAGE } = require('./username-policy');
+const { isMainSiteRootAdminUid, projectMainSiteAuthority } = require('./development-integration');
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const CODE_ATTEMPTS = 5;
@@ -94,7 +95,12 @@ async function ensureTeacherAccountTables(pool) {
   }
 }
 
-function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }) {
+function createAccountIdentityService({
+  pool,
+  sendCode,
+  now = () => Date.now(),
+  resolvePlatformAuthority,
+}) {
   async function transaction(work) {
     const connection = await pool.getConnection();
     try {
@@ -119,6 +125,23 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     ]);
     if (!user) throw accountError(404, 'user_missing', '账号不存在');
     return user;
+  }
+
+  async function lockAdministratorAndTarget(connection, adminId, userId) {
+    const [rows] = await connection.execute(
+      'SELECT * FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
+      [adminId, userId],
+    );
+    const admin = await projectMainSiteAuthority(
+      rows.find((row) => Number(row.id) === adminId),
+      resolvePlatformAuthority,
+    );
+    if (!admin?.is_admin) throw accountError(403, 'admin_required', '需要管理员权限');
+    const user = rows.find((row) => Number(row.id) === userId);
+    if (!user) throw accountError(404, 'user_not_found', '用户不存在');
+    if (isMainSiteRootAdminUid(user.uid) && !admin.rootAdmin)
+      throw accountError(403, 'root_account_protected', '只有最高管理员可以修改最高管理员账户');
+    return { admin, user };
   }
 
   async function checkPassword(user, password) {
@@ -306,7 +329,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     if (adminId === userId)
       throw accountError(403, 'self_review_forbidden', '请由另一位管理员核实本人的学号');
     await transaction(async (connection) => {
-      await lockUser(connection, userId);
+      await lockAdministratorAndTarget(connection, adminId, userId);
       const [[request]] = await connection.execute(
         'SELECT * FROM account_student_requests WHERE user_id = ? FOR UPDATE',
         [userId],
@@ -390,16 +413,10 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
       throw accountError(400, 'invalid_user', '无效用户 ID');
     const password = validatePassword(body.password);
     await transaction(async (connection) => {
-      // Lock in ID order so two admins cannot deadlock while resetting different teachers.
-      const [rows] = await connection.execute(
-        'SELECT * FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE',
-        [adminId, userId],
-      );
-      const admin = rows.find((row) => Number(row.id) === adminId);
-      const user = rows.find((row) => Number(row.id) === userId);
-      if (!admin?.is_admin) throw accountError(403, 'admin_required', '需要管理员权限');
+      const { admin, user } = await lockAdministratorAndTarget(connection, adminId, userId);
       await checkPassword(admin, body.currentPassword);
-      if (!user || !['teacher', 'enterprise'].includes(user.role) || user.is_admin)
+      const targetAuthority = await projectMainSiteAuthority(user, resolvePlatformAuthority);
+      if (!['teacher', 'enterprise'].includes(user.role) || targetAuthority.is_admin)
         throw accountError(403, 'teacher_required', '仅可重置非管理员教师或企业账号');
       await connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [
         hashPassword(password),

@@ -2,6 +2,53 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { open, lstat } = require('node:fs/promises');
 const { constants } = require('node:fs');
+const platformAuthority = require('../development/packages/contracts/src/platform-authority.json');
+
+function configuredPlatformRootAdminUids(environment = process.env) {
+  const additional = String(environment.PLATFORM_ROOT_ADMIN_UIDS || '')
+    .split(',')
+    .map((uid) => uid.trim())
+    .filter(Boolean);
+  if (
+    additional.some(
+      (uid) =>
+        uid.length > 128 ||
+        [...uid].some(
+          (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+        ),
+    )
+  )
+    throw new Error('PLATFORM_ROOT_ADMIN_UIDS contains an invalid UID');
+  return [...new Set([...platformAuthority.rootAdminUids, ...additional])];
+}
+
+function isMainSiteRootAdminUid(uid, environment = process.env) {
+  return typeof uid === 'string' && configuredPlatformRootAdminUids(environment).includes(uid);
+}
+
+// The resolver is supplied by the integrated runtime and reads its own current store.
+// No cross-database SQL or browser-provided roles participate in this projection.
+async function projectMainSiteAuthority(row, resolvePlatformAuthority, environment = process.env) {
+  if (!row) return null;
+  const legacyAdmin = row.is_admin === true || Number(row.is_admin) === 1 || row.role === 'admin';
+  let sharedAuthority = null;
+  if (row.uid && typeof resolvePlatformAuthority === 'function') {
+    try {
+      sharedAuthority = await resolvePlatformAuthority(row.uid);
+    } catch {
+      /* Shared-store outages fail closed for new grants; legacy/root access remains. */
+    }
+  }
+  const rootAdmin = isMainSiteRootAdminUid(row.uid, environment);
+  const learningAdmin = rootAdmin || legacyAdmin || sharedAuthority?.learningAdmin === true;
+  return {
+    ...row,
+    legacy_is_admin: legacyAdmin,
+    is_admin: learningAdmin ? 1 : 0,
+    rootAdmin,
+    learningAdmin,
+  };
+}
 
 async function readDevelopmentMapTokenDigest(repositoryRoot) {
   const filename = path.join(repositoryRoot, '.development-map-token.sha256');
@@ -9,6 +56,7 @@ async function readDevelopmentMapTokenDigest(repositoryRoot) {
   try {
     const info = await lstat(filename);
     if (!info.isFile() || info.size > 256) return undefined;
+    // eslint-disable-next-line no-bitwise -- Combine independent filesystem open flags.
     handle = await open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
     const buffer = Buffer.alloc(257);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
@@ -60,7 +108,15 @@ function createDevelopmentAuthClient({ verifyToken, getUserById, toUserProfile }
       const payload = verifyToken(token);
       if (!payload || !payload.sub) return null;
       const row = await getUserById(payload.sub);
-      return row ? profileToDevelopmentIdentity(toUserProfile(row)) : null;
+      if (!row) return null;
+      const profile = toUserProfile(row);
+      return profileToDevelopmentIdentity({
+        ...profile,
+        // A shared learning-only role must not masquerade as a physical legacy flag.
+        isAdmin: Object.hasOwn(row, 'legacy_is_admin')
+          ? row.legacy_is_admin === true
+          : profile.isAdmin,
+      });
     },
   };
 }
@@ -73,25 +129,38 @@ function createDevelopmentUserDirectory(pool) {
       displayName: row.username || row.full_name || row.uid,
       studentId: row.student_id || null,
       avatarUrl: row.avatar_path || null,
+      legacyLearningAdmin:
+        row.is_admin === true || Number(row.is_admin) === 1 || row.role === 'admin',
     };
   }
 
   function selection(options = {}) {
-    const normalized = String(options.query || '').trim().slice(0, 80);
+    const normalized = String(options.query || '')
+      .trim()
+      .slice(0, 80);
     const like = `%${normalized.replace(/[!%_]/g, '!$&')}%`;
     const parameters = [normalized, like, like, like, like];
     let where = `uid IS NOT NULL AND uid <> ''
       AND (? = '' OR username LIKE ? ESCAPE '!' OR full_name LIKE ? ESCAPE '!'
         OR student_id LIKE ? ESCAPE '!' OR uid LIKE ? ESCAPE '!')`;
     if (options.uids) {
-      where += options.uids.length ? ` AND uid IN (${options.uids.map(() => '?').join(',')})` : ' AND 1 = 0';
+      where += options.uids.length
+        ? ` AND uid IN (${options.uids.map(() => '?').join(',')})`
+        : ' AND 1 = 0';
       parameters.push(...options.uids);
     }
-    for (const [key, negate] of [['include', false], ['exclude', true]]) {
+    for (const [key, negate] of [
+      ['include', false],
+      ['exclude', true],
+    ]) {
       const filter = options[key];
       if (!filter) continue;
       const clauses = [];
-      for (const [field, column] of [['uids', 'uid'], ['studentIds', 'student_id'], ['usernames', 'LOWER(username)']]) {
+      for (const [field, column] of [
+        ['uids', 'uid'],
+        ['studentIds', 'student_id'],
+        ['usernames', 'LOWER(username)'],
+      ]) {
         if (!filter[field]?.length) continue;
         clauses.push(`COALESCE(${column} IN (${filter[field].map(() => '?').join(',')}), FALSE)`);
         parameters.push(...filter[field]);
@@ -104,23 +173,33 @@ function createDevelopmentUserDirectory(pool) {
     async list(query = '') {
       const { where, parameters } = selection({ query });
       const [rows] = await pool.execute(
-        `SELECT uid, username, full_name, student_id, avatar_path FROM users
-         WHERE ${where} ORDER BY username ASC, id ASC`, parameters);
+        `SELECT uid, username, full_name, student_id, avatar_path, role, is_admin FROM users
+         WHERE ${where} ORDER BY username ASC, id ASC`,
+        parameters,
+      );
       return rows.map(map);
     },
     async page(options = {}) {
       const page = Number.isSafeInteger(options.page) && options.page > 0 ? options.page : 1;
-      const pageSize = Number.isSafeInteger(options.pageSize) && options.pageSize > 0 ? Math.min(options.pageSize, 100) : 20;
+      const pageSize =
+        Number.isSafeInteger(options.pageSize) && options.pageSize > 0
+          ? Math.min(options.pageSize, 100)
+          : 20;
       const { where, parameters } = selection(options);
-      const [counts] = await pool.execute(`SELECT COUNT(*) AS total FROM users WHERE ${where}`, parameters);
+      const [counts] = await pool.execute(
+        `SELECT COUNT(*) AS total FROM users WHERE ${where}`,
+        parameters,
+      );
       const [rows] = await pool.execute(
-        `SELECT uid, username, full_name, student_id, avatar_path FROM users WHERE ${where}
-         ORDER BY username ASC, id ASC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, parameters);
+        `SELECT uid, username, full_name, student_id, avatar_path, role, is_admin FROM users WHERE ${where}
+         ORDER BY username ASC, id ASC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+        parameters,
+      );
       return { items: rows.map(map), total: Number(counts[0]?.total || 0), page, pageSize };
     },
     async get(uid) {
       const [rows] = await pool.execute(
-        `SELECT uid, username, full_name, student_id, avatar_path
+        `SELECT uid, username, full_name, student_id, avatar_path, role, is_admin
          FROM users WHERE uid = ? LIMIT 1`,
         [String(uid)],
       );
@@ -137,6 +216,8 @@ async function loadDevelopmentRuntime({
   uploadDirectory,
   collectionsUploadDirectory,
   sportsUploadDirectory,
+  financeDirectory,
+  publicUploadDirectory,
   developmentRewardProvider,
   learningAchievementProvider,
 }) {
@@ -157,6 +238,8 @@ async function loadDevelopmentRuntime({
     uploadDirectory,
     collectionsUploadDirectory,
     sportsUploadDirectory,
+    ...(financeDirectory ? { financeDirectory } : {}),
+    ...(publicUploadDirectory ? { publicUploadDirectory } : {}),
     ...(developmentRewardProvider ? { developmentRewardProvider } : {}),
     ...(learningAchievementProvider ? { learningAchievementProvider } : {}),
     ...(developmentMapTokenDigest ? { developmentMapTokenDigest } : {}),
@@ -179,11 +262,14 @@ async function initializeDevelopmentRuntime(options, dependencies = {}) {
 }
 
 module.exports = {
+  configuredPlatformRootAdminUids,
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,
+  isMainSiteRootAdminUid,
   loadDevelopmentRuntime,
   profileToDevelopmentIdentity,
+  projectMainSiteAuthority,
   readDevelopmentMapTokenDigest,
 };

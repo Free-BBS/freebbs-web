@@ -69,7 +69,10 @@ const {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
+  configuredPlatformRootAdminUids,
   initializeDevelopmentRuntime,
+  isMainSiteRootAdminUid,
+  projectMainSiteAuthority,
 } = require('./development-integration');
 const {
   createProfileExtras,
@@ -352,12 +355,14 @@ const systemSettingsStore = createSystemSettingsStore({
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
 const moderationPublisher = createModerationPublisher({
+  resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
   createPostPid: createUniqueDiscussionPostPid,
   awardMagnetic,
   notifications,
 });
 const moderationAutomaticEnabled = automationEnvironmentEnabled(config);
 const moderationAutomationStore = createModerationAutomationStore({
+  resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
   requiredNoticeVersion: requiredNoticeVersion(config),
   pool,
   withDatabaseTransaction,
@@ -397,6 +402,7 @@ const moderationAutomatic = {
   }),
 };
 const discussionModeration = createDiscussionModeration({
+  resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
   requiredNoticeVersion: requiredNoticeVersion(config),
   pool,
   withDatabaseTransaction,
@@ -426,7 +432,11 @@ const moderationAiTest = createModerationAiTest({
       : config.discussionModerationAiModel,
   }),
 });
-const certificationService = createUserCertificationService({ pool, notifications });
+const certificationService = createUserCertificationService({
+  pool,
+  notifications,
+  resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
+});
 const backgroundTasks = createBackgroundTaskService({
   pool,
   getUser: getPrivacyAcceptedUser,
@@ -1719,7 +1729,8 @@ function toUserProfile(row) {
     email: row.email,
     emailVerifiedAt: row.email_verified_at,
     role: row.role,
-    isAdmin: Boolean(row.is_admin || row.role === 'admin'),
+    isAdmin: Boolean(row.is_admin || row.role === 'admin' || isMainSiteRootAdminUid(row.uid)),
+    rootAdmin: isMainSiteRootAdminUid(row.uid),
     grade: row.grade,
     major: row.major,
     avatarPath: row.avatar_path || '',
@@ -2899,7 +2910,7 @@ async function getUserById(id) {
     [id],
   );
 
-  return rows[0] || null;
+  return projectMainSiteAuthority(rows[0], developmentRuntime?.resolvePlatformAuthority);
 }
 
 async function getUserByIdFromUsername(username) {
@@ -2914,7 +2925,7 @@ async function getUserByIdFromUsername(username) {
     [username],
   );
 
-  return rows[0] || null;
+  return projectMainSiteAuthority(rows[0], developmentRuntime?.resolvePlatformAuthority);
 }
 
 async function getPrivacyAcceptedUser(id) {
@@ -3024,6 +3035,7 @@ app.use(
 );
 const accountIdentityService = createAccountIdentityService({
   pool,
+  resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
   sendCode: (email, code, purpose) =>
     require('./mailer').sendVerificationCode(email, code, purpose),
 });
@@ -3116,7 +3128,13 @@ app.use('/api/circuit-examples', createCircuitExamplesRouter({ pool, requireAuth
 app.use('/api/circuit-challenges', createCircuitChallengesRouter({ pool, requireAuth }));
 app.use(
   '/api/course-upload',
-  createCourseUploadRouter({ pool, requireAuth, uploadDir: config.uploadDir, isValidUsername }),
+  createCourseUploadRouter({
+    pool,
+    requireAuth,
+    uploadDir: config.uploadDir,
+    isValidUsername,
+    resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
+  }),
 );
 app.use(
   '/api/courses',
@@ -3155,31 +3173,36 @@ class AdminUserUpdateError extends Error {
 }
 
 async function lockAdminStateAndTarget(connection, actorId, targetId) {
+  const rootUids = configuredPlatformRootAdminUids();
   const [adminRows] = await connection.execute(
-    `SELECT id
+    `SELECT id, uid, role, is_admin
      FROM users
-     WHERE is_admin = 1
+     WHERE is_admin = 1${rootUids.length ? ` OR uid IN (${rootUids.map(() => '?').join(',')})` : ''}
      ORDER BY id ASC
      FOR UPDATE`,
+    rootUids,
   );
-  const actorIsCurrentAdmin = adminRows.some((row) => Number(row.id) === Number(actorId));
-
-  if (!actorIsCurrentAdmin) {
-    throw new AdminUserUpdateError('管理员权限已失效', 403);
-  }
-
-  const [targetRows] = await connection.execute(
-    `SELECT id, role, is_admin, electrons, manetrons
+  const [lockedRows] = await connection.execute(
+    `SELECT id, uid, role, is_admin, electrons, manetrons
      FROM users
-     WHERE id = ?
-     LIMIT 1
+     WHERE id IN (?, ?)
+     ORDER BY id ASC
      FOR UPDATE`,
-    [targetId],
+    [actorId, targetId],
   );
-  const targetUser = targetRows[0];
+  const actorRow = lockedRows.find((row) => Number(row.id) === Number(actorId));
+  const actor = await projectMainSiteAuthority(
+    actorRow,
+    developmentRuntime?.resolvePlatformAuthority,
+  );
+  if (!actor?.is_admin) throw new AdminUserUpdateError('管理员权限已失效', 403);
+  const targetUser = lockedRows.find((row) => Number(row.id) === Number(targetId));
 
   if (!targetUser) {
     throw new AdminUserUpdateError('用户不存在', 404);
+  }
+  if (isMainSiteRootAdminUid(targetUser.uid) && !actor.rootAdmin) {
+    throw new AdminUserUpdateError('只有最高管理员可以修改最高管理员账户', 403);
   }
 
   return {
@@ -5910,7 +5933,9 @@ app.post('/api/auth/login', async (request, response) => {
 
     const privacyStatus = await privacyPolicyService.confirmLogin(row.id, request.body);
     await loginRateLimiter.resetAccount(row);
-    const user = toUserProfile(row);
+    const user = toUserProfile(
+      await projectMainSiteAuthority(row, developmentRuntime?.resolvePlatformAuthority),
+    );
 
     response.json({
       token: issueToken(user),
@@ -6925,6 +6950,8 @@ async function start() {
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
     collectionsUploadDirectory: path.join(config.uploadDir, 'development', 'collections'),
     sportsUploadDirectory: path.join(config.uploadDir, 'development', 'sports'),
+    publicUploadDirectory: config.uploadDir,
+    financeDirectory: process.env.FINANCE_DATA_DIR?.trim(),
     developmentRewardProvider: createDevelopmentRewardProvider({ pool }),
   });
   await decayHeatIfNeeded(new Date());

@@ -21,6 +21,17 @@ afterEach(() => {
 });
 
 describe('MainSiteHeader', () => {
+  it.each(['/system-settings', '/admin'])(
+    'uses the unified administrator heading at %s',
+    (route) => {
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('heading', { name: '管理员端' })).toBeInTheDocument();
+    },
+  );
   it.each(['/events', '/events/activity-night-run'])(
     'keeps the 萬事屋 shell title on existing activity route %s',
     (route) => {

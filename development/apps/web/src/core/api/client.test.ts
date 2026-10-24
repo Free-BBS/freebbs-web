@@ -10,9 +10,17 @@ afterEach(() => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('ApiClient browser transport', () => {
+  it('accepts a configured local demo identity without changing main authentication', () => {
+    vi.stubEnv('VITE_AUTH_MODE', 'demo');
+    vi.stubEnv('VITE_DEMO_USER_ID', 'demo-admin');
+    expect(new ApiClient().demoUser).toBe('demo-admin');
+    expect(new ApiClient({ selectedDemoUserId: 'demo-student' }).demoUser).toBe('demo-student');
+    expect(new ApiClient({ authMode: 'main' }).demoUser).toBeNull();
+  });
   it('downloads protected media with auth headers and an abort signal, never a token URL', async () => {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, 'test-private-token');
     const controller = new AbortController();

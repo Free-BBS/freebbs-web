@@ -1,0 +1,29 @@
+.management-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 0 20px;
+}
+
+.management-navigation a {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--color-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.management-navigation a:hover,
+.management-navigation a[aria-current='page'] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--surface-raised));
+  color: var(--color-text);
+}
+
+.management-navigation a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}

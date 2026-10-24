@@ -306,6 +306,7 @@ const BASE_ROLE_PERMISSION_CATALOG: Partial<RolePermissionCatalog> = {
 };
 
 function inheritedPermissionProfile(roleKey: RoleKey): RoleKey | null {
+  if (roleKey === 'science_association.office.vice_chair') return null;
   if (roleKey.startsWith('youth_league.')) {
     if (roleKey.endsWith('.deputy_secretary') || roleKey.endsWith('.consultant'))
       return 'affiliation.tuanwei_lead';
@@ -342,6 +343,8 @@ const ORGANIZATION_BUSINESS_ACTIONS = [
 ] as const;
 
 function scopedBusinessDefaults(roleKey: RoleKey): PermissionRule[] {
+  const financeAppointment =
+    roleKey.endsWith('.finance') || roleKey === 'science_association.office.vice_chair';
   if (roleKey === 'counselor.youth_league_secretary' || roleKey === 'counselor.youth_league') {
     return ORGANIZATION_BUSINESS_ACTIONS.map((action) => ({ action, resource: '*' }));
   }
@@ -351,7 +354,7 @@ function scopedBusinessDefaults(roleKey: RoleKey): PermissionRule[] {
   for (const { organizationId, level } of memberships) {
     const scope = { type: 'social_organization', id: organizationId };
     defaults.push(...rules(['finance.record.read', 'finance_record', scope]));
-    if (level === 'lead' || roleKey.endsWith('.finance')) {
+    if (level === 'lead' || financeAppointment) {
       defaults.push(
         ...rules(
           ['finance.record.create', 'finance_record', scope],
@@ -360,7 +363,7 @@ function scopedBusinessDefaults(roleKey: RoleKey): PermissionRule[] {
         ),
       );
     }
-    if (roleKey.endsWith('.finance')) continue;
+    if (financeAppointment) continue;
     defaults.push(
       ...rules(
         ['events.create', 'activity', scope],

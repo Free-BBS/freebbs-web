@@ -41,6 +41,11 @@ function redirectTarget(pathname: string) {
 }
 
 describe('application routes', () => {
+  it('provides two finance pages and redirects the old entry to the budget', () => {
+    expect(redirectTarget('/finance')).toBe('/finance/budget');
+    expect(leafRoute('/finance/budget')?.path).toBe('finance/budget');
+    expect(leafRoute('/finance/claims')?.path).toBe('finance/claims');
+  });
   it('opens the unified information hub at the module entry point', () => {
     const route = leafRoute('/information');
 

@@ -89,7 +89,6 @@ describe('main-site subject synchronization', () => {
       authClient: { introspect: vi.fn().mockResolvedValue(identity) },
       mode: 'main',
       store: mainStore,
-      allowedUids: [identity.uid],
       now: () => now,
     });
     const demoStore = createMemoryStore({ seed: false });

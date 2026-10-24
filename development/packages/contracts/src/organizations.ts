@@ -149,12 +149,14 @@ export function organizationMembershipsForRole(roleKey: string): OrganizationRol
   // Reject unknown role strings even if their prefix resembles an organization.
   if (!ROLE_KEYS.includes(roleKey as RoleKey)) return [];
   const level: OrganizationLevel =
-    roleKey === 'science_association.chair' ||
-    /\.(deputy_secretary|vice_chair|consultant)$/.test(roleKey)
-      ? 'lead'
-      : /\.(leader|minister|mentor)$/.test(roleKey)
-        ? 'director'
-        : 'member';
+    roleKey === 'science_association.office.vice_chair'
+      ? 'member'
+      : roleKey === 'science_association.chair' ||
+          /\.(deputy_secretary|vice_chair|consultant)$/.test(roleKey)
+        ? 'lead'
+        : /\.(leader|minister|mentor)$/.test(roleKey)
+          ? 'director'
+          : 'member';
   return [{ organizationId, level }];
 }
 

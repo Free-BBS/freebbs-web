@@ -55,7 +55,7 @@ function developmentTitle(pathname: string): string {
   if (pathname.startsWith('/ranch-gallery')) return '羊群广场';
   if (pathname.startsWith('/ranch')) return '电子牧场';
   if (pathname.startsWith('/settings')) return '设置';
-  if (pathname.startsWith('/system-settings')) return '系统设置';
+  if (/^\/(?:admin|system-settings)(?:\/|$)/.test(pathname)) return '管理员端';
   if (pathname.startsWith('/organizations')) return '风采展示';
   return (
     MODULE_MANIFESTS.find(

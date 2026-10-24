@@ -167,7 +167,7 @@ export function DepartmentHomepage({
           <span aria-hidden="true">↗</span>
         </Link>
       ) : null}
-      {canEdit ? (
+      {canEdit && home?.html ? (
         <div className="department-editor">
           <label>
             选择 HTML 文件

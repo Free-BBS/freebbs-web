@@ -10,8 +10,8 @@ import { isGlobalOrganizationBusinessSupervisor } from './business-authority.js'
 
 export type DepartmentId =
   | `student_union.${'arts_center' | 'sports_center' | 'liaison_center' | 'rights_development_center'}`
-  | `youth_league.${'organization' | 'freshman' | 'volunteer' | 'practice' | 'humanities' | 'sail'}`
-  | `science_association.${'office' | 'software' | 'hardware' | 'training' | 'project' | 'planning'}`
+  | `youth_league.${'organization' | 'freshman' | 'volunteer' | 'practice' | 'research' | 'humanities' | 'sail'}`
+  | `science_association.${'software' | 'hardware' | 'training' | 'project' | 'planning'}`
   | `media_center.${'creative' | 'audiovisual' | 'new_media_reporters'}`
   | 'tms.position';
 export interface DepartmentDefinition {

@@ -71,6 +71,7 @@ export function createAssignmentsRouter(
     const input = parse(roleAssignmentSchema, request.body);
     const assignment = await createRoleAssignment(store, input, {
       actorUid: adminActor(response).uid,
+      rootAdmin: adminActor(response).rootAdmin === true,
     });
     send(response, 201, assignment);
   });
@@ -79,6 +80,7 @@ export function createAssignmentsRouter(
     const assignmentId = parse(assignmentIdSchema, request.params.assignmentId);
     const assignment = await archiveRoleAssignment(store, assignmentId, {
       actorUid: adminActor(response).uid,
+      rootAdmin: adminActor(response).rootAdmin === true,
       allowReservedLeadMutation: false,
       ...(directory ? { directory } : {}),
       ...(allowedUids ? { allowedUids } : {}),

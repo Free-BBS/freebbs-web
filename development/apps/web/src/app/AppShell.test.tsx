@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +35,13 @@ const user: UserContext = {
   roles: [],
   tags: [],
 };
+const pendingClient = { request: vi.fn(() => new Promise(() => undefined)) };
+function financeAccessClient(request: (path: string) => unknown) {
+  return {
+    request: (path: string) =>
+      path === '/finance/tracking/access' ? request(path) : new Promise(() => undefined),
+  };
+}
 
 function authenticatedAuth(overrides: Record<string, unknown> = {}) {
   return {
@@ -46,6 +53,7 @@ function authenticatedAuth(overrides: Record<string, unknown> = {}) {
     demoUser: 'demo-student',
     setDemoUser: vi.fn(),
     loginUrl: '/login?next=%2Fdevelopment%2Fdashboard',
+    client: pendingClient,
     ...overrides,
   };
 }
@@ -68,6 +76,118 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
+  it('shows financial navigation from explicit access even without legacy finance permissions', async () => {
+    const request = vi.fn().mockResolvedValue({
+      configured: true,
+      canAccess: true,
+      canManageBudget: false,
+    });
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client: financeAccessClient(request) }));
+    renderShell('/finance/budget');
+    const navigation = screen.getByRole('navigation', { name: '主要导航' });
+    const finance = await within(navigation).findByRole('link', { name: '财务治理' });
+    expect(finance).toHaveAttribute('href', '/finance');
+    expect(finance).toHaveAttribute('aria-current', 'page');
+    expect(request).toHaveBeenCalledWith('/finance/tracking/access');
+    expect(
+      within(screen.getByRole('navigation', { name: '移动导航' })).getByRole('link', {
+        name: '财务治理',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not infer financial access from global administrator or legacy finance permissions', async () => {
+    const request = vi.fn().mockResolvedValue({
+      configured: true,
+      canAccess: false,
+      canManageBudget: false,
+    });
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        client: financeAccessClient(request),
+        user: {
+          ...user,
+          roles: ['platform.admin'],
+          businessAdmin: true,
+          policies: [{ action: 'finance.record.read', effect: 'allow' }],
+        },
+      }),
+    );
+    renderShell();
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
+
+  it.each([{ configured: false, canAccess: true, canManageBudget: true }, undefined])(
+    'keeps finance hidden when access is unconfigured or unavailable (%s)',
+    async (access) => {
+      const request = vi.fn().mockResolvedValue(access);
+      mockUseAuth.mockReturnValue(authenticatedAuth({ client: financeAccessClient(request) }));
+      renderShell();
+      await waitFor(() => expect(request).toHaveBeenCalledOnce());
+      expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('keeps finance hidden during identity preview without fetching financial access', () => {
+    const request = vi.fn();
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        client: financeAccessClient(request),
+        user: { ...user, previewing: true, businessAdmin: true },
+      }),
+    );
+    renderShell('/finance/claims');
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
+
+  it('does not fetch access or show finance when its module is disabled', () => {
+    const request = vi.fn();
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client: financeAccessClient(request) }));
+    renderShell('/finance/budget', { moduleStates: { finance: 'disabled' } });
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
+
+  it('clears financial visibility immediately when the authenticated identity changes', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ configured: true, canAccess: true, canManageBudget: false })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    const client = financeAccessClient(request);
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client }));
+    const view = renderShell('/finance/budget');
+    await screen.findAllByRole('link', { name: '财务治理' });
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client, user: { ...user, uid: 'student-2' } }));
+    view.rerender(
+      <MemoryRouter initialEntries={['/finance/budget']}>
+        <AppShell />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a delayed access response for an identity that has been replaced', async () => {
+    let finishFirst: ((access: { configured: boolean; canAccess: boolean }) => void) | undefined;
+    const request = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+      .mockResolvedValueOnce({ configured: true, canAccess: false, canManageBudget: false });
+    const client = financeAccessClient(request);
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client }));
+    const view = renderShell('/finance/budget');
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client, user: { ...user, uid: 'student-2' } }));
+    view.rerender(
+      <MemoryRouter initialEntries={['/finance/budget']}>
+        <AppShell />
+      </MemoryRouter>,
+    );
+    await act(async () => finishFirst?.({ configured: true, canAccess: true }));
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
+
   it('keeps identity preview out of the global shell even for a qualified lead', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({
@@ -111,7 +231,7 @@ describe('AppShell', () => {
     renderShell('/system-settings', { moduleStates: { finance: 'disabled' } });
     expect(
       within(screen.getByRole('complementary', { name: '发展平台侧栏' })).getByRole('link', {
-        name: '系统设置',
+        name: '管理员端',
       }),
     ).toBeInTheDocument();
   });
@@ -121,18 +241,50 @@ describe('AppShell', () => {
     );
     renderShell('/system-settings');
     const navigation = screen.getByRole('navigation', { name: '主要导航' });
-    expect(within(navigation).queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: '管理员端' })).not.toBeInTheDocument();
     const sidebar = screen.getByRole('complementary', { name: '发展平台侧栏' });
-    const settings = within(sidebar).getByRole('link', { name: '系统设置' });
+    const settings = within(sidebar).getByRole('link', { name: '管理员端' });
     expect(settings.parentElement).toHaveClass('sidebar-footer');
     expect(settings.nextElementSibling).toHaveAccessibleName('学习端');
     expect(settings).toHaveAttribute('href', '/system-settings');
     expect(settings).toHaveAttribute('aria-current', 'page');
     const mobile = screen.getByRole('navigation', { name: '移动导航' });
-    expect(within(mobile).getAllByRole('link', { name: '系统设置' })).toHaveLength(1);
-    expect(within(sidebar).getAllByRole('link', { name: '系统设置' })).toHaveLength(1);
-    expect(within(mobile).getAllByRole('link').at(-2)).toHaveAccessibleName('系统设置');
+    expect(within(mobile).getAllByRole('link', { name: '管理员端' })).toHaveLength(1);
+    expect(within(sidebar).getAllByRole('link', { name: '管理员端' })).toHaveLength(1);
+    expect(within(mobile).getAllByRole('link').at(-2)).toHaveAccessibleName('管理员端');
     expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+  });
+
+  it('keeps one management entry for both qualifications and defaults it to organization settings', () => {
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({
+        user: {
+          ...user,
+          roles: ['platform.admin', 'platform.super_admin'],
+          businessAdmin: true,
+          developmentAccess: 'lead',
+          viewer: { uid: user.uid, displayName: user.displayName, canManageDevelopment: true },
+        },
+      }),
+    );
+    renderShell('/admin');
+    for (const container of [
+      screen.getByRole('complementary', { name: '发展平台侧栏' }),
+      screen.getByRole('navigation', { name: '移动导航' }),
+    ]) {
+      const links = within(container).getAllByRole('link', { name: '管理员端' });
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute('href', '/system-settings');
+      expect(links[0]).toHaveAttribute('aria-current', 'page');
+    }
+    expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+  });
+
+  it('does not show administrative navigation to ordinary students', () => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell('/community');
+    expect(screen.queryByRole('link', { name: '管理员端' })).not.toBeInTheDocument();
   });
 
   it.each([false, undefined])(
@@ -142,7 +294,7 @@ describe('AppShell', () => {
         authenticatedAuth({ user: { ...user, roles: ['platform.admin'], businessAdmin } }),
       );
       renderShell('/community');
-      expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: '管理员端' })).not.toBeInTheDocument();
     },
   );
 
@@ -161,7 +313,7 @@ describe('AppShell', () => {
       }),
     );
     renderShell('/community');
-    expect(screen.getAllByRole('link', { name: '系统设置' })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: '管理员端' })).toHaveLength(2);
     expect(screen.queryByRole('link', { name: '管理员模块' })).not.toBeInTheDocument();
   });
 
@@ -177,8 +329,9 @@ describe('AppShell', () => {
       }),
     );
     renderShell('/community');
-    expect(screen.queryByRole('link', { name: '系统设置' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '管理员模块' })).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('link', { name: '管理员端' }).map((link) => link.getAttribute('href')),
+    ).toEqual(['/admin', '/admin']);
     expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
   });
   it.each([
@@ -245,13 +398,17 @@ describe('AppShell', () => {
     );
   });
 
-  it('sends a preview-denied identity back to the main-site construction page', () => {
-    mockUseAuth.mockReturnValue({ ...authenticatedAuth(), status: 'denied', user: null });
+  it('keeps authentication failures in the app with a retry instead of a construction redirect', () => {
+    mockUseAuth.mockReturnValue({
+      ...authenticatedAuth(),
+      status: 'error',
+      user: null,
+      error: new Error('Authentication service unavailable'),
+    });
     renderShell('/events');
-    expect(screen.getByRole('link', { name: '返回主站施工页' })).toHaveAttribute(
-      'href',
-      '/development',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Authentication service unavailable');
+    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /施工/ })).not.toBeInTheDocument();
   });
   it('uses the new square-first navigation while keeping established development modules', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
@@ -588,7 +745,7 @@ it('does not expose governance to a policy-only administrator', () => {
   renderShell('/finance');
 
   const navigation = screen.getByRole('navigation', { name: '主要导航' });
-  expect(navigation).toHaveTextContent('财务治理');
+  expect(navigation).not.toHaveTextContent('财务治理');
   expect(within(navigation).queryByText('权限与模块管理')).not.toBeInTheDocument();
 });
 
@@ -606,7 +763,10 @@ it('exposes governance to a platform super administrator', () => {
 
   renderShell('/admin');
 
-  const link = screen.getByRole('link', { name: '管理员模块' });
+  const link = within(screen.getByRole('complementary', { name: '发展平台侧栏' })).getByRole(
+    'link',
+    { name: '管理员端' },
+  );
   expect(link).toBeInTheDocument();
   expect(link.querySelector('img')).toHaveClass('sidebar-system-icon');
 });

@@ -21,7 +21,7 @@ const base = '/api/development/v1/collections';
 const positions: Array<[RoleKey, DepartmentId]> = [
   ['counselor.practice', 'youth_league.practice'],
   ['counselor.student_development', 'youth_league.freshman'],
-  ['counselor.innovation', 'science_association.office'],
+  ['counselor.innovation', 'science_association.software'],
 ];
 async function fixture(department: DepartmentId) {
   const value = await scopedEditFixture();
@@ -121,7 +121,7 @@ describe('current collection appointment scope through normal APIs', () => {
     },
   );
   it.each(positions)('keeps %s assigned to A inside A', async (role, department) => {
-    const { app, a, b, schema } = await fixture(department);
+    const { app, assign, a, b, schema } = await fixture(department);
     const assignment = await request(app)
       .post('/api/development/v1/admin/role-assignments')
       .set(admin)
@@ -155,11 +155,16 @@ describe('current collection appointment scope through normal APIs', () => {
       .set(memberHeaders)
       .send({ schema })
       .expect(404);
-    await request(app)
+    const globalAppointment = request(app)
       .post('/api/development/v1/admin/role-assignments')
       .set(admin)
-      .send({ subjectUid: scopedMemberUid, roleKey: role, scope: { type: 'public', id: '*' } })
-      .expect(201);
+      .send({ subjectUid: scopedMemberUid, roleKey: role, scope: { type: 'public', id: '*' } });
+    if (role === 'counselor.student_development') {
+      const denied = await globalAppointment.expect(403);
+      expect(denied.body.data.error.code).toBe('root_appointment_required');
+      // The test member's global appointment is setup, not an ordinary admin capability.
+      await assign(role);
+    } else await globalAppointment.expect(201);
     await request(app).get(`${base}/forms/${b}/results`).set(memberHeaders).expect(200);
     await request(app)
       .put(`${base}/forms/${b}/draft`)

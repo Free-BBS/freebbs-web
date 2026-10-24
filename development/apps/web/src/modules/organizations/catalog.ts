@@ -57,6 +57,10 @@ const departmentIntroductions: Record<string, { introduction: string; focus: str
     introduction: '从实践动员、行前培训到总结评比与报销，陪同学把想法变成一次出发。',
     focus: ['社会实践', '实践培训', '支队交流'],
   },
+  research: {
+    introduction: '认真倾听，扎实求证。从品牌项目到同学需求，让每一种声音都有回响。',
+    focus: ['品牌项目调研', '访谈与分析', '同学声音'],
+  },
   humanities: {
     introduction: '在阅读、对话与文化活动中，发现专业之外更宽广的校园生活。',
     focus: ['人文活动', '文化交流', '阅读分享'],
@@ -218,20 +222,6 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibiti
             sharedActivityScope: definition.key !== 'student_union',
           };
         })
-        .concat(
-          definition.key === 'youth_league'
-            ? [
-                {
-                  key: 'research',
-                  name: '调研组',
-                  introduction: '认真倾听，扎实求证。从品牌项目到同学需求，让每一种声音都有回响。',
-                  focus: ['品牌项目调研', '访谈与分析', '同学声音'],
-                  organizationIds: ['tuanwei' as const],
-                  sharedActivityScope: false,
-                },
-              ]
-            : [],
-        )
         .sort((a, b) =>
           definition.key === 'youth_league'
             ? youthLeagueOrder.indexOf(a.key) - youthLeagueOrder.indexOf(b.key)

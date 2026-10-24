@@ -7,6 +7,7 @@ const { POLICY_VERSION } = require('./moderation-policy');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { validateAssessment } = require('./moderation-ai-client');
 const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
+const { projectMainSiteAuthority } = require('./development-integration');
 const {
   sendModerationNotice,
   notifyAuthor,
@@ -87,6 +88,7 @@ function createModerationAutomationStore({
   isEnabled = () => false,
   logger = console,
   leaseMs = 300000,
+  resolvePlatformAuthority,
 }) {
   if (!Number.isSafeInteger(leaseMs) || leaseMs < 1000 || leaseMs > 300000)
     throw fail('自动审核租约配置无效。');
@@ -129,11 +131,12 @@ function createModerationAutomationStore({
     if (typeof paused !== 'boolean') throw fail('暂停状态无效。');
     const userId = actor(actorId);
     return transact(async (db) => {
-      const [[admin]] = await db.execute(
-        'SELECT id FROM users WHERE id = ? AND is_admin = 1 FOR SHARE',
+      const [[adminRow]] = await db.execute(
+        'SELECT id, uid, role, is_admin FROM users WHERE id = ? FOR SHARE',
         [userId],
       );
-      if (!admin) throw fail('需要管理员权限。', 403);
+      const admin = await projectMainSiteAuthority(adminRow, resolvePlatformAuthority);
+      if (!admin?.is_admin) throw fail('需要管理员权限。', 403);
       const [[row]] = await db.execute(
         'SELECT paused, revision FROM moderation_auto_control WHERE id = 1 FOR UPDATE',
       );

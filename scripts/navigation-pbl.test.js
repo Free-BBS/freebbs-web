@@ -72,7 +72,7 @@ test('PBL uses the construction art and versioned plan, without development acce
   assert.match(page, /项目匹配/);
   assert.match(page, /PBL 悬赏/);
   assert.doesNotMatch(page, /development-entry.js|<form|data-action|2026 年 10 月/);
-  assert.match(read('public/development.html'), /2026 年 10 月/);
+  assert.doesNotMatch(read('public/development.html'), /development-construction|正在建设/);
   assert.match(read('server.js'), /\['\/pbl', '\/pbl.html'\]/);
   assert.match(read('scripts/preview-onboarding.js'), /'\/pbl': 'pbl.html'/);
 });

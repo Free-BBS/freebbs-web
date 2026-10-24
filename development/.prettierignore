@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-review/
 coverage/
+**/.preview/
 apps/web/public/organization-showcase/sites/
 README.md
 docs/README.md

@@ -28,35 +28,63 @@ describe('development API core', () => {
     expect(response.headers['access-control-allow-origin']).toBe('https://www.free-bbs.cn');
   });
 
-  it('protects main-mode identity and module metadata with the production preview list', async () => {
-    const app = createApp({
-      store: createMemoryStore({ seed: false }),
-      authMode: 'main',
-      previewAllowedUids: ['u_allowed'],
-      authClient: {
-        introspect: async (token) => ({
-          uid: token === 'allowed' ? 'u_allowed' : 'u_other',
-          displayName: 'Main user',
-          avatarUrl: null,
-          baseRole: 'student',
-          roles: [],
-          tags: [],
-        }),
-      },
-    });
-    await request(app)
-      .get('/api/development/v1/me')
-      .set('Authorization', 'Bearer denied')
-      .expect(403);
-    await request(app)
-      .get('/api/development/v1/modules')
-      .set('Authorization', 'Bearer denied')
-      .expect(403);
-    await request(app)
-      .get('/api/development/v1/me')
-      .set('Authorization', 'Bearer allowed')
-      .expect(200);
-  });
+  it.each(['', 'u_legacy_preview'])(
+    'opens main-mode entry to verified users while retaining login and editing checks %#',
+    async (previewAllowedUids) => {
+      const store = createMemoryStore();
+      const app = createApp({
+        environment: {
+          NODE_ENV: 'test',
+          DEVELOPMENT_PREVIEW_UIDS: previewAllowedUids,
+        },
+        store,
+        authMode: 'main',
+        authClient: {
+          introspect: async (token) =>
+            token === 'ordinary'
+              ? {
+                  uid: 'u_ordinary',
+                  displayName: 'Main user',
+                  avatarUrl: null,
+                  baseRole: 'student',
+                  roles: [],
+                  tags: [],
+                }
+              : null,
+        },
+      });
+      const token = { Authorization: 'Bearer ordinary' };
+      const me = await request(app).get('/api/development/v1/me').set(token).expect(200);
+      expect(me.body.data).toMatchObject({
+        uid: 'u_ordinary',
+        roles: [],
+        businessAdmin: false,
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+      });
+      await request(app).get('/api/development/v1/modules').set(token).expect(200);
+      const home = await request(app)
+        .get('/api/development/v1/organizations/student_union/arts_center/home')
+        .set(token)
+        .expect(200);
+      expect(home.body.data.canEdit).toBe(false);
+      await request(app)
+        .put('/api/development/v1/organizations/student_union/arts_center/home')
+        .set(token)
+        .expect(403);
+      await request(app).get('/api/development/v1/admin/modules').set(token).expect(403);
+      await request(app)
+        .get('/api/development/v1/me')
+        .set({ ...token, 'X-Development-Preview-Uid': 'u_legacy_preview' })
+        .expect(403);
+      await request(app).get('/api/development/v1/me').expect(401);
+      await request(app)
+        .get('/api/development/v1/me')
+        .set('Authorization', 'Bearer invalid')
+        .expect(401);
+      expect(await store.developmentAccess.list({ query: 'u_ordinary' })).toEqual([]);
+    },
+  );
   it('returns a minimal health envelope without database secrets', async () => {
     const app = createApp({ store: createMemoryStore(), databaseMode: 'memory' });
     const response = await request(app).get('/api/development/v1/health').expect(200);

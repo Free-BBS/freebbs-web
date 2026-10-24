@@ -12,17 +12,12 @@ import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { adminActor } from './subjects-router.js';
 import {
-  hasRecipientAccess,
+  hasDevelopmentGrant,
   listDirectoryRows,
   parseDirectoryFilters,
   groupedByUid,
   accessLookup,
 } from '../system-settings/users.js';
-import {
-  businessAdminIdentities,
-  effectiveGlobalBusinessAdmins,
-} from '../../core/authorization/business-admin.js';
-
 const ASSIGNABLE_ROLES = ROLE_KEYS.filter((key) => key !== 'platform.super_admin');
 const publicScope = { type: 'public', id: '*' } as const;
 const updateSchema = z.object({ accessLevel: z.enum(['member', 'lead']).nullable() }).strict();
@@ -65,8 +60,8 @@ export function createDevelopmentUsersRouter(
       const items: BatchAllowDevelopmentUsersResponse['items'] = [];
       let changedCount = 0;
       for (const target of targets) {
-        const matching = records.filter((record) => hasRecipientAccess(target, [record]));
-        if (hasRecipientAccess(target, records, allowedUids)) {
+        const matching = records.filter((record) => hasDevelopmentGrant(target, [record]));
+        if (hasDevelopmentGrant(target, records, allowedUids)) {
           // Preserve all existing grants and lead aliases; allowing access never demotes a lead.
           items.push({
             uid: target.uid,
@@ -131,7 +126,7 @@ export function createDevelopmentUsersRouter(
       grant,
     }: Awaited<ReturnType<typeof listDirectoryRows>>['items'][number]) => ({
       ...user,
-      accessLevel: grant?.accessLevel ?? (allowedUids.includes(user.uid) ? 'member' : null),
+      accessLevel: grant?.accessLevel ?? 'member',
       roles: roles
         .filter(
           (row) =>
@@ -185,32 +180,9 @@ export function createDevelopmentUsersRouter(
     await store.transaction(async (transactionStore) => {
       await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
       await transactionStore.roles.listForUpdate({ key: 'platform.super_admin' });
-      const definitions = await transactionStore.roles.list();
       await synchronizeSubject(transactionStore, directoryUserContext(target), new Date());
       const records = await transactionStore.developmentAccess.list();
-      const previous = records.find((record) => hasRecipientAccess(target, [record]));
-      if (parsed.data.accessLevel === null) {
-        const roles = await transactionStore.roleAssignments.listForUpdate({
-          roleKey: 'platform.admin',
-        });
-        const activeSubjects = await transactionStore.subjects.listForUpdate({
-          status: 'active',
-          uids: [...new Set(roles.map((row) => row.subjectUid))],
-        });
-        const identities = await businessAdminIdentities(roles, directory);
-        const admins = effectiveGlobalBusinessAdmins(
-          roles,
-          definitions,
-          activeSubjects,
-          records,
-          new Date(),
-          identities,
-          allowedUids,
-        );
-        if (admins.has(target.uid) && admins.size === 1 && !allowedUids.includes(target.uid)) {
-          throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
-        }
-      }
+      const previous = records.find((record) => hasDevelopmentGrant(target, [record]));
       await upsertDevelopmentAccessInTransaction(transactionStore, {
         user: directoryUserContext(target),
         accessLevel: parsed.data.accessLevel,

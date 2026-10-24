@@ -4,6 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const sharp = require('sharp');
 const { isValidUsername: defaultIsValidUsername } = require('./username-policy');
+const { projectMainSiteAuthority } = require('./development-integration');
 const {
   canManageCourse,
   createCourseMapsRouter,
@@ -214,6 +215,7 @@ function createCourseUploadRouter({
   requireAuth,
   uploadDir,
   isValidUsername = defaultIsValidUsername,
+  resolvePlatformAuthority,
 }) {
   const router = express.Router();
   const fileDir = path.join(uploadDir, 'course-agent-files');
@@ -233,13 +235,13 @@ function createCourseUploadRouter({
     const token = (request.get('authorization') || '').replace(/^Bearer /i, '');
     if (!TOKEN_PATTERN.test(token)) fail(401, '请提供有效的课程上传 Token');
     const [rows] = await database.execute(
-      `SELECT t.id AS token_id, u.id, u.username, u.is_admin
+      `SELECT t.id AS token_id, u.id, u.uid, u.role, u.username, u.is_admin
        FROM course_upload_tokens t JOIN users u ON u.id = t.user_id
        WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
       [hashToken(token)],
     );
-    const user = rows[0];
+    const user = await projectMainSiteAuthority(rows[0], resolvePlatformAuthority);
     if (!user) fail(401, 'Token 已失效、过期或撤销');
     if (!isValidUsername(user.username))
       fail(403, '请先登录网站修改不符合规则的用户名', 'username_change_required');

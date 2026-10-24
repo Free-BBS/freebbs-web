@@ -84,7 +84,9 @@ describe('deployment configuration', () => {
     const nginx = configuration('deploy/nginx/freebbs-development.conf');
     const hostLocations = configuration('deploy/nginx/freebbs-development.locations.conf');
 
-    expect(nginx).toMatch(/location\s+=\s+\/development\s*{\s*return\s+308\s+\/development\/;/);
+    expect(nginx).toMatch(
+      /location\s+=\s+\/development\s*{\s*return\s+302\s+\/development\/\$is_args\$args;/,
+    );
     expect(nginx).toMatch(
       /location\s+\/development\/\s*{[\s\S]*?try_files[^;]+\/development\/index\.html;/,
     );
@@ -94,7 +96,9 @@ describe('deployment configuration', () => {
     expect(nginx).toContain('proxy_set_header Authorization $http_authorization;');
     expect(hostLocations).not.toMatch(/\bserver\s*{/);
     expect(hostLocations).not.toMatch(/\blisten\s+/);
-    expect(hostLocations).not.toMatch(/location\s+=\s+\/development\s*{/);
+    expect(hostLocations).toMatch(
+      /location\s+=\s+\/development\s*{\s*return\s+302\s+\/development\/\$is_args\$args;/,
+    );
     expect(hostLocations).toMatch(/location\s+\/development\/\s*{/);
     expect(hostLocations).toMatch(/location\s+\/api\/development\/v1\/\s*{/);
   });
@@ -122,6 +126,50 @@ describe('deployment configuration', () => {
     expect(compose).toContain('COLLECTIONS_UPLOAD_DIR: /var/lib/freebbs-development/collections');
     expect(compose).toContain('collection-assets:/var/lib/freebbs-development/collections');
     expect(compose).toMatch(/volumes:[\s\S]*collection-assets:/);
+  });
+
+  it('keeps finance in a separate private persistent volume without a single-account owner binding', () => {
+    const financeDirectory = '/var/lib/freebbs-development/finance';
+    const compose = configuration('docker-compose.yml');
+    const apiDockerfile = configuration('deploy/docker/api.Dockerfile');
+    const productionEnvironment = configuration('deploy/env/development.env.example');
+    const localEnvironment = configuration('apps/api/.env.example');
+    expect(compose).toContain(`FINANCE_DATA_DIR: ${financeDirectory}`);
+    expect(compose).toContain(`finance-data:${financeDirectory}`);
+    expect(compose).toMatch(/volumes:[\s\S]*\n {2}finance-data:/);
+    expect(compose).not.toContain('FINANCE_OWNER_UID');
+    expect(apiDockerfile).toContain(`ENV FINANCE_DATA_DIR=${financeDirectory}`);
+    expect(apiDockerfile).toMatch(
+      /RUN install -d -o node -g node -m 0700[^\n]*\/var\/lib\/freebbs-development\/finance/,
+    );
+    for (const environment of [productionEnvironment, localEnvironment]) {
+      expect(environment).toContain(`FINANCE_DATA_DIR=${financeDirectory}`);
+      expect(environment).not.toContain('FINANCE_OWNER_UID');
+      expect(environment).toContain('PLATFORM_ROOT_ADMIN_UIDS');
+      expect(environment).toContain('shared organization appointments');
+      expect(environment).toMatch(/outside.*uploads\/public\/static/);
+    }
+    expect(financeDirectory).not.toMatch(/\/(?:public|static|uploads|collections)\//);
+    for (const nginx of [
+      configuration('deploy/nginx/freebbs-development.conf'),
+      configuration('deploy/nginx/freebbs-development.locations.conf'),
+    ]) {
+      expect(nginx).not.toContain(financeDirectory);
+    }
+  });
+
+  it('documents private finance storage and complete SQL plus finance snapshots', () => {
+    const guide = configuration('docs/finance-tracking.md');
+    expect(guide).not.toContain('FINANCE_OWNER_UID');
+    expect(guide).toContain('platform-authority.json');
+    expect(guide).toContain('u_48370eb1aba453c7');
+    expect(guide).toContain('人员与组织');
+    expect(guide).toContain('FINANCE_DATA_DIR');
+    expect(guide).toContain('--finance');
+    expect(guide).toContain('DEVELOPMENT_WRITES_STOPPED');
+    expect(guide).toContain('scripts/data-snapshot.mjs verify');
+    expect(guide).toContain('scripts/data-snapshot.mjs stage');
+    expect(guide).toContain('uploads');
   });
 
   it('makes deterministic demo seeding explicit and keeps its safety gate', () => {

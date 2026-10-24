@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
+import { ManagementNavigation } from '../../components/ManagementNavigation.js';
 import { createApiClient, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { isSuperAdmin } from '../../core/permissions/Can.js';
@@ -20,17 +21,14 @@ export function AdminPage({ client: suppliedClient }: AdminPageProps = {}) {
   const [logsOpen, setLogsOpen] = useState(false);
 
   if (!auth?.user || !isSuperAdmin(auth.user)) {
-    return <p role="alert">需要发展端负责人资格才能进入管理员模块。</p>;
+    return <p role="alert">需要发展端负责人资格才能查看负责人任命。</p>;
   }
 
   return (
-    <main className="module-page admin-governance-page" aria-label="发展端管理员模块">
+    <main className="module-page admin-governance-page" aria-label="负责人任命">
+      <ManagementNavigation user={auth.user} />
       <div className="admin-module-heading">
-        <ModulePageHeader
-          kicker="DEVELOPMENT ADMIN"
-          title="管理员模块"
-          description="维护发展端访问名单和负责人任命。"
-        />
+        <ModulePageHeader title="负责人任命" description="维护发展端负责人资格与操作记录。" />
         <button
           type="button"
           className="secondary-button operation-log-trigger"

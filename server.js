@@ -30,7 +30,6 @@ const pageRoutes = new Map([
   ['/circuits', '/circuit.html'],
   ['/circuit-embed', '/circuit-embed.html'],
   ['/circuit-challenge', '/circuit-challenge.html'],
-  ['/development', '/development.html'],
   ['/discussion', '/discussion.html'],
   ['/moderation', '/moderation.html'],
   ['/privacy', '/privacy.html'],
@@ -72,7 +71,6 @@ const htmlRedirects = new Map([
   ['/circuit.html', '/circuit'],
   ['/circuit-embed.html', '/circuit-embed'],
   ['/circuit-challenge.html', '/circuit-challenge'],
-  ['/development.html', '/development'],
   ['/discussion.html', '/discussion'],
   ['/moderation.html', '/moderation'],
   ['/privacy.html', '/privacy'],
@@ -235,6 +233,15 @@ const server = http.createServer((request, response) => {
   }
 
   if (serveOrganizationShowcase(request, response)) return;
+
+  if (['/development', '/development.html'].includes(requestUrl.pathname)) {
+    response.writeHead(302, {
+      Location: `/development/${requestUrl.search}`,
+      'Cache-Control': 'no-store',
+    });
+    response.end();
+    return;
+  }
 
   if (requestUrl.pathname.startsWith('/development/')) {
     const relativeUrlPath = requestUrl.pathname.slice('/development/'.length);

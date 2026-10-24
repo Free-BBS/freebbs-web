@@ -2,11 +2,143 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { once } = require('node:events');
 const express = require('express');
+const { hashPassword, verifyPasswordAsync } = require('./password');
 const {
   normalizeAdminAccount,
   createAccountIdentityService,
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
+const ROOT_UID = require('../development/packages/contracts/src/platform-authority.json')
+  .rootAdminUids[0];
+
+function authorityService(accounts, resolvePlatformAuthority) {
+  const writes = [];
+  const events = [];
+  const connection = {
+    beginTransaction: async () => events.push('begin'),
+    commit: async () => events.push('commit'),
+    rollback: async () => events.push('rollback'),
+    release: () => events.push('release'),
+    execute: async (sql, args) => {
+      if (sql.startsWith('SELECT * FROM users WHERE id IN'))
+        return [accounts.filter((account) => args.includes(account.id))];
+      if (sql.startsWith('SELECT * FROM account_student_requests'))
+        return [[{ user_id: args[0], student_id: '2026000001', status: 'pending' }]];
+      assert.match(sql, /^UPDATE/);
+      writes.push({ sql, args });
+      return [{ affectedRows: 1 }];
+    },
+  };
+  const service = createAccountIdentityService({
+    pool: { getConnection: async () => connection },
+    sendCode: async () => {},
+    resolvePlatformAuthority,
+  });
+  return { service, writes, events };
+}
+
+test('the configured root can reset a non-admin teacher password without changing its physical administrator flag', async () => {
+  const root = {
+    id: 1,
+    uid: ROOT_UID,
+    role: 'student',
+    is_admin: 0,
+    password_hash: hashPassword('root-current'),
+  };
+  const { service, writes, events } = authorityService([
+    root,
+    { id: 2, uid: 'teacher', role: 'teacher', is_admin: 0 },
+  ]);
+  await service.adminResetPassword(1, 2, {
+    currentPassword: 'root-current',
+    password: 'new-teacher-password',
+  });
+  assert.equal(await verifyPasswordAsync('new-teacher-password', writes[0].args[0]), true);
+  assert.equal(root.is_admin, 0);
+  assert.deepEqual(events, ['begin', 'commit', 'release']);
+});
+
+test('ordinary admins cannot reset or approve identity changes for the configured root account', async () => {
+  const { service, writes } = authorityService([
+    { id: 1, uid: ROOT_UID, role: 'teacher', is_admin: 0 },
+    { id: 2, uid: 'legacy-admin', role: 'admin', is_admin: 1 },
+  ]);
+  await assert.rejects(
+    service.adminResetPassword(2, 1, { currentPassword: 'irrelevant', password: 'new-password' }),
+    { code: 'root_account_protected' },
+  );
+  await assert.rejects(
+    service.reviewStudentRequest(2, 1, {
+      action: 'approve',
+      identityConfirmed: true,
+      studentId: '2026000001',
+    }),
+    { code: 'root_account_protected' },
+  );
+  assert.equal(writes.length, 0);
+});
+
+test('shared learning-admin grants are revalidated inside account operations and development-only roles never suffice', async () => {
+  let learningAdmin = true;
+  const { service, writes } = authorityService(
+    [
+      {
+        id: 1,
+        uid: 'shared-admin',
+        role: 'student',
+        is_admin: 0,
+        password_hash: hashPassword('shared-current'),
+      },
+      { id: 2, uid: 'teacher', role: 'teacher', is_admin: 0 },
+    ],
+    async (uid) => ({
+      learningAdmin: uid === 'shared-admin' && learningAdmin,
+      developmentAdmin: true,
+    }),
+  );
+  await service.adminResetPassword(1, 2, {
+    currentPassword: 'shared-current',
+    password: 'new-password',
+  });
+  const before = writes.length;
+  learningAdmin = false;
+  await assert.rejects(
+    service.adminResetPassword(1, 2, {
+      currentPassword: 'shared-current',
+      password: 'another-password',
+    }),
+    { code: 'admin_required' },
+  );
+  await assert.rejects(
+    service.reviewStudentRequest(1, 2, { action: 'reject', studentId: '2026000001' }),
+    { code: 'admin_required' },
+  );
+  assert.equal(writes.length, before);
+});
+
+test('teacher-password recovery cannot reset another shared learning administrator through its physical zero flag', async () => {
+  const { service, writes } = authorityService(
+    [
+      {
+        id: 1,
+        uid: 'legacy-admin',
+        role: 'admin',
+        is_admin: 1,
+        password_hash: hashPassword('admin-current'),
+      },
+      { id: 2, uid: 'shared-teacher', role: 'teacher', is_admin: 0 },
+    ],
+    async (uid) => ({ learningAdmin: uid === 'shared-teacher' }),
+  );
+  await assert.rejects(
+    service.adminResetPassword(1, 2, {
+      currentPassword: 'admin-current',
+      password: 'new-password',
+    }),
+    { code: 'teacher_required' },
+  );
+  assert.equal(writes.length, 0);
+});
 
 test('only admin-provisioned teacher and enterprise identities allow missing student ID and email', () => {
   const body = {

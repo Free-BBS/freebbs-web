@@ -32,9 +32,10 @@ COPY database/migrations database/migrations
 COPY database/seeds database/seeds
 COPY scripts scripts
 
-RUN install -d -o node -g node -m 0700 /var/lib/freebbs-development/festival /var/lib/freebbs-development/collections
+RUN install -d -o node -g node -m 0700 /var/lib/freebbs-development/festival /var/lib/freebbs-development/collections /var/lib/freebbs-development/finance
 ENV FESTIVAL_UPLOAD_DIR=/var/lib/freebbs-development/festival
 ENV COLLECTIONS_UPLOAD_DIR=/var/lib/freebbs-development/collections
+ENV FINANCE_DATA_DIR=/var/lib/freebbs-development/finance
 
 USER node
 EXPOSE 3100

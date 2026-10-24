@@ -12,8 +12,9 @@ https://<主站域名>/development/          -> 发展端 Web 静态文件
 https://<主站域名>/api/development/v1/  -> 发展端 API（Nginx 转发到 127.0.0.1:3100）
 ```
 
-主站的 `/development` 保留原施工页。白名单用户登录后，施工页会校验发展端 API，成功才跳转到
-`/development/`；非白名单用户仍看到施工页，直接打开发展端深层链接也会被 API 拒绝。浏览器不应直接访问 API
+主站的 `/development` 和旧地址 `/development.html` 直接跳转到 `/development/`，不再展示施工地图。
+所有通过主站验证的登录账号默认进入，深层链接仍保留登录返回地址；未登录或凭据失效时，API 返回 401。
+普通访问不要求单独白名单，部门编辑、业务管理与负责人身份预览仍按原权限校验。浏览器不应直接访问 API
 容器、MySQL 或 Adminer。主站和发展端同源时，`ALLOWED_ORIGINS` 保持为空。API 支持 `HOST`；
 生产 systemd unit 固定监听 `127.0.0.1:3100`，并继续用主机防火墙/安全组阻止公网访问 3100，
 只允许本机 Nginx 连接。
@@ -78,8 +79,8 @@ sudoedit /etc/freebbs-development/backup.env
 
 - 不得在生产设置 `AUTH_MODE=demo` 或 `VITE_AUTH_MODE=demo`；API 也会拒绝这种组合。
 - `MAIN_SITE_API_BASE_URL` 是根地址，API 会追加 `/api/auth/me`。
-- `DEVELOPMENT_PREVIEW_UIDS` 填写允许预览的主站 UID，以英文逗号分隔；留空时所有真实账号都被拒绝。
-  该白名单只控制发展端准入，进入后的部门和业务权限仍由发展端服务端判断。
+- `DEVELOPMENT_PREVIEW_UIDS` 是兼容已有管理员目录工具的历史配置，可以留空；即使部署保留旧值，
+  也不再限制普通账号访问。负责人记录与业务角色仍按原服务端授权管理，不能通过此配置授予管理权限。
 - 不把 `.env`、Token、数据库密码、TLS 私钥提交到 Git 或输出到日志。
 - 若 Web 在构建时读取 `VITE_AUTH_MODE`，应明确设为 `main` 或不设置；Vite 变量会进入客户端产物，
   所以其中绝不能放秘密。
@@ -123,9 +124,10 @@ API 单元固定使用用户/组 `freebbs-development`、工作目录 `/opt/free
 - `deploy/nginx/freebbs-development.locations.conf` 只包含宿主机路由，应通过 `include` 嵌入主站现有的
   HTTPS `server` 块。
 
-宿主机路由片段只负责 `/development/` 静态 SPA fallback，以及
-`/api/development/v1/` 到 `127.0.0.1:3100` 的代理。它转发 Authorization header，以便 API 向主站核验
-登录身份。主站原有的 `/development` 路由继续提供施工页，不能把它重定向到 `/development/`。片段不包含生产域名和 TLS 配置。
+宿主机路由片段负责 `/development` 与 `/development.html` 到 `/development/` 的入口跳转、
+`/development/` 静态 SPA fallback，以及 `/api/development/v1/` 到 `127.0.0.1:3100` 的代理。
+跳转保留查询参数，API 代理转发 Authorization header，以便向主站核验登录身份。
+安装时移除主站旧的同名精确 location，避免重复声明；片段不包含生产域名和 TLS 配置。
 
 Nginx 片段只由 `sudo scripts/install-server.sh` 安装；Web 产物只由 root-owned release hook 指向不可变
 release。不得手工把构建目录同步到 `/usr/share/nginx/html/development`，否则会绕过归档校验、部署锁和

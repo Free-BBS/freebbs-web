@@ -13,6 +13,7 @@ export interface StartServerRuntimeOptions {
   host: string;
   port: number;
   collectionsUploadDirectory?: string;
+  financeDirectory?: string;
   dependencies?: ServerRuntimeDependencies;
 }
 
@@ -73,6 +74,7 @@ export async function startServerRuntime({
   host,
   port,
   collectionsUploadDirectory,
+  financeDirectory,
   dependencies = defaultDependencies,
 }: StartServerRuntimeOptions): Promise<ServerRuntime> {
   const handle = dependencies.createStore();
@@ -86,6 +88,7 @@ export async function startServerRuntime({
       getAppliedMigrationCount: handle.getAppliedMigrationCount,
       checkReadiness: handle.checkReadiness,
       ...(collectionsUploadDirectory ? { collectionsUploadDirectory } : {}),
+      ...(financeDirectory ? { financeDirectory } : {}),
     });
     server = app.listen(port, host);
     await waitForListening(server);

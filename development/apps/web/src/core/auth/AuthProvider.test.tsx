@@ -42,7 +42,6 @@ function RaceConsumer() {
 function AuthConsumer() {
   const auth = useAuth();
   if (auth.status === 'loading') return <p>Loading</p>;
-  if (auth.status === 'denied') return <p>Preview denied</p>;
   if (auth.status === 'unauthenticated') return <a href={auth.loginUrl}>Main site login</a>;
   if (auth.status === 'error') return <p role="alert">{auth.error?.message}</p>;
   if (auth.user === null) return null;
@@ -160,7 +159,7 @@ describe('AuthProvider', () => {
     );
   });
 
-  it('maps a denied preview identity to a distinct state', async () => {
+  it('reports a stale preview-denied response as a retryable error without a construction redirect', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -174,7 +173,7 @@ describe('AuthProvider', () => {
         <AuthConsumer />
       </AuthProvider>,
     );
-    expect(await screen.findByText('Preview denied')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not on list');
   });
 
   it('drops the development identity when another tab signs out of the main site', async () => {

@@ -4,12 +4,18 @@ import {
   validateIdentitySelection,
   organizationMembershipsForRole,
   ROLE_KEYS,
+  DEVELOPMENT_ADMIN_ROLE_KEYS,
+  LEARNING_ADMIN_ROLE_KEYS,
   SOCIAL_ORGANIZATION_IDS,
   type DevelopmentDirectoryFilters,
   type SystemSettingsUser,
   type SystemSettingsUserInput,
 } from '@freebbs-development/contracts';
 import { synchronizeSubject } from '../../core/auth/auth-middleware.js';
+import {
+  isRootManagedGlobalAppointment,
+  requireRootAppointmentAuthority,
+} from '../../core/auth/protected-appointments.js';
 import {
   directoryUserContext,
   directoryPage,
@@ -27,14 +33,20 @@ import { HttpError } from '../../core/errors/http-error.js';
 import {
   businessAdminIdentities,
   effectiveGlobalBusinessAdmins,
+  isDevelopmentAdministratorRole,
+  lockBusinessAdministratorAssignments,
+  configuredRootAdminUids,
 } from '../../core/authorization/business-admin.js';
 
 const scope = { type: 'public', id: '*' } as const;
 const current = (row: { status: string; expiresAt: string | null }, now = Date.now()) =>
   row.status === 'active' && (row.expiresAt === null || Date.parse(row.expiresAt) > now);
 const editableBusinessIdentity = (row: RoleAssignmentRecord) =>
-  row.roleKey !== 'platform.admin' || (row.scope.type === 'public' && row.scope.id === '*');
-export function hasRecipientAccess(
+  ![...DEVELOPMENT_ADMIN_ROLE_KEYS, ...LEARNING_ADMIN_ROLE_KEYS].some(
+    (key) => key === row.roleKey,
+  ) ||
+  (row.scope.type === 'public' && row.scope.id === '*');
+export function hasDevelopmentGrant(
   user: DirectoryUser,
   access: DevelopmentAccessRecord[],
   allowedUids: readonly string[] = [],
@@ -59,14 +71,14 @@ export function identitySnapshot(
   user: DirectoryUser,
   roles: RoleAssignmentRecord[],
   tags: TagAssignmentRecord[],
-  access: DevelopmentAccessRecord[] = [],
-  demo = false,
-  allowedUids: readonly string[] = [],
 ): SystemSettingsUser {
   const now = Date.now();
   const currentlyActive = (row: { status: string; expiresAt: string | null }) => current(row, now);
   const ownedRoles = roles.filter(
-    (row) => row.subjectUid === user.uid && row.roleKey !== 'platform.super_admin',
+    (row) =>
+      row.subjectUid === user.uid &&
+      row.roleKey !== 'platform.super_admin' &&
+      ROLE_KEYS.includes(row.roleKey),
   );
   const ownedTags = tags.filter(
     (row) => row.subjectUid === user.uid && row.tagKey === 'sports.team_captain',
@@ -117,7 +129,7 @@ export function identitySnapshot(
       ),
     ].sort(),
     revision,
-    canReceiveNotifications: demo || hasRecipientAccess(user, access, allowedUids),
+    canReceiveNotifications: true,
   };
 }
 export const directoryFiltersSchema = z
@@ -200,44 +212,29 @@ export async function listDirectoryRows(
     );
     uids = uids ? uids.filter((uid) => selected.has(uid)) : [...selected];
   }
-  const identityFilter: DirectoryIdentityFilter = { uids: [], studentIds: [], usernames: [] };
-  const includedUids: string[] = [],
-    studentIds: string[] = [],
-    usernames: string[] = [];
+  // Admission metadata is retained for legacy callers; every directory identity
+  // is now a member unless an active lead grant says otherwise.
+  void demo;
+  void allowedUids;
+  const identityFilter = {
+    uids: [] as string[],
+    studentIds: [] as string[],
+    usernames: [] as string[],
+  } satisfies DirectoryIdentityFilter;
   for (const grant of access) {
-    if (
-      grant.status !== 'active' ||
-      ((filters.admission === 'lead' || filters.admission === 'member') &&
-        grant.accessLevel !== filters.admission)
-    )
-      continue;
-    if (grant.subjectUid) includedUids.push(grant.subjectUid);
-    else if (grant.studentId) studentIds.push(grant.studentId);
-    else if (grant.username) usernames.push(grant.username.toLocaleLowerCase());
+    if (grant.status !== 'active' || grant.accessLevel !== 'lead') continue;
+    if (grant.subjectUid) identityFilter.uids.push(grant.subjectUid);
+    else if (grant.studentId) identityFilter.studentIds.push(grant.studentId);
+    else if (grant.username) identityFilter.usernames.push(grant.username.toLocaleLowerCase());
   }
-  if (filters.admission === 'member') {
-    const grantFor = accessLookup(access);
-    const identities = await Promise.all(allowedUids.map((uid) => directory.get(uid)));
-    includedUids.push(
-      ...identities
-        .filter(
-          (user): user is DirectoryUser => user !== null && grantFor(user)?.accessLevel !== 'lead',
-        )
-        .map((user) => user.uid),
-    );
-  } else if (filters.admission !== 'lead') includedUids.push(...allowedUids);
-  Object.assign(identityFilter, { uids: includedUids, studentIds, usernames });
   const page = await directoryPage(directory, {
     query: filters.query,
     page: filters.page ?? 1,
     pageSize: filters.pageSize ?? 20,
     uids,
-    ...(!filters.admission || (demo && ['admitted', 'not_admitted'].includes(filters.admission))
-      ? {}
-      : filters.admission === 'not_admitted'
-        ? { exclude: identityFilter }
-        : { include: identityFilter }),
-    ...(demo && filters.admission === 'not_admitted' ? { uids: [] } : {}),
+    ...(filters.admission === 'lead' ? { include: identityFilter } : {}),
+    ...(filters.admission === 'member' ? { exclude: identityFilter } : {}),
+    ...(filters.admission === 'not_admitted' ? { uids: [] } : {}),
   });
   const pageUids = page.items.map((user) => user.uid);
   const [roles, tags] = await Promise.all([
@@ -267,38 +264,24 @@ export async function settingsUsersPage(
   const page = await listDirectoryRows(store, directory, filters, demo, allowedUids);
   return {
     ...page,
-    items: page.items.map(({ user, roles, tags, grant }) =>
-      identitySnapshot(user, roles, tags, grant ? [grant] : [], demo, allowedUids),
-    ),
+    items: page.items.map(({ user, roles, tags }) => identitySnapshot(user, roles, tags)),
   };
 }
 export async function listSettingsUsers(
   store: DevelopmentStore,
   directory: UserDirectory,
   query = '',
-  demo = false,
-  allowedUids: readonly string[] = [],
 ) {
-  const [users, roles, tags, access] = await Promise.all([
+  const [users, roles, tags] = await Promise.all([
     directory.list(query),
     store.roleAssignments.list(),
     store.tagAssignments.list({ tagKey: 'sports.team_captain' }),
-    store.developmentAccess.list(),
   ]);
   const ownedRoles = groupedByUid(roles),
-    ownedTags = groupedByUid(tags),
-    grantFor = accessLookup(access);
-  return users.map((user) => {
-    const grant = grantFor(user);
-    return identitySnapshot(
-      user,
-      ownedRoles.get(user.uid) ?? [],
-      ownedTags.get(user.uid) ?? [],
-      grant ? [grant] : [],
-      demo,
-      allowedUids,
-    );
-  });
+    ownedTags = groupedByUid(tags);
+  return users.map((user) =>
+    identitySnapshot(user, ownedRoles.get(user.uid) ?? [], ownedTags.get(user.uid) ?? []),
+  );
 }
 export async function updateSettingsUser(
   store: DevelopmentStore,
@@ -307,6 +290,7 @@ export async function updateSettingsUser(
   input: SystemSettingsUserInput,
   actorUid: string,
   allowedUids: readonly string[] = [],
+  authority: { readonly rootAdmin?: boolean } = {},
 ) {
   const target = await directory.get(uid);
   if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
@@ -314,16 +298,14 @@ export async function updateSettingsUser(
   if (!validation.ok) throw new HttpError(400, 'identity_group_conflict', validation.message);
   const initialRoles = await store.roleAssignments.list({ subjectUid: uid });
   const changesAdmin =
-    input.roles.includes('platform.admin') ||
-    initialRoles.some((row) => row.roleKey === 'platform.admin' && current(row));
+    input.roles.some(isDevelopmentAdministratorRole) ||
+    initialRoles.some((row) => isDevelopmentAdministratorRole(row.roleKey) && current(row));
   return store.transaction(async (tx) => {
     // Stable definition row serializes last-administrator decisions, including access edits.
     // Lock it before identity rows so every administration writer has the same order.
     if (changesAdmin) await tx.roles.listForUpdate({ key: 'platform.admin' });
     const definitions = changesAdmin ? await tx.roles.list() : [];
-    const adminRoles = changesAdmin
-      ? await tx.roleAssignments.listForUpdate({ roleKey: 'platform.admin' })
-      : [];
+    const adminRoles = changesAdmin ? await lockBusinessAdministratorAssignments(tx) : [];
     const targetRoles = await tx.roleAssignments.listForUpdate({ subjectUid: uid });
     const roles = [
       ...new Map([...adminRoles, ...targetRoles].map((row) => [row.id, row])).values(),
@@ -333,12 +315,32 @@ export async function updateSettingsUser(
       tx.sportsTeams.listForUpdate({ ids: input.captainTeamIds }),
       tx.developmentAccess.list(),
       tx.subjects.listForUpdate({
-        uids: [...new Set([uid, ...adminRoles.map((row) => row.subjectUid)])],
+        uids: [
+          ...new Set([
+            uid,
+            actorUid,
+            ...configuredRootAdminUids(),
+            ...adminRoles.map((row) => row.subjectUid),
+          ]),
+        ],
       }),
     ]);
-    const previous = identitySnapshot(target, roles, tags, access, false, allowedUids);
+    const previous = identitySnapshot(target, roles, tags);
     if (previous.revision !== input.revision)
       throw new HttpError(409, 'stale_revision', '用户身份已被修改，请重新加载');
+    const previousProtected = new Set(
+      targetRoles
+        .filter((row) => current(row) && isRootManagedGlobalAppointment(row.roleKey, row.scope))
+        .map((row) => row.roleKey),
+    );
+    const desiredProtected = new Set<import('@freebbs-development/contracts').RoleKey>(
+      input.roles.filter((role) => isRootManagedGlobalAppointment(role, scope)),
+    );
+    if (
+      previousProtected.size !== desiredProtected.size ||
+      [...previousProtected].some((role) => !desiredProtected.has(role))
+    )
+      requireRootAppointmentAuthority(actorUid, authority.rootAdmin);
     if (
       input.captainTeamIds.some(
         (id) => !teams.some((team) => team.id === id && team.status === 'active'),
@@ -355,7 +357,22 @@ export async function updateSettingsUser(
       identities,
       allowedUids,
     );
-    const losingAdmin = admins.has(uid) && !input.roles.includes('platform.admin');
+    const retainedAdmin = input.roles.some(
+      (roleKey) =>
+        isDevelopmentAdministratorRole(roleKey) &&
+        definitions.some((role) => role.key === roleKey && role.status === 'active') &&
+        (!previous.roles.includes(roleKey) ||
+          roles.some(
+            (row) =>
+              row.subjectUid === uid &&
+              row.roleKey === roleKey &&
+              current(row) &&
+              row.scope.type === 'public' &&
+              row.scope.id === '*',
+          )),
+    );
+    const losingAdmin =
+      admins.has(uid) && !configuredRootAdminUids().includes(uid) && !retainedAdmin;
     if (losingAdmin && admins.size === 1) {
       throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
     }
@@ -430,9 +447,6 @@ export async function updateSettingsUser(
       target,
       await tx.roleAssignments.list({ subjectUid: uid }),
       await tx.tagAssignments.list({ subjectUid: uid }),
-      access,
-      false,
-      allowedUids,
     );
     await tx.auditLogs.create({
       actorUid,

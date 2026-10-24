@@ -1,6 +1,10 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
+import {
+  DEFAULT_ROOT_ADMIN_UIDS,
+  type RoleKey,
+  type ScopeRef,
+} from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
 import { createMemoryStore } from '../database/memory-store.js';
 import { loadAuthorizationContext } from './load-authorization-context.js';
@@ -11,6 +15,7 @@ import {
 } from '../../modules/admin/assignment-service.js';
 
 const base = '/api/development/v1';
+const rootUid = DEFAULT_ROOT_ADMIN_UIDS[0]!;
 const publicScope = { type: 'public', id: '*' } as const;
 const localScope = { type: 'social_organization', id: 'arts_center' } as const;
 async function fixture(global = true, allowedUids: readonly string[] = []) {
@@ -185,34 +190,41 @@ describe('scope-aware global business authority', () => {
   });
 
   it('does not count a local admin as a replacement for the last accessible global admin', async () => {
-    const { store } = await fixture();
+    const { store, users } = await fixture();
+    const directory = {
+      list: async () => users,
+      get: async (uid: string) => users.find((user) => user.uid === uid) ?? null,
+    };
     const global = (await store.roleAssignments.list()).find((row) => row.subjectUid === 'global')!;
     await expect(
-      archiveRoleAssignment(store, global.id, { actorUid: 'lead' }),
+      archiveRoleAssignment(store, global.id, { actorUid: rootUid, directory }),
     ).rejects.toMatchObject({ code: 'last_platform_admin' });
     const local = (await store.roleAssignments.list()).find((row) => row.subjectUid === 'local')!;
     await expect(
-      archiveRoleAssignment(store, local.id, { actorUid: 'lead' }),
+      archiveRoleAssignment(store, local.id, { actorUid: 'lead', directory }),
     ).resolves.toMatchObject({ status: 'inactive' });
   });
 
-  it('protects the last global admin through settings and access HTTP routes and preserves existing local rows', async () => {
+  it('protects the last global business role while removing an obsolete admission record keeps access', async () => {
     const { app, store } = await fixture();
     const users = await request(app)
       .get(`${base}/system-settings/users`)
       .set(bearer('global'))
       .expect(200);
     const global = users.body.data.find((user: { uid: string }) => user.uid === 'global');
-    await request(app)
+    const denied = await request(app)
       .put(`${base}/system-settings/users/global`)
       .set(bearer('global'))
       .send({ revision: global.revision, roles: [], captainTeamIds: [] })
-      .expect(409);
+      .expect(403);
+    expect(denied.body.data.error.code).toBe('root_appointment_required');
     await request(app)
       .put(`${base}/admin/development-users/global`)
       .set(bearer('lead'))
       .send({ accessLevel: null })
-      .expect(409);
+      .expect(200);
+    const retained = await request(app).get(`${base}/me`).set(bearer('global')).expect(200);
+    expect(retained.body.data).toMatchObject({ businessAdmin: true, developmentAccess: 'member' });
     const local = users.body.data.find((user: { uid: string }) => user.uid === 'local');
     expect(local.roles).not.toContain('platform.admin');
     await request(app)
@@ -322,10 +334,10 @@ describe('first global business administrator appointment', () => {
     },
   );
 
-  it.each(['settings', 'assignment', 'access'] as const)(
+  it.each(['settings', 'assignment'] as const)(
     'does not use a deleted account as a survivor when removing the last real admin through %s',
     async (route) => {
-      const { app, users, assign } = await fixture();
+      const { app, store, users, assign } = await fixture();
       const assignment = await assign('lead', 'platform.admin');
       users.splice(
         users.findIndex(({ uid }) => uid === 'global'),
@@ -342,28 +354,29 @@ describe('first global business administrator appointment', () => {
           .put(`${base}/system-settings/users/lead`)
           .set(bearer('lead'))
           .send({ revision: lead.revision, roles: [], captainTeamIds: [] });
-      } else if (route === 'assignment') {
+      } else {
         result = await request(app)
           .delete(`${base}/admin/role-assignments/${assignment.id}`)
           .set(bearer('lead'));
-      } else {
-        await request(app)
-          .put(`${base}/admin/development-users/other`)
-          .set(bearer('lead'))
-          .send({ accessLevel: 'lead' })
-          .expect(200);
-        result = await request(app)
-          .put(`${base}/admin/development-users/lead`)
-          .set(bearer('lead'))
-          .send({ accessLevel: null });
       }
-      expect(result.status).toBe(409);
-      expect(result.body.data.error.code).toBe('last_platform_admin');
+      expect(result.status).toBe(403);
+      expect(result.body.data.error.code).toBe('root_appointment_required');
+      // Even a root-authorized mutation cannot count a deleted main-site account as a survivor.
+      await expect(
+        archiveRoleAssignment(store, assignment.id, {
+          actorUid: rootUid,
+          directory: {
+            list: async () => users,
+            get: async (uid) => users.find((user) => user.uid === uid) ?? null,
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'last_platform_admin' });
+      expect((await store.roleAssignments.get(assignment.id))?.status).toBe('active');
     },
   );
 
   it('keeps the business administrator role active while a real business admin remains', async () => {
-    const { app, users, assign } = await fixture();
+    const { app, store, users, assign } = await fixture();
     await assign('lead', 'platform.admin');
     users.splice(
       users.findIndex(({ uid }) => uid === 'global'),
@@ -373,12 +386,13 @@ describe('first global business administrator appointment', () => {
       .patch(`${base}/admin/roles/platform.admin`)
       .set(bearer('lead'))
       .send({ status: 'inactive' })
-      .expect(409);
-    expect(result.body.data.error.code).toBe('last_platform_admin');
+      .expect(403);
+    expect(result.body.data.error.code).toBe('root_appointment_required');
+    expect((await store.roles.list({ key: 'platform.admin' }))[0]?.status).toBe('active');
   });
 
-  it('admits configured fallback users consistently as notification recipients', async () => {
-    const { app, store } = await fixture(true, ['global']);
+  it('admits ordinary users without stored or configured access as notification recipients', async () => {
+    const { app, store } = await fixture(true);
     const access = (await store.developmentAccess.list()).find(
       ({ subjectUid }) => subjectUid === 'global',
     )!;
@@ -396,8 +410,8 @@ describe('first global business administrator appointment', () => {
     const inbox = await request(app).get(`${base}/notifications`).set(bearer('global')).expect(200);
     expect(inbox.body.data).toHaveLength(1);
   });
-  it('counts a public global admin admitted by configured UID fallback and protects its role', async () => {
-    const { app, store, users } = await fixture(true, ['global']);
+  it('counts a verified global admin without stored or configured admission and protects its role', async () => {
+    const { app, store, users } = await fixture(true);
     const access = (await store.developmentAccess.list()).find(
       ({ subjectUid }) => subjectUid === 'global',
     )!;
@@ -420,17 +434,18 @@ describe('first global business administrator appointment', () => {
       .expect(200);
     const target = settings.body.data.find((user: { uid: string }) => user.uid === 'global');
     expect(target.canReceiveNotifications).toBe(true);
-    await request(app)
+    const denied = await request(app)
       .put(`${base}/system-settings/users/global`)
       .set(bearer('global'))
       .send({ revision: target.revision, roles: [], captainTeamIds: [] })
-      .expect(409);
+      .expect(403);
+    expect(denied.body.data.error.code).toBe('root_appointment_required');
     const assignment = (await store.roleAssignments.list()).find(
       (row) => row.subjectUid === 'global',
     )!;
     await expect(
       archiveRoleAssignment(store, assignment.id, {
-        actorUid: 'lead',
+        actorUid: rootUid,
         allowedUids: ['global'],
         directory: {
           list: async () => users,
@@ -440,8 +455,8 @@ describe('first global business administrator appointment', () => {
     ).rejects.toMatchObject({ code: 'last_platform_admin' });
   });
 
-  it('accepts a configured fallback target only as an active member and does not count scoped admins as global', async () => {
-    const { app, store } = await fixture(false, ['local', 'target']);
+  it('accepts an ordinary target without admission only as an active member and keeps scoped admins local', async () => {
+    const { app, store } = await fixture(false);
     for (const uid of ['local', 'target']) {
       const access = (await store.developmentAccess.list()).find(
         ({ subjectUid }) => subjectUid === uid,
@@ -524,16 +539,20 @@ describe('first global business administrator appointment', () => {
   });
 
   it('keeps a configured fallback global admin as a survivor when revoking another lead admin role', async () => {
-    const { app, store, assign } = await fixture(true, ['global']);
+    const { app, store, assign, users } = await fixture(true, ['global']);
     const access = (await store.developmentAccess.list()).find(
       ({ subjectUid }) => subjectUid === 'global',
     )!;
     await store.developmentAccess.delete(access.id);
     const leadAdmin = await assign('lead', 'platform.admin');
-    await request(app)
-      .delete(`${base}/admin/role-assignments/${leadAdmin.id}`)
-      .set(bearer('lead'))
-      .expect(200);
+    await archiveRoleAssignment(store, leadAdmin.id, {
+      actorUid: rootUid,
+      allowedUids: ['global'],
+      directory: {
+        list: async () => users,
+        get: async (uid) => users.find((user) => user.uid === uid) ?? null,
+      },
+    });
     expect((await store.roleAssignments.get(leadAdmin.id))?.status).toBe('inactive');
     const status = await request(app)
       .get(`${base}/admin/business-admin-bootstrap`)
@@ -561,7 +580,9 @@ describe('first global business administrator appointment', () => {
       .put(`${base}/admin/development-users/global`)
       .set(bearer('lead'))
       .send({ accessLevel: null })
-      .expect(409);
+      .expect(200);
+    const retained = await request(app).get(`${base}/me`).set(bearer('global')).expect(200);
+    expect(retained.body.data).toMatchObject({ businessAdmin: true, developmentAccess: 'member' });
   });
   it('refuses appointments and status requests while previewing even when the original viewer is a qualified lead and global admin', async () => {
     const { app, assign, store } = await fixture(false);
@@ -609,11 +630,6 @@ describe('first global business administrator appointment', () => {
     await request(app).get(`${base}/system-settings/users`).set(bearer('target')).expect(200);
     await request(app).get(`${base}/admin/development-users`).set(bearer('target')).expect(403);
     await request(app).get(`${base}/system-settings/users`).set(bearer('lead')).expect(403);
-    await request(app)
-      .post(`${base}/admin/business-admin-bootstrap`)
-      .set(bearer('lead'))
-      .send({ uid: 'other' })
-      .expect(409);
     const closed = await request(app)
       .get(`${base}/admin/business-admin-bootstrap`)
       .set(bearer('lead'))
@@ -621,7 +637,7 @@ describe('first global business administrator appointment', () => {
     expect(closed.body.data).toEqual({ canInitialize: false, globalAdminCount: 1 });
   });
 
-  it('rejects inactive or inaccessible targets and prevents concurrent first appointments', async () => {
+  it('rejects inactive subjects and serializes first appointments without requiring admission records', async () => {
     const { app, store } = await fixture(false);
     const subject = (await store.subjects.list()).find(({ uid }) => uid === 'target')!;
     await store.subjects.update(subject.id, { status: 'inactive' });
@@ -634,13 +650,7 @@ describe('first global business administrator appointment', () => {
       ({ subjectUid }) => subjectUid === 'other',
     )!;
     await store.developmentAccess.update(access.id, { status: 'inactive' });
-    await request(app)
-      .post(`${base}/admin/business-admin-bootstrap`)
-      .set(bearer('lead'))
-      .send({ uid: 'other' })
-      .expect(409);
     await store.subjects.update(subject.id, { status: 'active' });
-    await store.developmentAccess.update(access.id, { status: 'active' });
     const attempts = await Promise.all(
       ['target', 'other'].map((uid) =>
         request(app)

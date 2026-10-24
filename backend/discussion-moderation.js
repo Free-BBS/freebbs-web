@@ -6,6 +6,7 @@ const { withSubmissionNotice } = require('./moderation-production');
 const { buildPrivacyPreview, normalizePrivacyText } = require('./moderation-privacy');
 const { sendModerationNotice, notifyAuthor } = require('./moderation-notifications');
 const { MODERATION_RETENTION_DAYS } = require('./moderation-retention');
+const { projectMainSiteAuthority } = require('./development-integration');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
@@ -202,6 +203,7 @@ function createDiscussionModeration({
   onPublished,
   automation,
   requiredNoticeVersion = null,
+  resolvePlatformAuthority,
   logger = console,
 }) {
   const transact = withDatabaseTransaction || ((callback) => transaction(pool, callback));
@@ -235,10 +237,11 @@ function createDiscussionModeration({
   async function requireAdministrator(executor, rawUserId, lock = false) {
     const userId = positiveId(rawUserId);
     const [rows] = await executor.execute(
-      `SELECT id FROM users WHERE id = ? AND is_admin = 1${lock ? ' FOR UPDATE' : ''}`,
+      `SELECT id, uid, role, is_admin FROM users WHERE id = ?${lock ? ' FOR UPDATE' : ''}`,
       [userId],
     );
-    if (!rows.length) throw fail('需要管理员权限。', 403);
+    const administrator = await projectMainSiteAuthority(rows[0], resolvePlatformAuthority);
+    if (!administrator?.is_admin) throw fail('需要管理员权限。', 403);
   }
 
   async function notifyReviewers(connection, recipients, id) {

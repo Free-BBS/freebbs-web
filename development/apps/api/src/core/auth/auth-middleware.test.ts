@@ -117,36 +117,58 @@ describe('authentication middleware', () => {
       code: 'invalid_identity',
     });
   });
-  it('denies a main-site identity outside the preview list before creating a subject', async () => {
+  it('admits a verified main-site account without a preview grant or extra authority', async () => {
     const store = createMemoryStore({ seed: false });
     const authenticate = createAuthMiddleware({
       authClient: {
-        introspect: async (token) => ({
-          uid: token === 'allowed' ? 'u_allowed' : 'u_other',
+        introspect: async () => ({
+          uid: 'u_student',
           displayName: 'Main user',
           avatarUrl: null,
           baseRole: 'student',
-          roles: [],
+          roles: ['platform.super_admin'],
           tags: [],
         }),
       },
       mode: 'main',
       store,
-      allowedUids: ['u_allowed'],
     });
 
-    await expect(authenticate({ authorization: 'Bearer denied' })).resolves.toMatchObject({
-      status: 403,
-      code: 'preview_access_denied',
-    });
-    expect(await store.subjects.list({ query: 'u_other' })).toEqual([]);
-    await expect(authenticate({ authorization: 'Bearer allowed' })).resolves.toMatchObject({
+    const result = await authenticate({ authorization: 'Bearer ordinary-user' });
+    expect(result).toMatchObject({
       status: 200,
-      user: { uid: 'u_allowed' },
+      user: {
+        uid: 'u_student',
+        roles: [],
+        businessAdmin: false,
+        developmentAccess: 'member',
+        previewing: false,
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+      },
     });
+    expect(await store.subjects.list({ query: 'u_student' })).toHaveLength(1);
+    expect(await store.developmentAccess.list()).toEqual([]);
+    expect(await store.roleAssignments.list()).toEqual([]);
+    if (result.status !== 200) throw new Error('expected authentication');
+    expect(authorize(result.user, { action: 'admin.manage', resource: 'admin' }).allowed).toBe(
+      false,
+    );
+    expect(
+      authorize(result.user, {
+        action: 'events.department_home.update',
+        resource: 'department_home',
+        scope: { type: 'social_organization', id: 'arts_center' },
+      }).allowed,
+    ).toBe(false);
+    await expect(
+      authenticate({
+        authorization: 'Bearer ordinary-user',
+        'x-development-preview-uid': 'u_lead',
+      }),
+    ).resolves.toMatchObject({ status: 403, code: 'preview_identity_denied' });
   });
 
-  it('temporarily grants an unlisted main-site administrator access until a lead is configured', async () => {
+  it('keeps legacy main-site administrators learning-only without development bootstrap authority', async () => {
     const store = createMemoryStore({ seed: false });
     const authenticate = createAuthMiddleware({
       authClient: {
@@ -175,22 +197,18 @@ describe('authentication middleware', () => {
       status: 200,
       user: {
         uid: 'u_main_admin',
-        roles: ['platform.super_admin'],
-        developmentAccess: 'lead',
-        viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+        roles: [],
+        learningAdmin: true,
+        businessAdmin: false,
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
       },
     });
     await expect(
       authenticate({ authorization: 'Bearer admin', 'x-development-preview-uid': 'u_target' }),
     ).resolves.toMatchObject({
-      status: 200,
-      user: {
-        uid: 'u_target',
-        roles: [],
-        businessAdmin: false,
-        previewing: true,
-        viewer: { uid: 'u_main_admin', canManageDevelopment: true, canPreviewDevelopment: true },
-      },
+      status: 403,
+      code: 'preview_identity_denied',
     });
     expect(await store.developmentAccess.list()).toEqual([]);
     expect(await store.roleAssignments.list()).toEqual([]);
@@ -205,12 +223,16 @@ describe('authentication middleware', () => {
       scope: { type: 'public', id: '*' },
     });
     await expect(authenticate({ authorization: 'Bearer admin' })).resolves.toMatchObject({
-      status: 403,
-      code: 'preview_access_denied',
+      status: 200,
+      user: {
+        roles: [],
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+      },
     });
   });
 
-  it('does not grant bootstrap access to an ordinary main-site user', async () => {
+  it('does not turn ordinary member access into bootstrap administrator authority', async () => {
     const store = createMemoryStore({ seed: false });
     const authenticate = createAuthMiddleware({
       authClient: {
@@ -229,8 +251,12 @@ describe('authentication middleware', () => {
     });
 
     await expect(authenticate({ authorization: 'Bearer student' })).resolves.toMatchObject({
-      status: 403,
-      code: 'preview_access_denied',
+      status: 200,
+      user: {
+        roles: [],
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
+      },
     });
   });
 

@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import request from 'supertest';
 import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
-import { createRoleAssignment } from '../../modules/admin/assignment-service.js';
 import { MainSiteAuthClient } from '../auth/main-site-auth-client.js';
 import { createMemoryStore } from '../database/memory-store.js';
 
@@ -51,15 +50,18 @@ export async function scopedEditFixture() {
     previewAllowedUids: [scopedMemberUid, 'demo-admin'],
     collectionsUploadDirectory: directory,
   });
-  // Main authentication creates the target subject. Set up grants through the assignment
-  // service so a lead login does not fill the deliberately absent legacy definitions.
+  // Main authentication creates the target subject. Seed appointments directly so setup
+  // neither requires authority to appoint privileged roles nor fills absent legacy definitions.
   await request(app).get('/api/development/v1/me').set(memberHeaders).expect(200);
   async function assign(roleKey: RoleKey, scope: ScopeRef = publicScope) {
-    return createRoleAssignment(
-      store,
-      { subjectUid: scopedMemberUid, roleKey, scope },
-      { actorUid: 'demo-admin' },
-    );
+    return store.roleAssignments.create({
+      subjectUid: scopedMemberUid,
+      roleKey,
+      scope,
+      status: 'active',
+      expiresAt: null,
+      ownerUid: 'test-fixture',
+    });
   }
   return {
     app,

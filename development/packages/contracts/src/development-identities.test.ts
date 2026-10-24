@@ -54,7 +54,7 @@ describe('development identity catalog', () => {
       DEVELOPMENT_IDENTITY_SECTIONS.find((candidate) => candidate.id === id);
     expect(section('counselors')?.groups.flatMap(({ options }) => options)).toHaveLength(5);
     expect(section('student_union')?.groups).toHaveLength(6);
-    expect(section('youth_league')?.groups).toHaveLength(7);
+    expect(section('youth_league')?.groups).toHaveLength(8);
     expect(section('tms')?.groups.flatMap(({ options }) => options)).toHaveLength(3);
     expect(section('science_association')?.groups).toHaveLength(7);
     expect(section('media_center')?.groups).toHaveLength(4);
@@ -64,7 +64,7 @@ describe('development identity catalog', () => {
       toggleIdentitySelection(
         [
           'affiliation.sast_member',
-          'science_association.office.member',
+          'science_association.software.member',
           'youth_league.practice.member',
           'media_center.finance',
           'platform.admin',

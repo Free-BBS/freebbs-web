@@ -12,8 +12,15 @@ import { HttpError } from '../../core/errors/http-error.js';
 import {
   businessAdminIdentities,
   effectiveGlobalBusinessAdmins,
+  isDevelopmentAdministratorRole,
+  lockBusinessAdministratorAssignments,
+  configuredRootAdminUids,
 } from '../../core/authorization/business-admin.js';
 import type { UserDirectory } from '../../core/auth/user-directory.js';
+import {
+  isRootManagedGlobalAppointment,
+  requireRootAppointmentAuthority,
+} from '../../core/auth/protected-appointments.js';
 
 const SUPER_ADMIN_ROLE_KEY: RoleKey = 'platform.super_admin';
 
@@ -33,6 +40,8 @@ export interface TagAssignmentInput extends AssignmentInput {
 
 export interface AssignmentMutationContext {
   actorUid: string;
+  /** Trusted server authentication projection only. */
+  rootAdmin?: boolean;
   now?: Date;
   /** HTTP identity editing cannot mutate the reserved lead; internal recovery may. */
   allowReservedLeadMutation?: boolean;
@@ -84,6 +93,8 @@ export async function createRoleAssignment(
   const scope = input.scope ?? publicScope;
   validateScope(scope);
   validateExpiry(input.expiresAt, now);
+  if (isRootManagedGlobalAppointment(input.roleKey, scope))
+    requireRootAppointmentAuthority(context.actorUid, context.rootAdmin);
   if (input.roleKey === 'platform.admin' && (scope.type !== 'public' || scope.id !== '*'))
     throw new HttpError(
       400,
@@ -102,6 +113,8 @@ export async function createRoleAssignment(
   }
 
   return store.transaction(async (transactionStore) => {
+    if (isDevelopmentAdministratorRole(input.roleKey))
+      await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
     const definitions =
       input.roleKey === 'platform.admin'
         ? await transactionStore.roles.listForUpdate({ key: input.roleKey })
@@ -309,7 +322,10 @@ export async function archiveRoleAssignment(
   const now = context.now ?? new Date();
   const initial = await store.roleAssignments.get(assignmentId);
   return store.transaction(async (transactionStore) => {
-    if (initial?.roleKey === 'platform.admin' || initial?.roleKey === SUPER_ADMIN_ROLE_KEY) {
+    if (
+      initial &&
+      (isDevelopmentAdministratorRole(initial.roleKey) || initial.roleKey === SUPER_ADMIN_ROLE_KEY)
+    ) {
       await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
       await transactionStore.roles.listForUpdate({ key: SUPER_ADMIN_ROLE_KEY });
     }
@@ -319,18 +335,23 @@ export async function archiveRoleAssignment(
       throw new Error('Canonical platform super administrator role is missing');
     }
 
-    const assignments = initial
-      ? await transactionStore.roleAssignments.listForUpdate({
-          roleKey: initial.roleKey,
-          ...(initial.roleKey !== 'platform.admin' && initial.roleKey !== SUPER_ADMIN_ROLE_KEY
-            ? { ids: [assignmentId] }
-            : {}),
-        })
-      : [];
+    const assignments =
+      initial && isDevelopmentAdministratorRole(initial.roleKey)
+        ? await lockBusinessAdministratorAssignments(transactionStore)
+        : initial
+          ? await transactionStore.roleAssignments.listForUpdate({
+              roleKey: initial.roleKey,
+              ...(initial.roleKey !== 'platform.admin' && initial.roleKey !== SUPER_ADMIN_ROLE_KEY
+                ? { ids: [assignmentId] }
+                : {}),
+            })
+          : [];
     const assignment = assignments.find(({ id }) => id === assignmentId);
     if (assignment === undefined) {
       throw new HttpError(404, 'assignment_not_found', 'Role assignment not found');
     }
+    if (isRootManagedGlobalAppointment(assignment.roleKey, assignment.scope))
+      requireRootAppointmentAuthority(context.actorUid, context.rootAdmin);
     if (
       assignment.roleKey === SUPER_ADMIN_ROLE_KEY &&
       context.allowReservedLeadMutation === false
@@ -342,7 +363,7 @@ export async function archiveRoleAssignment(
     }
 
     if (
-      assignment.roleKey === 'platform.admin' &&
+      isDevelopmentAdministratorRole(assignment.roleKey) &&
       assignment.scope.type === 'public' &&
       assignment.scope.id === '*' &&
       isCurrent(assignment.expiresAt, now)
@@ -350,7 +371,9 @@ export async function archiveRoleAssignment(
       const [subjects, access] = await Promise.all([
         transactionStore.subjects.listForUpdate({
           status: 'active',
-          uids: [...new Set(assignments.map((row) => row.subjectUid))],
+          uids: [
+            ...new Set([...assignments.map((row) => row.subjectUid), ...configuredRootAdminUids()]),
+          ],
         }),
         transactionStore.developmentAccess.list(),
       ]);

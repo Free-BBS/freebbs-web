@@ -1,58 +1,48 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
-const { checkDevelopmentAccess } = require('../public/development-entry');
+const { enterDevelopment } = require('../public/development-entry');
 
-test('development construction page redirects only after the server accepts the bearer token', async () => {
-  const navigations = [];
-  const statuses = [];
-  let request;
-  assert.equal(
-    await checkDevelopmentAccess({
-      token: ' token ',
-      fetchImplementation: async (url, options) => {
-        request = { url, options };
-        return { ok: true };
-      },
-      navigate: (url) => navigations.push(url),
-      reportStatus: (status) => statuses.push(status),
-    }),
-    true,
-  );
-  assert.equal(request.url, '/api/development/v1/me');
-  assert.equal(request.options.headers.Authorization, 'Bearer token');
-  assert.deepEqual(navigations, ['/development/']);
-  assert.deepEqual(statuses, ['checking']);
-});
-
-test('denied development access stays silently on the construction page', async () => {
-  const statuses = [];
-  const result = await checkDevelopmentAccess({
-    token: 'token',
-    fetchImplementation: async () => ({ ok: false, status: 403 }),
-    navigate: () => assert.fail('must not navigate'),
-    reportStatus: (status) => statuses.push(status),
+test('legacy development entry opens the released app with query and fragment intact', () => {
+  const destinations = [];
+  enterDevelopment({
+    navigate: (url) => destinations.push(url),
+    search: '?from=learning',
+    hash: '#organizations',
   });
-
-  assert.equal(result, false);
-  assert.deepEqual(statuses, ['checking', 'denied']);
+  assert.deepEqual(destinations, ['/development/?from=learning#organizations']);
 });
 
-test('service and network failures report an unavailable state without navigating', async () => {
-  for (const response of [{ ok: false, status: 503 }, new Error('offline')]) {
-    const navigations = [];
-    const statuses = [];
-    const result = await checkDevelopmentAccess({
-      token: 'token',
-      fetchImplementation: async () => {
-        if (response instanceof Error) throw response;
-        return response;
+test('static legacy entry redirects without requiring a preview token or an API probe', () => {
+  const destinations = [];
+  const context = {
+    window: {
+      location: {
+        pathname: '/development.html',
+        search: '?from=bookmark',
+        hash: '#section',
+        replace: (url) => destinations.push(url),
       },
-      navigate: (url) => navigations.push(url),
-      reportStatus: (status) => statuses.push(status),
-    });
-    assert.equal(result, false);
-    assert.deepEqual(navigations, []);
-    assert.deepEqual(statuses, ['checking', 'unavailable']);
-  }
+      get localStorage() {
+        throw new Error('entry must not read a token or whitelist');
+      },
+      fetch() {
+        assert.fail('the app handles authentication after entry');
+      },
+    },
+  };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(__dirname, '..', 'public', 'development-entry.js'), 'utf8'),
+    context,
+  );
+  assert.deepEqual(destinations, ['/development/?from=bookmark#section']);
+});
+
+test('legacy entry retains an accessible app link without the construction illustration', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'development.html'), 'utf8');
+  assert.match(page, /href="\/development\/">进入发展端/);
+  assert.doesNotMatch(page, /development-construction|正在建设|<figure|发展端访问权限/);
 });

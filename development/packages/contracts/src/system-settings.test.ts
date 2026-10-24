@@ -102,7 +102,7 @@ describe('separate development authority', () => {
     );
     expect(
       display.systemSettingsIdentityLabels(['department.arts_member', 'platform.admin'], defaults),
-    ).toEqual(['平台管理员', '文艺中心部员']);
+    ).toEqual(['发展端管理员', '文艺中心部员']);
     const renamed: contracts.SystemSettingsOrganizations = {
       ...defaults,
       revision: 1,
@@ -128,5 +128,23 @@ describe('separate development authority', () => {
     expect(display.systemSettingsIdentityLabels(['department.arts_director'], renamed)).toEqual([
       '新文艺组织主任',
     ]);
+  });
+  it('upgrades former default department names while retaining explicit custom names', () => {
+    const metadata: contracts.SystemSettingsOrganizations = {
+      revision: 0,
+      organizations: [],
+      roles: [
+        { key: 'youth_league.freshman.leader', name: '新生组组长' },
+        { key: 'science_association.training.minister', name: '学培部部长' },
+        { key: 'science_association.planning.member', name: '策划部部员' },
+        { key: 'science_association.office.vice_chair', name: '办公室副主席' },
+      ],
+    };
+    expect(
+      contracts.systemSettingsIdentityLabels(
+        metadata.roles.map((row) => row.key),
+        metadata,
+      ),
+    ).toEqual(['办公室·新生组组长', '学习培养部部长', '智能策划部部员', '科协经费负责人']);
   });
 });

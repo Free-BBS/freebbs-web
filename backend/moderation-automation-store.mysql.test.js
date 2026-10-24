@@ -25,10 +25,10 @@ test(
     const pool = mysql.createPool({ ...config, database, connectionLimit: 10 });
     t.after(() => pool.end());
     await pool.query(
-      `CREATE TABLE users (id BIGINT PRIMARY KEY, username VARCHAR(64), is_admin TINYINT DEFAULT 0, full_name VARCHAR(64), student_id VARCHAR(10), email VARCHAR(200)) ENGINE=InnoDB`,
+      `CREATE TABLE users (id BIGINT PRIMARY KEY, uid VARCHAR(32) UNIQUE, username VARCHAR(64), role ENUM('student','ta','teacher','admin') DEFAULT 'student', is_admin TINYINT DEFAULT 0, full_name VARCHAR(64), student_id VARCHAR(10), email VARCHAR(200)) ENGINE=InnoDB`,
     );
     await pool.query(
-      "INSERT INTO users (id,username,is_admin) VALUES (1,'admin',1),(2,'author',0),(3,'reviewer',0),(4,'admin2',1)",
+      "INSERT INTO users (id,uid,username,is_admin) VALUES (1,'u_test_auto_admin','admin',1),(2,'u_test_auto_author','author',0),(3,'u_test_auto_reviewer','reviewer',0),(4,'u_test_auto_admin2','admin2',1)",
     );
     await pool.query(
       `CREATE TABLE community_notifications (id BIGINT AUTO_INCREMENT PRIMARY KEY, recipient_id BIGINT, actor_id BIGINT, kind VARCHAR(24), title VARCHAR(160), body TEXT, link VARCHAR(500), event_key VARCHAR(190), read_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_event (event_key,recipient_id)) ENGINE=InnoDB`,

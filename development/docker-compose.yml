@@ -22,9 +22,11 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
       FESTIVAL_UPLOAD_DIR: /var/lib/freebbs-development/festival
       COLLECTIONS_UPLOAD_DIR: /var/lib/freebbs-development/collections
+      FINANCE_DATA_DIR: /var/lib/freebbs-development/finance
     volumes:
       - festival-videos:/var/lib/freebbs-development/festival
       - collection-assets:/var/lib/freebbs-development/collections
+      - finance-data:/var/lib/freebbs-development/finance
     expose:
       - '3100'
     ports:
@@ -192,3 +194,4 @@ volumes:
   mysql-data:
   festival-videos:
   collection-assets:
+  finance-data:

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { AdminPage } from './AdminPage.js';
 
@@ -54,9 +55,15 @@ describe('AdminPage shell', () => {
   });
 
   it('opens directly on the administrator identity directory', async () => {
-    render(<AdminPage />);
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>,
+    );
 
-    expect(screen.getByRole('heading', { name: '管理员模块' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '负责人任命' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '负责人任命' })).toHaveAttribute('href', '/admin');
+    expect(screen.queryByRole('link', { name: '人员与组织' })).not.toBeInTheDocument();
     expect(await screen.findAllByText(/2023010567/)).not.toHaveLength(0);
     expect(mockRequest).toHaveBeenCalledWith('/admin/development-users?page=1&pageSize=20');
     expect(screen.queryByRole('tab', { name: 'Tag 定义' })).not.toBeInTheDocument();
@@ -65,7 +72,11 @@ describe('AdminPage shell', () => {
   });
 
   it('loads operation records only after opening the secondary panel', async () => {
-    render(<AdminPage />);
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>,
+    );
     await screen.findAllByText(/2023010567/);
     expect(
       mockRequest.mock.calls.some(([path]) => String(path).startsWith('/admin/audit-logs')),
@@ -96,7 +107,11 @@ describe('AdminPage shell', () => {
       }
       throw new Error(`Unexpected request ${path}`);
     });
-    render(<AdminPage />);
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>,
+    );
     const confirm = await screen.findByRole('button', { name: '任命首位平台管理员' });
     expect(confirm).toBeDisabled();
     await userEvent.selectOptions(screen.getByLabelText('首位平台管理员'), directoryUser.uid);
@@ -124,7 +139,11 @@ describe('AdminPage shell', () => {
       }
       throw new Error(`Unexpected request ${path}`);
     });
-    render(<AdminPage />);
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>,
+    );
     await screen.findByRole('button', { name: '任命首位平台管理员' });
     await userEvent.selectOptions(screen.getByLabelText('首位平台管理员'), directoryUser.uid);
     await userEvent.type(screen.getByLabelText('任命说明'), '保留说明');
@@ -152,9 +171,13 @@ describe('AdminPage shell', () => {
     'does not load administrative data for an unqualified or preview identity %j',
     async (user) => {
       mockAuth.mockReturnValue({ user, reload: mockReload });
-      render(<AdminPage />);
+      render(
+        <MemoryRouter>
+          <AdminPage />
+        </MemoryRouter>,
+      );
       await Promise.resolve();
-      expect(screen.queryByRole('heading', { name: '管理员模块' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: '负责人任命' })).not.toBeInTheDocument();
       expect(mockRequest).not.toHaveBeenCalled();
     },
   );

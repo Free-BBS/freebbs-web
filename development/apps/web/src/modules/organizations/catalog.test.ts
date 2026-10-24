@@ -39,7 +39,11 @@ describe('organization exhibition catalog', () => {
       findOrganization('youth_league')?.departments.find(({ key }) => key === 'freshman')?.name,
     ).toBe('办公室·新生组');
     expect(findOrganization('tms')?.departments).toHaveLength(0);
-    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(19);
+    const departments = ORGANIZATION_GALLERY.flatMap((organization) =>
+      organization.departments.map(({ key }) => `${organization.key}.${key}`),
+    );
+    expect(departments).toHaveLength(19);
+    expect(new Set(departments).size).toBe(19);
     for (const organization of ORGANIZATION_GALLERY) {
       expect(organization).not.toHaveProperty('leadership');
       expect(organization).not.toHaveProperty('supportingPositions');
@@ -89,13 +93,14 @@ describe('organization exhibition catalog', () => {
       if (!content.site) expect(content.sections.length).toBeGreaterThan(0);
     }
   });
-  it('does not turn the research exhibition into a practice permission identity', () => {
+  it('uses the independent canonical research identity without aliasing practice', () => {
     const research = findOrganization('youth_league')!.departments.find(
       ({ key }) => key === 'research',
     )!;
     expect(research.name).toBe('调研组');
-    expect(research.sharedActivityScope).toBe(false);
-    expect(departmentForRoute('youth_league', 'research')).toBeUndefined();
+    expect(research.sharedActivityScope).toBe(true);
+    expect(research.focus).toEqual(['品牌项目调研', '访谈与分析', '同学声音']);
+    expect(departmentForRoute('youth_league', 'research')?.id).toBe('youth_league.research');
     expect(departmentForRoute('youth_league', 'practice')?.id).toBe('youth_league.practice');
     expect(SHOWCASES.find(({ slug }) => slug === 'research')?.departmentId).toBe(
       'youth_league.research',

@@ -8,11 +8,46 @@ import {
 import type { ModuleManifest, ModuleId, RoleKey } from './modules.js';
 import { SOCIAL_ORGANIZATIONS, type SocialOrganizationId } from './organizations.js';
 
-/** Business administration never derives from the reserved development lead role. */
+export const DUAL_PLATFORM_ADMIN_ROLE_KEYS = [
+  'counselor.youth_league_secretary',
+  'counselor.youth_league',
+  'counselor.student_development',
+] as const satisfies readonly RoleKey[];
+export const DEVELOPMENT_ADMIN_ROLE_KEYS = [
+  'platform.admin',
+  ...DUAL_PLATFORM_ADMIN_ROLE_KEYS,
+] as const satisfies readonly RoleKey[];
+export const LEARNING_ADMIN_ROLE_KEYS = [
+  'platform.learning_admin',
+  ...DUAL_PLATFORM_ADMIN_ROLE_KEYS,
+] as const satisfies readonly RoleKey[];
+/** High-privilege global appointments can be changed only by the configured platform root. */
+export const ROOT_MANAGED_ROLE_KEYS = [
+  'platform.admin',
+  'platform.learning_admin',
+  ...DUAL_PLATFORM_ADMIN_ROLE_KEYS,
+] as const satisfies readonly RoleKey[];
+
+/** Flags are resolved from active, unexpired public:* appointments by the server. */
 export function isDevelopmentBusinessAdmin(
-  user: Pick<UserContext, 'roles' | 'businessAdmin'> | null | undefined,
+  user: Pick<UserContext, 'roles' | 'businessAdmin' | 'rootAdmin'> | null | undefined,
 ): boolean {
-  return user?.businessAdmin === true && user.roles.includes('platform.admin');
+  return (
+    user?.rootAdmin === true ||
+    (user?.businessAdmin === true &&
+      DEVELOPMENT_ADMIN_ROLE_KEYS.some((role) => user.roles.includes(role)))
+  );
+}
+export function isLearningPlatformAdmin(
+  user:
+    Pick<UserContext, 'roles' | 'learningAdmin' | 'mainSiteAdmin' | 'rootAdmin'> | null | undefined,
+): boolean {
+  return (
+    user?.rootAdmin === true ||
+    (user?.learningAdmin === true &&
+      (user.mainSiteAdmin === true ||
+        LEARNING_ADMIN_ROLE_KEYS.some((role) => user.roles.includes(role))))
+  );
 }
 export function isDevelopmentLead(roles: readonly RoleKey[]): boolean {
   return roles.includes('platform.super_admin');
@@ -46,6 +81,8 @@ export interface DevelopmentDirectoryFilters {
   admission?: 'admitted' | 'not_admitted' | 'member' | 'lead';
 }
 export interface SystemSettingsUser {
+  /** Existing main-site role/is_admin source, displayed read-only. */
+  legacyLearningAdmin?: boolean;
   uid: string;
   username: string;
   displayName: string;
@@ -110,6 +147,14 @@ function customizedRoleName(
   metadata: SystemSettingsOrganizations,
 ): string | undefined {
   const name = metadata.roles.find((row) => row.key === role)?.name;
+  if (role === 'platform.admin' && name === '平台管理员') return undefined;
+  const canonical = identityLabels([role])[0];
+  const legacyDefault = canonical
+    ?.replace('办公室·新生组', '新生组')
+    .replace('学习培养部', '学培部')
+    .replace('智能策划部', '策划部');
+  if (name === legacyDefault && name !== canonical) return undefined;
+  if (role === 'science_association.office.vice_chair' && name === '办公室副主席') return undefined;
   return name && name !== identityLabels([role])[0] ? name : undefined;
 }
 /** Apply persisted display metadata while keeping canonical keys and default concise options. */
@@ -143,8 +188,10 @@ export function systemSettingsIdentityLabels(
 ): string[] {
   const selected = new Set(roles);
   const labels: string[] = [];
+  if (selected.has('platform.learning_admin'))
+    labels.push(customizedRoleName('platform.learning_admin', metadata) ?? '学习端管理员');
   if (selected.has('platform.admin'))
-    labels.push(metadata.roles.find((row) => row.key === 'platform.admin')?.name ?? '平台管理员');
+    labels.push(customizedRoleName('platform.admin', metadata) ?? '发展端管理员');
   for (const section of systemSettingsIdentitySections(metadata)) {
     const parentName = renamedOrganization(sectionOrganizations[section.id], metadata);
     for (const group of section.groups)
@@ -163,6 +210,7 @@ export function systemSettingsIdentityLabels(
           labels.push(option.label);
         else if (group.id === 'tms.position')
           labels.push(parentName ? `${parentName}${option.label}` : `TMS ${option.label}`);
+        else if (group.id === 'science_association.finance') labels.push(option.label);
         else if (group.id === 'student_union.finance') labels.push(`学生会${option.label}`);
         else if (group.id === 'youth_league.finance')
           labels.push(`${parentName ?? '团委'}${option.label}`);

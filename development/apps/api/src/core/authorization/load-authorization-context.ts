@@ -1,4 +1,10 @@
-import { validateTagScope } from '@freebbs-development/contracts';
+import {
+  validateTagScope,
+  ROLE_KEYS,
+  DEVELOPMENT_ADMIN_ROLE_KEYS,
+  LEARNING_ADMIN_ROLE_KEYS,
+  DUAL_PLATFORM_ADMIN_ROLE_KEYS,
+} from '@freebbs-development/contracts';
 import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
 import {
   ALL_PERMISSION_RULES,
@@ -117,6 +123,8 @@ export async function loadAuthorizationContext(
     ...identityContext,
     roles: [],
     businessAdmin: false,
+    learningAdmin: false,
+    rootAdmin: false,
     tags: [],
     policies: [],
     roleScopes: [],
@@ -188,7 +196,9 @@ export async function loadAuthorizationContext(
   }
 
   const activeRoles = new Set(
-    roles.filter(({ status }) => status === 'active').map(({ key }) => key),
+    roles
+      .filter(({ status, key }) => status === 'active' && ROLE_KEYS.includes(key))
+      .map(({ key }) => key),
   );
   const currentRoleAssignments = roleAssignments.filter(
     (assignment) =>
@@ -214,14 +224,24 @@ export async function loadAuthorizationContext(
               'student_union.executive_president',
               'student_union.presidium',
               'science_association.chair',
+              'platform.learning_admin',
             ].includes(assignment.roleKey) || isGlobal(assignment.scope),
         )
         .map(({ roleKey }) => roleKey),
     ),
   ];
   const businessAdmin = currentRoleAssignments.some(
-    (assignment) => assignment.roleKey === 'platform.admin' && isGlobal(assignment.scope),
+    (assignment) =>
+      DEVELOPMENT_ADMIN_ROLE_KEYS.some((role) => role === assignment.roleKey) &&
+      isGlobal(assignment.scope),
   );
+  const learningAdmin =
+    identityContext.mainSiteAdmin === true ||
+    currentRoleAssignments.some(
+      (assignment) =>
+        LEARNING_ADMIN_ROLE_KEYS.some((role) => role === assignment.roleKey) &&
+        isGlobal(assignment.scope),
+    );
   const activeRoleBindings = roleBindings.filter(
     (binding) => binding.status === 'active' && catalogDefinition(binding),
   );
@@ -258,9 +278,26 @@ export async function loadAuthorizationContext(
     }
     // Existing databases can retain legacy lead wildcard rows. The reserved lead
     // role never supplies business permissions, even before catalog reconciliation.
-    if (assignment.roleKey === 'platform.admin') {
+    if (
+      assignment.roleKey === 'platform.admin' ||
+      (DUAL_PLATFORM_ADMIN_ROLE_KEYS.some((role) => role === assignment.roleKey) &&
+        isGlobal(assignment.scope))
+    ) {
       for (const permission of activePermissions.filter(
-        (permission) => !permission.action.startsWith('admin.'),
+        (permission) =>
+          !permission.action.startsWith('admin.') &&
+          (assignment.roleKey !== 'counselor.student_development' ||
+            !permission.action.startsWith('finance.')) &&
+          !roleBindings.some(
+            (binding) =>
+              binding.roleKey === assignment.roleKey &&
+              binding.status !== 'active' &&
+              overlaps(binding, permission) &&
+              scopesOverlap(
+                binding.scope,
+                isGlobal(assignment.scope) ? undefined : assignment.scope,
+              ),
+          ),
       )) {
         policies.push({
           id: `business-admin:${assignment.id}:${permission.id}`,
@@ -274,6 +311,12 @@ export async function loadAuthorizationContext(
     }
     for (const binding of activeRoleBindings) {
       if (binding.roleKey !== assignment.roleKey) continue;
+      // This legacy office key now represents only the independent SAST finance appointment.
+      if (
+        assignment.roleKey === 'science_association.office.vice_chair' &&
+        !binding.action.startsWith('finance.')
+      )
+        continue;
       if (assignment.roleKey === 'platform.super_admin' && !binding.action.startsWith('admin.'))
         continue;
       const scope = combineScopes(assignment.scope, binding.scope);
@@ -340,5 +383,5 @@ export async function loadAuthorizationContext(
     }
   }
 
-  return { ...context, businessAdmin, policies };
+  return { ...context, businessAdmin, learningAdmin, policies };
 }
