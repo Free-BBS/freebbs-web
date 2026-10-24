@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import console from 'node:console';
 
-const roots = ['collections', 'festival', 'sports', 'settings'];
+const roots = ['collections', 'festival', 'sports', 'settings', 'finance'];
 const digest = (data) => createHash('sha256').update(data).digest('hex');
 const inside = (parent, child) => {
   const path = relative(parent, child);
@@ -55,6 +55,15 @@ export async function createSnapshot({ sql, directories, output, confirm }) {
     throw new Error('SQL dump, collections storage and a new output directory are required');
   if (Object.keys(directories).some((key) => !roots.includes(key)))
     throw new Error('Unknown development storage root');
+  if (directories.finance) {
+    const finance = await realpath(directories.finance);
+    for (const [name, path] of Object.entries(directories)) {
+      if (name === 'finance' || !path) continue;
+      const other = await realpath(path);
+      if (inside(finance, other) || inside(other, finance))
+        throw new Error('Finance storage must be separate from upload and other feature roots');
+    }
+  }
   await regular(sql);
   const entries = [{ source: sql, path: 'database.sql' }];
   const sources = [await realpath(sql)];
@@ -93,7 +102,7 @@ export async function verifySnapshot(source) {
   for (const entry of manifest.files) {
     if (
       typeof entry.path !== 'string' ||
-      !/^(database\.sql|(?:collections|festival|sports|settings)\/.+)$/.test(entry.path) ||
+      !/^(database\.sql|(?:collections|festival|sports|settings|finance)\/.+)$/.test(entry.path) ||
       /[\\:]/.test(entry.path) ||
       [...entry.path].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
       entry.path.split('/').some((part) => !part || part === '..' || part === '.') ||
@@ -133,7 +142,7 @@ async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === '--help') {
     console.log(
-      'create --sql FILE --collections DIR [--festival DIR] [--sports DIR] [--settings DIR] --output NEWDIR --confirm DEVELOPMENT_WRITES_STOPPED\nverify --source DIR\nstage --source DIR --output NEWDIR',
+      'create --sql FILE --collections DIR [--festival DIR] [--sports DIR] [--settings DIR] [--finance DIR] --output NEWDIR --confirm DEVELOPMENT_WRITES_STOPPED\nverify --source DIR\nstage --source DIR --output NEWDIR',
     );
     return;
   }

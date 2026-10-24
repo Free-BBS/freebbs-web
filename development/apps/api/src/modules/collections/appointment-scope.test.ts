@@ -21,7 +21,7 @@ const base = '/api/development/v1/collections';
 const positions: Array<[RoleKey, DepartmentId]> = [
   ['counselor.practice', 'youth_league.practice'],
   ['counselor.student_development', 'youth_league.freshman'],
-  ['counselor.innovation', 'science_association.office'],
+  ['counselor.innovation', 'science_association.software'],
 ];
 async function fixture(department: DepartmentId) {
   const value = await scopedEditFixture();

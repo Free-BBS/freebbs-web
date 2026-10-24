@@ -21,7 +21,7 @@ test('Map verifier loading is bounded and optional without affecting existing ba
       await writeFile(filename, invalid);
       assert.equal(await readDevelopmentMapTokenDigest(root), undefined);
     }
-    const digest = 'abc123'.repeat(10) + 'abcd';
+    const digest = `${'abc123'.repeat(10)}abcd`;
     await writeFile(filename, `${digest}\n`);
     assert.equal(await readDevelopmentMapTokenDigest(root), digest);
   } finally {
@@ -139,6 +139,7 @@ test('development directory exposes a read-only user projection with escaped sea
       displayName: '同学',
       studentId: '2023000001',
       avatarUrl: null,
+      legacyLearningAdmin: false,
     },
   ]);
   assert.deepEqual(captured.parameters, [
@@ -149,7 +150,41 @@ test('development directory exposes a read-only user projection with escaped sea
     '%100!%!_%',
   ]);
   assert.doesNotMatch(captured.sql, /LIMIT 2000/);
-  assert.doesNotMatch(captured.sql, /email|password|is_admin/i);
+  assert.doesNotMatch(captured.sql, /email|password/i);
+  assert.match(captured.sql, /role, is_admin/);
+});
+
+test('directory legacy-learning-admin provenance uses physical user rows and never arbitrary projected flags', async () => {
+  const rows = [
+    { uid: 'physical-admin', username: 'physical', is_admin: 1, role: 'student' },
+    { uid: 'legacy-role', username: 'legacy', is_admin: 0, role: 'admin' },
+    {
+      uid: 'ordinary',
+      username: 'ordinary',
+      is_admin: 0,
+      role: 'student',
+      learningAdmin: true,
+      rootAdmin: true,
+    },
+  ];
+  const directory = createDevelopmentUserDirectory({
+    execute: async (sql, parameters) => {
+      assert.doesNotMatch(sql, /UPDATE|INSERT|DELETE/i);
+      if (sql.includes('COUNT(*)')) return [[{ total: rows.length }]];
+      if (sql.includes('WHERE uid = ?')) return [[rows.find((row) => row.uid === parameters[0])]];
+      return [rows];
+    },
+  });
+  assert.deepEqual(
+    (await directory.list()).map((user) => user.legacyLearningAdmin),
+    [true, true, false],
+  );
+  assert.deepEqual(
+    (await directory.page()).items.map((user) => user.legacyLearningAdmin),
+    [true, true, false],
+  );
+  assert.equal((await directory.get('ordinary')).legacyLearningAdmin, false);
+  assert.equal((await directory.get('physical-admin')).legacyLearningAdmin, true);
 });
 
 test('development initialization failure does not prevent the main backend from starting', async () => {
@@ -191,7 +226,9 @@ test('runtime loader forwards the optional development reward provider without i
         throw new Error('must not run at initialization');
       },
     };
-    const learningProvider = async () => { throw new Error('must not query learning at initialization'); };
+    const learningProvider = async () => {
+      throw new Error('must not query learning at initialization');
+    };
     const digest = 'b'.repeat(64);
     await writeFile(path.join(root, '.development-map-token.sha256'), digest);
     const options = await loadDevelopmentRuntime({
@@ -207,15 +244,58 @@ test('runtime loader forwards the optional development reward provider without i
   }
 });
 
+test('runtime loader preserves the private finance directory and public upload boundary independently', async () => {
+  const { mkdtemp, mkdir, writeFile, rm, readFile } = require('node:fs/promises');
+  const path = require('node:path');
+  const { tmpdir } = require('node:os');
+  const { loadDevelopmentRuntime } = require('./development-integration');
+  const root = await mkdtemp(path.join(tmpdir(), 'development-finance-boundary-'));
+  try {
+    const dist = path.join(root, 'development', 'apps', 'api', 'dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(path.join(dist, 'package.json'), JSON.stringify({ type: 'module' }));
+    await writeFile(
+      path.join(dist, 'integrated-runtime.js'),
+      'export function createIntegratedDevelopmentRuntime(options) { return options; }',
+    );
+    const financeDirectory = path.join(root, 'private-finance');
+    const publicUploadDirectory = path.join(root, 'uploads');
+    const options = await loadDevelopmentRuntime({
+      repositoryRoot: root,
+      financeDirectory,
+      publicUploadDirectory,
+    });
+    assert.equal(options.financeDirectory, financeDirectory);
+    assert.equal(options.publicUploadDirectory, publicUploadDirectory);
+    assert.notEqual(options.financeDirectory, options.publicUploadDirectory);
+    const unconfigured = await loadDevelopmentRuntime({ repositoryRoot: root });
+    assert.equal(Object.hasOwn(unconfigured, 'financeDirectory'), false);
+    assert.equal(Object.hasOwn(unconfigured, 'publicUploadDirectory'), false);
+    const server = await readFile(path.join(__dirname, 'server.js'), 'utf8');
+    assert.match(server, /financeDirectory:\s*process\.env\.FINANCE_DATA_DIR\?\.trim\(\)/);
+    assert.match(server, /publicUploadDirectory:\s*config\.uploadDir/);
+    assert.doesNotMatch(server, /financeDirectory:\s*path\.join\(config\.uploadDir/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('development directory pages beyond 2000 and counts matching users with identity filters', async () => {
   const calls = [];
-  const directory = createDevelopmentUserDirectory({ execute: async (sql, parameters) => {
-    calls.push({ sql, parameters });
-    return sql.includes('COUNT(*)') ? [[{ total: 2105 }]] : [[{ uid: 'u_2001', username: 'late', student_id: null }]];
-  }});
-  const page = await directory.page({ query: 'late', page: 101, pageSize: 20,
-    include: { uids: ['u_2001'], studentIds: ['2023'], usernames: ['legacy'] } });
+  const directory = createDevelopmentUserDirectory({
+    execute: async (sql, parameters) => {
+      calls.push({ sql, parameters });
+      return sql.includes('COUNT(*)')
+        ? [[{ total: 2105 }]]
+        : [[{ uid: 'u_2001', username: 'late', student_id: null }]];
+    },
+  });
+  const page = await directory.page({
+    query: 'late',
+    page: 101,
+    pageSize: 20,
+    include: { uids: ['u_2001'], studentIds: ['2023'], usernames: ['legacy'] },
+  });
   assert.equal(page.total, 2105);
   assert.equal(page.items[0].uid, 'u_2001');
   assert.equal(page.page, 101);

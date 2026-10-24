@@ -7,6 +7,7 @@ const { once } = require('node:events');
 const test = require('node:test');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const { projectMainSiteAuthority } = require('./development-integration');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
 const {
@@ -181,6 +182,8 @@ test(
         crypto,
         privacyPolicy,
         privacyPolicyService,
+        projectMainSiteAuthority,
+        developmentRuntime: null,
         requireAdmin,
         requireAuth,
         normalizeAdminAccount,

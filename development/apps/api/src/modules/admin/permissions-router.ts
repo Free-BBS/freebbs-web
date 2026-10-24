@@ -28,8 +28,15 @@ import {
 } from './schemas.js';
 import { adminActor } from './subjects-router.js';
 import {
+  isRootManagedGlobalAppointment,
+  requireRootAppointmentAuthority,
+} from '../../core/auth/protected-appointments.js';
+import {
   businessAdminIdentities,
   effectiveGlobalBusinessAdmins,
+  isDevelopmentAdministratorRole,
+  lockBusinessAdministratorAssignments,
+  configuredRootAdminUids,
 } from '../../core/authorization/business-admin.js';
 import type { UserDirectory } from '../../core/auth/user-directory.js';
 
@@ -180,7 +187,10 @@ async function patchRoleStatus(
   actorUid: string,
   directory?: UserDirectory,
   allowedUids: readonly string[] = [],
+  rootAdmin = false,
 ): Promise<RoleRecord> {
+  if (isRootManagedGlobalAppointment(roleKey, { type: 'public', id: '*' }))
+    requireRootAppointmentAuthority(actorUid, rootAdmin);
   return store.transaction(async (transactionStore) => {
     await transactionStore.roles.listForUpdate({ key: 'platform.admin' });
     await transactionStore.roles.listForUpdate({ key: superAdminRoleKey });
@@ -188,13 +198,13 @@ async function patchRoleStatus(
     const definitions = await transactionStore.roles.list();
     const role = definitions.find(({ key }) => key === roleKey);
     if (role === undefined) throw new HttpError(404, 'role_not_found', 'Role not found');
-    if (roleKey === 'platform.admin' && status === 'inactive') {
-      const assignments = await transactionStore.roleAssignments.listForUpdate({
-        roleKey: 'platform.admin',
-      });
+    if (isDevelopmentAdministratorRole(roleKey) && status === 'inactive') {
+      const assignments = await lockBusinessAdministratorAssignments(transactionStore);
       const access = await transactionStore.developmentAccess.list();
       const subjects = await transactionStore.subjects.listForUpdate({
-        uids: [...new Set(assignments.map((row) => row.subjectUid))],
+        uids: [
+          ...new Set([...assignments.map((row) => row.subjectUid), ...configuredRootAdminUids()]),
+        ],
       });
       const identities = await businessAdminIdentities(assignments, directory);
       if (
@@ -206,7 +216,18 @@ async function patchRoleStatus(
           new Date(),
           identities,
           allowedUids,
-        ).size > 0
+        ).size > 0 &&
+        effectiveGlobalBusinessAdmins(
+          assignments,
+          definitions.map((definition) =>
+            definition.key === roleKey ? { ...definition, status: 'inactive' } : definition,
+          ),
+          subjects,
+          access,
+          new Date(),
+          identities,
+          allowedUids,
+        ).size === 0
       )
         throw new HttpError(409, 'last_platform_admin', '平台管理员角色必须保持可用');
     }
@@ -356,6 +377,7 @@ export function createPermissionsRouter(
       adminActor(response).uid,
       directory,
       allowedUids,
+      adminActor(response).rootAdmin === true,
     );
     send(response, 200, role);
   });

@@ -3,20 +3,20 @@ import { IdentityProviderUnavailableError } from './auth-client.js';
 import {
   canManageDevelopmentAccess,
   isDevelopmentBusinessAdmin,
+  platformRootAdminUids,
   type UserContext,
 } from '@freebbs-development/contracts';
 import { loadAuthorizationContext } from '../authorization/load-authorization-context.js';
 import { authorize } from '../authorization/authorize.js';
-import { ROLE_PERMISSION_CATALOG } from '../authorization/permission-catalog.js';
+import {
+  ALL_PERMISSION_RULES,
+  ROLE_PERMISSION_CATALOG,
+} from '../authorization/permission-catalog.js';
 import type { AuthorizationContext } from '../authorization/policy.js';
 import { ensurePlatformDefinitions } from '../bootstrap/bootstrap-service.js';
 import type { DevelopmentStore, SubjectRecord } from '../database/types.js';
 import type { AuthClient } from './auth-client.js';
-import {
-  ensureDevelopmentLeadAssignment,
-  hasConfiguredDevelopmentLead,
-  resolveDevelopmentAccess,
-} from './development-access.js';
+import { ensureDevelopmentLeadAssignment, resolveDevelopmentAccess } from './development-access.js';
 import { directoryUserContext, type UserDirectory } from './user-directory.js';
 
 export type AuthHeaders = Readonly<Record<string, string | string[] | undefined>>;
@@ -41,6 +41,8 @@ export interface AuthMiddlewareOptions {
   userDirectory?: UserDirectory;
   now?: () => Date;
   reportError?: (message: string, error: unknown) => void;
+  /** Trusted server configuration only. The explicit default root cannot be removed. */
+  rootAdminUids?: readonly string[];
 }
 
 function firstHeader(headers: AuthHeaders, name: string): string | undefined {
@@ -107,10 +109,18 @@ export async function synchronizeSubject(
 }
 
 function emptyAuthorizationContext(identity: UserContext): AuthorizationContext {
-  return { ...identity, roles: [], businessAdmin: false, tags: [], policies: [] };
+  return {
+    ...identity,
+    roles: [],
+    businessAdmin: false,
+    learningAdmin: false,
+    rootAdmin: false,
+    tags: [],
+    policies: [],
+  };
 }
 
-function temporarySuperAdminContext(context: AuthorizationContext): AuthorizationContext {
+function developmentLeadContext(context: AuthorizationContext): AuthorizationContext {
   return {
     ...context,
     roles: [...new Set([...context.roles, 'platform.super_admin' as const])],
@@ -118,14 +128,47 @@ function temporarySuperAdminContext(context: AuthorizationContext): Authorizatio
       ...(context.policies ?? []),
       ...ROLE_PERMISSION_CATALOG['platform.super_admin'].map((rule, index) => ({
         ...rule,
-        id: `main-site-admin-bootstrap:${index}`,
+        id: `automatic-development-lead:${index}`,
         effect: 'allow' as const,
       })),
     ],
   };
 }
 
+function rootContext(context: AuthorizationContext): AuthorizationContext {
+  return {
+    ...context,
+    rootAdmin: true,
+    businessAdmin: true,
+    learningAdmin: true,
+    roles: [
+      ...new Set([
+        ...context.roles,
+        'platform.super_admin' as const,
+        'platform.admin' as const,
+        'platform.learning_admin' as const,
+      ]),
+    ],
+    policies: ALL_PERMISSION_RULES.map((rule, index) => ({
+      action: rule.action,
+      resource: rule.resource,
+      id: `configured-platform-root:${index}`,
+      effect: 'allow' as const,
+    })),
+  };
+}
+
+function automaticDevelopmentLead(context: AuthorizationContext): boolean {
+  return (context.roleScopes ?? []).some(
+    (assignment) =>
+      ['counselor.youth_league_secretary', 'counselor.youth_league'].includes(assignment.roleKey) &&
+      assignment.scope.type === 'public' &&
+      assignment.scope.id === '*',
+  );
+}
+
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
+  const rootUids = new Set(platformRootAdminUids(options.rootAdminUids?.join(',')));
   return async (headers: AuthHeaders): Promise<AuthenticationResult> => {
     const credential = readCredential(headers, options.mode);
     if (!credential.ok) {
@@ -140,10 +183,10 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
         return { status: 401, code: 'invalid_identity', message: 'Authentication is invalid' };
       }
       const now = (options.now ?? (() => new Date()))();
+      const root = rootUids.has(viewerIdentity.uid);
       let identity = viewerIdentity;
       let accessLevel: 'member' | 'lead' | null = null;
       let accessGrant: Awaited<ReturnType<typeof resolveDevelopmentAccess>> = null;
-      let bootstrapAdministrator = false;
       let previewing = false;
       let viewerCanPreview = false;
       let viewerContext: AuthorizationContext | undefined;
@@ -152,31 +195,32 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
         if (options.store) {
           accessGrant = await resolveDevelopmentAccess(options.store, viewerIdentity);
           accessLevel = accessGrant?.accessLevel ?? null;
-          if (
-            accessLevel === null &&
-            viewerIdentity.mainSiteAdmin === true &&
-            !(await hasConfiguredDevelopmentLead(options.store))
-          ) {
-            accessLevel = 'lead';
-            bootstrapAdministrator = true;
-          }
         }
         // Every verified main-site account can enter. Explicit grants still determine
         // development lead and identity-preview authority, not ordinary admission.
         accessLevel ??= 'member';
 
         if (options.store) {
-          const viewerSubject = await synchronizeSubject(options.store, viewerIdentity, now);
-          if (accessLevel === 'lead') {
+          let viewerSubject = await synchronizeSubject(options.store, viewerIdentity, now);
+          if (root && viewerSubject.status !== 'active') {
+            viewerSubject = (await options.store.subjects.update(viewerSubject.id, {
+              status: 'active',
+            }))!;
+          }
+          if (root || accessLevel === 'lead') {
             await ensurePlatformDefinitions(options.store, viewerIdentity.uid);
             if (accessGrant) {
               await ensureDevelopmentLeadAssignment(options.store, viewerIdentity, accessGrant);
             }
           }
           const storedViewer = await loadAuthorizationContext(options.store, viewerIdentity, now);
-          viewerContext = bootstrapAdministrator
-            ? temporarySuperAdminContext(storedViewer)
-            : storedViewer;
+          const automaticLead = automaticDevelopmentLead(storedViewer);
+          if (root || automaticLead) accessLevel = 'lead';
+          viewerContext = root
+            ? rootContext(storedViewer)
+            : automaticLead
+              ? developmentLeadContext(storedViewer)
+              : storedViewer;
           viewerCanPreview =
             viewerSubject.status === 'active' &&
             canManageDevelopmentAccess({
@@ -219,10 +263,16 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       if (options.mode === 'main' && previewing) {
         await synchronizeSubject(options.store, identity, now);
       }
-      const user =
+      const storedUser =
         viewerContext && !previewing
           ? viewerContext
           : await loadAuthorizationContext(options.store, identity, now);
+      const user =
+        !previewing && root
+          ? rootContext(storedUser)
+          : automaticDevelopmentLead(storedUser)
+            ? developmentLeadContext(storedUser)
+            : storedUser;
       return {
         status: 200,
         user:

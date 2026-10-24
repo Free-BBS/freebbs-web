@@ -8,6 +8,7 @@
 
 1. [总体技术设计](./overall-technical-design.md)：了解平台定位、系统边界、功能域、权限模型、负责人和模块认领方式。
 2. [本地开发与完整预览](./local-development.md)：安装依赖，以 demo 身份启动 Web 与 API，并进行 MySQL 联调。
+3. [管理员权限说明](./admin-permissions.md)：供管理员转发使用的身份权限、授权与交接说明。
 
 ### 平台核心与领域模块开发者
 
@@ -21,6 +22,7 @@
 
 - [服务器部署与运维](./server-deployment.md)：生产拓扑、主站同源路径、Nginx/systemd、Compose 集成、健康检查和回滚。
 - [数据库与业务数据管理](./data-administration.md)：生产迁移、凭据隔离、备份恢复和定期核查。
+- [财务同步系统部署与备份](./finance-tracking.md)：共享岗位授权、私有持久存储、财务快照和恢复核查。
 
 ## 当前平台范围
 

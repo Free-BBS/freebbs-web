@@ -14,6 +14,7 @@ import sportsIcon from '../assets/icons/sports.svg';
 import organizationsIcon from '../assets/icons/organizations.svg';
 import {
   hasPresentationPermission,
+  canViewSystemSettings,
   isSuperAdmin,
   type PresentationUser,
 } from '../core/permissions/Can.js';
@@ -135,7 +136,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   },
   {
     id: 'admin',
-    name: '管理员模块',
+    name: '管理员端',
     description: '维护发展端访问名单与负责人资格。',
     route: '/admin',
     icon: adminIcon,
@@ -162,7 +163,7 @@ export const ORGANIZATIONS_NAVIGATION: ModuleManifest = {
 
 export const SYSTEM_SETTINGS_NAVIGATION: ModuleManifest = {
   id: 'admin',
-  name: '系统设置',
+  name: '管理员端',
   description: '维护组织身份、通知和奖励。',
   route: '/system-settings',
   icon: adminIcon,
@@ -171,6 +172,12 @@ export const SYSTEM_SETTINGS_NAVIGATION: ModuleManifest = {
   requiredPermissions: [],
   order: 100,
 };
+
+/** One presentation entry; the destination keeps each existing authorization boundary. */
+export function managementNavigationFor(user: PresentationUser): ModuleManifest | null {
+  if (canViewSystemSettings(user)) return SYSTEM_SETTINGS_NAVIGATION;
+  return isSuperAdmin(user) ? { ...SYSTEM_SETTINGS_NAVIGATION, route: '/admin' } : null;
+}
 
 export function resolveModuleStatus(
   manifest: ModuleManifest,

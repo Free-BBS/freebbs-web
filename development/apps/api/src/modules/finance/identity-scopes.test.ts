@@ -275,6 +275,7 @@ function expectedOrganizations(role: RoleKey): (SocialOrganizationId | null)[] {
   return center ? [`${center[1] ?? center[2]}_center` as SocialOrganizationId] : [];
 }
 function expectedMaintainer(role: RoleKey): boolean {
+  if (role === 'science_association.office.vice_chair') return false;
   return (
     [
       'platform.admin',
@@ -292,8 +293,8 @@ function expectedMaintainer(role: RoleKey): boolean {
 }
 
 describe('finance canonical identity matrix', () => {
-  it('covers all 79 catalog identities including legacy roles', () => {
-    expect(ROLE_KEYS).toHaveLength(79);
+  it('covers all 81 shared catalog identities', () => {
+    expect(ROLE_KEYS).toHaveLength(81);
   });
   it.each(ROLE_KEYS)(
     '%s reads its organizations and maintains only its authorized budgets',

@@ -9,6 +9,8 @@ import type { UserDirectory } from '../../core/auth/user-directory.js';
 import {
   businessAdminIdentities,
   effectiveGlobalBusinessAdmins,
+  lockBusinessAdministratorAssignments,
+  configuredRootAdminUids,
 } from '../../core/authorization/business-admin.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
@@ -66,10 +68,17 @@ export function createBusinessAdminBootstrapRouter(
       await tx.roles.listForUpdate({ key: 'platform.admin' });
       await tx.roles.listForUpdate({ key: 'platform.super_admin' });
       const roles = await tx.roles.list();
-      const assignments = await tx.roleAssignments.listForUpdate({ roleKey: 'platform.admin' });
+      const assignments = await lockBusinessAdministratorAssignments(tx);
       const access = await tx.developmentAccess.list();
       const subjects = await tx.subjects.listForUpdate({
-        uids: [...new Set([actor.uid, target.uid, ...assignments.map((row) => row.subjectUid)])],
+        uids: [
+          ...new Set([
+            actor.uid,
+            target.uid,
+            ...configuredRootAdminUids(),
+            ...assignments.map((row) => row.subjectUid),
+          ]),
+        ],
       });
       const identities = await businessAdminIdentities(assignments, directory);
       if (!subjects.some((subject) => subject.uid === actor.uid && subject.status === 'active'))

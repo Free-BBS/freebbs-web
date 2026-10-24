@@ -5,8 +5,8 @@ import { canEditDepartment, departmentsForRoles } from './departments.js';
 import { validateIdentitySelection } from './development-identities.js';
 
 describe('completed organization identity policy', () => {
-  it('maps all 79 keys to canonical membership or an explicit nonmembership category', () => {
-    expect(ROLE_KEYS).toHaveLength(79);
+  it('maps all 81 keys to canonical membership or an explicit nonmembership category', () => {
+    expect(ROLE_KEYS).toHaveLength(81);
     for (const role of ROLE_KEYS) {
       const memberships = organizations.organizationMembershipsForRole(role);
       if (role.startsWith('platform.') || role.startsWith('counselor.')) {
@@ -27,7 +27,7 @@ describe('completed organization identity policy', () => {
     );
     expect(
       organizations.organizationMembershipsForRoles([
-        'science_association.office.member',
+        'science_association.software.member',
         'science_association.chair',
       ]),
     ).toEqual([{ organizationId: 'sast', level: 'lead' }]);
@@ -35,11 +35,11 @@ describe('completed organization identity policy', () => {
   it('supervises approved departments without turning counselors into organization members', () => {
     for (const role of ['student_union.executive_president', 'student_union.presidium'] as const)
       expect(departmentsForRoles([role])).toHaveLength(4);
-    expect(departmentsForRoles(['science_association.chair'])).toHaveLength(6);
+    expect(departmentsForRoles(['science_association.chair'])).toHaveLength(5);
     expect(departmentsForRoles(['counselor.practice']).map(({ id }) => id)).toEqual([
       'youth_league.practice',
     ]);
-    expect(departmentsForRoles(['counselor.innovation'])).toHaveLength(6);
+    expect(departmentsForRoles(['counselor.innovation'])).toHaveLength(5);
     expect(departmentsForRoles(['counselor.student_development']).map(({ id }) => id)).toEqual([
       'youth_league.freshman',
       'youth_league.sail',
@@ -58,7 +58,7 @@ describe('completed organization identity policy', () => {
     for (const roles of [
       ['domain.arts_lead', 'department.sports_member'],
       ['student_union.presidium', 'department.arts_member'],
-      ['science_association.chair', 'science_association.office.member'],
+      ['science_association.chair', 'science_association.software.member'],
       ['affiliation.sast_member', 'science_association.hardware.member'],
       ['affiliation.tuanwei_director', 'youth_league.practice.member'],
       ['youth_league.organization.member', 'youth_league.sail.student'],

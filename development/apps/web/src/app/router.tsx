@@ -25,7 +25,7 @@ import { CommunityPage } from '../modules/community/CommunityPage.js';
 import { DeskPage } from '../modules/desk/DeskPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
 import { FestivalPage } from '../modules/festival/FestivalPage.js';
-import { FinancePage } from '../modules/finance/FinancePage.js';
+import { FinanceWorkspace } from '../modules/finance/FinanceWorkspace.js';
 import { GrowthPage } from '../modules/growth/GrowthPage.js';
 import { InformationHubPage } from '../modules/information/InformationHubPage.js';
 import { InformationLayout } from '../modules/information/InformationLayout.js';
@@ -383,9 +383,16 @@ function SportsTeamDetailRoute() {
   return <SportsTeamDetailPage teamId={teamId} />;
 }
 
-function FinanceRoute() {
+function FinanceRoute({ page }: { page: 'budget' | 'claims' }) {
   const auth = useAuth();
-  return <FinancePage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+  return (
+    <FinanceWorkspace
+      key={auth.demoUser ?? auth.user?.uid}
+      page={page}
+      client={auth.client}
+      user={auth.user}
+    />
+  );
 }
 
 function AdminRoute() {
@@ -566,7 +573,9 @@ export const appRouter = createBrowserRouter(
         { path: 'sports', element: <SportsRoute /> },
         { path: 'sports/matches', element: <SportsMatchesRoute /> },
         { path: 'sports/:teamId', element: <SportsTeamDetailRoute /> },
-        { path: 'finance', element: <FinanceRoute /> },
+        { path: 'finance', element: <Navigate to="/finance/budget" replace /> },
+        { path: 'finance/budget', element: <FinanceRoute page="budget" /> },
+        { path: 'finance/claims', element: <FinanceRoute page="claims" /> },
         { path: 'admin', element: <AdminRoute /> },
         { path: '*', element: <Navigate to="/community" replace /> },
       ],

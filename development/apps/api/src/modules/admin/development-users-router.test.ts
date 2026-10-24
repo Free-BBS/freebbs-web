@@ -232,7 +232,7 @@ describe('batch development admission', () => {
 });
 
 describe('development access administration', () => {
-  it('lets a main-site administrator configure the first lead and then retains only ordinary member access', async () => {
+  it('lets the configured root appoint a first development lead while legacy learning administrators stay ordinary members', async () => {
     const store = createMemoryStore({ seed: false });
     const users = [
       {
@@ -249,6 +249,13 @@ describe('development access administration', () => {
         studentId: '2023000002',
         avatarUrl: null,
       },
+      {
+        uid: 'u_48370eb1aba453c7',
+        username: 'Root',
+        displayName: 'Root',
+        studentId: null,
+        avatarUrl: null,
+      },
     ];
     const app = createApp({
       store,
@@ -260,7 +267,9 @@ describe('development access administration', () => {
               ? candidate.uid === 'u_main_admin'
               : token === 'development-lead'
                 ? candidate.uid === 'u_development_lead'
-                : false,
+                : token === 'root'
+                  ? candidate.uid === 'u_48370eb1aba453c7'
+                  : false,
           );
           return user
             ? {
@@ -282,6 +291,11 @@ describe('development access administration', () => {
     await request(app)
       .put('/api/development/v1/admin/development-users/u_development_lead')
       .set('Authorization', 'Bearer main-admin')
+      .send({ accessLevel: 'lead' })
+      .expect(403);
+    await request(app)
+      .put('/api/development/v1/admin/development-users/u_development_lead')
+      .set('Authorization', 'Bearer root')
       .send({ accessLevel: 'lead' })
       .expect(200);
 

@@ -1,4 +1,4 @@
-import type { UserContext } from '@freebbs-development/contracts';
+import { isPlatformRootAdminUid, type UserContext } from '@freebbs-development/contracts';
 import type {
   DevelopmentAccessRecord,
   DevelopmentStore,
@@ -84,6 +84,11 @@ async function applyDevelopmentAccess(
     actorUid: string;
   },
 ): Promise<DevelopmentAccessRecord | null> {
+  if (
+    isPlatformRootAdminUid(input.user.uid, process.env.PLATFORM_ROOT_ADMIN_UIDS) &&
+    input.accessLevel !== 'lead'
+  )
+    throw new HttpError(403, 'platform_root_immutable', '最高管理员资格不能通过普通任命操作撤销');
   await store.roles.listForUpdate({ key: 'platform.admin' });
   await store.roles.listForUpdate({ key: 'platform.super_admin' });
   const candidates = await store.developmentAccess.list({ identity: input.user });

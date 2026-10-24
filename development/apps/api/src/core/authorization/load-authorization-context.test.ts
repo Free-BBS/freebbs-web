@@ -57,6 +57,49 @@ function publishRequest() {
 }
 
 describe('database-backed authorization context', () => {
+  it('does not retain former office-lead business powers on the repurposed SAST finance key', async () => {
+    const store = await governanceStore();
+    await store.roleAssignments.create({
+      subjectUid: identity.uid,
+      roleKey: 'science_association.office.vice_chair',
+      status: 'active',
+      expiresAt: null,
+      ownerUid: 'bootstrap',
+      scope: publicScope,
+    });
+    await store.rolePermissions.create({
+      roleKey: 'science_association.office.vice_chair',
+      action: 'knowledge.publish',
+      resource: 'knowledge_entry',
+      effect: 'allow',
+      status: 'active',
+      ownerUid: 'legacy',
+      scope: { type: 'social_organization', id: 'sast' },
+    });
+    const context = await loadAuthorizationContext(store, identity, now);
+    expect(
+      authorize(
+        context,
+        {
+          action: 'knowledge.publish',
+          resource: 'knowledge_entry',
+          scope: { type: 'social_organization', id: 'sast' },
+        },
+        now,
+      ).allowed,
+    ).toBe(false);
+    expect(
+      authorize(
+        context,
+        {
+          action: 'finance.record.read',
+          resource: 'finance_record',
+          scope: { type: 'social_organization', id: 'sast' },
+        },
+        now,
+      ).allowed,
+    ).toBe(true);
+  });
   it('grants from active governance rows and revokes immediately with the binding', async () => {
     const store = await governanceStore();
     await assignRole(store, 'department.arts_director');

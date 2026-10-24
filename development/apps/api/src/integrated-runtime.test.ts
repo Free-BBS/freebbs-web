@@ -33,6 +33,32 @@ beforeEach(() => {
   mocks.start.mockReturnValue(mocks.stop);
 });
 afterEach(() => vi.unstubAllEnvs());
+it('exposes the shared root authority to the learning platform before a first development login', async () => {
+  vi.stubEnv('PLATFORM_ROOT_ADMIN_UIDS', 'additional-root');
+  const runtime = await createIntegratedDevelopmentRuntime(options);
+  for (const uid of ['u_48370eb1aba453c7', 'additional-root'])
+    expect(await runtime.resolvePlatformAuthority(uid)).toEqual({
+      rootAdmin: true,
+      learningAdmin: true,
+      developmentAdmin: true,
+      developmentLead: true,
+    });
+  await runtime.close();
+});
+it('passes private finance configuration and public upload roots into the app', async () => {
+  const runtime = await createIntegratedDevelopmentRuntime({
+    ...options,
+    financeDirectory: '/private-finance',
+    publicUploadDirectory: '/public-uploads',
+  });
+  expect(mocks.app).toHaveBeenCalledWith(
+    expect.objectContaining({
+      financeDirectory: '/private-finance',
+      publicUploadDirectory: '/public-uploads',
+    }),
+  );
+  await runtime.close();
+});
 it('starts the integrated feed with the effective app environment and stops it before closing once', async () => {
   vi.stubEnv('DEVELOPMENT_ARTICLE_FEED_URL', 'https://feed.example/articles');
   vi.stubEnv('DEVELOPMENT_FEED_OWNER_UID', 'publisher');

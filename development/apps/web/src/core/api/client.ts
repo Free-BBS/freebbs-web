@@ -71,7 +71,9 @@ export class ApiClient {
     }
     this.selectedDemoUserId =
       this.authMode === 'demo'
-        ? requireDemoUserId(options.selectedDemoUserId ?? DEMO_USER_IDS[0])
+        ? requireDemoUserId(
+            options.selectedDemoUserId ?? import.meta.env.VITE_DEMO_USER_ID ?? DEMO_USER_IDS[0],
+          )
         : null;
     this.selectedPreviewUid =
       this.authMode === 'main'

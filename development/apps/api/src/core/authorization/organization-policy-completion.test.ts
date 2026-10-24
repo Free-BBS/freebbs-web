@@ -78,7 +78,7 @@ describe('organization policy compatibility on existing stores', () => {
     }
   });
   it.each(ROLE_KEYS)(
-    'checks canonical business authority for %s across the complete 79-role matrix',
+    'checks canonical business authority for %s across the complete 81-role matrix',
     async (roleKey) => {
       const f = await fixture(roleKey);
       const context = await f.load();
@@ -87,7 +87,14 @@ describe('organization policy compatibility on existing stores', () => {
         expect(authorize(context, request, now).allowed).toBe(false);
         return;
       }
-      if (roleKey === 'platform.admin') {
+      if (
+        [
+          'platform.admin',
+          'counselor.youth_league_secretary',
+          'counselor.youth_league',
+          'counselor.student_development',
+        ].includes(roleKey)
+      ) {
         expect(context.businessAdmin).toBe(true);
         return;
       }
@@ -264,12 +271,12 @@ describe('organization policy compatibility on existing stores', () => {
     ).toBe(true);
   });
   it.each(['counselor.youth_league_secretary', 'counselor.youth_league'] as const)(
-    'grants %s organization business while keeping platform identity separate',
+    'grants %s current global organization business and administrator authority',
     async (roleKey) => {
       const f = await fixture(roleKey);
       const context = await f.load();
       expect(isGlobalOrganizationBusinessSupervisor(context)).toBe(true);
-      expect(context.businessAdmin).toBe(false);
+      expect(context.businessAdmin).toBe(true);
       expect(context.roles).toEqual([roleKey]);
       expect(
         authorize(

@@ -20,7 +20,7 @@ const unionOrganizations = [
   'rights_development_center',
 ] as const;
 const memberships: { roleKey: RoleKey; organizationId: SocialOrganizationId }[] = [
-  { roleKey: 'science_association.office.member', organizationId: 'sast' },
+  { roleKey: 'science_association.software.member', organizationId: 'sast' },
   { roleKey: 'media_center.audiovisual.member', organizationId: 'media_center' },
   { roleKey: 'youth_league.practice.member', organizationId: 'tuanwei' },
   ...unionOrganizations.flatMap((organizationId) =>
@@ -183,7 +183,7 @@ for (const { endpoint, actor } of [
     );
 
     it('keeps organizational membership from authorizing directory administration', async () => {
-      const { app } = await fixture('science_association.office.member', 'sast');
+      const { app } = await fixture('science_association.software.member', 'sast');
       await request(app)
         .get(`/api/development/v1/${endpoint}`)
         .query({ organizationId: 'sast', page: 1, pageSize: 2 })

@@ -10,10 +10,18 @@ import { createMemoryStore } from '../../core/database/memory-store.js';
 const roots: string[] = [];
 const base = '/api/development/v1';
 const scope = { type: 'public', id: '*' } as const;
+const rootUid = 'u_48370eb1aba453c7';
 async function fixture(extra: Partial<CreateAppOptions> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'development-settings-'));
   roots.push(root);
   const store = createMemoryStore();
+  const rootUser = {
+    uid: rootUid,
+    username: 'Root',
+    displayName: 'Root',
+    studentId: null,
+    avatarUrl: null,
+  };
   const users = ['lead', 'admin', 'member', 'target'].map((uid, index) => ({
     uid,
     username: uid,
@@ -59,13 +67,14 @@ async function fixture(extra: Partial<CreateAppOptions> = {}) {
     collectionsUploadDirectory: root,
     authClient: {
       introspect: async (token) => {
-        const user = users.find((user) => user.uid === token);
+        const user = token === rootUid ? rootUser : users.find((user) => user.uid === token);
         return user ? { ...user, baseRole: 'student', roles: [], tags: [] } : null;
       },
     },
     userDirectory: {
       list: async (query) => users.filter((user) => !query || user.uid.includes(query)),
-      get: async (uid) => users.find((user) => user.uid === uid) ?? null,
+      get: async (uid) =>
+        uid === rootUid ? rootUser : (users.find((user) => user.uid === uid) ?? null),
     },
     ...extra,
   });
@@ -75,6 +84,156 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 describe('development system settings boundaries', () => {
+  it.each(['counselor.youth_league', 'counselor.student_development', 'root'] as const)(
+    'allows replacing the final explicit administrator when an effective %s remains',
+    async (source) => {
+      const rootUsers = ['lead', 'admin', 'member', 'target', 'u_48370eb1aba453c7'].map((uid) => ({
+        uid,
+        username: uid,
+        displayName: uid,
+        studentId: null,
+        avatarUrl: null,
+      }));
+      const { app, store } = await fixture(
+        source === 'root'
+          ? {
+              userDirectory: {
+                list: async (query) =>
+                  rootUsers.filter((user) => !query || user.uid.includes(query)),
+                get: async (uid) => rootUsers.find((user) => user.uid === uid) ?? null,
+              },
+            }
+          : {},
+      );
+      const uid = source === 'root' ? 'u_48370eb1aba453c7' : 'member';
+      if (source === 'root')
+        await store.subjects.create({
+          uid,
+          displayName: 'Root',
+          avatarUrl: null,
+          status: 'active',
+          ownerUid: 'root',
+          scope,
+        });
+      else
+        await store.roleAssignments.create({
+          subjectUid: uid,
+          roleKey: source,
+          status: 'active',
+          expiresAt: null,
+          ownerUid: 'lead',
+          scope,
+        });
+      const before = await request(app)
+        .get(`${base}/system-settings/users?query=admin`)
+        .set('Authorization', 'Bearer admin')
+        .expect(200);
+      const result = await request(app)
+        .put(`${base}/system-settings/users/admin`)
+        .set('Authorization', `Bearer ${rootUid}`)
+        .send({ revision: before.body.data[0].revision, roles: [], captainTeamIds: [] });
+      expect(result.status).toBe(200);
+    },
+  );
+  it('omits retired finance-chief and office identities from metadata and effective selections', async () => {
+    const { app, store } = await fixture();
+    for (const key of [
+      'finance.chief',
+      'science_association.office.minister',
+      'science_association.office.member',
+    ]) {
+      await store.roles.create({
+        key: key as RoleKey,
+        name: 'Retired role',
+        status: 'active',
+        ownerUid: 'legacy',
+        scope,
+      });
+      await store.roleAssignments.create({
+        subjectUid: 'target',
+        roleKey: key as RoleKey,
+        status: 'active',
+        expiresAt: null,
+        ownerUid: 'legacy',
+        scope,
+      });
+    }
+    const metadata = await request(app)
+      .get(`${base}/system-settings/organizations`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    expect(
+      metadata.body.data.roles.some((row: { key: string }) =>
+        [
+          'finance.chief',
+          'science_association.office.minister',
+          'science_association.office.member',
+        ].includes(row.key),
+      ),
+    ).toBe(false);
+    const users = await request(app)
+      .get(`${base}/system-settings/users?query=target`)
+      .set('Authorization', 'Bearer admin')
+      .expect(200);
+    expect(users.body.data[0].roles).toEqual([]);
+    const identity = await request(app)
+      .get(`${base}/me`)
+      .set('Authorization', 'Bearer target')
+      .expect(200);
+    expect(identity.body.data.roles).toEqual([]);
+  });
+  it.each([
+    'platform.admin',
+    'platform.learning_admin',
+    'counselor.youth_league_secretary',
+    'counselor.youth_league',
+    'counselor.student_development',
+  ] as const)(
+    'edits the global %s checkbox while retaining a separate local appointment',
+    async (roleKey) => {
+      const { app, store } = await fixture();
+      const localScope = { type: 'department', id: 'youth_league.organization' };
+      const local = await store.roleAssignments.create({
+        subjectUid: 'target',
+        roleKey,
+        status: 'active',
+        expiresAt: null,
+        ownerUid: 'lead',
+        scope: localScope,
+      });
+      const before = await request(app)
+        .get(`${base}/system-settings/users?query=target`)
+        .set('Authorization', 'Bearer admin')
+        .expect(200);
+      expect(before.body.data[0].roles).not.toContain(roleKey);
+      const checked = await request(app)
+        .put(`${base}/system-settings/users/target`)
+        .set('Authorization', `Bearer ${rootUid}`)
+        .send({ revision: before.body.data[0].revision, roles: [roleKey], captainTeamIds: [] })
+        .expect(200);
+      expect(checked.body.data.roles).toContain(roleKey);
+      const assignments = await store.roleAssignments.list({ subjectUid: 'target' });
+      expect(assignments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: local.id, status: 'active', scope: localScope }),
+          expect.objectContaining({ roleKey, status: 'active', scope }),
+        ]),
+      );
+      await request(app)
+        .put(`${base}/system-settings/users/target`)
+        .set('Authorization', `Bearer ${rootUid}`)
+        .send({ revision: checked.body.data.revision, roles: [], captainTeamIds: [] })
+        .expect(200);
+      expect(await store.roleAssignments.get(local.id)).toMatchObject({
+        status: 'active',
+        scope: localScope,
+      });
+      const global = (await store.roleAssignments.list({ subjectUid: 'target' })).find(
+        (row) => row.roleKey === roleKey && row.scope.type === 'public' && row.scope.id === '*',
+      );
+      expect(global?.status).toBe('archived');
+    },
+  );
   it('locks identity rows only for the edited user and global administration guards', async () => {
     const { app, store } = await fixture();
     const roleLocks = vi.fn(),
@@ -213,7 +372,7 @@ describe('development system settings boundaries', () => {
     };
     const result = await request(app)
       .put(`${base}/system-settings/users/target`)
-      .set('Authorization', 'Bearer admin')
+      .set('Authorization', `Bearer ${rootUid}`)
       .send(input)
       .expect(200);
     expect(result.body.data.roles).toEqual(input.roles);
@@ -281,7 +440,7 @@ describe('development system settings boundaries', () => {
       .put(`${base}/system-settings/users/admin`)
       .set('Authorization', 'Bearer admin')
       .send({ revision, roles: [], captainTeamIds: [] })
-      .expect(409);
+      .expect(403);
     expect(
       (await store.roleAssignments.list({ query: 'lead' })).some(
         (row) => row.roleKey === 'platform.admin',
@@ -306,12 +465,12 @@ describe('development system settings boundaries', () => {
     await request(app)
       .delete(`${base}/admin/role-assignments/${assignment.id}`)
       .set('X-Demo-User', 'demo-admin')
-      .expect(409);
+      .expect(403);
     await request(app)
       .patch(`${base}/admin/roles/platform.admin`)
       .set('X-Demo-User', 'demo-admin')
       .send({ status: 'inactive' })
-      .expect(409);
+      .expect(403);
     expect((await store.roleAssignments.get(assignment.id))?.status).toBe('active');
   });
   it('deduplicates isolated notification publishing, checks trusted recipients, and marks only own inbox', async () => {
@@ -1141,7 +1300,7 @@ describe('development system settings boundaries', () => {
       .put(`${base}/system-settings/users/admin`)
       .set('Authorization', 'Bearer admin')
       .send({ revision: administrator.revision, roles: [], captainTeamIds: [] })
-      .expect(409);
+      .expect(403);
     expect(await store.developmentAccess.get(adminGrant.id)).toEqual(adminGrant);
     expect(
       (await store.auditLogs.list()).filter(

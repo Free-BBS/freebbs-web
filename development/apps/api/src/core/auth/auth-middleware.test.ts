@@ -168,7 +168,7 @@ describe('authentication middleware', () => {
     ).resolves.toMatchObject({ status: 403, code: 'preview_identity_denied' });
   });
 
-  it('temporarily grants an unlisted main-site administrator access until a lead is configured', async () => {
+  it('keeps legacy main-site administrators learning-only without development bootstrap authority', async () => {
     const store = createMemoryStore({ seed: false });
     const authenticate = createAuthMiddleware({
       authClient: {
@@ -197,22 +197,18 @@ describe('authentication middleware', () => {
       status: 200,
       user: {
         uid: 'u_main_admin',
-        roles: ['platform.super_admin'],
-        developmentAccess: 'lead',
-        viewer: { canManageDevelopment: true, canPreviewDevelopment: true },
+        roles: [],
+        learningAdmin: true,
+        businessAdmin: false,
+        developmentAccess: 'member',
+        viewer: { canManageDevelopment: false, canPreviewDevelopment: false },
       },
     });
     await expect(
       authenticate({ authorization: 'Bearer admin', 'x-development-preview-uid': 'u_target' }),
     ).resolves.toMatchObject({
-      status: 200,
-      user: {
-        uid: 'u_target',
-        roles: [],
-        businessAdmin: false,
-        previewing: true,
-        viewer: { uid: 'u_main_admin', canManageDevelopment: true, canPreviewDevelopment: true },
-      },
+      status: 403,
+      code: 'preview_identity_denied',
     });
     expect(await store.developmentAccess.list()).toEqual([]);
     expect(await store.roleAssignments.list()).toEqual([]);

@@ -1,6 +1,8 @@
 import type { UserContext } from '@freebbs-development/contracts';
 
 export interface DirectoryUser {
+  /** Physical legacy learning-platform source, never a projected administrator flag. */
+  legacyLearningAdmin?: boolean;
   uid: string;
   username: string;
   displayName: string;

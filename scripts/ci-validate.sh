@@ -50,7 +50,7 @@ npm run test:moderation-automation
 node --test backend/discussion-moderation.test.js backend/moderation-attachments.test.js backend/moderation-integration.test.js backend/moderation-privacy.test.js backend/moderation-privacy.integration.test.js scripts/moderation-page.test.js
 node --test backend/moderation-ai-client.test.js backend/moderation-ai-test.test.js
 node --test backend/moderation-policy.test.js backend/moderation-policy-decision.test.js backend/moderation-audit.test.js scripts/moderation-policy-regression.test.js
-node --test backend/development-integration.test.js backend/achievement-source.test.js
+node --test backend/development-integration.test.js backend/platform-authority.test.js backend/shared-admin-authority.test.js backend/achievement-source.test.js
 node --check backend/background-tasks.js
 node --check backend/workbench-schedule-planner.js
 node --test backend/background-tasks.test.js

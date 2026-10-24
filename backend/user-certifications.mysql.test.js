@@ -7,6 +7,11 @@ const { once } = require('node:events');
 const test = require('node:test');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const {
+  configuredPlatformRootAdminUids,
+  isMainSiteRootAdminUid,
+  projectMainSiteAuthority,
+} = require('./development-integration');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 const { ensureNotificationTables, createNotificationService } = require('./notifications');
 const {
@@ -142,6 +147,10 @@ test(
     assert.ok(start >= 0 && end > start);
     const failures = { ledger: false, responsibilities: false };
     const routeContext = vm.createContext({
+      configuredPlatformRootAdminUids,
+      isMainSiteRootAdminUid,
+      projectMainSiteAuthority,
+      developmentRuntime: null,
       app,
       pool,
       crypto,
@@ -211,6 +220,8 @@ test(
     const loginEnd = source.indexOf("app.post('/api/auth/reset-password',", loginStart);
     assert.ok(loginStart >= 0 && loginEnd > loginStart);
     vm.runInNewContext(source.slice(loginStart, loginEnd), {
+      projectMainSiteAuthority,
+      developmentRuntime: null,
       app,
       pool,
       verifyPasswordAsync,

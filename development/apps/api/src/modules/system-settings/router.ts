@@ -230,8 +230,8 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
     });
   async function metadata(state: SettingsState): Promise<SystemSettingsOrganizations> {
     const saved = state.organizations;
-    const definitions = (await options.store.roles.list()).filter(
-      (role) => role.key !== 'platform.super_admin',
+    const definitions = (await options.store.roles.list()).filter((role) =>
+      ASSIGNABLE_ROLES.some((key) => key === role.key),
     );
     return {
       revision: saved?.revision ?? 0,
@@ -383,6 +383,7 @@ export function createSystemSettingsRouters(options: SystemSettingsOptions) {
         parse(userInput, request.body),
         actor(response).uid,
         options.allowedUids,
+        { rootAdmin: actor(response).rootAdmin === true },
       ),
     ),
   );

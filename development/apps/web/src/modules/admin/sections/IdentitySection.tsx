@@ -12,12 +12,14 @@ export function IdentitySection({
   onRolesChange,
   labelsForRoles = identityLabels,
   readonly = false,
+  readonlyRoleKeys = [],
 }: {
   section: DevelopmentIdentitySection;
   roles: RoleKey[];
   onRolesChange: (roles: RoleKey[]) => void;
   labelsForRoles?: (roles: readonly RoleKey[]) => string[];
   readonly?: boolean;
+  readonlyRoleKeys?: readonly RoleKey[];
 }) {
   const [open, setOpen] = useState(false);
   const selectedRoles = new Set(roles);
@@ -27,10 +29,15 @@ export function IdentitySection({
   const selectedInSection = sectionRoleKeys.filter((roleKey) => selectedRoles.has(roleKey));
 
   function toggle(groupIndex: number, roleKey: RoleKey) {
-    if (readonly) return;
+    if (readonly || roleReadonly(roleKey)) return;
     const group = section.groups[groupIndex];
     if (!group) return;
     onRolesChange(toggleIdentitySelection(roles, roleKey));
+  }
+  function roleReadonly(roleKey: RoleKey): boolean {
+    if (readonlyRoleKeys.includes(roleKey)) return true;
+    const next = toggleIdentitySelection(roles, roleKey);
+    return readonlyRoleKeys.some((key) => roles.includes(key) !== next.includes(key));
   }
 
   return (
@@ -66,7 +73,7 @@ export function IdentitySection({
                       type="button"
                       aria-label={`${group.label}：${identity.label}`}
                       aria-pressed={selected}
-                      disabled={readonly}
+                      disabled={readonly || roleReadonly(identity.roleKey)}
                       onClick={() => toggle(groupIndex, identity.roleKey)}
                     >
                       {identity.label}

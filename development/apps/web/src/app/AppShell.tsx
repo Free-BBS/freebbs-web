@@ -1,30 +1,35 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
-import adminIcon from '../assets/icons/admin.svg';
 import { isOrganizationShowcasePath } from '../modules/organizations/showcase/presentation.js';
 import { OrganizationShowcaseHeader } from '../modules/organizations/OrganizationShowcaseHeader.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
-import {
-  canViewSystemSettings,
-  isSuperAdmin,
-  type PresentationUser,
-} from '../core/permissions/Can.js';
+import type { PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { MainSiteFooter } from './MainSiteFooter.js';
 import { useMainSiteTypography } from './main-site-typography.js';
 import {
   visibleModuleManifests,
+  MODULE_MANIFESTS,
   ORGANIZATIONS_NAVIGATION,
-  SYSTEM_SETTINGS_NAVIGATION,
+  managementNavigationFor,
   navigationPathname,
+  resolveModuleStatus,
   type ModuleStateOverrides,
 } from './module-manifests.js';
 
-const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison', 'events', 'knowledge']);
+const HIDDEN_SIDEBAR_MODULE_IDS = new Set([
+  'dashboard',
+  'admin',
+  'liaison',
+  'events',
+  'knowledge',
+  'finance',
+]);
+const FINANCE_NAVIGATION = MODULE_MANIFESTS.find((module) => module.id === 'finance');
 
 export interface AppShellProps {
   children?: ReactNode;
@@ -35,6 +40,7 @@ interface ModuleNavigationProps {
   activePath?: string;
   className: string;
   ensureCurrentVisible?: boolean;
+  financeAccess: boolean;
   label: string;
   moduleStates?: ModuleStateOverrides;
   user: PresentationUser;
@@ -58,6 +64,7 @@ function ModuleNavigation({
   activePath,
   className,
   ensureCurrentVisible = false,
+  financeAccess,
   label,
   moduleStates,
   user,
@@ -94,8 +101,17 @@ function ModuleNavigation({
     .flatMap((module) =>
       module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
     );
-  if (withLearningLink && canViewSystemSettings(user)) {
-    navigationModules.push(SYSTEM_SETTINGS_NAVIGATION);
+  if (
+    financeAccess &&
+    FINANCE_NAVIGATION &&
+    resolveModuleStatus(FINANCE_NAVIGATION, moduleStates) === 'enabled'
+  ) {
+    navigationModules.push(FINANCE_NAVIGATION);
+    navigationModules.sort((left, right) => left.order - right.order);
+  }
+  const management = managementNavigationFor(user);
+  if (withLearningLink && management) {
+    navigationModules.push(management);
   }
 
   return (
@@ -104,7 +120,8 @@ function ModuleNavigation({
         const isActive =
           navigationPath === module.route ||
           navigationPath.startsWith(`${module.route}/`) ||
-          (module.route === '/desk' && deskAliasActive);
+          (module.route === '/desk' && deskAliasActive) ||
+          (module.id === 'admin' && /^\/(?:admin|system-settings)(?:\/|$)/.test(navigationPath));
         const content = (
           <>
             <span className="module-icon" aria-hidden="true">
@@ -145,6 +162,55 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   const auth = useAuth();
   const location = useLocation();
   const fullPageShowcase = isOrganizationShowcasePath(location.pathname);
+  const financeModuleEnabled =
+    FINANCE_NAVIGATION !== undefined &&
+    resolveModuleStatus(FINANCE_NAVIGATION, moduleStates) === 'enabled';
+  const previewing = Boolean(auth.user?.previewing || auth.previewUser);
+  const financeIdentity = JSON.stringify([
+    auth.status,
+    auth.authMode,
+    auth.user?.uid,
+    auth.demoUser,
+    auth.previewUser,
+    previewing,
+  ]);
+  const [financeAccess, setFinanceAccess] = useState<{
+    identity: string;
+    client: typeof auth.client;
+    allowed: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    setFinanceAccess(null);
+    if (auth.status !== 'authenticated' || previewing || !financeModuleEnabled || !auth.client)
+      return;
+    let current = true;
+    void (async () => {
+      try {
+        const access = await auth.client.request<{
+          configured: boolean;
+          canAccess: boolean;
+          canManageBudget: boolean;
+        }>('/finance/tracking/access');
+        if (current)
+          setFinanceAccess({
+            identity: financeIdentity,
+            client: auth.client,
+            allowed: access?.configured === true && access.canAccess === true,
+          });
+      } catch {
+        // Financial visibility fails closed independently of the rest of the shell.
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [auth.client, auth.status, financeIdentity, financeModuleEnabled, previewing]);
+  const canAccessFinance =
+    !previewing &&
+    financeAccess?.identity === financeIdentity &&
+    financeAccess.client === auth.client &&
+    financeAccess.allowed;
 
   const theme = useMainSiteTheme();
   const typography = useMainSiteTypography();
@@ -194,6 +260,8 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
     );
   }
 
+  const management = managementNavigationFor(auth.user);
+  const managementActive = /^\/(?:admin|system-settings)(?:\/|$)/.test(location.pathname);
   return (
     <div
       className={`development-shell-root${fullPageShowcase ? ' development-shell-root--full-page' : ''}`}
@@ -212,21 +280,20 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           <ModuleNavigation
             className="module-nav"
             label="主要导航"
+            financeAccess={canAccessFinance}
             moduleStates={moduleStates}
             user={auth.user as PresentationUser}
           />
           <div className="sidebar-footer">
-            {isSuperAdmin(auth.user) ? (
-              <NavLink className="sidebar-system-link" to="/admin">
-                <img className="sidebar-system-icon" src={adminIcon} alt="" />
-                <span>管理员模块</span>
-              </NavLink>
-            ) : null}
-            {canViewSystemSettings(auth.user) ? (
-              <NavLink className="sidebar-system-link" to={SYSTEM_SETTINGS_NAVIGATION.route}>
-                <img className="sidebar-system-icon" src={SYSTEM_SETTINGS_NAVIGATION.icon} alt="" />
-                <span>{SYSTEM_SETTINGS_NAVIGATION.name}</span>
-              </NavLink>
+            {management ? (
+              <Link
+                className={`sidebar-system-link${managementActive ? ' active' : ''}`}
+                aria-current={managementActive ? 'page' : undefined}
+                to={management.route}
+              >
+                <img className="sidebar-system-icon" src={management.icon} alt="" />
+                <span>{management.name}</span>
+              </Link>
             ) : null}
             <LearningSiteLink className="sidebar-learning-link" />
           </div>
@@ -264,6 +331,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
         className="mobile-nav"
         ensureCurrentVisible
         label="移动导航"
+        financeAccess={canAccessFinance}
         moduleStates={moduleStates}
         user={auth.user as PresentationUser}
         withLearningLink

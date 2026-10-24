@@ -4,12 +4,18 @@ import {
   validateIdentitySelection,
   organizationMembershipsForRole,
   ROLE_KEYS,
+  DEVELOPMENT_ADMIN_ROLE_KEYS,
+  LEARNING_ADMIN_ROLE_KEYS,
   SOCIAL_ORGANIZATION_IDS,
   type DevelopmentDirectoryFilters,
   type SystemSettingsUser,
   type SystemSettingsUserInput,
 } from '@freebbs-development/contracts';
 import { synchronizeSubject } from '../../core/auth/auth-middleware.js';
+import {
+  isRootManagedGlobalAppointment,
+  requireRootAppointmentAuthority,
+} from '../../core/auth/protected-appointments.js';
 import {
   directoryUserContext,
   directoryPage,
@@ -27,13 +33,19 @@ import { HttpError } from '../../core/errors/http-error.js';
 import {
   businessAdminIdentities,
   effectiveGlobalBusinessAdmins,
+  isDevelopmentAdministratorRole,
+  lockBusinessAdministratorAssignments,
+  configuredRootAdminUids,
 } from '../../core/authorization/business-admin.js';
 
 const scope = { type: 'public', id: '*' } as const;
 const current = (row: { status: string; expiresAt: string | null }, now = Date.now()) =>
   row.status === 'active' && (row.expiresAt === null || Date.parse(row.expiresAt) > now);
 const editableBusinessIdentity = (row: RoleAssignmentRecord) =>
-  row.roleKey !== 'platform.admin' || (row.scope.type === 'public' && row.scope.id === '*');
+  ![...DEVELOPMENT_ADMIN_ROLE_KEYS, ...LEARNING_ADMIN_ROLE_KEYS].some(
+    (key) => key === row.roleKey,
+  ) ||
+  (row.scope.type === 'public' && row.scope.id === '*');
 export function hasDevelopmentGrant(
   user: DirectoryUser,
   access: DevelopmentAccessRecord[],
@@ -63,7 +75,10 @@ export function identitySnapshot(
   const now = Date.now();
   const currentlyActive = (row: { status: string; expiresAt: string | null }) => current(row, now);
   const ownedRoles = roles.filter(
-    (row) => row.subjectUid === user.uid && row.roleKey !== 'platform.super_admin',
+    (row) =>
+      row.subjectUid === user.uid &&
+      row.roleKey !== 'platform.super_admin' &&
+      ROLE_KEYS.includes(row.roleKey),
   );
   const ownedTags = tags.filter(
     (row) => row.subjectUid === user.uid && row.tagKey === 'sports.team_captain',
@@ -275,6 +290,7 @@ export async function updateSettingsUser(
   input: SystemSettingsUserInput,
   actorUid: string,
   allowedUids: readonly string[] = [],
+  authority: { readonly rootAdmin?: boolean } = {},
 ) {
   const target = await directory.get(uid);
   if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
@@ -282,16 +298,14 @@ export async function updateSettingsUser(
   if (!validation.ok) throw new HttpError(400, 'identity_group_conflict', validation.message);
   const initialRoles = await store.roleAssignments.list({ subjectUid: uid });
   const changesAdmin =
-    input.roles.includes('platform.admin') ||
-    initialRoles.some((row) => row.roleKey === 'platform.admin' && current(row));
+    input.roles.some(isDevelopmentAdministratorRole) ||
+    initialRoles.some((row) => isDevelopmentAdministratorRole(row.roleKey) && current(row));
   return store.transaction(async (tx) => {
     // Stable definition row serializes last-administrator decisions, including access edits.
     // Lock it before identity rows so every administration writer has the same order.
     if (changesAdmin) await tx.roles.listForUpdate({ key: 'platform.admin' });
     const definitions = changesAdmin ? await tx.roles.list() : [];
-    const adminRoles = changesAdmin
-      ? await tx.roleAssignments.listForUpdate({ roleKey: 'platform.admin' })
-      : [];
+    const adminRoles = changesAdmin ? await lockBusinessAdministratorAssignments(tx) : [];
     const targetRoles = await tx.roleAssignments.listForUpdate({ subjectUid: uid });
     const roles = [
       ...new Map([...adminRoles, ...targetRoles].map((row) => [row.id, row])).values(),
@@ -301,12 +315,32 @@ export async function updateSettingsUser(
       tx.sportsTeams.listForUpdate({ ids: input.captainTeamIds }),
       tx.developmentAccess.list(),
       tx.subjects.listForUpdate({
-        uids: [...new Set([uid, ...adminRoles.map((row) => row.subjectUid)])],
+        uids: [
+          ...new Set([
+            uid,
+            actorUid,
+            ...configuredRootAdminUids(),
+            ...adminRoles.map((row) => row.subjectUid),
+          ]),
+        ],
       }),
     ]);
     const previous = identitySnapshot(target, roles, tags);
     if (previous.revision !== input.revision)
       throw new HttpError(409, 'stale_revision', '用户身份已被修改，请重新加载');
+    const previousProtected = new Set(
+      targetRoles
+        .filter((row) => current(row) && isRootManagedGlobalAppointment(row.roleKey, row.scope))
+        .map((row) => row.roleKey),
+    );
+    const desiredProtected = new Set<import('@freebbs-development/contracts').RoleKey>(
+      input.roles.filter((role) => isRootManagedGlobalAppointment(role, scope)),
+    );
+    if (
+      previousProtected.size !== desiredProtected.size ||
+      [...previousProtected].some((role) => !desiredProtected.has(role))
+    )
+      requireRootAppointmentAuthority(actorUid, authority.rootAdmin);
     if (
       input.captainTeamIds.some(
         (id) => !teams.some((team) => team.id === id && team.status === 'active'),
@@ -323,7 +357,22 @@ export async function updateSettingsUser(
       identities,
       allowedUids,
     );
-    const losingAdmin = admins.has(uid) && !input.roles.includes('platform.admin');
+    const retainedAdmin = input.roles.some(
+      (roleKey) =>
+        isDevelopmentAdministratorRole(roleKey) &&
+        definitions.some((role) => role.key === roleKey && role.status === 'active') &&
+        (!previous.roles.includes(roleKey) ||
+          roles.some(
+            (row) =>
+              row.subjectUid === uid &&
+              row.roleKey === roleKey &&
+              current(row) &&
+              row.scope.type === 'public' &&
+              row.scope.id === '*',
+          )),
+    );
+    const losingAdmin =
+      admins.has(uid) && !configuredRootAdminUids().includes(uid) && !retainedAdmin;
     if (losingAdmin && admins.size === 1) {
       throw new HttpError(409, 'last_platform_admin', '至少保留一位可访问发展端的平台管理员');
     }

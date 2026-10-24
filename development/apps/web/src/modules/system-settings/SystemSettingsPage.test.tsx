@@ -5,6 +5,7 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { ApiError, type ApiClient } from '../../core/api/client.js';
 import { SystemSettingsPage } from './SystemSettingsPage.js';
 
@@ -30,7 +31,7 @@ const bootstrap: SystemSettingsBootstrap = {
   organizations: {
     revision: 1,
     organizations: [{ id: 'arts_center', name: '文艺中心', description: '文艺活动' }],
-    roles: [{ key: 'platform.admin', name: '平台管理员' }],
+    roles: [{ key: 'platform.admin', name: '发展端管理员' }],
   },
   sportsTeams: [{ id: 'basketball', name: '男篮代表队' }],
   modules: [],
@@ -54,7 +55,11 @@ function setup(overrides?: (path: string, init?: RequestInit) => unknown) {
     if (path === '/sports/teams') return [];
     throw new Error(`Unexpected request ${path}`);
   });
-  render(<SystemSettingsPage client={{ request: request as ApiClient['request'] }} />);
+  render(
+    <MemoryRouter>
+      <SystemSettingsPage client={{ request: request as ApiClient['request'] }} />
+    </MemoryRouter>,
+  );
   return request;
 }
 async function tab(name: string) {
@@ -62,7 +67,21 @@ async function tab(name: string) {
 }
 
 describe('SystemSettingsPage', () => {
-  beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'target' }, reload }));
+  beforeEach(() => mockAuth.mockReturnValue({ user: { uid: 'target', rootAdmin: true }, reload }));
+  it('presents organization management within the shared administrator navigation', async () => {
+    mockAuth.mockReturnValue({
+      user: { uid: 'manager', roles: ['platform.admin'], businessAdmin: true },
+      reload,
+    });
+    setup();
+    expect(await screen.findByRole('heading', { name: '人员与组织' })).toBeInTheDocument();
+    const navigation = screen.getByRole('navigation', { name: '管理员端导航' });
+    expect(within(navigation).getByRole('link', { name: '人员与组织' })).toHaveAttribute(
+      'href',
+      '/system-settings',
+    );
+    expect(within(navigation).queryByRole('link', { name: '负责人任命' })).not.toBeInTheDocument();
+  });
   it('mounts only the active directory panel and follows server pages', async () => {
     const request = setup((path) => {
       if (path === '/system-settings')
@@ -85,7 +104,7 @@ describe('SystemSettingsPage', () => {
     mockAuth.mockReturnValue({ user: { uid: 'target', previewing: true }, reload });
     const request = setup();
     await screen.findByRole('tab', { name: '用户身份' });
-    expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).toBeDisabled();
     await tab('组织配置');
     expect(screen.getByLabelText('文艺中心名称')).toBeDisabled();
     expect(screen.getByRole('button', { name: '保存组织配置' })).toBeDisabled();
@@ -168,7 +187,7 @@ describe('SystemSettingsPage', () => {
       organizations: [{ id: 'sports_center' as const, name: '体育中心', description: '' }],
       roles: [
         { key: 'department.sports_member' as const, name: '体育中心部员' },
-        { key: 'platform.admin' as const, name: '平台管理员' },
+        { key: 'platform.admin' as const, name: '发展端管理员' },
       ],
     };
     const overrides = (path: string, init?: RequestInit) => {
@@ -190,8 +209,8 @@ describe('SystemSettingsPage', () => {
     await userEvent.click(screen.getByText('身份展示名称'));
     await userEvent.clear(screen.getByLabelText('体育中心部员'));
     await userEvent.type(screen.getByLabelText('体育中心部员'), '赛场中心活动成员');
-    await userEvent.clear(screen.getByLabelText('平台管理员'));
-    await userEvent.type(screen.getByLabelText('平台管理员'), '运营管理员');
+    await userEvent.clear(screen.getByLabelText('发展端管理员'));
+    await userEvent.type(screen.getByLabelText('发展端管理员'), '运营管理员');
     await userEvent.click(screen.getByRole('button', { name: '保存组织配置' }));
     await screen.findByRole('status');
     await tab('用户身份');
@@ -267,7 +286,7 @@ describe('SystemSettingsPage', () => {
   beforeEach(() => reload.mockReset());
   it('offers five separate settings tabs inside the development shell', async () => {
     setup();
-    expect(await screen.findByRole('heading', { name: '系统设置' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '人员与组织' })).toBeInTheDocument();
     expect(screen.getAllByRole('tab').map((item) => item.textContent)).toEqual([
       '用户身份',
       '组织配置',
@@ -294,7 +313,7 @@ describe('SystemSettingsPage', () => {
       'aria-pressed',
       'false',
     );
-    await userEvent.click(screen.getByRole('checkbox', { name: /^平台管理员/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /^发展端管理员/ }));
     const media = screen.getByRole('button', { name: /电子系学生媒体中心/ });
     const captain = screen.getByRole('button', { name: /代表队队长/ });
     expect(media.compareDocumentPosition(captain)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -310,16 +329,63 @@ describe('SystemSettingsPage', () => {
     });
     await waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
+  it('provides independent learning and development administrator switches', async () => {
+    const request = setup();
+    await screen.findByRole('tab', { name: '用户身份' });
+    const learning = screen.getByRole('checkbox', { name: /^学习端管理员/ });
+    const development = screen.getByRole('checkbox', { name: /^发展端管理员/ });
+    await userEvent.click(learning);
+    expect(learning).toBeChecked();
+    expect(development).not.toBeChecked();
+    await userEvent.click(development);
+    expect(learning).toBeChecked();
+    expect(development).toBeChecked();
+    await userEvent.click(development);
+    expect(learning).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: '保存身份设置' }));
+    const save = request.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(save?.[1]?.body)).roles).toEqual(['platform.learning_admin']);
+  });
+  it('makes high privilege appointments read-only for an ordinary development administrator', async () => {
+    mockAuth.mockReturnValue({
+      user: { uid: 'manager', roles: ['platform.admin'], businessAdmin: true, rootAdmin: false },
+      reload,
+    });
+    setup();
+    await screen.findByRole('tab', { name: '用户身份' });
+    expect(screen.getByRole('checkbox', { name: /^学习端管理员/ })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).toBeDisabled();
+    expect(screen.getByText(/如需调整，请联系最高管理员/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^辅导员/ }));
+    for (const label of ['团委书记', '团委辅导员', '学生发展辅导员'])
+      expect(screen.getByRole('button', { name: `辅导员身份：${label}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '辅导员身份：实践辅导员' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: /电子系学生会/ }));
+    expect(screen.getByRole('button', { name: '文艺中心：部员' })).toBeEnabled();
+  });
+  it('shows the physical legacy learning administrator source without creating a checkbox grant', async () => {
+    setup((path) =>
+      path === '/system-settings'
+        ? { ...structuredClone(bootstrap), users: [{ ...person, legacyLearningAdmin: true }] }
+        : undefined,
+    );
+    await screen.findByRole('tab', { name: '用户身份' });
+    expect(
+      screen.getByText(/学习端原有管理员 · 来自主站原有管理员设置，只读保留/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /^学习端管理员/ })).not.toBeChecked();
+    expect(screen.getByText(/取消勾选不会撤销学习端原有管理员来源/)).toBeInTheDocument();
+  });
   it('preserves a failed draft and requires explicit refresh after revision conflict', async () => {
     const request = setup((path, init) => {
       if (init?.method === 'PUT')
         throw new ApiError(409, 'revision_conflict', '身份已被其他管理员修改', null);
     });
     await screen.findByRole('tab', { name: '用户身份' });
-    await userEvent.click(screen.getByRole('checkbox', { name: /^平台管理员/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /^发展端管理员/ }));
     await userEvent.click(screen.getByRole('button', { name: '保存身份设置' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('身份已被其他管理员修改');
-    expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).toBeChecked();
     expect(screen.getByRole('button', { name: '保存身份设置' })).toBeDisabled();
     await userEvent.type(
       screen.getByRole('textbox', { name: '搜索用户名、学号或 UID' }),
@@ -329,7 +395,7 @@ describe('SystemSettingsPage', () => {
     expect(request.mock.calls.some(([path]) => String(path).includes('query=missing'))).toBe(false);
     await userEvent.click(screen.getByRole('button', { name: '重新加载身份' }));
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).not.toBeChecked(),
+      expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).not.toBeChecked(),
     );
   });
   it('previews scoped notification recipients and reports the returned count', async () => {
@@ -363,7 +429,7 @@ describe('SystemSettingsPage', () => {
         : undefined,
     );
     await screen.findByRole('tab', { name: '用户身份' });
-    expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).toBeEnabled();
     await tab('通知');
     expect(screen.getByRole('checkbox', { name: /Target/ })).toBeDisabled();
     expect(within(screen.getByRole('tabpanel')).getByText('未开放发展端')).toBeInTheDocument();
@@ -417,12 +483,12 @@ describe('SystemSettingsPage', () => {
   it('preserves unsaved identity and organization drafts while switching lazily mounted tabs', async () => {
     setup();
     await screen.findByRole('tab', { name: '用户身份' });
-    await userEvent.click(screen.getByRole('checkbox', { name: /^平台管理员/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /^发展端管理员/ }));
     await tab('组织配置');
     await userEvent.clear(screen.getByLabelText('文艺中心名称'));
     await userEvent.type(screen.getByLabelText('文艺中心名称'), '未保存的文艺中心');
     await tab('用户身份');
-    expect(screen.getByRole('checkbox', { name: /^平台管理员/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /^发展端管理员/ })).toBeChecked();
     await tab('组织配置');
     expect(screen.getByLabelText('文艺中心名称')).toHaveValue('未保存的文艺中心');
   });

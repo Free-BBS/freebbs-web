@@ -30,9 +30,9 @@ async function fixture(role: RoleKey) {
   );
   return { ...f, actor };
 }
-describe('organization supervisors without platform identity escalation', () => {
+describe('organization supervisors and approved platform authority', () => {
   it.each<RoleKey>(['counselor.youth_league_secretary', 'counselor.youth_league'])(
-    'lets %s supervise business while keeping platform modules closed',
+    'lets %s supervise business with automatic development administration',
     async (role) => {
       const { store, actor, app } = await fixture(role);
       expect(await canEditDepartmentHome(store, actor, 'media_center.creative')).toBe(true);
@@ -45,11 +45,21 @@ describe('organization supervisors without platform identity escalation', () => 
         ),
       ).toBe(true);
       expect(canUpdateOrganization(actor, { organizationId: 'sast' })).toBe(true);
-      await request(app).get('/api/development/v1/system-settings').set(memberHeaders).expect(403);
-      await request(app)
-        .get('/api/development/v1/admin/development-users')
+      const identity = await request(app)
+        .get('/api/development/v1/me')
         .set(memberHeaders)
-        .expect(403);
+        .expect(200);
+      expect(identity.body.data.user ?? identity.body.data).toMatchObject({
+        businessAdmin: true,
+        learningAdmin: true,
+        developmentAccess: 'lead',
+      });
+      const settings = await request(app)
+        .get('/api/development/v1/system-settings')
+        .set(memberHeaders)
+        .expect(503);
+      expect(settings.body.data.error.code).toBe('user_directory_unavailable');
+      await request(app).get('/api/development/v1/admin/subjects').set(memberHeaders).expect(200);
     },
   );
   it.each<RoleKey>(['student_union.executive_president', 'student_union.presidium'])(
