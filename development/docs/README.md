@@ -15,6 +15,7 @@
 - [总体技术设计](./overall-technical-design.md)：统一身份、权限、Tag、模块契约、数据边界和验收原则。
 - [统一模块框架技术说明](./technical_design.md)：实际路由、迁移 008/009、联络审核、公私响应与外部投稿扩展边界。
 - [学生节特别栏目](./student-festival.md)：视频投稿、展示审核、私密访问及媒体存储配置。
+- [组织组活动台账](./organization-group-ledger.md)：八字段班团活动表、本人/全局权限、团支书授权、问卷版本和存储备份。
 - [本地开发与完整预览](./local-development.md)：环境变量、运行模式、质量检查和常见问题。
 - [数据库与业务数据管理](./data-administration.md)：迁移、seed、最小权限账号、备份、恢复和业务管理边界。
 

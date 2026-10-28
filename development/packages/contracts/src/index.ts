@@ -19,6 +19,7 @@ export * from './activity-workspace.js';
 export * from './collaboration.js';
 export * from './publishing.js';
 export * from './organization-group.js';
+export * from './class-secretaries.js';
 export * from './system-settings.js';
 export * from './achievement-atlas.js';
 export * from './finance-tracking.js';

@@ -48,6 +48,8 @@ export function EntryForm({
           classId: entry.classId,
           participantCount: String(entry.participantCount),
           activityTypeId: entry.activityTypeId,
+          activityTypeIds: entry.activityTypeIds ?? [entry.activityTypeId],
+          participantNames: entry.participantNames ?? '',
           activityDate: entry.activityDate ?? '',
           summary: entry.summary,
           difficulties: entry.difficulties ?? '',
@@ -66,6 +68,17 @@ export function EntryForm({
   const token = useRef(crypto.randomUUID());
   const saving = useRef(false);
   const photoInput = useRef<HTMLInputElement>(null);
+  const modern = version.template === 'class_activity_v2';
+  const maxPhotos = modern ? 5 : workspace.maxPhotos;
+  const maxPhotoBytes = modern ? 5 * 1048576 : workspace.maxPhotoBytes;
+  const estimatedNames = (draft.participantNames ?? '')
+    .trim()
+    .split(/[\s、,，;；]+/u)
+    .filter(Boolean).length;
+  const namesNeedReview =
+    estimatedNames > 0 &&
+    Number(draft.participantCount) > 0 &&
+    estimatedNames !== Number(draft.participantCount);
   function change<K extends keyof EntryDraft>(key: K, value: EntryDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
@@ -73,19 +86,26 @@ export function EntryForm({
     setDraft((current) => ({ ...current, extraAnswers: { ...current.extraAnswers, [id]: value } }));
   }
   const label = (key: keyof typeof coreLabels) =>
-    version.corePresentation?.[key]?.label ?? coreLabels[key];
+    version.corePresentation?.[key]?.label ??
+    (modern && key === 'activityDate'
+      ? '活动时间'
+      : modern && key === 'summary'
+        ? '活动内容'
+        : modern && key === 'difficulties'
+          ? '备注'
+          : coreLabels[key]);
   const help = (key: keyof typeof coreLabels) => version.corePresentation?.[key]?.help;
   async function upload(files: FileList | null, field?: OrganizationGroupField) {
     if (!files?.length || uploading) return;
     setMessage('');
     setUploading(true);
     try {
-      if (!field && draft.photos.length + files.length > workspace.maxPhotos)
-        throw new Error(`活动照片最多 ${workspace.maxPhotos} 张。`);
+      if (!field && draft.photos.length + files.length > maxPhotos)
+        throw new Error(`活动照片最多 ${maxPhotos} 张。`);
       for (const file of Array.from(files)) {
-        if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > workspace.maxPhotoBytes)
+        if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > maxPhotoBytes)
           throw new Error(
-            `请选择 PNG、JPEG 或 WebP 图片，单张不超过 ${Math.round(workspace.maxPhotoBytes / 1048576)} MiB。`,
+            `请选择 PNG、JPEG 或 WebP 图片，单张不超过 ${Math.round(maxPhotoBytes / 1048576)} MiB。`,
           );
         const uploaded = await uploadFile(api, file, year.id, 'activity_photo', entry?.id);
         if (field) {
@@ -124,7 +144,13 @@ export function EntryForm({
     const values = {
       classId: draft.classId,
       participantCount: Number(draft.participantCount),
-      activityTypeId: draft.activityTypeId,
+      activityTypeId: modern ? (draft.activityTypeIds?.[0] ?? '') : draft.activityTypeId,
+      ...(modern
+        ? {
+            activityTypeIds: draft.activityTypeIds ?? [],
+            participantNames: draft.participantNames ?? '',
+          }
+        : {}),
       activityDate: draft.activityDate || null,
       summary: draft.summary,
       difficulties: draft.difficulties,
@@ -218,7 +244,9 @@ export function EntryForm({
           <p>
             {entry
               ? `使用原问卷 v${version.number}，保留原记录归属。`
-              : '完成活动后填写概要、人数和现场照片。'}
+              : modern
+                ? '记录活动内容、参与人员和活动标签，照片可以稍后补充。'
+                : '完成活动后填写概要、人数和现场照片。'}
           </p>
         </div>
         <span className="og-badge">问卷 v{version.number}</span>
@@ -236,7 +264,10 @@ export function EntryForm({
           void submit();
         }}
       >
-        <fieldset disabled={busy || unavailable} className="og-fields">
+        <fieldset
+          disabled={busy || unavailable}
+          className={`og-fields${modern ? ' og-form-modern' : ''}`}
+        >
           <label>
             {label('classId')}
             <select
@@ -264,34 +295,77 @@ export function EntryForm({
             />
             <small>{help('participantCount') ?? '填写正整数；累计统计为参与人次。'}</small>
           </label>
-          <label>
-            {label('activityTypeId')}
-            <select
-              aria-label={label('activityTypeId')}
-              value={draft.activityTypeId}
-              onChange={(event) => change('activityTypeId', event.target.value)}
-            >
-              <option value="">选择类型</option>
-              {version.activityTypes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            {help('activityTypeId') ? <small>{help('activityTypeId')}</small> : null}
-          </label>
-          <label>
-            {label('activityDate')}
-            <input
-              aria-label={label('activityDate')}
-              type="date"
-              min={year.startDate ?? undefined}
-              max={year.endDate ?? undefined}
-              value={draft.activityDate}
-              onChange={(event) => change('activityDate', event.target.value)}
-            />
-            <small>{help('activityDate') ?? '可选，填写活动实际发生日期。'}</small>
-          </label>
+          {modern ? (
+            <label>
+              {label('activityDate')}
+              <input
+                aria-label={label('activityDate')}
+                type="date"
+                required
+                min={year.startDate ?? undefined}
+                max={year.endDate ?? undefined}
+                value={draft.activityDate}
+                onChange={(event) => change('activityDate', event.target.value)}
+              />
+              {help('activityDate') ? <small>{help('activityDate')}</small> : null}
+            </label>
+          ) : null}
+          {modern ? (
+            <fieldset className="og-multiple og-span">
+              <legend>{label('activityTypeIds')}</legend>
+              <div className="og-tag-options">
+                {version.activityTypes.map((type) => (
+                  <label className="og-tag-choice" key={type.id}>
+                    <input
+                      type="checkbox"
+                      checked={draft.activityTypeIds?.includes(type.id) ?? false}
+                      onChange={(event) =>
+                        change(
+                          'activityTypeIds',
+                          event.target.checked
+                            ? [...(draft.activityTypeIds ?? []), type.id]
+                            : (draft.activityTypeIds ?? []).filter((id) => id !== type.id),
+                        )
+                      }
+                    />
+                    <span>{type.label}</span>
+                  </label>
+                ))}
+              </div>
+              <small>{help('activityTypeIds') ?? '可选择多个标签。'}</small>
+            </fieldset>
+          ) : (
+            <label>
+              {label('activityTypeId')}
+              <select
+                aria-label={label('activityTypeId')}
+                value={draft.activityTypeId}
+                onChange={(event) => change('activityTypeId', event.target.value)}
+              >
+                <option value="">选择类型</option>
+                {version.activityTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              {help('activityTypeId') ? <small>{help('activityTypeId')}</small> : null}
+            </label>
+          )}
+          {!modern ? (
+            <label>
+              {label('activityDate')}
+              <input
+                aria-label={label('activityDate')}
+                type="date"
+                min={year.startDate ?? undefined}
+                max={year.endDate ?? undefined}
+                value={draft.activityDate}
+                onChange={(event) => change('activityDate', event.target.value)}
+              />
+              <small>{help('activityDate') ?? '可选，填写活动实际发生日期。'}</small>
+            </label>
+          ) : null}
           <label className="og-span">
             {label('summary')}
             <textarea
@@ -322,7 +396,7 @@ export function EntryForm({
             </label>
             <small>
               {help('photos') ??
-                `至少 1 张，最多 ${workspace.maxPhotos} 张；单张 ${Math.round(workspace.maxPhotoBytes / 1048576)} MiB。`}
+                `${modern ? '选填，' : '至少 1 张，'}最多 ${maxPhotos} 张；单张 ${Math.round(maxPhotoBytes / 1048576)} MiB。`}
             </small>
             {uploading ? <p role="status">正在上传图片，请稍候…</p> : null}
             <div className="og-file-grid">
@@ -349,8 +423,35 @@ export function EntryForm({
               value={draft.difficulties}
               onChange={(event) => change('difficulties', event.target.value)}
             />
-            <small>{help('difficulties') ?? '选填，记录需要协助的困难；最多 2000 字。'}</small>
+            <small>
+              {help('difficulties') ??
+                (modern
+                  ? '选填，补充需要说明的情况。'
+                  : '选填，记录需要协助的困难；最多 2000 字。')}
+            </small>
           </label>
+          {modern ? (
+            <label className="og-span">
+              {label('participantNames')}
+              <textarea
+                aria-label={label('participantNames')}
+                rows={3}
+                required
+                value={draft.participantNames ?? ''}
+                onChange={(event) => change('participantNames', event.target.value)}
+              />
+              <small>
+                {help('participantNames') ??
+                  '直接填写姓名，可用顿号、逗号或换行分隔。请核对名单与上方参与人数。'}
+              </small>
+              {namesNeedReview ? (
+                <small role="status" className="og-name-hint">
+                  按分隔符估算为 {estimatedNames} 位，上方填写 {draft.participantCount}{' '}
+                  人；请核对，提示不影响提交。
+                </small>
+              ) : null}
+            </label>
+          ) : null}
           {version.fields.map((field) => (
             <div
               key={field.id}
@@ -435,20 +536,32 @@ export function EntryForm({
               <>
                 <p>
                   最新问卷 v{nextVersion.number}
-                  ；确认后仅使用该版本保留的附加问题，核心内容和照片不变。
+                  ；保留已有文字和照片，移除新版本不再使用的活动标签和附加问题。
                 </p>
                 <button
                   type="button"
                   onClick={() => {
                     setVersion(nextVersion);
-                    setDraft((current) => ({
-                      ...current,
-                      extraAnswers: Object.fromEntries(
-                        Object.entries(current.extraAnswers).filter(([id]) =>
-                          nextVersion.fields.some((field) => field.id === id),
+                    setDraft((current) => {
+                      const selected = modern
+                        ? (current.activityTypeIds ?? [])
+                        : current.activityTypeId
+                          ? [current.activityTypeId]
+                          : [];
+                      const retained = selected.filter((id) =>
+                        nextVersion.activityTypes.some((type) => type.id === id),
+                      );
+                      return {
+                        ...current,
+                        activityTypeId: retained[0] ?? '',
+                        activityTypeIds: retained,
+                        extraAnswers: Object.fromEntries(
+                          Object.entries(current.extraAnswers).filter(([id]) =>
+                            nextVersion.fields.some((field) => field.id === id),
+                          ),
                         ),
-                      ),
-                    }));
+                      };
+                    });
                     setNextVersion(null);
                     setTemplateConflict(false);
                     setMessage('已使用最新问卷，请核对后重新提交。');

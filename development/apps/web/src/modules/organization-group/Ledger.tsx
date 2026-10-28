@@ -3,6 +3,8 @@ import type {
   OrganizationGroupEditContext,
   OrganizationGroupEntry,
   OrganizationGroupEntryList,
+  OrganizationGroupFile,
+  OrganizationGroupAnswer,
   OrganizationGroupWorkspace,
   OrganizationGroupYear,
 } from '@freebbs-development/contracts';
@@ -76,7 +78,7 @@ export function Ledger({
     return () => {
       live = false;
     };
-  }, [api, query, refresh, revision]);
+  }, [api, query, refresh, revision, workspace.revision, workspace.canViewAll]);
   useEffect(() => {
     setDetail(null);
     setEditing(null);
@@ -136,6 +138,27 @@ export function Ledger({
   const original = detail
     ? workspace.versions.find((item) => item.id === detail.versionId)
     : undefined;
+  const current = workspace.versions.find((item) => item.id === year.currentVersionId);
+  const column = (
+    key:
+      | 'classId'
+      | 'participantCount'
+      | 'activityDate'
+      | 'activityTypeIds'
+      | 'summary'
+      | 'photos'
+      | 'difficulties'
+      | 'participantNames',
+    fallback: string,
+  ) => current?.corePresentation?.[key]?.label ?? fallback;
+  const extraColumns = Array.from(
+    new Map(
+      workspace.versions
+        .filter((item) => item.yearId === year.id)
+        .flatMap((item) => item.fields)
+        .map((field) => [field.id, field]),
+    ).values(),
+  );
   if (editing)
     return (
       <EntryForm
@@ -158,7 +181,7 @@ export function Ledger({
       <section className="og-panel">
         <div className="og-panel-heading">
           <div>
-            <h2>{detail.activityTypeLabel}</h2>
+            <h2>{(detail.activityTypeLabels ?? [detail.activityTypeLabel]).join(' · ')}</h2>
             <p>
               {detail.classLabel} · {detail.authorName} · {detail.participantCount} 人次
             </p>
@@ -174,17 +197,23 @@ export function Ledger({
         </div>
         <dl className="og-detail">
           <div>
-            <dt>活动日期</dt>
+            <dt>{original?.corePresentation?.activityDate?.label ?? '活动时间'}</dt>
             <dd>{detail.activityDate ?? '未填写'}</dd>
           </div>
           <div>
-            <dt>活动概要</dt>
+            <dt>{original?.corePresentation?.summary?.label ?? '活动内容'}</dt>
             <dd>{detail.summary}</dd>
           </div>
           {detail.difficulties !== undefined ? (
             <div>
-              <dt>困难反馈</dt>
+              <dt>{original?.corePresentation?.difficulties?.label ?? '备注'}</dt>
               <dd>{detail.difficulties || '未填写'}</dd>
+            </div>
+          ) : null}
+          {detail.participantNames ? (
+            <div>
+              <dt>{original?.corePresentation?.participantNames?.label ?? '具体参与人员'}</dt>
+              <dd>{detail.participantNames}</dd>
             </div>
           ) : null}
           {original?.fields.map((field) => (
@@ -260,10 +289,6 @@ export function Ledger({
           <small>参与人次</small>
           <strong>{rows?.statistics.participantTimes ?? '—'}</strong>
         </div>
-        <div>
-          <small>当前筛选记录</small>
-          <strong>{rows?.total ?? '—'}</strong>
-        </div>
       </div>
       {rows ? (
         <details className="og-category-stats">
@@ -292,11 +317,14 @@ export function Ledger({
           </div>
         </details>
       ) : null}
-      <section className="og-panel">
+      <section className="og-panel og-ledger-panel">
         <div className="og-panel-heading">
           <div>
-            <h2>活动台账</h2>
-            <p>统计与导出均以当前可查看、已筛选的全部记录计算。</p>
+            <h2>{workspace.canViewAll ? '全局活动台账' : '我的活动台账'}</h2>
+            <p>
+              {workspace.canViewAll ? '全系班级活动记录' : '仅显示本人提交的活动'} · 共{' '}
+              {rows?.total ?? '—'} 条
+            </p>
           </div>
           {workspace.canExport ? (
             <button type="button" onClick={() => void exportLedger()}>
@@ -310,31 +338,33 @@ export function Ledger({
             <input
               aria-label="搜索活动"
               value={filters.query}
-              placeholder="概要与附加回答中的关键词"
+              placeholder="活动内容、参与人员或备注"
               onChange={(event) => filter('query', event.target.value)}
             />
           </label>
+          {workspace.canViewAll ? (
+            <label>
+              筛选班级
+              <select
+                value={filters.classId}
+                onChange={(event) => filter('classId', event.target.value)}
+              >
+                <option value="">全部班级</option>
+                {workspace.classes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
-            筛选班级
-            <select
-              value={filters.classId}
-              onChange={(event) => filter('classId', event.target.value)}
-            >
-              <option value="">全部班级</option>
-              {workspace.classes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            筛选类型
+            筛选标签
             <select
               value={filters.activityTypeId}
               onChange={(event) => filter('activityTypeId', event.target.value)}
             >
-              <option value="">全部类型</option>
+              <option value="">全部标签</option>
               {Array.from(
                 new Map(
                   workspace.versions
@@ -349,41 +379,56 @@ export function Ledger({
               ))}
             </select>
           </label>
-          <label>
-            填写人 UID
-            <input
-              value={filters.authorUid}
-              onChange={(event) => filter('authorUid', event.target.value)}
-            />
-          </label>
-          <label>
-            活动日期起
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(event) => filter('dateFrom', event.target.value)}
-            />
-          </label>
-          <label>
-            活动日期止
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(event) => filter('dateTo', event.target.value)}
-            />
-          </label>
-          <label>
-            排序
-            <select value={filters.sort} onChange={(event) => filter('sort', event.target.value)}>
-              <option value="created_desc">最新提交</option>
-              <option value="created_asc">最早提交</option>
-              <option value="date_desc">活动日期从近到远</option>
-              <option value="date_asc">活动日期从远到近</option>
-              <option value="participants_desc">参与人数从多到少</option>
-              <option value="participants_asc">参与人数从少到多</option>
-            </select>
-          </label>
         </div>
+        <details className="og-more-filters">
+          <summary>
+            更多筛选
+            {filters.authorUid ||
+            filters.dateFrom ||
+            filters.dateTo ||
+            filters.sort !== 'created_desc'
+              ? ' · 已应用'
+              : ''}
+          </summary>
+          <div className="og-filters">
+            {workspace.canViewAll ? (
+              <label>
+                填写人 UID
+                <input
+                  value={filters.authorUid}
+                  onChange={(event) => filter('authorUid', event.target.value)}
+                />
+              </label>
+            ) : null}
+            <label>
+              活动日期起
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => filter('dateFrom', event.target.value)}
+              />
+            </label>
+            <label>
+              活动日期止
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => filter('dateTo', event.target.value)}
+              />
+            </label>
+            <label>
+              排序
+              <select value={filters.sort} onChange={(event) => filter('sort', event.target.value)}>
+                <option value="created_desc">最新提交</option>
+                <option value="created_asc">最早提交</option>
+                <option value="date_desc">活动日期从近到远</option>
+                <option value="date_asc">活动日期从远到近</option>
+                <option value="participants_desc">参与人数从多到少</option>
+                <option value="participants_asc">参与人数从少到多</option>
+              </select>
+            </label>
+          </div>
+        </details>
         {error ? (
           <p role="alert" className="og-notice">
             {error}
@@ -394,26 +439,109 @@ export function Ledger({
         ) : null}
         {!rows && !error ? <p role="status">正在整理活动台账…</p> : null}
         {rows?.items.length ? (
-          <div className="og-ledger-list">
-            {rows.items.map((item) => (
-              <article className="og-entry-card" key={item.id}>
-                <div>
-                  <div className="og-actions">
-                    <span className="og-badge">{item.classLabel}</span>
-                    <small>{item.activityDate ?? displayShanghai(item.createdAt)}</small>
-                    {item.locked ? <span className="og-badge">已锁定</span> : null}
-                  </div>
-                  <h3>{item.activityTypeLabel}</h3>
-                  <p>{item.summary}</p>
-                  <small>
-                    {item.authorName} · {item.participantCount} 人次 · {item.photos.length} 张照片
-                  </small>
-                </div>
-                <button type="button" disabled={busy} onClick={() => void open(item.id)}>
-                  查看详情
-                </button>
-              </article>
-            ))}
+          <div
+            className="og-table-scroll"
+            role="region"
+            aria-label={workspace.canViewAll ? '全局活动台账表格' : '本人活动台账表格'}
+            tabIndex={0}
+          >
+            <table className="og-ledger-table">
+              <caption className="og-sr-only">
+                {workspace.canViewAll ? '全系活动记录' : '本人提交的活动记录'}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" className="og-col-class">
+                    {column('classId', '班级')}
+                  </th>
+                  <th scope="col" className="og-col-number">
+                    {column('participantCount', '参与人数')}
+                  </th>
+                  <th scope="col" className="og-col-date">
+                    {column('activityDate', '活动时间')}
+                  </th>
+                  <th scope="col" className="og-col-tags">
+                    {column('activityTypeIds', '活动标签')}
+                  </th>
+                  <th scope="col" className="og-col-content">
+                    {column('summary', '活动内容')}
+                  </th>
+                  <th scope="col" className="og-col-photo">
+                    {column('photos', '照片')}
+                  </th>
+                  <th scope="col" className="og-col-content">
+                    {column('difficulties', '备注')}
+                  </th>
+                  <th scope="col" className="og-col-names">
+                    {column('participantNames', '具体参与人员')}
+                  </th>
+                  {extraColumns.map((field) => (
+                    <th scope="col" className="og-col-content" key={field.id}>
+                      {field.label}
+                    </th>
+                  ))}
+                  <th scope="col" className="og-col-date">
+                    提交记录
+                  </th>
+                  <th scope="col" className="og-col-action">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.items.map((item) => (
+                  <tr key={item.id}>
+                    <th scope="row" className="og-col-class">
+                      {item.classLabel}
+                      {item.locked ? <span className="og-row-status">已锁定</span> : null}
+                    </th>
+                    <td className="og-col-number">{item.participantCount}</td>
+                    <td>{item.activityDate ?? '未填写'}</td>
+                    <td>
+                      <div className="og-cell-tags">
+                        {(item.activityTypeLabels ?? [item.activityTypeLabel]).map((label) => (
+                          <span className="og-badge" key={label}>
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="og-cell-text">{item.summary}</td>
+                    <td>
+                      {item.photos[0] ? (
+                        <button
+                          type="button"
+                          className="og-photo-button"
+                          aria-label={`查看${item.classLabel}活动的${item.photos.length}张照片`}
+                          onClick={() => void open(item.id)}
+                        >
+                          <LedgerPhoto api={api} file={item.photos[0]} />
+                          <span>{item.photos.length} 张</span>
+                        </button>
+                      ) : (
+                        <span className="og-muted">—</span>
+                      )}
+                    </td>
+                    <td className="og-cell-text">{item.difficulties || '—'}</td>
+                    <td className="og-cell-text">{item.participantNames || '—'}</td>
+                    {extraColumns.map((field) => (
+                      <td className="og-cell-text" key={field.id}>
+                        {answerText(item.extraAnswers[field.id], field.kind === 'image')}
+                      </td>
+                    ))}
+                    <td>
+                      <span>{item.authorName}</span>
+                      <small className="og-submitted-time">{displayShanghai(item.createdAt)}</small>
+                    </td>
+                    <td>
+                      <button type="button" disabled={busy} onClick={() => void open(item.id)}>
+                        查看详情
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : rows ? (
           <div className="og-empty">
@@ -445,5 +573,38 @@ export function Ledger({
         ) : null}
       </section>
     </section>
+  );
+}
+function answerText(value: OrganizationGroupAnswer | undefined, image: boolean) {
+  if (image) return `${Array.isArray(value) ? value.length : 0} 张`;
+  return Array.isArray(value) ? value.join('、') : String(value ?? '—');
+}
+function LedgerPhoto({ api, file }: { api: GroupClient; file: OrganizationGroupFile }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    let objectUrl: string | null = null;
+    setUrl(null);
+    if (api.download && /^image\/(png|jpeg|webp)$/.test(file.mime)) {
+      void api.download(`/organization-group/files/${encodeURIComponent(file.id)}?preview=1`).then(
+        (blob) => {
+          if (!live) return;
+          objectUrl = URL.createObjectURL(new Blob([blob], { type: file.mime }));
+          setUrl(objectUrl);
+        },
+        () => {},
+      );
+    }
+    return () => {
+      live = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [api, file.id, file.mime]);
+  return url ? (
+    <img src={url} alt="活动照片缩略图" loading="lazy" />
+  ) : (
+    <span className="og-photo-placeholder" aria-hidden="true">
+      ▧
+    </span>
   );
 }

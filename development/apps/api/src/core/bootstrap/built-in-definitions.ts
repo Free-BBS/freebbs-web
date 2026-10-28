@@ -83,6 +83,13 @@ export const BUILT_IN_TAG_DEFINITIONS = [
     requiredScopeType: 'sports_team',
     metadata: { resourceTypes: ['sports_team'] },
   },
+  {
+    key: 'class.youth_league_secretary',
+    name: '班级团支书',
+    description: '可填报负责班级的活动，仅查看本人提交的台账。',
+    requiredScopeType: 'class',
+    metadata: { managedBy: 'organization_group', resourceTypes: ['class'] },
+  },
 ] as const;
 
 export const BUILT_IN_TAG_PERMISSIONS = SPORTS_CAPTAIN_RULES.map(({ action, resource }) => ({

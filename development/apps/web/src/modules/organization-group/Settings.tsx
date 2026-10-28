@@ -3,12 +3,12 @@ import type {
   OrganizationGroupCoreField,
   OrganizationGroupField,
   OrganizationGroupVersionInput,
+  OrganizationGroupVersion,
   OrganizationGroupWorkspace,
   OrganizationGroupYear,
-  OrganizationGroupViewScope,
 } from '@freebbs-development/contracts';
 import type { GroupClient } from './OrganizationGroupPage.js';
-import { coreLabels, errorMessage, parseClasses, parseRoster } from './model.js';
+import { coreLabels, errorMessage, parseClasses } from './model.js';
 import { ApiError } from '../../core/api/client.js';
 import { jsonOptions } from './api.js';
 
@@ -26,18 +26,7 @@ export function Settings({
   const [classes, setClasses] = useState(
     workspace.classes.map((item) => `${item.id},${item.label}`).join('\n'),
   );
-  const [roster, setRoster] = useState(
-    workspace.members
-      .map(
-        (item) => `${item.uid},${item.studentId},${item.classId},${item.submitClassIds.join('|')}`,
-      )
-      .join('\n'),
-  );
   const [managers, setManagers] = useState(workspace.managerUids.join('\n'));
-  const [scope, setScope] = useState(workspace.viewScope.kind);
-  const [scopeUsers, setScopeUsers] = useState(
-    'ids' in workspace.viewScope ? workspace.viewScope.ids.join('\n') : '',
-  );
   const [hide, setHide] = useState(workspace.hideDifficulties);
   const [exportAllowed, setExportAllowed] = useState(workspace.ordinaryExport);
   const [limits, setLimits] = useState({
@@ -53,16 +42,9 @@ export function Settings({
     setMessage('');
     try {
       const parsedClasses = parseClasses(classes);
-      const members = parseRoster(roster, parsedClasses);
-      const viewScope: OrganizationGroupViewScope =
-        scope === 'users'
-          ? { kind: 'users', ids: scopeUsers.split(/[\s,，]+/).filter(Boolean) }
-          : { kind: scope };
       const body = {
         revision: workspace.revision,
         classes: parsedClasses,
-        members,
-        viewScope,
         hideDifficulties: hide,
         ordinaryExport: exportAllowed,
         maxPhotos: limits.maxPhotos,
@@ -74,7 +56,7 @@ export function Settings({
       };
       await api.request('/organization-group/settings', jsonOptions('PATCH', body));
       setConflict(false);
-      setMessage(`设置已保存：${parsedClasses.length} 个班级，${members.length} 位成员。`);
+      setMessage(`设置已保存：${parsedClasses.length} 个班级。`);
       await onReload();
     } catch (cause) {
       setMessage(errorMessage(cause));
@@ -83,32 +65,13 @@ export function Settings({
       setBusy(false);
     }
   }
-  async function importRoster(file?: File) {
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const parsed = parseRoster(text, parseClasses(classes));
-      setRoster(text);
-      setMessage(`已校验 ${parsed.length} 位成员。点击保存设置后生效。`);
-    } catch (cause) {
-      setMessage(errorMessage(cause));
-    }
-  }
-  function previewRoster() {
-    try {
-      const parsed = parseRoster(roster, parseClasses(classes));
-      setMessage(`名册校验通过：${parsed.length} 位成员，UID 与学号均无重复。`);
-    } catch (cause) {
-      setMessage(errorMessage(cause));
-    }
-  }
   return (
     <div className="og-settings">
       <section className="og-panel">
         <div className="og-panel-heading">
           <div>
-            <h2>班级与成员</h2>
-            <p>使用正式目录。每位成员通过 UID 和学号同时匹配身份。</p>
+            <h2>班级与台账设置</h2>
+            <p>团支书使用统一账号授权；组织组与辅导员查看全局，团支书仅查看本人记录。</p>
           </div>
           <span className="og-badge">设置修订 {workspace.revision}</span>
         </div>
@@ -130,31 +93,6 @@ export function Settings({
               />
               <small>每行填写 编号,名称；已被历史活动引用的班级须保留。</small>
             </label>
-            <label>
-              成员名册
-              <textarea
-                aria-label="成员名册"
-                rows={5}
-                value={roster}
-                placeholder="UID,学号,所属班级编号,可填报班级编号"
-                onChange={(event) => setRoster(event.target.value)}
-              />
-              <small>每行四列，多个可填报班级用 | 分隔；班级编号需来自左侧目录。</small>
-            </label>
-            <div className="og-span og-actions">
-              <label className="og-import">
-                导入 CSV
-                <input
-                  aria-label="导入成员 CSV"
-                  type="file"
-                  accept=".csv,.txt,text/csv,text/plain"
-                  onChange={(event) => void importRoster(event.target.files?.[0])}
-                />
-              </label>
-              <button type="button" onClick={previewRoster}>
-                校验名册
-              </button>
-            </div>
             {workspace.canGrantManagers ? (
               <label className="og-span">
                 管理员 UID
@@ -165,29 +103,6 @@ export function Settings({
                   onChange={(event) => setManagers(event.target.value)}
                 />
                 <small>仅开发负责人或超级管理员可授予管理权限。每行一个 UID。</small>
-              </label>
-            ) : null}
-            <label>
-              台账可查看范围
-              <select
-                value={scope}
-                onChange={(event) => setScope(event.target.value as typeof scope)}
-              >
-                <option value="own">仅查看自己的记录</option>
-                <option value="same_class">同班记录</option>
-                <option value="all">所有有模块访问权的成员</option>
-                <option value="users">指定用户可查看台账</option>
-              </select>
-            </label>
-            {scope === 'users' ? (
-              <label>
-                指定可查看台账的用户 UID
-                <textarea
-                  value={scopeUsers}
-                  onChange={(event) => setScopeUsers(event.target.value)}
-                  rows={3}
-                />
-                <small>每行一个目录成员 UID。</small>
               </label>
             ) : null}
             <div className="og-checks">
@@ -209,8 +124,11 @@ export function Settings({
               </label>
             </div>
             <div className="og-fields og-span">
+              <p className="og-muted og-span">
+                班级活动表固定为最多 5 张照片，单张 5 MiB；以下照片设置仅用于历史问卷。
+              </p>
               <label>
-                照片数量上限
+                历史问卷照片数量上限
                 <input
                   type="number"
                   min={1}
@@ -222,7 +140,7 @@ export function Settings({
                 />
               </label>
               <label>
-                单张照片上限（MiB）
+                历史问卷单张照片上限（MiB）
                 <input
                   type="number"
                   min={1}
@@ -532,12 +450,35 @@ function QuestionDesigner({
   const current = workspace.versions.find((item) => item.id === year.currentVersionId);
   const initial = year.draft ?? current ?? { activityTypes: [], fields: [], corePresentation: {} };
   const [draft, setDraft] = useState<OrganizationGroupVersionInput>({
+    ...(initial.template ? { template: initial.template } : {}),
     activityTypes: initial.activityTypes,
     fields: initial.fields,
     corePresentation: initial.corePresentation ?? {},
   });
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  async function applyClassTemplate() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const published = await api.request<OrganizationGroupVersion>(
+        `/organization-group/years/${encodeURIComponent(year.id)}/template`,
+        jsonOptions('POST', { revision: year.revision }),
+      );
+      setDraft({
+        template: published.template,
+        activityTypes: published.activityTypes,
+        fields: published.fields,
+        corePresentation: published.corePresentation ?? {},
+      });
+      await onReload();
+      setMessage('班级活动表已发布，历史记录和原问卷保持不变。');
+    } catch (cause) {
+      setMessage(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
   function changeField(index: number, patch: Partial<OrganizationGroupField>) {
     setDraft((value) => ({
       ...value,
@@ -585,8 +526,22 @@ function QuestionDesigner({
         </div>
         <span className="og-badge">{current ? `当前 v${current.number}` : '尚未发布'}</span>
       </div>
+      {current?.template !== 'class_activity_v2' ? (
+        <div className="og-template-upgrade">
+          <p>班级活动表包含八项内容：活动标签可多选，活动时间和参与人员必填，照片选填。</p>
+          <button
+            type="button"
+            className="og-primary"
+            disabled={busy || year.archived}
+            onClick={() => void applyClassTemplate()}
+          >
+            发布班级活动表
+          </button>
+          <small>发布为新问卷，历史活动仍使用原版本。</small>
+        </div>
+      ) : null}
       <fieldset disabled={busy} className="og-designer">
-        <h3>活动类型</h3>
+        <h3>{draft.template === 'class_activity_v2' ? '活动标签（可多选）' : '活动类型'}</h3>
         {draft.activityTypes.length ? (
           draft.activityTypes.map((type, index) => (
             <div className="og-designer-row" key={index}>
@@ -651,46 +606,55 @@ function QuestionDesigner({
         <details className="og-fold">
           <summary>核心题目名称与帮助</summary>
           <div className="og-fields">
-            {Object.entries(coreLabels).map(([id, defaultLabel]) => {
-              const key = id as OrganizationGroupCoreField;
-              return (
-                <div className="og-core" key={id}>
-                  <label>
-                    {defaultLabel}题目名称
-                    <input
-                      value={draft.corePresentation?.[key]?.label ?? defaultLabel}
-                      onChange={(event) =>
-                        setDraft((value) => ({
-                          ...value,
-                          corePresentation: {
-                            ...value.corePresentation,
-                            [key]: { ...value.corePresentation?.[key], label: event.target.value },
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    {defaultLabel}帮助文字
-                    <input
-                      value={draft.corePresentation?.[key]?.help ?? ''}
-                      onChange={(event) =>
-                        setDraft((value) => ({
-                          ...value,
-                          corePresentation: {
-                            ...value.corePresentation,
-                            [key]: {
-                              label: value.corePresentation?.[key]?.label ?? defaultLabel,
-                              help: event.target.value,
+            {Object.entries(coreLabels)
+              .filter(([id]) =>
+                draft.template === 'class_activity_v2'
+                  ? id !== 'activityTypeId'
+                  : id !== 'activityTypeIds' && id !== 'participantNames',
+              )
+              .map(([id, defaultLabel]) => {
+                const key = id as OrganizationGroupCoreField;
+                return (
+                  <div className="og-core" key={id}>
+                    <label>
+                      {defaultLabel}题目名称
+                      <input
+                        value={draft.corePresentation?.[key]?.label ?? defaultLabel}
+                        onChange={(event) =>
+                          setDraft((value) => ({
+                            ...value,
+                            corePresentation: {
+                              ...value.corePresentation,
+                              [key]: {
+                                ...value.corePresentation?.[key],
+                                label: event.target.value,
+                              },
                             },
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-              );
-            })}
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      {defaultLabel}帮助文字
+                      <input
+                        value={draft.corePresentation?.[key]?.help ?? ''}
+                        onChange={(event) =>
+                          setDraft((value) => ({
+                            ...value,
+                            corePresentation: {
+                              ...value.corePresentation,
+                              [key]: {
+                                label: value.corePresentation?.[key]?.label ?? defaultLabel,
+                                help: event.target.value,
+                              },
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                );
+              })}
           </div>
         </details>
         <h3>附加问题</h3>

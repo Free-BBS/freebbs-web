@@ -10,6 +10,8 @@ export interface EntryDraft {
   classId: string;
   participantCount: string;
   activityTypeId: string;
+  activityTypeIds?: string[];
+  participantNames?: string;
   activityDate: string;
   summary: string;
   difficulties: string;
@@ -21,6 +23,8 @@ export function emptyDraft(classId = ''): EntryDraft {
     classId,
     participantCount: '',
     activityTypeId: '',
+    activityTypeIds: [],
+    participantNames: '',
     activityDate: '',
     summary: '',
     difficulties: '',
@@ -43,13 +47,21 @@ export function validateEntry(
     Number(draft.participantCount) < 1
   )
     return '参与人数必须为正整数。';
-  if (!version.activityTypes.some((type) => type.id === draft.activityTypeId))
+  const modern = version.template === 'class_activity_v2';
+  if (modern) {
+    if (!draft.activityDate) return '请选择活动时间。';
+    const tags = draft.activityTypeIds ?? [];
+    if (!tags.length || tags.some((id) => !version.activityTypes.some((type) => type.id === id)))
+      return '请至少选择一个活动标签。';
+    if (!draft.participantNames?.trim()) return '请填写具体参与人员姓名。';
+  } else if (!version.activityTypes.some((type) => type.id === draft.activityTypeId))
     return '请选择活动类型。';
   if (!draft.summary.trim()) return '请填写活动概要。';
   if (pointCount(draft.summary) > 200) return '活动概要最多 200 字（包含空白）。';
   if (pointCount(draft.difficulties) > 2000) return '困难反馈最多 2000 字。';
-  if (!draft.photos.length) return '请至少上传一张活动照片。';
-  if (draft.photos.length > workspace.maxPhotos) return `活动照片最多 ${workspace.maxPhotos} 张。`;
+  if (!modern && !draft.photos.length) return '请至少上传一张活动照片。';
+  const photoLimit = modern ? 5 : workspace.maxPhotos;
+  if (draft.photos.length > photoLimit) return `活动照片最多 ${photoLimit} 张。`;
   for (const field of version.fields) {
     const value = draft.extraAnswers[field.id];
     if (
@@ -179,6 +191,8 @@ export const coreLabels = {
   classId: '班级',
   participantCount: '参与人数',
   activityTypeId: '活动类型',
+  activityTypeIds: '活动标签',
+  participantNames: '具体参与人员',
   activityDate: '活动日期',
   summary: '活动概要',
   photos: '活动照片',

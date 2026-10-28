@@ -155,6 +155,11 @@ export function IdentitySettings({
           <p className="section-kicker">IDENTITY DIRECTORY</p>
           <h3 id="system-identities-title">用户身份卡片</h3>
           <p>选择同学，维护组织身份与代表队范围。</p>
+          <p>
+            <a href="/development/organizations/youth_league/organization/ledger?tab=secretaries">
+              班级团支书授权 ↗
+            </a>
+          </p>
         </div>
         <form
           role="search"

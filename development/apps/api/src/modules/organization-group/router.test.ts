@@ -40,14 +40,24 @@ function appFor(directory?: string, production = false) {
           studentId: uid === 'alice' ? '001' : uid === 'bob' ? '002' : '003',
           avatarUrl: null,
           baseRole: 'student',
-          tags: [],
+          tags:
+            ['alice', 'bob', 'carol'].includes(uid) && headers['x-revoked'] !== 'true'
+              ? [
+                  {
+                    key: 'class.youth_league_secretary',
+                    scope: { type: 'class', id: uid === 'carol' ? 'b' : 'a' },
+                  },
+                ]
+              : [],
           businessAdmin: uid === 'lead',
           roles:
             uid === 'lead'
               ? ['platform.admin']
               : uid === 'department'
                 ? ['youth_league.organization.member']
-                : [],
+                : uid === 'counselor'
+                  ? ['counselor.practice']
+                  : [],
           ...(uid === 'preview' ? { developmentAccess: 'lead' as const, previewing: true } : {}),
         };
         return { status: 200, user };
@@ -140,6 +150,24 @@ it('initializes an empty formal directory and denies implicit department managem
   expect(initial.body.data.members).toEqual([]);
   expect(initial.body.data.years[0].label).toBe('2026—2027');
   expect(initial.body.data.setupRequired).toBe(true);
+  expect(initial.body.data.versions[0].template).toBe('class_activity_v2');
+  expect(initial.body.data.versions[0].corePresentation.summary.label).toBe('活动内容');
+  expect(initial.body.data.versions[0].corePresentation.participantNames.label).toBe(
+    '具体参与人员',
+  );
+  expect(
+    initial.body.data.versions[0].activityTypes.map((row: { label: string }) => row.label),
+  ).toEqual([
+    '主题团日',
+    '支部事业',
+    '社会实践',
+    '志愿服务',
+    '学风建设',
+    '体育建设',
+    '美育建设',
+    '党团共建',
+    '宣传成果',
+  ]);
   expect(
     (
       await request(app)
@@ -157,6 +185,475 @@ it('initializes an empty formal directory and denies implicit department managem
     ).status,
   ).toBe(403);
   expect((await request(app).get('/org/workspace').set('x-user', 'anonymous')).status).toBe(401);
+});
+async function v2Fixture() {
+  const directory = await mkdtemp(join(tmpdir(), 'organization-v2-'));
+  directories.push(directory);
+  const app = appFor(directory);
+  const initial = (await request(app).get('/org/workspace').set('x-user', 'lead')).body.data;
+  const configured = await request(app)
+    .patch('/org/settings')
+    .set('x-user', 'lead')
+    .send({
+      revision: initial.revision,
+      classes: [
+        { id: 'a', label: 'A班' },
+        { id: 'b', label: 'B班' },
+      ],
+      managerUids: ['manager'],
+      ordinaryExport: true,
+    });
+  expect(configured.status).toBe(200);
+  return {
+    app,
+    directory,
+    yearId: initial.activeYearId as string,
+    versionId: initial.years[0].currentVersionId as string,
+  };
+}
+async function createV2(
+  f: Awaited<ReturnType<typeof v2Fixture>>,
+  uid = 'alice',
+  overrides: object = {},
+) {
+  return request(f.app)
+    .post('/org/entries')
+    .set('x-user', uid)
+    .set('Idempotency-Key', crypto.randomUUID())
+    .send({
+      yearId: f.yearId,
+      expectedVersionId: f.versionId,
+      classId: uid === 'carol' ? 'b' : 'a',
+      participantCount: 2,
+      activityDate: '2026-10-28',
+      activityTypeIds: ['theme_day', 'study'],
+      summary: '一起读书和讨论',
+      participantNames: '张三、李四',
+      photoIds: [],
+      ...overrides,
+    });
+}
+it('accepts the eight-field template without photos and normalizes multi-tag records in statistics, search and export', async () => {
+  const f = await v2Fixture();
+  const created = await createV2(f);
+  expect(created.status).toBe(201);
+  expect(created.body.data.activityTypeIds).toEqual(['theme_day', 'study']);
+  expect(created.body.data.activityTypeLabels).toEqual(['主题团日', '学风建设']);
+  expect(created.body.data.participantNames).toBe('张三、李四');
+  expect(created.body.data.photos).toEqual([]);
+  const list = await request(f.app).get('/org/entries?activityTypeId=study');
+  expect(list.body.data.total).toBe(1);
+  expect(list.body.data.statistics).toMatchObject({
+    activityCount: 1,
+    participantTimes: 2,
+    byActivityType: { theme_day: 1, study: 1 },
+  });
+  expect((await request(f.app).get('/org/entries?query=李四')).body.data.total).toBe(1);
+  const exported = await request(f.app)
+    .get('/org/export.xlsx?activityTypeId=study')
+    .buffer(true)
+    .parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+  expect(exported.status).toBe(200);
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(exported.body);
+  expect(book.worksheets[0]!.getRow(1).values).toEqual([
+    undefined,
+    '班级',
+    '参与人数',
+    '活动时间',
+    '活动标签',
+    '活动内容',
+    '活动照片',
+    '备注',
+    '具体参与人员',
+    '提交时间（上海）',
+    '填报人',
+  ]);
+  expect(book.worksheets[0]!.getRow(2).values).toContain('主题团日、学风建设');
+  expect(book.worksheets[0]!.getRow(2).values).toContain('张三、李四');
+});
+it('uses the saved version field labels for validation and export without rewriting historical labels on template publication', async () => {
+  const f = await v2Fixture();
+  const workspace = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  const source = workspace.versions.find((row: { id: string }) => row.id === f.versionId);
+  const published = await request(f.app)
+    .post(`/org/years/${f.yearId}/versions`)
+    .set('x-user', 'manager')
+    .send({
+      revision: workspace.years[0].revision,
+      template: source.template,
+      activityTypes: source.activityTypes,
+      fields: [],
+      corePresentation: {
+        ...source.corePresentation,
+        summary: { label: '原活动概况' },
+        participantNames: { label: '原参与名单' },
+      },
+    });
+  expect(published.status).toBe(201);
+  f.versionId = published.body.data.id;
+  const invalid = await createV2(f, 'alice', { summary: '字'.repeat(201) });
+  expect(invalid.status).toBe(400);
+  expect(invalid.body.error.message).toContain('原活动概况');
+  expect((await createV2(f)).status).toBe(201);
+  const exported = await request(f.app)
+    .get('/org/export.xlsx')
+    .buffer(true)
+    .parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(exported.body);
+  expect(book.worksheets[0]!.getRow(1).values).toContain('原活动概况');
+  expect(book.worksheets[0]!.getRow(1).values).toContain('原参与名单');
+  const afterPublish = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body
+    .data;
+  expect(
+    (
+      await request(f.app)
+        .post(`/org/years/${f.yearId}/template`)
+        .set('x-user', 'manager')
+        .send({ revision: afterPublish.years[0].revision })
+    ).status,
+  ).toBe(201);
+  const afterTemplate = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body
+    .data;
+  const historical = afterTemplate.versions.find((row: { id: string }) => row.id === f.versionId);
+  expect(historical.corePresentation.summary.label).toBe('原活动概况');
+  expect(historical.corePresentation.participantNames.label).toBe('原参与名单');
+});
+
+it('requires v2 dates and participant names, limits descriptions, and rejects empty, unknown or duplicate labels', async () => {
+  const f = await v2Fixture();
+  for (const invalid of [
+    { activityDate: null },
+    { activityDate: undefined },
+    { participantNames: '' },
+    { participantNames: ' '.repeat(3) },
+    { participantNames: '人'.repeat(4001) },
+    { summary: '字'.repeat(201) },
+    { activityTypeIds: [] },
+    { activityTypeIds: ['unknown'] },
+    { activityTypeIds: ['theme_day', 'theme_day'] },
+  ])
+    expect((await createV2(f, 'alice', invalid)).status).toBe(400);
+  expect(
+    (
+      await createV2(f, 'alice', {
+        participantNames: '同学甲\n同学乙（志愿者）',
+        summary: '字'.repeat(200),
+      })
+    ).status,
+  ).toBe(201);
+});
+it('limits v2 photos to five and five MiB, preserving zero-photo submissions', async () => {
+  const f = await v2Fixture();
+  const ids: string[] = [];
+  for (let index = 0; index < 6; index++) ids.push(await photo(f.app, f.yearId));
+  expect((await createV2(f, 'alice', { photoIds: ids })).status).toBe(400);
+  const saved = await createV2(f, 'alice', { photoIds: ids.slice(0, 5) });
+  expect(saved.status).toBe(201);
+  expect(saved.body.data.photos).toHaveLength(5);
+  expect(
+    (
+      await request(f.app)
+        .patch(`/org/entries/${saved.body.data.id}`)
+        .send({ revision: 1, photoIds: [] })
+    ).status,
+  ).toBe(200);
+  const large = Buffer.concat([
+    png.subarray(0, -12),
+    Buffer.alloc(5 * 1024 ** 2 + 1 - png.length),
+    png.subarray(-12),
+  ]);
+  expect(
+    (
+      await request(f.app)
+        .post('/org/uploads')
+        .field('yearId', f.yearId)
+        .field('purpose', 'activity_photo')
+        .attach('file', large, { filename: 'large.png', contentType: 'image/png' })
+    ).status,
+  ).toBe(413);
+  const exact = large.subarray(0, large.length - 1);
+  png.subarray(-12).copy(exact, exact.length - 12);
+  expect(
+    (
+      await request(f.app)
+        .post('/org/uploads')
+        .field('yearId', f.yearId)
+        .field('purpose', 'activity_photo')
+        .attach('file', exact, { filename: 'exact.png', contentType: 'image/png' })
+    ).status,
+  ).toBe(201);
+});
+it('keeps v2 photos at five and five MiB through upload, creation and editing while legacy versions retain lower settings', async () => {
+  const f = await v2Fixture();
+  const workspace = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  expect(
+    (
+      await request(f.app)
+        .patch('/org/settings')
+        .set('x-user', 'manager')
+        .send({
+          revision: workspace.revision,
+          maxPhotos: 1,
+          maxPhotoBytes: 1024 ** 2,
+        })
+    ).status,
+  ).toBe(200);
+  const large = Buffer.concat([
+    png.subarray(0, -12),
+    Buffer.alloc(2 * 1024 ** 2 - png.length),
+    png.subarray(-12),
+  ]);
+  async function upload(bytes: Buffer, entryId?: string) {
+    const req = request(f.app)
+      .post('/org/uploads')
+      .field('yearId', f.yearId)
+      .field('purpose', 'activity_photo');
+    if (entryId) req.field('entryId', entryId);
+    return req.attach('file', bytes, { filename: 'photo.png', contentType: 'image/png' });
+  }
+  const first = await upload(large);
+  const pendingForLegacy = await upload(large);
+  expect(first.status).toBe(201);
+  expect(first.body.data.size).toBeGreaterThan(1024 ** 2);
+  expect(pendingForLegacy.status).toBe(201);
+  const second = await photo(f.app, f.yearId);
+  const created = await createV2(f, 'alice', { photoIds: [first.body.data.id, second] });
+  expect(created.status).toBe(201);
+  expect(created.body.data.photos).toHaveLength(2);
+  expect((await upload(Buffer.alloc(5 * 1024 ** 2 + 1))).status).toBe(413);
+  const beforeLegacy = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body
+    .data;
+  const legacy = await request(f.app)
+    .post(`/org/years/${f.yearId}/versions`)
+    .set('x-user', 'manager')
+    .send({
+      revision: beforeLegacy.years[0].revision,
+      activityTypes: [{ id: 'meeting', label: '班会' }],
+      fields: [],
+    });
+  expect(legacy.status).toBe(201);
+  // An existing v2 record uses its original rules even after a legacy questionnaire is published.
+  const editPhoto = await upload(large, created.body.data.id);
+  expect(editPhoto.status).toBe(201);
+  const edited = await request(f.app)
+    .patch(`/org/entries/${created.body.data.id}`)
+    .send({
+      revision: 1,
+      photoIds: [editPhoto.body.data.id, second],
+    });
+  expect(edited.status).toBe(200);
+  expect(edited.body.data.photos).toHaveLength(2);
+  expect((await upload(Buffer.alloc(5 * 1024 ** 2 + 1), created.body.data.id)).status).toBe(413);
+  // Legacy new uploads and binding still use the historical one-MiB limit.
+  expect((await upload(large)).status).toBe(413);
+  const oldContext = { ...f, versionId: legacy.body.data.id as string };
+  expect(
+    (await create(oldContext, 'alice', { photoIds: [pendingForLegacy.body.data.id] })).status,
+  ).toBe(400);
+  const smallOne = await photo(f.app, f.yearId);
+  const smallTwo = await photo(f.app, f.yearId);
+  expect((await create(oldContext, 'alice', { photoIds: [smallOne, smallTwo] })).status).toBe(400);
+  const oldRecord = await create(oldContext, 'alice', { photoIds: [smallOne] });
+  expect(oldRecord.status).toBe(201);
+  expect((await upload(large, oldRecord.body.data.id)).status).toBe(413);
+});
+
+it('applies the fixed v2 limits to additional image answers and their binding as well as core photos', async () => {
+  const f = await v2Fixture();
+  let workspace = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  expect(
+    (
+      await request(f.app)
+        .patch('/org/settings')
+        .set('x-user', 'manager')
+        .send({
+          revision: workspace.revision,
+          maxPhotos: 1,
+          maxPhotoBytes: 1024 ** 2,
+        })
+    ).status,
+  ).toBe(200);
+  workspace = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  const template = workspace.versions.find((row: { id: string }) => row.id === f.versionId);
+  const published = await request(f.app)
+    .post(`/org/years/${f.yearId}/versions`)
+    .set('x-user', 'manager')
+    .send({
+      revision: workspace.years[0].revision,
+      template: 'class_activity_v2',
+      activityTypes: template.activityTypes,
+      fields: [{ id: 'gallery', label: '现场照片', kind: 'image', required: false }],
+    });
+  expect(published.status).toBe(201);
+  f.versionId = published.body.data.id;
+  const large = Buffer.concat([
+    png.subarray(0, -12),
+    Buffer.alloc(2 * 1024 ** 2 - png.length),
+    png.subarray(-12),
+  ]);
+  const uploaded = await request(f.app)
+    .post('/org/uploads')
+    .field('yearId', f.yearId)
+    .field('purpose', 'activity_photo')
+    .attach('file', large, { filename: 'large.png', contentType: 'image/png' });
+  expect(uploaded.status).toBe(201);
+  const other = await photo(f.app, f.yearId);
+  const saved = await createV2(f, 'alice', {
+    photoIds: [],
+    extraAnswers: { gallery: [uploaded.body.data.id, other] },
+  });
+  expect(saved.status).toBe(201);
+  expect(saved.body.data.extraPhotos).toHaveLength(2);
+});
+
+it('keeps ordinary users on their own records across old visibility settings and grants global readers without management', async () => {
+  const f = await v2Fixture();
+  const firstPhoto = await photo(f.app, f.yearId);
+  const own = await createV2(f, 'alice', { photoIds: [firstPhoto] });
+  await createV2(f, 'bob');
+  await createV2(f, 'carol');
+  for (const scope of [{ kind: 'all' }, { kind: 'same_class' }, { kind: 'users', ids: ['bob'] }]) {
+    const w = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+    if (scope.kind === 'users') continue; // the legacy fixture below covers persisted user scopes.
+    await request(f.app)
+      .patch('/org/settings')
+      .set('x-user', 'manager')
+      .send({ revision: w.revision, viewScope: scope });
+    expect((await request(f.app).get('/org/entries').set('x-user', 'bob')).body.data.total).toBe(1);
+    expect(
+      (await request(f.app).get(`/org/entries/${own.body.data.id}`).set('x-user', 'bob')).status,
+    ).toBe(404);
+    expect((await request(f.app).get(`/org/files/${firstPhoto}`).set('x-user', 'bob')).status).toBe(
+      404,
+    );
+  }
+  for (const uid of ['department', 'counselor']) {
+    const workspace = (await request(f.app).get('/org/workspace').set('x-user', uid)).body.data;
+    expect(workspace.canViewAll).toBe(true);
+    expect(workspace.canManage).toBe(false);
+    expect(workspace.canGrantSecretaries).toBe(uid === 'department');
+    expect(workspace.members).toEqual([]);
+    expect((await request(f.app).get('/org/entries').set('x-user', uid)).body.data.total).toBe(3);
+    expect((await request(f.app).get(`/org/files/${firstPhoto}`).set('x-user', uid)).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await request(f.app)
+          .patch('/org/settings')
+          .set('x-user', uid)
+          .send({ revision: workspace.revision, ordinaryExport: true })
+      ).status,
+    ).toBe(403);
+    expect((await request(f.app).get('/org/export.xlsx').set('x-user', uid)).status).toBe(200);
+  }
+  const foreignExport = await request(f.app)
+    .get('/org/export.xlsx?authorUid=alice')
+    .set('x-user', 'bob')
+    .buffer(true)
+    .parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+  expect(foreignExport.status).toBe(200);
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(foreignExport.body);
+  expect(book.worksheets[0]!.rowCount).toBe(1);
+  expect(
+    (await request(f.app).get('/org/entries/statistics?authorUid=alice').set('x-user', 'bob')).body
+      .data.activityCount,
+  ).toBe(0);
+});
+it('does not let old manual members retain submission or edit rights after their shared secretary tag is revoked', async () => {
+  const f = await fixture();
+  const saved = await create(f);
+  const workspace = (await request(f.app).get('/org/workspace').set('x-revoked', 'true')).body.data;
+  expect(workspace.canSubmit).toBe(false);
+  expect(workspace.allowedSubmitClassIds).toEqual([]);
+  expect((await request(f.app).get('/org/entries').set('x-revoked', 'true')).body.data.total).toBe(
+    1,
+  );
+  expect(
+    (
+      await request(f.app)
+        .patch(`/org/entries/${saved.body.data.id}`)
+        .set('x-revoked', 'true')
+        .send({ revision: 1, summary: '撤销后修改' })
+    ).status,
+  ).toBe(409);
+  expect(
+    (
+      await request(f.app)
+        .post('/org/entries')
+        .set('x-revoked', 'true')
+        .set('Idempotency-Key', 'revoked')
+        .send({
+          yearId: f.yearId,
+          expectedVersionId: f.versionId,
+          classId: 'a',
+          participantCount: 2,
+          activityTypeId: 'meeting',
+          summary: '撤销后填报',
+          photoIds: [],
+        })
+    ).status,
+  ).toBe(409);
+});
+it('explicitly upgrades old questionnaires while retaining legacy single tags, original edit rules and fields', async () => {
+  const f = await fixture();
+  const old = await create(f);
+  const statePath = join(
+    f.directory,
+    'organization-group',
+    `${createHash('sha256').update('youth_league.organization').digest('hex')}.json`,
+  );
+  const legacy = JSON.parse(await readFile(statePath, 'utf8'));
+  delete legacy.entries[0].activityTypeIds;
+  delete legacy.entries[0].participantNames;
+  await writeFile(statePath, JSON.stringify(legacy));
+  const before = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  expect(
+    before.versions.find((v: { id: string }) => v.id === f.versionId).template,
+  ).toBeUndefined();
+  const upgraded = await request(f.app)
+    .post(`/org/years/${f.yearId}/template`)
+    .set('x-user', 'manager')
+    .send({ revision: before.years[0].revision });
+  expect(upgraded.status).toBe(201);
+  expect(upgraded.body.data.template).toBe('class_activity_v2');
+  const after = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  expect(after.versions.some((v: { id: string }) => v.id === f.versionId)).toBe(true);
+  expect(
+    (await request(f.app).get(`/org/entries/${old.body.data.id}`)).body.data.activityTypeIds,
+  ).toEqual(['meeting']);
+  expect(
+    (await request(f.app).get(`/org/entries/${old.body.data.id}`)).body.data.participantNames,
+  ).toBe('');
+  expect(
+    (
+      await request(f.app)
+        .patch(`/org/entries/${old.body.data.id}`)
+        .send({ revision: 1, summary: '修改旧记录，无须新增参与者姓名' })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await request(f.app)
+        .patch(`/org/entries/${old.body.data.id}`)
+        .send({ revision: 2, photoIds: [] })
+    ).status,
+  ).toBe(400);
 });
 it('permits repeated valid activities with identity from authentication, preserving assets after restart', async () => {
   const f = await fixture();
@@ -295,7 +792,7 @@ it('uses the same scopes and field projection for list/search/statistics/files/e
       ordinaryExport: true,
     });
   const list = await request(f.app).get('/org/entries');
-  expect(list.body.data.total).toBe(2);
+  expect(list.body.data.total).toBe(1);
   expect(list.body.data.items[0]).not.toHaveProperty('difficulties');
   expect((await request(f.app).get('/org/entries?query=私密困难')).body.data.total).toBe(0);
   expect(
@@ -303,7 +800,7 @@ it('uses the same scopes and field projection for list/search/statistics/files/e
   ).toBe('私密困难');
   expect(
     (await request(f.app).get(`/org/entries/${mine.id}/edit-context`).set('x-user', 'bob')).status,
-  ).toBe(403);
+  ).toBe(404);
   const filtered = await request(f.app).get(
     '/org/entries?authorUid=alice&dateFrom=2026-10-08&dateTo=2026-10-08',
   );
@@ -322,17 +819,21 @@ it('uses the same scopes and field projection for list/search/statistics/files/e
   await book.xlsx.load(exported.body);
   const sheet = book.worksheets[0]!;
   expect(sheet.rowCount).toBe(2);
-  expect(sheet.getRow(1).values).not.toContain('困难反馈');
+  expect(sheet.getRow(1).values).not.toContain('备注');
   expect(sheet.getRow(2).values).toContain("'=SUM(1)");
   w = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
   await request(f.app)
     .patch('/org/settings')
     .set('x-user', 'manager')
     .send({ revision: w.revision, viewScope: { kind: 'users', ids: ['bob'] } });
-  expect((await request(f.app).get('/org/entries')).body.data.total).toBe(0);
-  expect((await request(f.app).get('/org/entries').set('x-user', 'bob')).body.data.total).toBe(3);
-  expect((await request(f.app).get(`/org/entries/${mine.id}`)).status).toBe(404);
-  expect((await request(f.app).get(`/org/files/${mine.photos[0].id}`)).status).toBe(404);
+  expect((await request(f.app).get('/org/entries')).body.data.total).toBe(1);
+  expect((await request(f.app).get('/org/entries').set('x-user', 'bob')).body.data.total).toBe(1);
+  expect((await request(f.app).get(`/org/entries/${mine.id}`).set('x-user', 'bob')).status).toBe(
+    404,
+  );
+  expect(
+    (await request(f.app).get(`/org/files/${mine.photos[0].id}`).set('x-user', 'bob')).status,
+  ).toBe(404);
 });
 it('publishes immutable versions and edits old answers against old schema; prevents core rule removal', async () => {
   const f = await fixture();
@@ -440,6 +941,96 @@ it('keeps retry idempotency, rejects changed replay and foreign asset rebinding'
     (await request(f.app).post('/org/entries').set('Idempotency-Key', 'two').send(input)).status,
   ).toBe(403);
 });
+it('uses shared secretary class tags for deadline and resource read scopes, retaining only legacy roster read compatibility', async () => {
+  const f = await v2Fixture();
+  async function material(classId: string) {
+    const deadline = await request(f.app)
+      .post('/org/deadlines')
+      .set('x-user', 'manager')
+      .send({
+        yearId: f.yearId,
+        title: `${classId}班截止事项`,
+        dueAt: new Date(Date.now() + 86400000).toISOString(),
+        scope: { kind: 'classes', ids: [classId] },
+      });
+    expect(deadline.status).toBe(201);
+    const uploaded = await request(f.app)
+      .post('/org/uploads')
+      .set('x-user', 'manager')
+      .field('yearId', f.yearId)
+      .field('purpose', 'resource')
+      .attach('file', Buffer.from('%PDF-1.4\n%%EOF'), {
+        filename: `${classId}.pdf`,
+        contentType: 'application/pdf',
+      });
+    expect(uploaded.status).toBe(201);
+    const resource = await request(f.app)
+      .post('/org/resources')
+      .set('x-user', 'manager')
+      .send({
+        yearId: f.yearId,
+        title: `${classId}班资料`,
+        fileId: uploaded.body.data.id,
+        scope: { kind: 'classes', ids: [classId] },
+        deadlineId: deadline.body.data.id,
+      });
+    expect(resource.status).toBe(201);
+    return {
+      deadline: deadline.body.data,
+      resource: resource.body.data,
+      fileId: uploaded.body.data.id as string,
+    };
+  }
+  const own = await material('a');
+  const other = await material('b');
+  expect((await request(f.app).get('/org/workspace')).body.data.members).toEqual([]);
+  expect(
+    (await request(f.app).get('/org/deadlines')).body.data.items.map(
+      (row: { id: string }) => row.id,
+    ),
+  ).toEqual([own.deadline.id]);
+  expect(
+    (await request(f.app).get('/org/resources')).body.data.items.map(
+      (row: { id: string }) => row.id,
+    ),
+  ).toEqual([own.resource.id]);
+  expect((await request(f.app).get(`/org/files/${own.fileId}`)).status).toBe(200);
+  expect((await request(f.app).get(`/org/files/${other.fileId}`)).status).toBe(404);
+  expect((await request(f.app).get('/org/deadlines').set('x-revoked', 'true')).status).toBe(403);
+  expect((await request(f.app).get('/org/resources').set('x-revoked', 'true')).status).toBe(403);
+  expect(
+    (await request(f.app).get(`/org/files/${own.fileId}`).set('x-revoked', 'true')).status,
+  ).toBe(404);
+  const w = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
+  expect(
+    (
+      await request(f.app)
+        .patch('/org/settings')
+        .set('x-user', 'manager')
+        .send({
+          revision: w.revision,
+          members: [{ uid: 'alice', studentId: '001', classId: 'a', submitClassIds: ['a'] }],
+        })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await request(f.app).get('/org/deadlines').set('x-revoked', 'true')).body.data.items.map(
+      (row: { id: string }) => row.id,
+    ),
+  ).toEqual([own.deadline.id]);
+  expect(
+    (await request(f.app).get('/org/resources').set('x-revoked', 'true')).body.data.items.map(
+      (row: { id: string }) => row.id,
+    ),
+  ).toEqual([own.resource.id]);
+  expect(
+    (await request(f.app).get(`/org/files/${own.fileId}`).set('x-revoked', 'true')).status,
+  ).toBe(200);
+  expect(
+    (await request(f.app).get('/org/workspace').set('x-revoked', 'true')).body.data.canSubmit,
+  ).toBe(false);
+});
+
 it('filters deadlines, sorts future ascending, distinguishes cancellation and intersects old resource file access', async () => {
   const f = await fixture();
   const future = new Date(Date.now() + 86400000).toISOString();
@@ -528,7 +1119,7 @@ it('rejects invalid MIME/signatures, active content and ordinary public-resource
   ).toBe(503);
 });
 
-it('requires exact UID/studentId mapping, validates directory references and filters ordinary workspace roster', async () => {
+it('filters the legacy roster by exact UID/studentId while using shared appointments for new submission rights', async () => {
   const f = await fixture();
   let w = (await request(f.app).get('/org/workspace').set('x-user', 'lead')).body.data;
   const ordinary = (await request(f.app).get('/org/workspace')).body.data;
@@ -570,8 +1161,11 @@ it('requires exact UID/studentId mapping, validates directory references and fil
     .set('x-user', 'lead')
     .send({ revision: w.revision, members });
   expect(changed.status).toBe(200);
-  expect((await request(f.app).get('/org/workspace')).body.data.allowedSubmitClassIds).toEqual([]);
-  expect((await request(f.app).get('/org/entries')).status).toBe(403);
+  const shared = (await request(f.app).get('/org/workspace')).body.data;
+  expect(shared.allowedSubmitClassIds).toEqual(['a']);
+  expect(shared.members).toEqual([]);
+  expect((await request(f.app).get('/org/entries')).status).toBe(200);
+  expect((await request(f.app).get('/org/entries').set('x-revoked', 'true')).status).toBe(403);
   w = changed.body.data;
   expect(
     (

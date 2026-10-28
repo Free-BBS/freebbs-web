@@ -5,6 +5,7 @@ import express from 'express';
 import type { ApiEnvelope, DevelopmentRewardProvider } from '@freebbs-development/contracts';
 import {
   ACTIVITY_CONTENT_BODY_MAX_BYTES,
+  DEMO_USERS,
   platformRootAdminUids,
 } from '@freebbs-development/contracts';
 import { loadEnvironment, type AuthMode } from './config/env.js';
@@ -134,6 +135,22 @@ function resolveAuthClient(mode: AuthMode, options: CreateAppOptions): AuthClien
         apiBaseUrl: environment.mainSiteApiBaseUrl,
         timeoutMs: environment.authTimeoutMs,
       });
+}
+
+/** Reuse deterministic demo accounts only; production must supply its verified user directory. */
+function organizationGroupDemoDirectory(): UserDirectory {
+  const users = DEMO_USERS.map((user) => ({
+    uid: user.uid,
+    username: user.uid,
+    displayName: user.displayName,
+    studentId: null,
+    avatarUrl: null,
+  }));
+  return {
+    list: async (query) =>
+      users.filter((user) => !query || `${user.uid} ${user.displayName}`.includes(query)),
+    get: async (uid) => users.find((user) => user.uid === uid) ?? null,
+  };
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -392,6 +409,10 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     `${API_BASE_PATH}/organization-group`,
     createOrganizationGroupRouter({
+      store,
+      userDirectory:
+        options.userDirectory ??
+        (authMode === 'demo' ? organizationGroupDemoDirectory() : undefined),
       authenticate,
       nodeEnvironment: environment.nodeEnv,
       uploadDirectory:

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   OrganizationGroupWorkspace,
   OrganizationGroupYear,
+  OrganizationGroupEntry,
 } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../core/api/client.js';
 import { Ledger } from './Ledger.js';
@@ -52,6 +53,102 @@ const rows = {
 afterEach(() => vi.restoreAllMocks());
 
 describe('organization ledger export lifecycle', () => {
+  it('renders multiple activity tags and participant names as readable table cells', async () => {
+    const item: OrganizationGroupEntry = {
+      id: 'entry',
+      yearId: 'year',
+      versionId: 'v2',
+      authorUid: 'student',
+      authorName: '团支书',
+      classId: 'c1',
+      classLabel: '无60',
+      participantCount: 2,
+      activityTypeId: 'theme',
+      activityTypeLabel: '主题团日',
+      activityTypeIds: ['theme', 'art'],
+      activityTypeLabels: ['主题团日', '美育建设'],
+      participantNames: '张三、李四',
+      activityDate: '2026-10-28',
+      summary: '观影交流',
+      difficulties: '无',
+      extraAnswers: {},
+      photos: [],
+      extraPhotos: [],
+      locked: false,
+      revision: 1,
+      createdAt: '2026-10-28T01:00:00Z',
+      updatedAt: '',
+      canEdit: false,
+      editBlockedReason: '只能修改本人记录',
+    };
+    const api = {
+      request: vi
+        .fn()
+        .mockResolvedValue({ ...rows, items: [item], total: 1 }) as ApiClient['request'],
+    };
+    render(
+      <Ledger api={api} workspace={{ ...workspace, canViewAll: true }} year={year} refresh={0} />,
+    );
+    expect(await screen.findByRole('table', { name: '全系活动记录' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '张三、李四' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '主题团日 美育建设' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: '无60' })).toBeInTheDocument();
+  });
+  it('discards a private thumbnail download after its table is unmounted', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL');
+    let resolve!: (blob: Blob) => void;
+    const item: OrganizationGroupEntry = {
+      id: 'entry',
+      yearId: 'year',
+      versionId: 'v1',
+      authorUid: 'student',
+      authorName: '团支书',
+      classId: 'c1',
+      classLabel: '无60',
+      participantCount: 1,
+      activityTypeId: 'theme',
+      activityTypeLabel: '主题团日',
+      activityDate: null,
+      summary: '活动',
+      extraAnswers: {},
+      photos: [
+        {
+          id: 'photo',
+          originalName: '合影.png',
+          mime: 'image/png',
+          size: 20,
+          previewable: true,
+          purpose: 'activity_photo',
+          yearId: 'year',
+          createdAt: '',
+        },
+      ],
+      extraPhotos: [],
+      locked: false,
+      revision: 1,
+      createdAt: '',
+      updatedAt: '',
+      canEdit: true,
+      editBlockedReason: null,
+    };
+    const api = {
+      request: vi
+        .fn()
+        .mockResolvedValue({ ...rows, items: [item], total: 1 }) as ApiClient['request'],
+      download: vi.fn(
+        () =>
+          new Promise<Blob>((accept) => {
+            resolve = accept;
+          }),
+      ),
+    };
+    const view = render(<Ledger api={api} workspace={workspace} year={year} refresh={0} />);
+    await screen.findByRole('button', { name: '查看无60活动的1张照片' });
+    await waitFor(() => expect(api.download).toHaveBeenCalledTimes(1));
+    view.unmount();
+    await act(async () => resolve(new Blob(['private photo'])));
+    expect(create).not.toHaveBeenCalled();
+  });
   it('saves a completed export while the same view is current', async () => {
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:export');
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});

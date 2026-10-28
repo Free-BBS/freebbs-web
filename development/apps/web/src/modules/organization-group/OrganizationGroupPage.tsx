@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { OrganizationGroupWorkspace } from '@freebbs-development/contracts';
 import { createApiClient, type ApiClient } from '../../core/api/client.js';
 import { EntryForm } from './EntryForm.js';
 import { Ledger } from './Ledger.js';
 import { Materials } from './Materials.js';
 import { Settings } from './Settings.js';
+import { ClassSecretaries } from './Secretaries.js';
 import { errorMessage } from './model.js';
 import './organization-group.css';
 export type GroupClient = Pick<ApiClient, 'request'> & Partial<Pick<ApiClient, 'download'>>;
@@ -18,6 +19,7 @@ export function OrganizationGroupPage({
 }) {
   const fallback = useMemo(createApiClient, []);
   const api = client ?? fallback;
+  const { search } = useLocation();
   const [workspace, setWorkspace] = useState<OrganizationGroupWorkspace | null>(null);
   const [yearId, setYearId] = useState('');
   const [tab, setTab] = useState('form');
@@ -33,6 +35,14 @@ export function OrganizationGroupPage({
           if (live) {
             setWorkspace(data);
             setYearId(data.activeYearId);
+            const requested = new URLSearchParams(search).get('tab');
+            setTab(
+              requested === 'secretaries' && data.canGrantSecretaries
+                ? 'secretaries'
+                : data.canViewAll
+                  ? 'ledger'
+                  : 'form',
+            );
           }
         },
         (cause) => {
@@ -42,7 +52,7 @@ export function OrganizationGroupPage({
     return () => {
       live = false;
     };
-  }, [api, enabled]);
+  }, [api, enabled, search]);
   async function reload() {
     const data = await api.request<OrganizationGroupWorkspace>('/organization-group/workspace');
     setWorkspace(data);
@@ -85,6 +95,7 @@ export function OrganizationGroupPage({
     ['form', '活动填报'],
     ['ledger', '活动台账'],
     ['materials', '截止事项与资料'],
+    ...(workspace.canGrantSecretaries ? [['secretaries', '团支书授权']] : []),
     ...(workspace.canManage ? [['settings', '管理设置']] : []),
   ];
   return (
@@ -96,7 +107,11 @@ export function OrganizationGroupPage({
         <div>
           <p className="og-eyebrow">团委 · 组织组</p>
           <h1>组织组活动台账</h1>
-          <p>把每一次组织生活，留成可回看的共同记录。</p>
+          <p>
+            {workspace.canViewAll
+              ? '查看全系班级活动，按班级、标签和日期查找记录。'
+              : '填写班级活动，查看本人提交的记录。'}
+          </p>
         </div>
         <label className="og-year">
           学年
@@ -175,6 +190,11 @@ export function OrganizationGroupPage({
                 year={year}
                 onReload={reload}
               />
+            </div>
+          ) : null}
+          {tab === 'secretaries' && workspace.canGrantSecretaries ? (
+            <div id="og-secretaries" role="tabpanel" aria-labelledby="og-tab-secretaries">
+              <ClassSecretaries api={api} classes={workspace.classes} />
             </div>
           ) : null}
         </>

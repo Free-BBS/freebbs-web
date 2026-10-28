@@ -5,17 +5,22 @@ import multer from 'multer';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import type {
+  OrganizationGroupCoreField,
   OrganizationGroupEntryQuery,
   OrganizationGroupVersionInput,
   OrganizationGroupYear,
   UserContext,
 } from '@freebbs-development/contracts';
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
+import type { UserDirectory } from '../../core/auth/user-directory.js';
+import type { DevelopmentStore } from '../../core/database/types.js';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import {
   audit,
+  ACTIVITY_PHOTO_BYTES,
   bindAssets,
+  classActivityTemplate,
   deadlineDto,
   editReason,
   entryDto,
@@ -25,6 +30,8 @@ import {
   grantAdministrator,
   initialState,
   manages,
+  entryTypeIds,
+  photoBytes,
   now,
   requireAccess,
   requireManager,
@@ -38,6 +45,7 @@ import {
   validateValues,
   version,
   visibleEntry,
+  viewsAll,
   visibleResource,
   visibleScope,
   WORKSPACE_ID,
@@ -54,10 +62,13 @@ import {
   storeFile,
   visibleAsset,
 } from './files.js';
+import { createClassSecretariesRouter } from './secretaries-router.js';
 export interface OrganizationGroupOptions {
   authenticate: (headers: AuthHeaders) => Promise<AuthenticationResult>;
   uploadDirectory?: string;
   nodeEnvironment?: string;
+  store?: DevelopmentStore;
+  userDirectory?: UserDirectory;
 }
 
 const key = z
@@ -96,6 +107,7 @@ const presentation = z
   .strict();
 const definition = z
   .object({
+    template: z.literal('class_activity_v2').optional(),
     activityTypes: z
       .array(z.object({ id: key, label: z.string().trim().min(1).max(120) }).strict())
       .min(1)
@@ -106,6 +118,8 @@ const definition = z
         classId: presentation.optional(),
         participantCount: presentation.optional(),
         activityTypeId: presentation.optional(),
+        activityTypeIds: presentation.optional(),
+        participantNames: presentation.optional(),
         activityDate: presentation.optional(),
         summary: presentation.optional(),
         photos: presentation.optional(),
@@ -119,12 +133,14 @@ const values = z
   .object({
     classId: key,
     participantCount: z.number().int().min(1).max(1000000),
-    activityTypeId: key,
+    activityTypeId: key.optional(),
+    activityTypeIds: z.array(key).min(1).max(100).optional(),
+    participantNames: z.string().max(16000).optional(),
     activityDate: date.nullable().optional(),
     summary: z.string().min(1).max(800),
     difficulties: z
       .string()
-      .refine((value) => Array.from(value).length <= 2000, '困难反馈最多 2000 个字符')
+      .refine((value) => Array.from(value).length <= 2000, '备注最多 2000 个字符')
       .default(''),
     photoIds: z.array(z.string().uuid()).max(30),
     extraAnswers: z
@@ -237,6 +253,8 @@ function validateDefinition(s: OrganizationState, input: OrganizationGroupVersio
         'classId',
         'participantCount',
         'activityTypeId',
+        'activityTypeIds',
+        'participantNames',
         'activityDate',
         'summary',
         'photos',
@@ -346,6 +364,16 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
     response.locals.actor = identity.user;
     next();
   });
+  if (options.store) {
+    router.use(
+      '/secretaries',
+      createClassSecretariesRouter({
+        store: options.store,
+        directory: options.userDirectory,
+        readClasses: async () => (await read()).classes,
+      }),
+    );
+  }
   router.get('/workspace', async (_request, response) =>
     send(response, workspaceDto(await read(), actor(response))),
   );
@@ -510,6 +538,21 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
       201,
     );
   });
+  router.post('/years/:id/template', async (request, response) => {
+    const user = actor(response);
+    const input = parse(z.object({ revision: rev }).strict(), request.body);
+    send(
+      response,
+      await change((s) => {
+        requireManager(s, user);
+        const y = year(s, String(request.params.id));
+        revision(y.revision, input.revision);
+        if (y.archived) fail(409, 'year_archived', '归档学年不能发布新问卷');
+        return attachVersion(s, user, y, classActivityTemplate());
+      }),
+      201,
+    );
+  });
   router.get('/entries', async (request, response) => {
     const s = await read();
     const user = actor(response);
@@ -539,30 +582,35 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
     const s = await read();
     const user = actor(response);
     requireAccess(s, user);
-    if (!manages(s, user) && !s.settings.ordinaryExport)
+    if (!viewsAll(s, user) && !s.settings.ordinaryExport)
       fail(403, 'export_forbidden', '当前未开放普通用户导出');
     const q = queryInput(request.query);
     year(s, q.yearId ?? s.settings.activeYearId);
     const rows = filteredEntries(s, user, q);
-    const showDifficulties = !s.settings.hideDifficulties || manages(s, user);
+    const showDifficulties = !s.settings.hideDifficulties || viewsAll(s, user);
     const fields = s.versions
       .filter((v) => v.yearId === (q.yearId ?? s.settings.activeYearId))
       .flatMap((v) => v.fields)
       .filter((f, i, all) => all.findIndex((row) => row.id === f.id) === i);
+    const currentYear = year(s, q.yearId ?? s.settings.activeYearId);
+    const currentVersion = currentYear.currentVersionId
+      ? version(s, currentYear.currentVersionId)
+      : null;
+    const label = (field: OrganizationGroupCoreField, fallback: string) =>
+      currentVersion?.corePresentation?.[field]?.label ?? fallback;
     const book = new ExcelJS.Workbook();
     const sheet = book.addWorksheet('活动台账');
     sheet.addRow([
-      '班级',
-      '参与人次',
-      '活动类型',
-      '活动日期',
-      '活动简述',
-      ...(showDifficulties ? ['困难反馈'] : []),
-      '提交人 UID',
-      '提交人',
-      '问卷版本',
+      label('classId', '班级'),
+      label('participantCount', '参与人数'),
+      label('activityDate', '活动时间'),
+      label('activityTypeIds', label('activityTypeId', '活动标签')),
+      label('summary', '活动内容'),
+      label('photos', '活动照片'),
+      ...(showDifficulties ? [label('difficulties', '备注')] : []),
+      label('participantNames', '具体参与人员'),
       '提交时间（上海）',
-      '照片数',
+      '填报人',
       ...fields.map((f) => f.label),
     ]);
     const safe = (value: unknown) => {
@@ -575,15 +623,14 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
       sheet.addRow([
         safe(dto.classLabel),
         e.participantCount,
-        safe(dto.activityTypeLabel),
         safe(e.activityDate),
+        safe(dto.activityTypeLabels?.join('、') ?? dto.activityTypeLabel),
         safe(e.summary),
+        e.photoIds.length ? `${e.photoIds.length} 张` : '',
         ...(showDifficulties ? [safe(e.difficulties)] : []),
-        safe(e.authorUid),
-        safe(e.authorName),
-        v.number,
+        safe(e.participantNames),
         new Date(e.createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }),
-        e.photoIds.length,
+        safe(e.authorName),
         ...fields.map((f) =>
           v.fields.some((old) => old.id === f.id)
             ? safe(
@@ -596,8 +643,16 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
       ]);
     }
     sheet.getRow(1).font = { bold: true };
+    sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 1 }];
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: Math.max(1, sheet.rowCount), column: sheet.columnCount },
+    };
     sheet.columns.forEach((c) => {
       c.width = 24;
+    });
+    sheet.eachRow((row) => {
+      row.alignment = { vertical: 'top', wrapText: true };
     });
     response.setHeader(
       'Content-Type',
@@ -644,6 +699,7 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
         'activity_photo',
         'entry',
         id,
+        v,
       );
       const e: StoredEntry = {
         id,
@@ -653,7 +709,9 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
         authorName: user.displayName,
         classId: input.classId,
         participantCount: input.participantCount,
-        activityTypeId: input.activityTypeId,
+        activityTypeId: entryTypeIds(input)[0]!,
+        activityTypeIds: entryTypeIds(input),
+        participantNames: input.participantNames ?? '',
         activityDate: input.activityDate ?? null,
         summary: input.summary,
         difficulties: input.difficulties,
@@ -704,6 +762,9 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
         if (reason) fail(409, 'entry_locked', reason);
         const changes = omitKeys(input, ['revision']);
         const next = { ...e, ...changes };
+        if (input.activityTypeId !== undefined && input.activityTypeIds === undefined) {
+          next.activityTypeIds = [input.activityTypeId];
+        }
         const extraPhotoIds = validateValues(
           s,
           user,
@@ -719,9 +780,16 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
           'activity_photo',
           'entry',
           e.id,
+          version(s, e.versionId),
         );
         const before = { ...e };
-        Object.assign(e, next, { extraPhotoIds, revision: e.revision + 1, updatedAt: now() });
+        Object.assign(e, next, {
+          activityTypeId: entryTypeIds(next)[0]!,
+          activityTypeIds: entryTypeIds(next),
+          extraPhotoIds,
+          revision: e.revision + 1,
+          updatedAt: now(),
+        });
         audit(s, user, 'entry_updated', e.id, e.revision, before, e);
         return entryDto(s, user, e);
       }),
@@ -755,9 +823,12 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
       const s = await read();
       const user = actor(response);
       requireAccess(s, user);
+      // Multipart fields are unavailable until parsed; allow the largest possible photo rule,
+      // then enforce the actual original questionnaire version before accepting the upload.
+      const maximumPhotoBytes = Math.max(s.settings.maxPhotoBytes, ACTIVITY_PHOTO_BYTES);
       const maximum = manages(s, user)
-        ? Math.max(s.settings.maxResourceBytes, s.settings.maxPhotoBytes)
-        : s.settings.maxPhotoBytes;
+        ? Math.max(s.settings.maxResourceBytes, maximumPhotoBytes)
+        : maximumPhotoBytes;
       const upload = multer({
         storage: multer.memoryStorage(),
         limits: { fileSize: maximum, files: 1, fields: 3, fieldSize: 200, parts: 4 },
@@ -806,9 +877,16 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
             const reason = submissionReason(s, user, y);
             if (reason) fail(409, 'submission_closed', reason);
           }
+          const currentVersion = input.entryId
+            ? version(s, s.entries.find((e) => e.id === input.entryId)!.versionId)
+            : y.currentVersionId
+              ? version(s, y.currentVersionId)
+              : null;
           const maximum =
             input.purpose === 'activity_photo'
-              ? s.settings.maxPhotoBytes
+              ? currentVersion
+                ? photoBytes(s, currentVersion)
+                : s.settings.maxPhotoBytes
               : s.settings.maxResourceBytes;
           if (file.size < 1 || file.size > maximum)
             fail(413, 'file_too_large', `文件不得超过 ${maximum} 字节`);
