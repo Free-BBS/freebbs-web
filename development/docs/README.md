@@ -9,6 +9,7 @@
 1. [总体技术设计](./overall-technical-design.md)：了解平台定位、系统边界、功能域、权限模型、负责人和模块认领方式。
 2. [本地开发与完整预览](./local-development.md)：安装依赖，以 demo 身份启动 Web 与 API，并进行 MySQL 联调。
 3. [管理员权限说明](./admin-permissions.md)：供管理员转发使用的身份权限、授权与交接说明。
+4. [组织组活动台账操作指南](./organization-group-user-guide.md)：供组织组转发使用，说明全局查看、团支书授权和团支书填报操作。
 
 ### 平台核心与领域模块开发者
 
