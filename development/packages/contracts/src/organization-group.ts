@@ -33,6 +33,8 @@ export type OrganizationGroupCoreField =
   | 'classId'
   | 'participantCount'
   | 'activityTypeId'
+  | 'activityTypeIds'
+  | 'participantNames'
   | 'activityDate'
   | 'summary'
   | 'photos'
@@ -42,6 +44,8 @@ export interface OrganizationGroupCorePresentation {
   help?: string;
 }
 export interface OrganizationGroupVersionInput {
+  /** Absence identifies the original single-category questionnaire and its historical rules. */
+  template?: 'class_activity_v2';
   activityTypes: OrganizationGroupOption[];
   fields: OrganizationGroupField[];
   corePresentation?: Partial<Record<OrganizationGroupCoreField, OrganizationGroupCorePresentation>>;
@@ -84,6 +88,8 @@ export interface OrganizationGroupWorkspace extends OrganizationGroupSettings {
   years: OrganizationGroupYear[];
   versions: OrganizationGroupVersion[];
   canManage: boolean;
+  canViewAll?: boolean;
+  canGrantSecretaries?: boolean;
   canGrantManagers: boolean;
   canExport: boolean;
   allowedSubmitClassIds: string[];
@@ -110,7 +116,9 @@ export interface OrganizationGroupFile {
 export interface OrganizationGroupEntryValues {
   classId: string;
   participantCount: number;
-  activityTypeId: string;
+  activityTypeId?: string;
+  activityTypeIds?: string[];
+  participantNames?: string;
   activityDate?: string | null;
   summary: string;
   difficulties?: string;
@@ -135,6 +143,10 @@ export interface OrganizationGroupEntry {
   participantCount: number;
   activityTypeId: string;
   activityTypeLabel: string;
+  /** Always normalized by the API, including original single-category records. */
+  activityTypeIds?: string[];
+  activityTypeLabels?: string[];
+  participantNames?: string;
   activityDate: string | null;
   summary: string;
   difficulties?: string;

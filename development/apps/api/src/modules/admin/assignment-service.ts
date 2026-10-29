@@ -1,5 +1,5 @@
 import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
-import { validateIdentitySelection } from '@freebbs-development/contracts';
+import { CLASS_SECRETARY_TAG, validateIdentitySelection } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { RecordConflictError } from '../../core/database/record-conflict-error.js';
@@ -208,6 +208,8 @@ export async function createTagAssignment(
   input: TagAssignmentInput,
   context: AssignmentMutationContext,
 ): Promise<TagAssignmentRecord> {
+  if (input.tagKey === CLASS_SECRETARY_TAG)
+    throw new HttpError(409, 'class_secretary_managed', '请在组织组台账的团支书授权中分配负责班级');
   const now = context.now ?? new Date();
   const scope = input.scope ?? publicScope;
   validateExpiry(input.expiresAt, now);
@@ -455,6 +457,8 @@ export async function archiveTagAssignment(
     if (assignment === null) {
       throw new HttpError(404, 'assignment_not_found', 'Tag assignment not found');
     }
+    if (assignment.tagKey === CLASS_SECRETARY_TAG)
+      throw new HttpError(409, 'class_secretary_managed', '请在组织组台账的团支书授权中撤销授权');
     if (assignment.status !== 'active') {
       throw new HttpError(409, 'assignment_inactive', 'Tag assignment is not active');
     }

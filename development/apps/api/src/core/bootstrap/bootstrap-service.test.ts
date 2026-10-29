@@ -165,6 +165,7 @@ describe('production governance bootstrap', () => {
       'social_org.tms',
       'social_org.media_center',
       'sports.team_captain',
+      'class.youth_league_secretary',
     ]);
     expect(BUILT_IN_TAG_DEFINITIONS.find(({ key }) => key === 'sports.team_captain')).toEqual(
       expect.objectContaining({

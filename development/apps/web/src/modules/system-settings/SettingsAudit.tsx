@@ -8,6 +8,7 @@ const actionLabels: Record<string, string> = {
   'system_settings.notification.publish': '发送通知',
   'system_settings.reward.grant': '发放奖励',
   'system_settings.module.update': '调整模块',
+  'organization_group.class_secretary.update': '更新班级团支书授权',
   'business.admin_override': '维护业务内容',
 };
 

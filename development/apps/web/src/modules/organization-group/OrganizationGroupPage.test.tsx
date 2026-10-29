@@ -158,6 +158,58 @@ async function fill() {
   await screen.findByText('活动.png');
 }
 describe('organization group user flows', () => {
+  it('submits the eight-field form with multiple tags, names and no photos', async () => {
+    const modern = {
+      ...version,
+      template: 'class_activity_v2' as const,
+      activityTypes: [
+        { id: 'theme', label: '主题团日' },
+        { id: 'volunteer', label: '志愿服务' },
+      ],
+    };
+    const { save } = setup({ versions: [modern] });
+    await screen.findByLabelText('活动内容');
+    fireEvent.change(screen.getByLabelText('参与人数'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('活动时间'), { target: { value: '2026-10-28' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: '主题团日' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '志愿服务' }));
+    fireEvent.change(screen.getByLabelText('活动内容'), {
+      target: { value: '共同参加志愿服务。' },
+    });
+    fireEvent.change(screen.getByLabelText('具体参与人员'), { target: { value: '张三、李四' } });
+    expect(screen.getByText(/按分隔符估算为 2 位/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('活动名称')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '提交活动' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(save.mock.calls[0]![0]!.body))).toMatchObject({
+      activityTypeIds: ['theme', 'volunteer'],
+      participantNames: '张三、李四',
+      participantCount: 3,
+      activityDate: '2026-10-28',
+      photoIds: [],
+    });
+  });
+  it('opens global readers on the table and keeps questionnaire management separate', async () => {
+    setup({ canViewAll: true, canGrantSecretaries: true, canManage: false });
+    expect(await screen.findByRole('tab', { name: '活动台账' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const table = await screen.findByRole('table', { name: '全系活动记录' });
+    expect(within(table).getByRole('columnheader', { name: '班级' })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: '原记录' })).toBeInTheDocument();
+    expect(screen.getByLabelText('筛选班级')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '团支书授权' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: '管理设置' })).not.toBeInTheDocument();
+  });
+  it('keeps ordinary table scope explicit and offers no cross-user filters', async () => {
+    setup();
+    fireEvent.click(await screen.findByRole('tab', { name: '活动台账' }));
+    expect(await screen.findByRole('table', { name: '本人提交的活动记录' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('筛选班级')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('填写人 UID')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '搜索活动' })).toBeInTheDocument();
+  });
   it('uses only server management permissions and guides an empty directory', async () => {
     setup({
       setupRequired: true,
@@ -254,6 +306,66 @@ describe('organization group user flows', () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(JSON.parse(save.mock.calls[1]![0].body).expectedVersionId).toBe('v2');
   });
+  it('migrates a v2 draft after a 409 by dropping removed tags while retaining valid selections and content', async () => {
+    const modern = {
+      ...version,
+      template: 'class_activity_v2' as const,
+      activityTypes: [
+        { id: 'theme', label: '主题团日' },
+        { id: 'volunteer', label: '志愿服务' },
+      ],
+    };
+    const overrides: Partial<OrganizationGroupWorkspace> = { versions: [modern] };
+    const save = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(409, 'form_version_changed', '问卷版本已更新', null))
+      .mockResolvedValue(entry);
+    setup(overrides, save);
+    await screen.findByLabelText('活动内容');
+    fireEvent.change(screen.getByLabelText('参与人数'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('活动时间'), { target: { value: '2026-10-28' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: '主题团日' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '志愿服务' }));
+    fireEvent.change(screen.getByLabelText('活动内容'), { target: { value: '待迁移的活动内容' } });
+    fireEvent.change(screen.getByLabelText('具体参与人员'), { target: { value: '张三、李四' } });
+    fireEvent.change(screen.getByLabelText('活动照片'), {
+      target: { files: [new File(['png'], '活动.png', { type: 'image/png' })] },
+    });
+    await screen.findByText('活动.png');
+    fireEvent.click(screen.getByRole('button', { name: '提交活动' }));
+    await screen.findByText('问卷版本已更新');
+    overrides.versions = [
+      modern,
+      {
+        ...modern,
+        id: 'v2',
+        number: 2,
+        activityTypes: [
+          { id: 'volunteer', label: '志愿服务' },
+          { id: 'sports', label: '体育建设' },
+        ],
+      },
+    ];
+    overrides.years = [{ ...workspace.years[0]!, currentVersionId: 'v2', revision: 2 }];
+    fireEvent.click(screen.getByRole('button', { name: '读取最新问卷' }));
+    fireEvent.click(await screen.findByRole('button', { name: '保留草稿并使用最新问卷' }));
+    expect(screen.queryByRole('checkbox', { name: '主题团日' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '志愿服务' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '体育建设' })).not.toBeChecked();
+    expect(screen.getByLabelText('活动内容')).toHaveValue('待迁移的活动内容');
+    expect(screen.getByLabelText('具体参与人员')).toHaveValue('张三、李四');
+    expect(screen.getByText('活动.png')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '提交活动' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(save.mock.calls[1]![0].body)).toMatchObject({
+      expectedVersionId: 'v2',
+      activityTypeId: 'volunteer',
+      activityTypeIds: ['volunteer'],
+      summary: '待迁移的活动内容',
+      participantNames: '张三、李四',
+      photoIds: ['photo'],
+    });
+  });
   it('counts Unicode points including whitespace and blocks invalid integers', async () => {
     const { save } = setup();
     await fill();
@@ -332,6 +444,33 @@ describe('organization group user flows', () => {
   });
 });
 describe('input helpers', () => {
+  it('validates the new required date, names and five-photo limit without requiring photos', () => {
+    const modern = { ...version, template: 'class_activity_v2' as const };
+    const draft = {
+      classId: 'class',
+      participantCount: '2',
+      activityTypeId: '',
+      activityTypeIds: ['meeting'],
+      participantNames: '',
+      activityDate: '',
+      summary: '活动内容',
+      difficulties: '',
+      photos: [],
+      extraAnswers: {},
+    };
+    expect(validateEntry(draft, modern, workspace)).toBe('请选择活动时间。');
+    const dated = { ...draft, activityDate: '2026-10-28' };
+    expect(validateEntry(dated, modern, workspace)).toBe('请填写具体参与人员姓名。');
+    const complete = { ...dated, participantNames: '张三' };
+    expect(validateEntry(complete, modern, workspace)).toBeNull();
+    expect(
+      validateEntry(
+        { ...complete, photos: Array.from({ length: 6 }, () => photo) },
+        modern,
+        workspace,
+      ),
+    ).toBe('活动照片最多 5 张。');
+  });
   it('matches roster UID and student number and rejects unknown class references', () => {
     expect(
       parseRoster('uid,studentId,classId,submitClassIds\nuser,2026001,c,c|d', [

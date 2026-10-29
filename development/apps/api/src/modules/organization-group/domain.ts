@@ -1,4 +1,8 @@
-import { isGlobalOrganizationBusinessSupervisor } from '@freebbs-development/contracts';
+import {
+  canGrantClassSecretaries,
+  isDevelopmentBusinessAdmin,
+  secretaryClassIds,
+} from '@freebbs-development/contracts';
 import type {
   OrganizationGroupAnswer,
   OrganizationGroupDeadline,
@@ -11,14 +15,46 @@ import type {
   OrganizationGroupScope,
   OrganizationGroupSettings,
   OrganizationGroupVersion,
+  OrganizationGroupVersionInput,
   OrganizationGroupWorkspace,
   OrganizationGroupYear,
   UserContext,
 } from '@freebbs-development/contracts';
 import { HttpError } from '../../core/errors/http-error.js';
+import type { AuthorizationContext } from '../../core/authorization/policy.js';
 
 export const WORKSPACE_ID = 'youth_league.organization';
 export const now = () => new Date().toISOString();
+export const ACTIVITY_PHOTO_LIMIT = 5;
+export const ACTIVITY_PHOTO_BYTES = 5 * 1024 ** 2;
+export function classActivityTemplate(): OrganizationGroupVersionInput {
+  return {
+    template: 'class_activity_v2',
+    activityTypes: [
+      ['theme_day', '主题团日'],
+      ['branch_work', '支部事业'],
+      ['social_practice', '社会实践'],
+      ['volunteering', '志愿服务'],
+      ['study', '学风建设'],
+      ['sports', '体育建设'],
+      ['aesthetics', '美育建设'],
+      ['party_youth', '党团共建'],
+      ['publicity', '宣传成果'],
+    ].map(([id, label]) => ({ id: id!, label: label! })),
+    fields: [],
+    corePresentation: {
+      classId: { label: '班级' },
+      participantCount: { label: '参与人数' },
+      activityDate: { label: '活动时间' },
+      activityTypeId: { label: '活动标签' },
+      activityTypeIds: { label: '活动标签' },
+      summary: { label: '活动内容', help: '200 字以内' },
+      photos: { label: '活动照片', help: '选填，最多 5 张，每张不超过 5 MiB' },
+      difficulties: { label: '备注' },
+      participantNames: { label: '具体参与人员', help: '请填写本次活动的具体参与人员' },
+    },
+  };
+}
 export interface StoredAsset extends OrganizationGroupFile {
   ownerUid: string;
   binding: { kind: 'entry' | 'resource'; id: string } | null;
@@ -57,6 +93,14 @@ export interface OrganizationState {
   }>;
 }
 export function initialState(): OrganizationState {
+  const initialVersion: OrganizationGroupVersion = {
+    ...classActivityTemplate(),
+    id: 'a54c0c28-2a2e-4ce6-a42d-202620270001',
+    yearId: '2026-2027',
+    number: 1,
+    publishedAt: now(),
+    publishedBy: 'system',
+  };
   return {
     id: WORKSPACE_ID,
     revision: 1,
@@ -65,8 +109,8 @@ export function initialState(): OrganizationState {
       viewScope: { kind: 'own' },
       hideDifficulties: false,
       ordinaryExport: false,
-      maxPhotos: 9,
-      maxPhotoBytes: 10 * 1024 ** 2,
+      maxPhotos: ACTIVITY_PHOTO_LIMIT,
+      maxPhotoBytes: ACTIVITY_PHOTO_BYTES,
       maxResourceBytes: 50 * 1024 ** 2,
     },
     classes: [],
@@ -82,11 +126,11 @@ export function initialState(): OrganizationState {
         archived: false,
         submissionOpen: true,
         editOpen: true,
-        currentVersionId: null,
+        currentVersionId: initialVersion.id,
         draft: null,
       },
     ],
-    versions: [],
+    versions: [initialVersion],
     assets: [],
     entries: [],
     deadlines: [],
@@ -98,10 +142,29 @@ export function initialState(): OrganizationState {
 export function fail(status: number, code: string, message: string): never {
   throw new HttpError(status, code, message);
 }
+function globalCounselor(
+  user: UserContext,
+  roles = user.roles.filter((role) => role.startsWith('counselor.')),
+) {
+  const appointments = (user as AuthorizationContext).roleScopes;
+  if (appointments === undefined) return roles.some((role) => user.roles.includes(role));
+  return appointments.some(
+    (row) =>
+      row.subjectUid === user.uid &&
+      roles.includes(row.roleKey) &&
+      user.roles.includes(row.roleKey) &&
+      row.scope.type === 'public' &&
+      row.scope.id === '*' &&
+      (row.expiresAt === null || Date.parse(row.expiresAt) > Date.now()),
+  );
+}
+const businessSupervisor = (user: UserContext) =>
+  isDevelopmentBusinessAdmin(user) ||
+  globalCounselor(user, ['counselor.youth_league_secretary', 'counselor.youth_league']);
 export const grantAdministrator = (user: UserContext) =>
-  isGlobalOrganizationBusinessSupervisor(user) && !user.previewing;
+  businessSupervisor(user) && !user.previewing;
 export const manages = (s: OrganizationState, user: UserContext) =>
-  isGlobalOrganizationBusinessSupervisor(user) || s.managerUids.includes(user.uid);
+  businessSupervisor(user) || s.managerUids.includes(user.uid);
 export const departmentMember = (user: UserContext) =>
   user.roles.some((role) =>
     [
@@ -109,14 +172,18 @@ export const departmentMember = (user: UserContext) =>
       'youth_league.organization.leader',
       'youth_league.organization.deputy_secretary',
     ].includes(role),
-  );
+  ) && canGrantClassSecretaries({ ...user, previewing: false });
+export const viewsAll = (s: OrganizationState, user: UserContext) =>
+  manages(s, user) || departmentMember(user) || globalCounselor(user);
+export const submitClasses = (s: OrganizationState, user: UserContext) =>
+  secretaryClassIds(user).filter((id) => s.classes.some((row) => row.id === id));
 export function member(s: OrganizationState, user: UserContext) {
   return s.members.find(
     (row) => row.uid === user.uid && Boolean(user.studentId) && row.studentId === user.studentId,
   );
 }
 export const moduleAccess = (s: OrganizationState, user: UserContext) =>
-  manages(s, user) || departmentMember(user) || Boolean(member(s, user));
+  viewsAll(s, user) || Boolean(member(s, user)) || secretaryClassIds(user).length > 0;
 export function requireAccess(s: OrganizationState, user: UserContext) {
   if (!moduleAccess(s, user))
     fail(403, 'module_forbidden', '尚未配置您的组织组访问范围，请联系管理者');
@@ -169,30 +236,29 @@ export function submissionReason(
   user: UserContext,
   y: OrganizationGroupYear,
 ): string | null {
+  if (user.previewing) return '预览模式不能填报活动';
   if (!moduleAccess(s, user)) return '尚未配置访问权限';
   if (y.archived) return '该学年已归档';
   if (!y.submissionOpen) return '新活动填报已关闭';
   if (!y.currentVersionId) return '管理者尚未发布问卷';
-  if (!member(s, user)?.submitClassIds.length) return '管理者尚未配置您的 UID、学号及可填班级';
+  if (!submitClasses(s, user).length) return '尚未为您授予已配置班级的团支书身份，请联系组织组';
   return null;
 }
 export function editReason(s: OrganizationState, user: UserContext, e: StoredEntry): string | null {
+  if (user.previewing) return '预览模式不能修改活动';
   if (e.authorUid !== user.uid) return '只能修改本人记录';
   if (!visibleEntry(s, user, e)) return '当前无权查看该记录';
   if (year(s, e.yearId).archived) return '该学年已归档';
   if (!year(s, e.yearId).editOpen) return '记录修改已关闭';
   if (e.locked) return '该记录已锁定';
-  if (!member(s, user)?.submitClassIds.includes(e.classId)) return '已不在允许填报的班级范围';
+  if (!submitClasses(s, user).includes(e.classId)) return '已不在允许填报的班级范围';
   return null;
 }
 export function visibleEntry(s: OrganizationState, user: UserContext, e: StoredEntry) {
   if (!moduleAccess(s, user)) return false;
-  if (manages(s, user)) return true;
-  const scope = s.settings.viewScope;
-  if (scope.kind === 'all') return true;
-  if (scope.kind === 'own') return e.authorUid === user.uid;
-  if (scope.kind === 'same_class') return member(s, user)?.classId === e.classId;
-  return scope.kind === 'users' && scope.ids.includes(user.uid);
+  if (viewsAll(s, user)) return true;
+  // Historical view settings must never turn a secretary's own ledger into a shared ledger.
+  return e.authorUid === user.uid;
 }
 export function visibleScope(
   s: OrganizationState,
@@ -205,7 +271,11 @@ export function visibleScope(
   if (scope.kind === 'department') return departmentMember(user);
   if (scope.kind === 'users') return scope.ids.includes(user.uid);
   const row = member(s, user);
-  return scope.kind === 'classes' && Boolean(row && scope.ids.includes(row.classId));
+  return (
+    scope.kind === 'classes' &&
+    (submitClasses(s, user).some((id) => scope.ids.includes(id)) ||
+      Boolean(row && scope.ids.includes(row.classId)))
+  );
 }
 export function validateScope(s: OrganizationState, scope: OrganizationGroupScope) {
   if (scope.kind === 'classes' && scope.ids.some((id) => !s.classes.some((row) => row.id === id)))
@@ -243,18 +313,23 @@ export function entryDto(
   editable = false,
 ): OrganizationGroupEntry {
   const { photoIds, extraPhotoIds, ...values } = e;
+  const activityTypeIds = entryTypeIds(e);
+  const activityTypeLabels = activityTypeIds.map(
+    (id) => version(s, e.versionId).activityTypes.find((row) => row.id === id)?.label ?? id,
+  );
   const dto: OrganizationGroupEntry = {
     ...values,
+    activityTypeIds,
+    activityTypeLabels,
+    participantNames: e.participantNames ?? '',
     classLabel: s.classes.find((row) => row.id === e.classId)?.label ?? e.classId,
-    activityTypeLabel:
-      version(s, e.versionId).activityTypes.find((row) => row.id === e.activityTypeId)?.label ??
-      e.activityTypeId,
+    activityTypeLabel: activityTypeLabels.join('、'),
     photos: s.assets.filter((row) => photoIds.includes(row.id)).map(fileDto),
     extraPhotos: s.assets.filter((row) => extraPhotoIds.includes(row.id)).map(fileDto),
     canEdit: !editReason(s, user, e),
     editBlockedReason: editReason(s, user, e),
   };
-  if (s.settings.hideDifficulties && !manages(s, user) && !editable) delete dto.difficulties;
+  if (s.settings.hideDifficulties && !viewsAll(s, user) && !editable) delete dto.difficulties;
   return dto;
 }
 export function workspaceDto(s: OrganizationState, user: UserContext): OrganizationGroupWorkspace {
@@ -272,10 +347,12 @@ export function workspaceDto(s: OrganizationState, user: UserContext): Organizat
     years: s.years.map((row) => ({ ...row, draft: manager ? row.draft : null })),
     versions: s.versions,
     canManage: manager,
+    canViewAll: viewsAll(s, user),
+    canGrantSecretaries: canGrantClassSecretaries(user) && !user.previewing,
     canGrantManagers: grantAdministrator(user),
-    canExport: manager || (moduleAccess(s, user) && s.settings.ordinaryExport),
-    allowedSubmitClassIds: own?.submitClassIds ?? [],
-    setupRequired: !s.classes.length || !s.members.length || !y.currentVersionId,
+    canExport: viewsAll(s, user) || (moduleAccess(s, user) && s.settings.ordinaryExport),
+    allowedSubmitClassIds: submitClasses(s, user),
+    setupRequired: !s.classes.length || !y.currentVersionId,
     canSubmit: reason === null,
     submissionBlockedReason: reason,
   };
@@ -309,19 +386,37 @@ export function validateValues(
 ) {
   if (!s.classes.some((row) => row.id === values.classId))
     fail(400, 'invalid_class', '请选择已配置班级');
-  if (!member(s, user)?.submitClassIds.includes(values.classId))
+  if (!submitClasses(s, user).includes(values.classId))
     fail(403, 'class_forbidden', '无权为该班级填报');
-  if (!v.activityTypes.some((row) => row.id === values.activityTypeId))
-    fail(400, 'invalid_activity_type', '请选择原版本中有效的活动类型');
-  if (!values.summary.trim() || Array.from(values.summary).length > 200)
-    fail(400, 'invalid_summary', '活动简述必填且最多 200 个字符（包含空格与换行）');
-  validateDateBounds(y, values.activityDate);
+  const typeIds = entryTypeIds(values);
   if (
-    values.photoIds.length < 1 ||
-    values.photoIds.length > s.settings.maxPhotos ||
+    !typeIds.length ||
+    new Set(typeIds).size !== typeIds.length ||
+    typeIds.some((id) => !v.activityTypes.some((row) => row.id === id))
+  )
+    fail(400, 'invalid_activity_type', '请选择原版本中有效的活动类型');
+  if (!values.summary.trim() || Array.from(values.summary).length > 200) {
+    const label =
+      v.corePresentation?.summary?.label ??
+      (v.template === 'class_activity_v2' ? '活动内容' : '活动简述');
+    fail(400, 'invalid_summary', `${label}必填且最多 200 个字符（包含空格与换行）`);
+  }
+  validateDateBounds(y, values.activityDate);
+  if (v.template === 'class_activity_v2') {
+    if (!values.activityDate) fail(400, 'activity_date_required', '请填写活动时间');
+    if (!values.participantNames?.trim() || Array.from(values.participantNames).length > 4000)
+      fail(
+        400,
+        'participant_names_required',
+        `${v.corePresentation?.participantNames?.label ?? '具体参与人员'}必填且最多 4000 字`,
+      );
+  }
+  if (
+    (v.template !== 'class_activity_v2' && values.photoIds.length < 1) ||
+    values.photoIds.length > photoLimit(s, v) ||
     new Set(values.photoIds).size !== values.photoIds.length
   )
-    fail(400, 'invalid_photos', `请上传 1—${s.settings.maxPhotos} 张不同照片`);
+    fail(400, 'invalid_photos', `照片数量须在允许范围内，最多 ${photoLimit(s, v)} 张`);
   const answers = values.extraAnswers ?? {};
   const extraPhotos: string[] = [];
   if (Object.keys(answers).some((id) => !v.fields.some((f) => f.id === id)))
@@ -352,8 +447,7 @@ export function validateValues(
       if (field.kind === 'multi_choice' && answer.some((x) => !field.options?.includes(x)))
         fail(400, 'invalid_answer', `${field.label}包含无效选项`);
       if (field.kind === 'image') {
-        if (answer.length > s.settings.maxPhotos)
-          fail(400, 'invalid_answer', `${field.label}照片过多`);
+        if (answer.length > photoLimit(s, v)) fail(400, 'invalid_answer', `${field.label}照片过多`);
         extraPhotos.push(...answer);
       }
     } else {
@@ -371,9 +465,21 @@ export function validateValues(
   if (
     new Set([...values.photoIds, ...extraPhotos]).size !==
       values.photoIds.length + extraPhotos.length ||
-    values.photoIds.length + extraPhotos.length > 60
+    values.photoIds.length + extraPhotos.length >
+      (v.template === 'class_activity_v2' ? photoLimit(s, v) : 60)
   )
-    fail(400, 'invalid_photos', '照片不能重复使用，单条记录照片总数最多 60 张');
+    fail(
+      400,
+      'invalid_photos',
+      `照片不能重复使用，单条记录照片总数最多 ${v.template === 'class_activity_v2' ? photoLimit(s, v) : 60} 张`,
+    );
+  if (
+    v.template === 'class_activity_v2' &&
+    [...values.photoIds, ...extraPhotos].some(
+      (id) => (s.assets.find((asset) => asset.id === id)?.size ?? 0) > photoBytes(s, v),
+    )
+  )
+    fail(400, 'file_too_large', '每张活动照片不得超过 5 MiB');
   return extraPhotos;
 }
 export function validDate(value: string) {
@@ -391,7 +497,12 @@ export function bindAssets(
   purpose: StoredAsset['purpose'],
   kind: 'entry' | 'resource',
   targetId: string,
+  entryVersion?: OrganizationGroupVersion,
 ) {
+  if (purpose === 'activity_photo' && (!entryVersion || entryVersion.yearId !== yearId))
+    fail(500, 'missing_photo_version', '活动照片绑定缺少对应问卷版本');
+  const maximumBytes =
+    purpose === 'activity_photo' ? photoBytes(s, entryVersion!) : s.settings.maxResourceBytes;
   for (const id of ids) {
     const a = s.assets.find((row) => row.id === id);
     if (
@@ -403,11 +514,7 @@ export function bindAssets(
       (a.binding && (a.binding.kind !== kind || a.binding.id !== targetId))
     )
       fail(403, 'asset_forbidden', '附件用途、学年、拥有者、保留期限或绑定记录不匹配');
-    if (
-      a.size >
-      (purpose === 'activity_photo' ? s.settings.maxPhotoBytes : s.settings.maxResourceBytes)
-    )
-      fail(400, 'file_too_large', '附件超过当前配置大小限制');
+    if (a.size > maximumBytes) fail(400, 'file_too_large', '附件超过当前配置大小限制');
   }
   for (const id of ids) s.assets.find((row) => row.id === id)!.binding = { kind, id: targetId };
 }
@@ -417,18 +524,18 @@ export function filteredEntries(
   query: OrganizationGroupEntryQuery,
 ) {
   const q = query.query?.toLocaleLowerCase() ?? '';
-  const seeDifficulties = !s.settings.hideDifficulties || manages(s, user);
+  const seeDifficulties = !s.settings.hideDifficulties || viewsAll(s, user);
   const rows = s.entries.filter(
     (e) =>
       visibleEntry(s, user, e) &&
       e.yearId === (query.yearId ?? s.settings.activeYearId) &&
       (!query.classId || e.classId === query.classId) &&
-      (!query.activityTypeId || e.activityTypeId === query.activityTypeId) &&
+      (!query.activityTypeId || entryTypeIds(e).includes(query.activityTypeId)) &&
       (!query.authorUid || e.authorUid === query.authorUid) &&
       (!query.dateFrom || Boolean(e.activityDate && e.activityDate >= query.dateFrom)) &&
       (!query.dateTo || Boolean(e.activityDate && e.activityDate <= query.dateTo)) &&
       (!q ||
-        `${e.summary} ${seeDifficulties ? e.difficulties : ''} ${Object.values(e.extraAnswers).join(' ')}`
+        `${e.summary} ${e.participantNames ?? ''} ${seeDifficulties ? e.difficulties : ''} ${Object.values(e.extraAnswers).join(' ')}`
           .toLocaleLowerCase()
           .includes(q)),
   );
@@ -449,7 +556,7 @@ export function statistics(rows: StoredEntry[]) {
   const byActivityType: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const e of rows) {
     byClass[e.classId] = (byClass[e.classId] ?? 0) + 1;
-    byActivityType[e.activityTypeId] = (byActivityType[e.activityTypeId] ?? 0) + 1;
+    for (const id of entryTypeIds(e)) byActivityType[id] = (byActivityType[id] ?? 0) + 1;
   }
   return {
     activityCount: rows.length,
@@ -457,4 +564,13 @@ export function statistics(rows: StoredEntry[]) {
     byClass,
     byActivityType,
   };
+}
+export function entryTypeIds(e: { activityTypeId?: string; activityTypeIds?: string[] }): string[] {
+  return e.activityTypeIds ?? (e.activityTypeId ? [e.activityTypeId] : []);
+}
+export function photoLimit(s: OrganizationState, v: OrganizationGroupVersion) {
+  return v.template === 'class_activity_v2' ? ACTIVITY_PHOTO_LIMIT : s.settings.maxPhotos;
+}
+export function photoBytes(s: OrganizationState, v: OrganizationGroupVersion) {
+  return v.template === 'class_activity_v2' ? ACTIVITY_PHOTO_BYTES : s.settings.maxPhotoBytes;
 }

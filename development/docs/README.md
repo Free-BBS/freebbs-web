@@ -9,12 +9,14 @@
 1. [总体技术设计](./overall-technical-design.md)：了解平台定位、系统边界、功能域、权限模型、负责人和模块认领方式。
 2. [本地开发与完整预览](./local-development.md)：安装依赖，以 demo 身份启动 Web 与 API，并进行 MySQL 联调。
 3. [管理员权限说明](./admin-permissions.md)：供管理员转发使用的身份权限、授权与交接说明。
+4. [组织组活动台账操作指南](./organization-group-user-guide.md)：供组织组转发使用，说明全局查看、团支书授权和团支书填报操作。
 
 ### 平台核心与领域模块开发者
 
 - [总体技术设计](./overall-technical-design.md)：统一身份、权限、Tag、模块契约、数据边界和验收原则。
 - [统一模块框架技术说明](./technical_design.md)：实际路由、迁移 008/009、联络审核、公私响应与外部投稿扩展边界。
 - [学生节特别栏目](./student-festival.md)：视频投稿、展示审核、私密访问及媒体存储配置。
+- [组织组活动台账](./organization-group-ledger.md)：八字段班团活动表、本人/全局权限、团支书授权、问卷版本和存储备份。
 - [本地开发与完整预览](./local-development.md)：环境变量、运行模式、质量检查和常见问题。
 - [数据库与业务数据管理](./data-administration.md)：迁移、seed、最小权限账号、备份、恢复和业务管理边界。
 

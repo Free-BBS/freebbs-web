@@ -24,6 +24,15 @@ export const LIAISON_PROBLEM_PERMISSION_ACTIONS = [
 ] as const;
 
 export function validateTagScope(tag: string, scope: ScopeRef | undefined): boolean {
+  if (tag === 'class.youth_league_secretary') {
+    return (
+      scope?.type === 'class' &&
+      typeof scope.id === 'string' &&
+      /^[a-zA-Z0-9_-]{1,80}$/.test(scope.id) &&
+      scope.id !== 'prototype' &&
+      !Object.prototype.hasOwnProperty.call(Object.prototype, scope.id)
+    );
+  }
   if (tag !== 'sports.team_captain') {
     return true;
   }
