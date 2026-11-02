@@ -34,6 +34,9 @@ test(
       `CREATE TABLE community_notifications (id BIGINT AUTO_INCREMENT PRIMARY KEY, recipient_id BIGINT, actor_id BIGINT, kind VARCHAR(24), title VARCHAR(160), body TEXT, link VARCHAR(500), event_key VARCHAR(190), read_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_event (event_key,recipient_id)) ENGINE=InnoDB`,
     );
     await pool.query(
+      'CREATE TABLE app_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT) ENGINE=InnoDB',
+    );
+    await pool.query(
       'CREATE TABLE discussion_boards (id BIGINT PRIMARY KEY, slug VARCHAR(64), is_active TINYINT DEFAULT 1) ENGINE=InnoDB',
     );
     await pool.query("INSERT INTO discussion_boards(id,slug) VALUES (1,'daily')");
@@ -288,6 +291,86 @@ test(
       assert.ok([a.id, b.id].includes(remaining.submissionId));
       await other.finish(remaining, { assessment: null });
     });
+    await t.test(
+      'missing independent credentials route new submissions directly to notified manual review',
+      async () => {
+        const unconfigured = createModerationAutomationStore({
+          ...options,
+          isConfigured: async () => false,
+        });
+        const manualService = createDiscussionModeration({
+          pool,
+          publishSubmission,
+          automation: unconfigured,
+        });
+        const submission = await transaction((db) => manualService.submit(db, input()));
+        assert.equal(submission.processing, 'review');
+        assert.equal(await job(submission.id), undefined);
+        const [notices] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [`moderation-author:${submission.id}:pending`],
+        );
+        assert.equal(notices.length, 1);
+      },
+    );
+    await t.test(
+      'custom model publication is bound to the claim revision and rejects stale settings',
+      async () => {
+        const selected = {
+          textModel: 'custom/text-v2',
+          imageModel: 'custom/vision-v3',
+          revision: 17,
+        };
+        await pool.execute('INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)', [
+          'moderation_settings_revision',
+          '17',
+        ]);
+        const submission = await submit();
+        assert.equal(await store.claim({ ...selected, revision: 16 }), null);
+        assert.equal((await job(submission.id)).state, 'queued');
+        const claimed = await store.claim(selected);
+        assert.deepEqual(claimed.modelSettings, selected);
+        const snapshot = await store.prepare(claimed);
+        const bound = await job(submission.id);
+        assert.equal(bound.model, selected.textModel);
+        assert.equal(Number(bound.settings_revision), 17);
+        const base = allow({ snapshot }, { model: selected.textModel, settingsRevision: 17 });
+        const { buildAutomaticResult } = require('./moderation-automation-result');
+        const result = buildAutomaticResult({
+          modelSettings: selected,
+          textResult: base,
+          snapshot,
+        });
+        assert.equal((await store.finish(claimed, result)).state, 'published');
+        for (const mutate of [
+          (value) => {
+            value.settingsRevision = 18;
+          },
+          (value) => {
+            value.textResult.model = 'other/model';
+          },
+          (value) => {
+            value.textResult.settingsRevision = 18;
+          },
+        ]) {
+          const next = await submit();
+          const lease = await store.claim(selected);
+          const prepared = await store.prepare(lease);
+          const textResult = allow(
+            { snapshot: prepared },
+            { model: selected.textModel, settingsRevision: 17 },
+          );
+          const altered = buildAutomaticResult({
+            modelSettings: selected,
+            textResult,
+            snapshot: prepared,
+          });
+          mutate(altered);
+          assert.equal((await store.finish(lease, altered)).state, 'review');
+          assert.equal((await row(next.id)).status, 'pending');
+        }
+      },
+    );
     await t.test(
       'a lease expiring during local preparation never produces a provider-ready snapshot',
       async () => {

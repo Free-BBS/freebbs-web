@@ -40,7 +40,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness() {
+function harness({ readSettings } = {}) {
   const config = configuration();
   const calls = [];
   const warnings = [];
@@ -91,9 +91,9 @@ function harness() {
     },
   };
   const client = {
-    async assess(input) {
+    async assess(input, settingsSnapshot) {
       calls.push(['provider', structuredClone(input)]);
-      if (provider) return provider(input);
+      if (provider) return provider(input, settingsSnapshot);
       return structuredClone(response);
     },
   };
@@ -101,12 +101,13 @@ function harness() {
     store,
     client,
     imageClient: {
-      async assess(input) {
+      async assess(input, settingsSnapshot) {
         calls.push(['imageProvider', structuredClone(input)]);
-        return imageProvider(input);
+        return imageProvider(input, settingsSnapshot);
       },
     },
     config,
+    readSettings,
     isEnabled: async () => !paused,
     now: () => time,
     logger: { warn: (...values) => warnings.push(values) },
@@ -181,13 +182,13 @@ function harness() {
   };
 }
 
-test('image review is explicitly gated and cannot change the text or image model', () => {
+test('image review remains explicitly gated independently of deployment model defaults', () => {
   const config = configuration();
   assert.equal(imageAutomationEnabled(config), false);
   config.discussionModerationAutoImagesEnabled = true;
   assert.equal(imageAutomationEnabled(config), true);
   config.discussionModerationImageModel = 'qwen3.6-27b';
-  assert.equal(imageAutomationEnabled(config), false);
+  assert.equal(imageAutomationEnabled(config), true);
   config.discussionModerationImageModel = 'kimi-k2.6';
   config.apiHost = '0.0.0.0';
   assert.equal(imageAutomationEnabled(config), false);
@@ -235,6 +236,129 @@ test('automatic images use Qwen for text and one Kimi call per batch of at most 
   assert.equal(h.finished[0].result.imagesReviewed, true);
   assert.equal(h.finished[0].result.requiresPostPublicationReview, true);
   assert.doesNotMatch(JSON.stringify(h.finished), /TEST_IMAGE_BYTES|DO_NOT_SAVE/);
+});
+
+test('each job binds one independent settings snapshot across text, image batches and claim metadata', async () => {
+  let reads = 0;
+  let settings = {
+    baseUrl: 'https://api.example.org/v1',
+    apiKey: 'INDEPENDENT_KEY',
+    textModel: 'custom/text',
+    imageModel: 'custom/image',
+    revision: 9,
+  };
+  const h = harness({
+    readSettings: async () => {
+      reads += 1;
+      return settings;
+    },
+  });
+  h.config.discussionModerationAutoImagesEnabled = true;
+  const seenClaims = [];
+  const claim = h.options.store.claim;
+  h.options.store.claim = async (metadata) => {
+    seenClaims.push(metadata);
+    return claim();
+  };
+  const seenSnapshots = [];
+  h.setProvider((input, bound) => {
+    seenSnapshots.push(bound);
+    settings = {
+      ...settings,
+      textModel: 'changed/text',
+      imageModel: 'changed/image',
+      apiKey: 'CHANGED_KEY',
+      revision: 10,
+    };
+    return { ...h.response, model: input.model, settingsRevision: bound.revision };
+  });
+  h.setImageProvider((input, bound) => {
+    seenSnapshots.push(bound);
+    return { ...imageResponse(input), model: input.model, settingsRevision: bound.revision };
+  });
+  h.add(imageSnapshot(4));
+  h.worker.start();
+  await h.worker.tick();
+  assert.equal(reads, 1);
+  assert.deepEqual(seenClaims, [
+    { textModel: 'custom/text', imageModel: 'custom/image', revision: 9 },
+  ]);
+  assert.equal(seenSnapshots.length, 3);
+  assert.ok(seenSnapshots.every((value) => value === seenSnapshots[0] && Object.isFrozen(value)));
+  assert.equal(seenSnapshots[0].apiKey, 'INDEPENDENT_KEY');
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'allow');
+  assert.equal(h.finished[0].result.model, 'custom/text');
+  assert.equal(h.finished[0].result.imageModel, 'custom/image');
+  assert.doesNotMatch(JSON.stringify(h.finished), /INDEPENDENT_KEY|CHANGED_KEY/);
+  h.add();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(reads, 2);
+  assert.equal(h.finished[1].result.model, 'changed/text');
+  assert.equal(h.finished[1].result.settingsRevision, 10);
+});
+
+test('missing independent credentials settle queued work as manual without calling a provider', async () => {
+  const h = harness({
+    readSettings: async () => ({
+      baseUrl: 'https://api.example.org/v1',
+      textModel: 't',
+      imageModel: 'v',
+      revision: 1,
+      apiKey: '',
+    }),
+  });
+  h.add();
+  h.worker.start();
+  assert.equal((await h.worker.tick()).status, 'processed');
+  h.worker.stop();
+  assert.equal(h.queue.length, 0);
+  assert.equal(h.finished.length, 1);
+  assert.equal(h.finished[0].result.automationReason, 'configuration_invalid');
+  assert.equal(h.finished[0].result.manualReview.required, true);
+  assert.equal(h.finished[0].result.model, 't');
+  assert.equal(h.finished[0].result.settingsRevision, 1);
+  assert.equal(h.calls.filter(([kind]) => ['provider', 'imageProvider'].includes(kind)).length, 0);
+});
+
+test('a settings database read failure leaves queued work untouched and never falls back', async () => {
+  const h = harness({
+    readSettings: async () => {
+      throw new Error('private settings error');
+    },
+  });
+  h.add();
+  h.worker.start();
+  assert.equal((await h.worker.tick()).status, 'unavailable');
+  h.worker.stop();
+  assert.equal(h.queue.length, 1);
+  assert.equal(h.finished.length, 0);
+  assert.equal(
+    h.calls.filter(([kind]) => ['claim', 'provider', 'imageProvider'].includes(kind)).length,
+    0,
+  );
+  assert.doesNotMatch(JSON.stringify(h.warnings), /private settings error/);
+});
+
+test('a response from a different settings revision cannot authorize a dynamically configured job', async () => {
+  const h = harness({
+    readSettings: async () => ({
+      baseUrl: 'https://api.example.org/v1',
+      apiKey: 'ONLY_TEST',
+      textModel: 'custom/text',
+      imageModel: 'custom/image',
+      revision: 3,
+    }),
+  });
+  h.setProvider(() => ({ ...h.response, model: 'custom/text', settingsRevision: 4 }));
+  h.add();
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.finished[0].result.manualReview.required, true);
+  assert.equal(h.finished[0].result.manualReview.validation, 'failed');
+  assert.equal(h.finished[0].result.model, 'custom/text');
+  assert.equal(h.finished[0].result.settingsRevision, 3);
 });
 
 test('privacy in original text skips image calls and remains manual', async () => {
@@ -323,7 +447,7 @@ test('image failures retain sanitized structural diagnostics and never retry the
   assert.doesNotMatch(JSON.stringify(h.finished), /provider-secret|NEVER_SAVE/);
 });
 
-test('automatic review requires explicit loopback test gates and exact primary/manual backup models', () => {
+test('automatic review requires explicit loopback test gates', () => {
   assert.equal(automationEnvironmentEnabled(configuration()), true);
   for (const patch of [
     { discussionModerationEnabled: false },
@@ -338,9 +462,6 @@ test('automatic review requires explicit loopback test gates and exact primary/m
     { publicWebUrl: 'http://user:password@127.0.0.1' },
     { publicWebUrl: 'ftp://127.0.0.1' },
     { publicWebUrl: 'not a URL' },
-    { discussionModerationAutoModel: 'glm-5.1' },
-    { discussionModerationAutoModel: 'unknown-model' },
-    { discussionModerationBackupModel: 'kimi-k2.6' },
   ])
     assert.equal(automationEnvironmentEnabled({ ...configuration(), ...patch }), false);
   assert.equal(automationEnvironmentEnabled(), false);

@@ -162,6 +162,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/moderation-privacy.mysql.test.js',
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-settings.mysql.test.js',
     'backend/moderation-retention.mysql.test.js',
     'backend/privacy-policy.mysql.test.js',
     'backend/ai-dialog-export.mysql.test.js',
@@ -189,7 +190,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/learning-research.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 29);
+  assert.equal(new Set(TEST_FILES).size, 30);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -214,7 +215,7 @@ test('the isolated runner enables its named test files with matching database op
 });
 
 test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 29);
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 30);
   assert.ok(
     REQUIRED_MYSQL_TESTS.includes(
       'isolated MySQL: verified identities, notices, privacy, concurrent review and enterprise provisioning',
@@ -267,6 +268,7 @@ test('moderation-only requires publication, privacy and policy audit suite resul
     'backend/moderation-privacy.mysql.test.js',
     'backend/moderation-audit.mysql.test.js',
     'backend/moderation-automation-store.mysql.test.js',
+    'backend/moderation-settings.mysql.test.js',
     'backend/moderation-retention.mysql.test.js',
     'backend/privacy-policy.mysql.test.js',
     'backend/ai-dialog-export.mysql.test.js',
@@ -277,6 +279,7 @@ test('moderation-only requires publication, privacy and policy audit suite resul
     'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence',
     'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts',
     'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic',
+    'isolated MySQL: moderation settings isolate MAX and preserve atomic credential snapshots',
     'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically',
     'isolated MySQL: privacy consent persists across restarts and concurrent confirmations without first-login bypass',
     'isolated MySQL: scoped AI chat exports persist audits and exclude unselected conversations',

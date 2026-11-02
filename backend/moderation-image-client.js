@@ -1,5 +1,7 @@
-const { topicPrompt, validateReviewTopics } = require('./moderation-review-topics');
 const { performance } = require('node:perf_hooks');
+const { topicPrompt, validateReviewTopics } = require('./moderation-review-topics');
+const { normalizeModerationBaseUrl, normalizeModerationModel } = require('./moderation-settings');
+const { moderationFetch } = require('./moderation-endpoint');
 const {
   POLICY_VERSION,
   CATEGORIES,
@@ -496,7 +498,7 @@ function parseModeration(
 
 function createModerationImageClient({
   settings,
-  fetchImpl = globalThis.fetch,
+  fetchImpl = moderationFetch,
   timeoutMs = 45000,
   validateAssessmentImpl,
 } = {}) {
@@ -504,13 +506,22 @@ function createModerationImageClient({
     baseUrl: settings?.baseUrl,
     apiKey: settings?.apiKey,
     revision: settings?.revision,
+    imageModel: settings?.imageModel,
   };
   async function request({ model, images, prompt, userText, parse }) {
     const started = performance.now();
-    if (!MODELS.includes(model)) throw new ModerationImageError('input_invalid');
+    let baseUrl;
+    try {
+      baseUrl = normalizeModerationBaseUrl(snapshot.baseUrl);
+      model = normalizeModerationModel(model || snapshot.imageModel);
+      if (snapshot.imageModel && model !== snapshot.imageModel) throw new Error('model_mismatch');
+      if (!snapshot.imageModel && !MODELS.includes(model)) throw new Error('model_unavailable');
+    } catch {
+      throw new ModerationImageError('configuration_invalid');
+    }
+    const endpoint = `${baseUrl}/chat/completions`;
     const parts = validateImages(images);
     if (
-      ![BASE_URL, `${BASE_URL}/`].includes(snapshot.baseUrl) ||
       typeof snapshot.apiKey !== 'string' ||
       !snapshot.apiKey ||
       snapshot.apiKey.length > 8192 ||
@@ -535,7 +546,8 @@ function createModerationImageClient({
       temperature: 0,
       max_tokens: 5000,
       response_format: { type: 'json_object' },
-      ...(model === 'kimi-k2.6' ? { thinking: { type: 'disabled' } } : { enable_thinking: false }),
+      ...(baseUrl === BASE_URL && model === 'kimi-k2.6' ? { thinking: { type: 'disabled' } } : {}),
+      ...(baseUrl === BASE_URL && model === 'qwen3.6-27b' ? { enable_thinking: false } : {}),
     };
     const controller = new AbortController();
     let reader;
@@ -562,7 +574,7 @@ function createModerationImageClient({
     });
     const execute = async () => {
       try {
-        const response = await fetchImpl(ENDPOINT, {
+        const response = await fetchImpl(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -578,7 +590,7 @@ function createModerationImageClient({
         httpStatus = response?.status;
         responseBody = response?.body;
         if (timedOut) throw new ModerationImageError('timeout');
-        if (response?.redirected || (response?.url && response.url !== ENDPOINT))
+        if (response?.redirected || (response?.url && response.url !== endpoint))
           throw new ModerationImageError('response_redirected');
         if (!response?.ok) {
           // Extract only fixed parameter names from at most 8 KiB. Never save

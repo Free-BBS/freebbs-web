@@ -8,11 +8,13 @@ async function fixture(t) {
   app.use(express.json());
   let paused = true;
   let enabled = true;
+  let configured = true;
   const controls = [];
   const withdrawals = [];
   const imageConfirmations = [];
   const status = () => ({
     enabled,
+    configured,
     paused: !enabled || paused,
     model: 'qwen3.6-27b',
     backupModel: 'glm-5.1',
@@ -97,6 +99,9 @@ async function fixture(t) {
     controls,
     withdrawals,
     imageConfirmations,
+    removeKey: () => {
+      configured = false;
+    },
     disable: () => {
       enabled = false;
     },
@@ -115,6 +120,7 @@ test('automatic moderation routes expose paused state and delegate pause authori
   assert.equal(session.mode, 'automatic_test');
   assert.deepEqual(session.automation, {
     enabled: true,
+    configured: true,
     paused: true,
     model: 'qwen3.6-27b',
     backupModel: 'glm-5.1',
@@ -134,6 +140,15 @@ test('automatic moderation routes expose paused state and delegate pause authori
   assert.equal((await h.request('/session').then((r) => r.json())).mode, 'manual');
   assert.equal((await h.request('/automation/control', 1, { paused: false })).status, 503);
   assert.deepEqual(h.controls, [false]);
+});
+
+test('missing independent API key prevents resume but still permits pausing', async (t) => {
+  const h = await fixture(t);
+  h.removeKey();
+  assert.equal((await h.request('/automation/control', 1, { paused: false })).status, 503);
+  assert.deepEqual(h.controls, []);
+  assert.equal((await h.request('/automation/control', 1, { paused: true })).status, 200);
+  assert.deepEqual(h.controls, [true]);
 });
 
 test('image review remains reviewer-only when paused/disabled and ignores no caller authority fields', async (t) => {

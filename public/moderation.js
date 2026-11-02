@@ -1109,13 +1109,16 @@
       if (!visible) return;
       el('automation-summary').textContent = !automation.enabled
         ? '未开启 · 请人工审核提交内容'
-        : automation.paused
-          ? '已暂停 · 新提交的内容等待审核'
-          : '运行中 · 系统正在自动检查新提交的内容';
+        : automation.configured === false
+          ? '监管 API 未配置 · 请在“模型与密钥”中设置，当前请人工审核'
+          : automation.paused
+            ? '已暂停 · 新提交的内容等待审核'
+            : '运行中 · 系统正在自动检查新提交的内容';
       el('automation-models').textContent =
-        `文字：${automation.model || '未配置'} · 备选配置：${automation.backupModel || '未配置'} · 图片：${automation.imagesEnabled ? automation.imageModel || 'Kimi' : '由负责人检查'}`;
+        `文字：${automation.model || '未配置'} · 图片：${automation.imagesEnabled ? automation.imageModel || '未配置' : '由负责人检查'}`;
       el('automation-toggle').hidden = !state.session.isAdmin || !automation.enabled;
-      el('automation-toggle').disabled = state.automationChanging;
+      el('automation-toggle').disabled =
+        state.automationChanging || (automation.paused && automation.configured === false);
       el('automation-toggle').textContent = automation.paused ? '开启自动审核' : '暂停自动审核';
       el('queue-note').textContent = automation.enabled
         ? '含图自动发布稿件请在“图片待复核”中确认或撤回。暂停自动审核仍可处理复核；政治或心理相关关键词一旦触发，须负责人审核，通过前不发布。'
@@ -1128,6 +1131,7 @@
         !state.session?.reviewer ||
         !state.session?.isAdmin ||
         !state.session?.automation?.enabled ||
+        (state.session.automation.paused && state.session.automation.configured === false) ||
         state.automationChanging
       )
         return;

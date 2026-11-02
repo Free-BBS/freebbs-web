@@ -9,6 +9,7 @@ const {
 } = require('../backend/moderation-production');
 
 const TABLES = [
+  'system_secret_settings',
   'moderation_meta',
   'moderation_reviewers',
   'moderation_submissions',
@@ -125,6 +126,7 @@ async function inspect({
     missingTables: null,
     paused: null,
     activeReviewerCount: null,
+    moderationApiConfigured: false,
   };
   if (
     settings.discussionModerationEnvironment === 'production' &&
@@ -156,6 +158,13 @@ async function inspect({
       const names = new Set(tables.map((row) => row.name));
       report.databaseChecked = true;
       report.missingTables = TABLES.filter((name) => !names.has(name));
+      if (names.has('system_secret_settings')) {
+        const [keys] = await db.execute(
+          'SELECT setting_key FROM system_secret_settings WHERE setting_key = ? LIMIT 1',
+          ['moderation_api_key'],
+        );
+        report.moderationApiConfigured = keys.length === 1;
+      }
       if (names.has('moderation_auto_control')) {
         const [[row]] = await db.execute('SELECT paused FROM moderation_auto_control WHERE id = 1');
         report.paused = row ? Boolean(Number(row.paused)) : null;
@@ -184,6 +193,7 @@ async function inspect({
   report.readyForAutomaticAcceptance =
     report.readyForManualAcceptance &&
     report.automaticConfigured &&
+    report.moderationApiConfigured &&
     report.providerReviewed &&
     report.paused === true;
   return report;

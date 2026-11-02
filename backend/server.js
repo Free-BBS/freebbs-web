@@ -134,6 +134,8 @@ const { ensureModerationRetention } = require('./moderation-retention');
 const { createModerationAutomationStore } = require('./moderation-automation-store');
 const { createAutomaticImageReader } = require('./moderation-auto-images');
 const { createModerationImageClient } = require('./moderation-image-client');
+const { createModerationSettingsStore } = require('./moderation-settings');
+const { mountModerationSettingsRoutes } = require('./moderation-settings-router');
 const {
   createModerationAutomation,
   automationEnvironmentEnabled,
@@ -352,6 +354,12 @@ const systemSettingsStore = createSystemSettingsStore({
   defaultModel: config.llmModel,
   courseMaterialsAllowedRoot: config.courseMaterialsAllowedRoot,
 });
+const moderationSettingsStore = createModerationSettingsStore({
+  pool,
+  encryptionKey: config.settingsEncryptionKey,
+  defaultTextModel: config.discussionModerationAutoModel,
+  defaultImageModel: config.discussionModerationImageModel,
+});
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
 const moderationPublisher = createModerationPublisher({
@@ -369,20 +377,26 @@ const moderationAutomationStore = createModerationAutomationStore({
   publishSubmission: moderationPublisher,
   notifications,
   isEnabled: () => moderationAutomaticEnabled,
+  isConfigured: async (db) => {
+    const [keys] = await db.execute(
+      'SELECT setting_key FROM system_secret_settings WHERE setting_key = ? LIMIT 1',
+      ['moderation_api_key'],
+    );
+    return keys.length === 1;
+  },
   readImages: createAutomaticImageReader({ privateDir: config.discussionModerationDir }),
 });
 const moderationAutomation = createModerationAutomation({
   config,
+  readSettings: (options) => moderationSettingsStore.readSettings(options),
   store: moderationAutomationStore,
   isEnabled: async () =>
     moderationAutomaticEnabled && !(await moderationAutomationStore.control()).paused,
   client: createModerationAiClient({
-    readSettings: (options) => systemSettingsStore.readSettings(options),
-    modelOverride: config.discussionModerationAutoModel,
+    readSettings: (options) => moderationSettingsStore.readSettings(options),
   }),
   imageClient: {
-    async assess(input) {
-      const settings = await systemSettingsStore.readSettings({ includeSecret: true });
+    async assess(input, settings) {
       return createModerationImageClient({ settings }).assess(input);
     },
   },
@@ -390,16 +404,19 @@ const moderationAutomation = createModerationAutomation({
 const moderationAutomatic = {
   enabled: moderationAutomaticEnabled,
   store: moderationAutomationStore,
-  status: async () => ({
-    enabled: moderationAutomaticEnabled,
-    environment: config.discussionModerationEnvironment,
-    paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
-    model: config.discussionModerationAutoModel,
-    backupModel: config.discussionModerationBackupModel,
-    imagesEnabled: imageAutomationEnabled(config),
-    imageModel: config.discussionModerationImageModel,
-    imageReviewRequired: true,
-  }),
+  status: async () => {
+    const settings = await moderationSettingsStore.readSettings();
+    return {
+      enabled: moderationAutomaticEnabled,
+      configured: settings.configured,
+      environment: config.discussionModerationEnvironment,
+      paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
+      model: settings.textModel,
+      imagesEnabled: imageAutomationEnabled(config),
+      imageModel: settings.imageModel,
+      imageReviewRequired: true,
+    };
+  },
 };
 const discussionModeration = createDiscussionModeration({
   resolvePlatformAuthority: (uid) => developmentRuntime?.resolvePlatformAuthority?.(uid),
@@ -426,10 +443,7 @@ const moderationAiTest = createModerationAiTest({
   audit: moderationAudit,
   enabled: aiTestEnvironmentEnabled(config),
   client: createModerationAiClient({
-    readSettings: (options) => systemSettingsStore.readSettings(options),
-    modelOverride: moderationAutomaticEnabled
-      ? config.discussionModerationAutoModel
-      : config.discussionModerationAiModel,
+    readSettings: (options) => moderationSettingsStore.readSettings(options),
   }),
 });
 const certificationService = createUserCertificationService({
@@ -6401,6 +6415,11 @@ app.get('/api/admin/users', async (request, response) => {
 
 mountAiDialogExportRoutes(app, { pool, requireAdmin, ensureAiDialogTables });
 mountDataRetentionRoutes(app, { pool, requireAdmin });
+mountModerationSettingsRoutes(app, {
+  requireAdmin,
+  store: moderationSettingsStore,
+  sendError: sendSystemSettingsError,
+});
 
 app.get('/api/admin/system-settings/model', async (request, response) => {
   try {

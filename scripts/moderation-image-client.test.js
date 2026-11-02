@@ -604,14 +604,14 @@ test('report error helper rejects arbitrary error messages and revalidates diagn
   assert.doesNotMatch(JSON.stringify(safe), /provider-secret|synthetic-secret/);
 });
 
-test('configuration is snapshotted, wrong endpoint and malformed image make zero requests', async () => {
+test('configuration is snapshotted, unsafe endpoint and malformed image make zero requests', async () => {
   const h = harness();
   h.settings.apiKey = 'replacement-secret';
   await h.client.assess(INPUT);
   assert.equal(h.requests[0].options.headers.Authorization, `Bearer ${KEY}`);
   for (const baseUrl of [
     'http://127.0.0.1:9/v1',
-    'https://example.org/v1',
+    'https://10.20.30.40/v1',
     `${BASE_URL}?leak=yes`,
   ]) {
     const bad = harness({ config: { baseUrl } });
@@ -628,6 +628,21 @@ test('configuration is snapshotted, wrong endpoint and malformed image make zero
     await assert.rejects(bad.client.assess({ ...INPUT, images }), failure('input_invalid'));
     assert.equal(bad.requests.length, 0);
   }
+});
+
+test('independent image settings accept a custom model and omit Infini-only parameters on other hosts', async () => {
+  const h = harness({
+    config: { baseUrl: 'https://api.example.org/v1', imageModel: 'vision/custom-1' },
+  });
+  const value = await h.client.assess({ ...INPUT, model: 'vision/custom-1' });
+  assert.equal(value.model, 'vision/custom-1');
+  assert.equal(h.requests[0].url, 'https://api.example.org/v1/chat/completions');
+  const body = JSON.parse(h.requests[0].options.body);
+  assert.equal(body.thinking, undefined);
+  assert.equal(body.enable_thinking, undefined);
+  assert.deepEqual(body.response_format, { type: 'json_object' });
+  await assert.rejects(h.client.assess(INPUT), failure('configuration_invalid'));
+  assert.equal(h.requests.length, 1);
 });
 
 test('redirect, unexpected content type, envelope and invalid JSON never become assessments', async () => {

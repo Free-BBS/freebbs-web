@@ -23,6 +23,9 @@ const AUDIT_TEST_TITLE =
 const AUTOMATION_TEST_FILE = 'backend/moderation-automation-store.mysql.test.js';
 const AUTOMATION_TEST_TITLE =
   'isolated MySQL: automatic moderation leases, publication, pause and withdrawal are atomic';
+const MODERATION_SETTINGS_TEST_FILE = 'backend/moderation-settings.mysql.test.js';
+const MODERATION_SETTINGS_TEST_TITLE =
+  'isolated MySQL: moderation settings isolate MAX and preserve atomic credential snapshots';
 const RETENTION_TEST_FILE = 'backend/moderation-retention.mysql.test.js';
 const RETENTION_TEST_TITLE =
   'isolated MySQL: ninety-day moderation retention upgrades only live evidence atomically';
@@ -42,6 +45,7 @@ const TEST_FILES = [
   PRIVACY_TEST_FILE,
   AUDIT_TEST_FILE,
   AUTOMATION_TEST_FILE,
+  MODERATION_SETTINGS_TEST_FILE,
   RETENTION_TEST_FILE,
   CONSENT_TEST_FILE,
   EXPORT_TEST_FILE,
@@ -115,6 +119,7 @@ const REQUIRED_MYSQL_TESTS = [
   PRIVACY_TEST_TITLE,
   AUDIT_TEST_TITLE,
   AUTOMATION_TEST_TITLE,
+  MODERATION_SETTINGS_TEST_TITLE,
   RETENTION_TEST_TITLE,
   CONSENT_TEST_TITLE,
   EXPORT_TEST_TITLE,
@@ -157,6 +162,7 @@ function selectMysqlTests(args = []) {
         PRIVACY_TEST_FILE,
         AUDIT_TEST_FILE,
         AUTOMATION_TEST_FILE,
+        MODERATION_SETTINGS_TEST_FILE,
         RETENTION_TEST_FILE,
         CONSENT_TEST_FILE,
         EXPORT_TEST_FILE,
@@ -167,6 +173,7 @@ function selectMysqlTests(args = []) {
         PRIVACY_TEST_TITLE,
         AUDIT_TEST_TITLE,
         AUTOMATION_TEST_TITLE,
+        MODERATION_SETTINGS_TEST_TITLE,
         RETENTION_TEST_TITLE,
         CONSENT_TEST_TITLE,
         EXPORT_TEST_TITLE,

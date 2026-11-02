@@ -107,16 +107,8 @@ function productionConfigurationIssues(
   if (config.discussionModerationAutoEnabled) {
     if (!config.discussionModerationProviderReviewed)
       issues.push('启用正式自动审核前，需核对供应商数据处理安排并设置 PROVIDER_REVIEWED。');
-    if (
-      config.discussionModerationAutoModel !== 'qwen3.6-27b' ||
-      config.discussionModerationBackupModel !== 'glm-5.1'
-    )
-      issues.push('正式文字审核使用已验收的 Qwen，备选配置为 GLM。');
-    if (
-      config.discussionModerationAutoImagesEnabled &&
-      config.discussionModerationImageModel !== 'kimi-k2.6'
-    )
-      issues.push('正式图片审核使用已验收的 Kimi K2.6。');
+    // API endpoint, credential and model IDs are now validated in the independent
+    // moderation settings store and bound to each claimed job, not deployment defaults.
   }
   return issues;
 }
