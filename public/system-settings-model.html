@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="配置 FREE-BBS Agent 服务使用的大模型 API key。" />
+    <meta name="description" content="分别配置问问 MAX 的密钥和监管 Agent 的 API 渠道。" />
     <title>FREE-BBS - 模型与密钥</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
@@ -113,14 +113,14 @@
         >
           <header class="system-settings-intro">
             <h1 class="visually-hidden" id="system-model-title">模型与密钥</h1>
-            <p>页面不会回显已保存的密钥。输入新密钥并保存后，Agent 服务会通过同机内部接口读取。</p>
+            <p>问问 MAX 与监管 Agent 使用独立配置，修改其中一项不会更改另一项。</p>
           </header>
 
-          <form class="system-settings-form" id="system-model-form" aria-label="模型密钥设置">
+          <form class="system-settings-form" id="system-model-form" aria-label="问问 MAX 密钥设置">
             <div class="system-settings-form-heading">
               <div>
-                <h2>大模型 API key</h2>
-                <p>仅在需要替换密钥时填写。</p>
+                <h2>问问 MAX</h2>
+                <p>仅在需要替换 MAX 的密钥时填写。</p>
               </div>
               <strong id="system-model-config-state" role="status" aria-live="polite"
                 >等待读取</strong
@@ -180,6 +180,142 @@
               aria-live="polite"
             ></p>
           </form>
+
+          <form
+            class="system-settings-form"
+            id="moderation-settings-form"
+            aria-label="监管 Agent API 设置"
+          >
+            <div class="system-settings-form-heading">
+              <div>
+                <h2>监管 Agent</h2>
+                <p>单独配置内容审核的 API 地址、密钥和模型。首次使用需填写监管专用密钥。</p>
+              </div>
+              <strong id="moderation-settings-state" role="status" aria-live="polite"
+                >等待读取</strong
+              >
+            </div>
+
+            <label class="system-settings-field" for="moderation-settings-base-url">
+              <span>API 地址（Base URL）</span>
+              <input
+                id="moderation-settings-base-url"
+                name="baseUrl"
+                type="url"
+                required
+                maxlength="2048"
+                placeholder="https://cloud.infini-ai.com/maas/v1"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="moderation-settings-url-help"
+                disabled
+              />
+            </label>
+            <p class="system-settings-help" id="moderation-settings-url-help">
+              填写兼容 Chat Completions 的 HTTPS 基础地址，不包含 /chat/completions。
+              更换地址时须同时填写新密钥。
+            </p>
+
+            <label class="system-settings-field" for="moderation-settings-text-model">
+              <span>文字审核模型</span>
+              <input
+                id="moderation-settings-text-model"
+                name="textModel"
+                required
+                maxlength="128"
+                placeholder="qwen3.6-27b"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                disabled
+              />
+            </label>
+            <label class="system-settings-field" for="moderation-settings-image-model">
+              <span>图片审核模型</span>
+              <input
+                id="moderation-settings-image-model"
+                name="imageModel"
+                required
+                maxlength="128"
+                placeholder="kimi-k2.6"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                disabled
+              />
+            </label>
+            <p class="system-settings-help">
+              使用平台提供的准确模型名称。文字模型需支持 JSON 输出，图片模型还需支持图片输入。
+            </p>
+
+            <label class="system-settings-field" for="moderation-settings-api-key">
+              <span>新的监管 API key</span>
+            </label>
+            <div class="system-settings-secret-field">
+              <input
+                id="moderation-settings-api-key"
+                name="apiKey"
+                type="password"
+                maxlength="8192"
+                autocomplete="new-password"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="moderation-settings-key-help"
+                disabled
+              />
+              <button
+                class="system-settings-secret-toggle"
+                id="moderation-settings-key-toggle"
+                type="button"
+                aria-label="显示新输入的监管 API key"
+                aria-pressed="false"
+                disabled
+              >
+                显示
+              </button>
+            </div>
+            <p class="system-settings-help" id="moderation-settings-key-help">
+              留空保留已有监管密钥；已保存的密钥不会回显，也不会从 MAX 复制。
+            </p>
+
+            <div class="system-settings-form-actions">
+              <button
+                class="system-settings-submit bbs-action"
+                data-action-tone="primary"
+                type="submit"
+                disabled
+              >
+                保存监管配置
+              </button>
+              <button
+                class="system-settings-clear bbs-action"
+                data-action-tone="danger"
+                id="moderation-settings-key-clear"
+                type="button"
+                disabled
+              >
+                清除监管密钥
+              </button>
+              <button
+                class="system-settings-submit bbs-action"
+                data-action-tone="secondary"
+                id="moderation-settings-reload"
+                type="button"
+              >
+                重新读取
+              </button>
+            </div>
+            <p class="system-settings-help">
+              保存不会调用模型或自动开启审核。更换平台或模型后，请先验证审核结果，再到工作台开启自动审核。
+            </p>
+            <p
+              class="system-settings-message"
+              id="moderation-settings-message"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </form>
         </section>
       </main>
     </div>
@@ -190,6 +326,7 @@
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/system-settings.js"></script>
+    <script src="/moderation-settings.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

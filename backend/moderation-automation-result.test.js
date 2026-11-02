@@ -75,6 +75,29 @@ test('four images require both batches and retain independently rebuilt model/di
   assert.equal(input.imageResults[0].response.apiKey, 'NEVER_PERSIST_KEY');
 });
 
+test('custom models are validated against the claimed settings and only public metadata is retained', () => {
+  const input = fixture(1);
+  input.modelSettings = {
+    textModel: 'custom/text-v2',
+    imageModel: 'custom/vision-v3',
+    revision: 7,
+    apiKey: 'NEVER_PERSIST_KEY',
+  };
+  input.textResult.model = input.modelSettings.textModel;
+  input.imageResults[0].response.model = input.modelSettings.imageModel;
+  const result = buildAutomaticResult(input);
+  assert.equal(result.model, 'custom/text-v2');
+  assert.equal(result.imageModel, 'custom/vision-v3');
+  assert.deepEqual(result.modelSettings, {
+    textModel: 'custom/text-v2',
+    imageModel: 'custom/vision-v3',
+    revision: 7,
+  });
+  assert.doesNotMatch(JSON.stringify(result), /NEVER_PERSIST/);
+  input.modelSettings.revision = 8;
+  assert.throws(() => buildAutomaticResult(input));
+});
+
 test('missing, duplicate, reordered, wrong-model, changed-settings and old-contract image results cannot allow', () => {
   const mutations = [
     (x) => x.imageResults.pop(),

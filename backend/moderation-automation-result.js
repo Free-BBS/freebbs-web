@@ -18,12 +18,39 @@ function metadata(value, model) {
   );
 }
 
+function automaticModelSettings(value) {
+  if (
+    !value ||
+    ![value.textModel, value.imageModel].every(
+      (model) => typeof model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model),
+    ) ||
+    !Number.isSafeInteger(value.revision) ||
+    value.revision < 0
+  )
+    throw fail();
+  return { textModel: value.textModel, imageModel: value.imageModel, revision: value.revision };
+}
+
 // Rebuilt both in the worker and under the publication transaction. Model
 // supplied action/authority/display fields are never publication authority.
-function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsedMs = 0 }) {
+function buildAutomaticResult({
+  textResult,
+  imageResults = [],
+  snapshot,
+  elapsedMs = 0,
+  modelSettings,
+}) {
+  const selected = automaticModelSettings(
+    modelSettings || {
+      textModel: TEXT_MODEL,
+      imageModel: IMAGE_MODEL,
+      revision: textResult?.settingsRevision,
+    },
+  );
   if (
     !snapshot ||
-    !metadata(textResult, TEXT_MODEL) ||
+    !metadata(textResult, selected.textModel) ||
+    textResult.settingsRevision !== selected.revision ||
     !Array.isArray(imageResults) ||
     !Number.isSafeInteger(snapshot.imageCount) ||
     snapshot.imageCount < 0 ||
@@ -51,7 +78,7 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
       !Array.isArray(batch?.attachmentIds) ||
       !batch.attachmentIds.length ||
       batch.attachmentIds.length > 3 ||
-      !metadata(batch.response, IMAGE_MODEL) ||
+      !metadata(batch.response, selected.imageModel) ||
       batch.response.settingsRevision !== textResult.settingsRevision
     )
       throw fail();
@@ -77,7 +104,7 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
       attachmentIds: [...batch.attachmentIds],
       response: {
         ...parsed,
-        model: IMAGE_MODEL,
+        model: selected.imageModel,
         settingsRevision: batch.response.settingsRevision,
         policyVersion: POLICY_VERSION,
         imageContractVersion: IMAGE_CONTRACT_VERSION,
@@ -143,8 +170,9 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
     source: 'automatic',
     executor: 'moderation-agent',
     inputMode: 'redacted',
-    model: TEXT_MODEL,
-    imageModel: snapshot.imageCount > 0 ? IMAGE_MODEL : null,
+    model: selected.textModel,
+    imageModel: snapshot.imageCount > 0 ? selected.imageModel : null,
+    modelSettings: selected,
     settingsRevision: textResult.settingsRevision,
     policyVersion: POLICY_VERSION,
     redactorVersion: snapshot.redactorVersion,
@@ -166,7 +194,7 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
     requiresPostPublicationReview: snapshot.imageCount > 0,
     textResult: {
       assessment,
-      model: TEXT_MODEL,
+      model: selected.textModel,
       settingsRevision: textResult.settingsRevision,
       policyVersion: POLICY_VERSION,
     },
@@ -174,4 +202,4 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
   };
 }
 
-module.exports = { TEXT_MODEL, IMAGE_MODEL, buildAutomaticResult };
+module.exports = { TEXT_MODEL, IMAGE_MODEL, buildAutomaticResult, automaticModelSettings };

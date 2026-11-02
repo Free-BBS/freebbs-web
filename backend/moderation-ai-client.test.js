@@ -155,7 +155,7 @@ test('refusal, tool, truncated, HTTP, and syntax failures never extract a model 
   }
 });
 
-test('model listing shares the Max catalog without reading a secret or contacting a provider', async () => {
+test('legacy evaluation listing uses static profiles without reading a secret or contacting a provider', async () => {
   for (const modelOverride of ['', 'deployment/custom-model:v2']) {
     const config = settings({ apiKey: undefined, configured: false });
     Object.defineProperty(config, 'apiKey', {
@@ -179,7 +179,7 @@ test('model listing shares the Max catalog without reading a secret or contactin
   }
 });
 
-test('listing validates the fixed endpoint and default configuration without requiring fetch', async () => {
+test('listing validates the public HTTPS endpoint and default configuration without requiring fetch', async () => {
   const withoutFetch = createModerationAiClient({
     readSettings: async () => settings({ apiKey: '', baseUrl: `${BASE}/` }),
     fetchImpl: null,
@@ -187,7 +187,7 @@ test('listing validates the fixed endpoint and default configuration without req
   assert.equal((await withoutFetch.listModels()).defaultModel, 'glm-5.1');
   for (const extra of [
     { baseUrl: 'http://127.0.0.1:9' },
-    { baseUrl: `${BASE}/other` },
+    { baseUrl: 'https://localhost/v1' },
     { model: 'private-original bad model' },
     { model: undefined },
     { revision: '7' },
@@ -292,8 +292,8 @@ test('a later settings change rebuilds the allowed catalog instead of trusting a
   assert.equal(result.model, 'deployment/current');
   assert.equal(result.settingsRevision, 8);
   assert.equal((await h.client.listModels()).defaultModel, 'deployment/current');
-  config.baseUrl = 'https://evil.example/maas/v1';
-  await assert.rejects(h.client.assess({ ...INPUT, model: 'glm-5.1' }), fixedError(503));
+  config.baseUrl = 'https://api.example.org/v1';
+  await assert.rejects(h.client.assess({ ...INPUT, model: 'glm-5.1' }), fixedError(400));
   assert.equal(h.requests.length, 1);
 });
 
@@ -593,14 +593,13 @@ test('invalid inputs fail before reading settings or contacting a provider', asy
   }
 });
 
-test('only the exact HTTPS Infini endpoint and valid server credentials are accepted', async () => {
+test('unsafe endpoints and invalid server credentials are rejected before a request', async () => {
   for (const extra of [
     { baseUrl: 'http://cloud.infini-ai.com/maas/v1' },
-    { baseUrl: 'https://cloud.infini-ai.com.evil.example/maas/v1' },
     { baseUrl: 'https://cloud.infini-ai.com@evil.example/maas/v1' },
     { baseUrl: `${BASE}?key=provider-secret` },
     { baseUrl: `${BASE}#provider-secret` },
-    { baseUrl: `${BASE}/other` },
+    { baseUrl: 'https://10.1.2.3/v1' },
     { baseUrl: 'https://127.0.0.1/maas/v1' },
     { apiKey: '' },
     { apiKey: `${KEY}\r\nINJECTED` },
@@ -638,6 +637,36 @@ test('settings, network and upstream failures expose fixed messages without retr
   });
   await assert.rejects(network.client.assess(INPUT), fixedError(502));
   assert.equal(network.requests.length, 1);
+});
+
+test('independent settings choose their own endpoint and model without inheriting Max or provider flags', async () => {
+  const h = harness({
+    config: settings({ baseUrl: 'https://api.example.org/v1/', textModel: 'glm-5.1' }),
+    modelOverride: 'max-default-model',
+  });
+  assert.deepEqual((await h.client.listModels()).models, [{ id: 'glm-5.1', label: 'glm-5.1' }]);
+  const result = await h.client.assess(INPUT);
+  assert.equal(result.model, 'glm-5.1');
+  assert.equal(h.requests[0].url, 'https://api.example.org/v1/chat/completions');
+  const body = JSON.parse(h.requests[0].options.body);
+  assert.deepEqual(body.response_format, { type: 'json_object' });
+  assert.equal(body.thinking, undefined);
+  assert.equal(body.enable_thinking, undefined);
+  assert.equal(body.reasoning_effort, undefined);
+  await assert.rejects(h.client.assess({ ...INPUT, model: 'max-default-model' }), fixedError(400));
+  assert.equal(h.requests.length, 1);
+});
+
+test('a bound job snapshot bypasses later settings reads and uses its own credential and revision', async () => {
+  const h = harness({
+    config: settings({ textModel: 'later-model', apiKey: 'later-key', revision: 9 }),
+  });
+  const snapshot = settings({ textModel: 'job-model', apiKey: KEY, revision: 8 });
+  const result = await h.client.assess(INPUT, snapshot);
+  assert.equal(h.reads.length, 0);
+  assert.equal(result.model, 'job-model');
+  assert.equal(result.settingsRevision, 8);
+  assert.equal(h.requests[0].options.headers.Authorization, `Bearer ${KEY}`);
 });
 
 test('redirect responses are rejected even when a fetch substitute disregards redirect:error', async () => {

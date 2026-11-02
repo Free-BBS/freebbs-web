@@ -1922,7 +1922,8 @@ test('automation control is admin-only while reviewers can read status and autho
       role,
     );
     if (reviewing) {
-      assert.match(h.get('automation-models').textContent, /qwen3.6-27b.*glm-5.1/);
+      assert.match(h.get('automation-models').textContent, /文字：qwen3.6-27b.*图片：/);
+      assert.doesNotMatch(h.get('automation-models').textContent, /备选/);
       assert.match(h.get('automation-summary').textContent, /已暂停/);
     }
     if (role !== 'admin') {
@@ -1966,6 +1967,18 @@ test('automation resume is guarded against double clicks and failed pause preser
     calls.map(({ options }) => JSON.parse(options.body)),
     [{ paused: false }, { paused: true }],
   );
+});
+
+test('missing independent key explains manual handling and cannot resume from the workbench', async () => {
+  const h = harness({
+    isAdmin: true,
+    automation: { ...automaticSettings(), configured: false },
+  });
+  await h.app.ready;
+  assert.match(h.get('automation-summary').textContent, /监管 API 未配置/);
+  assert.equal(h.get('automation-toggle').disabled, true);
+  await h.get('automation-toggle').events.click();
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/automation/control')));
 });
 
 test('disabled automation still shows historical jobs but never allows enabling from the browser', async () => {

@@ -6,6 +6,7 @@ const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-p
 const { POLICY_VERSION } = require('./moderation-policy');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { validateAssessment } = require('./moderation-ai-client');
+const { automaticModelSettings } = require('./moderation-automation-result');
 const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
 const { projectMainSiteAuthority } = require('./development-integration');
 const {
@@ -86,6 +87,7 @@ function createModerationAutomationStore({
   readImages,
   requiredNoticeVersion = null,
   isEnabled = () => false,
+  isConfigured = async () => true,
   logger = console,
   leaseMs = 300000,
   resolvePlatformAuthority,
@@ -244,6 +246,9 @@ function createModerationAutomationStore({
     // Serialize admission against pause changes. Paused submissions enter the
     // manual queue directly and never get backfilled when automation resumes.
     if ((await control(db, true)).paused) return false;
+    // Missing independent credentials send new submissions through the existing
+    // manual route, including its notification, rather than building a backlog.
+    if (!(await isConfigured(db))) return false;
     const id = uuid(submission.id);
     if (
       !Number.isSafeInteger(submission.version) ||
@@ -258,7 +263,8 @@ function createModerationAutomationStore({
     );
     return Boolean(inserted.affectedRows);
   }
-  async function claim() {
+  async function claim(settings) {
+    const selected = settings === undefined ? null : automaticModelSettings(settings);
     if (!(await enabled())) return null;
     const [candidates] = await pool.execute(
       "SELECT id, submission_id FROM moderation_auto_jobs WHERE state = 'queued' ORDER BY created_at, id LIMIT 10",
@@ -267,6 +273,13 @@ function createModerationAutomationStore({
       const outcome = await transact(async (db) => {
         const state = await control(db, 'exclusive');
         if (state.paused || !(await enabled())) return null;
+        if (selected) {
+          const [[revisionRow]] = await db.execute(
+            'SELECT setting_value FROM app_settings WHERE setting_key = ? FOR SHARE',
+            ['moderation_settings_revision'],
+          );
+          if (Number(revisionRow?.setting_value || 0) !== selected.revision) return null;
+        }
         const [[running]] = await db.execute(
           "SELECT id FROM moderation_auto_jobs WHERE state = 'running' LIMIT 1",
         );
@@ -287,8 +300,17 @@ function createModerationAutomationStore({
         }
         const token = crypto.randomUUID();
         await db.execute(
-          "UPDATE moderation_auto_jobs SET state = 'running', lease_token = ?, lease_until = TIMESTAMPADD(MICROSECOND, ?, NOW(3)), attempts = attempts + 1, control_revision = ?, model = 'qwen3.6-27b', policy_version = ? WHERE id = ?",
-          [token, leaseMs * 1000, state.revision, POLICY_VERSION, job.id],
+          "UPDATE moderation_auto_jobs SET state = 'running', lease_token = ?, lease_until = TIMESTAMPADD(MICROSECOND, ?, NOW(3)), attempts = attempts + 1, control_revision = ?, model = ?, settings_revision = ?, result_json = ?, policy_version = ? WHERE id = ?",
+          [
+            token,
+            leaseMs * 1000,
+            state.revision,
+            selected?.textModel || 'qwen3.6-27b',
+            selected?.revision ?? null,
+            selected ? JSON.stringify({ modelSettings: selected }) : null,
+            POLICY_VERSION,
+            job.id,
+          ],
         );
         return {
           id: job.id,
@@ -297,6 +319,7 @@ function createModerationAutomationStore({
           contentHash: row.content_hash,
           token,
           controlRevision: state.revision,
+          ...(selected ? { modelSettings: selected } : {}),
         };
       });
       if (outcome) return outcome;
@@ -491,6 +514,21 @@ function createModerationAutomationStore({
   }
 
   function sanitizeResult(result, meta, row, job, preview) {
+    // Model IDs and revision come from the locked job claim, never the model
+    // response or a configuration read that could change between text and images.
+    let selected;
+    let configurationMatches = job.settings_revision == null;
+    try {
+      if (job.settings_revision != null) {
+        selected = automaticModelSettings(parse(job.result_json, {}).modelSettings);
+        configurationMatches =
+          selected.textModel === job.model &&
+          selected.revision === Number(job.settings_revision) &&
+          result?.settingsRevision === selected.revision;
+      }
+    } catch {
+      configurationMatches = false;
+    }
     // Re-evaluate the locked original row. Neither redaction nor a worker's
     // supplied reviewFocus=false can waive a mandatory human-review route.
     const original = parse(row.payload_json, {});
@@ -500,6 +538,7 @@ function createModerationAutomationStore({
     });
     if (
       !result?.manualReview &&
+      configurationMatches &&
       preview &&
       meta &&
       result?.textResult &&
@@ -511,6 +550,7 @@ function createModerationAutomationStore({
       try {
         const { buildAutomaticResult } = require('./moderation-automation-result');
         const rebuilt = buildAutomaticResult({
+          modelSettings: selected,
           textResult: result.textResult,
           imageResults: result.imageResults || [],
           snapshot: {
@@ -560,6 +600,7 @@ function createModerationAutomationStore({
       if (
         !result?.manualReview &&
         meta &&
+        configurationMatches &&
         preview &&
         result?.inputHash === meta.inputHash &&
         result?.model === job.model &&

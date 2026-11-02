@@ -22,7 +22,7 @@ const pages = {
   'staff.html': 1,
   'surveys.html': 1,
   'system-settings-course-materials.html': 2,
-  'system-settings-model.html': 3,
+  'system-settings-model.html': 6,
   'system-settings-rewards.html': 10,
   'system-settings-surveys.html': 10,
   'tool-workshop.html': 8,
@@ -58,6 +58,9 @@ test('destructive operations and normal submits retain explicit distinct roles',
     ['settings', '[data-avatar-action="cancel"]', 'secondary'],
     ['knowledge', '#knowledge-editor-discard-confirm', 'danger'],
     ['system-settings-model', '#system-model-api-key-clear', 'danger'],
+    ['system-settings-model', '#moderation-settings-form [type="submit"]', 'primary'],
+    ['system-settings-model', '#moderation-settings-key-clear', 'danger'],
+    ['system-settings-model', '#moderation-settings-reload', 'secondary'],
     ['system-settings-rewards', '#reward-confirm-send', 'primary'],
     ['workbench', '#workbench-campus-disconnect', 'danger'],
     ['workbench', '#workbench-schedule-delete', 'danger'],
@@ -88,6 +91,15 @@ test('migration keeps native hiding, disabling, and delegated business selectors
   assert.ok(surveys('#export').is('[disabled]'));
   const tool = cheerio.load(read('public/tool-workshop.html'));
   assert.ok(tool('#tool-cancel').is('[hidden]'));
+  const model = cheerio.load(read('public/system-settings-model.html'));
+  for (const selector of [
+    '#moderation-settings-form [type="submit"]',
+    '#moderation-settings-key-clear',
+    '#moderation-settings-key-toggle',
+  ])
+    assert.ok(model(selector).is('[disabled]'), selector);
+  assert.equal(model('#moderation-settings-reload').attr('type'), 'button');
+  assert.ok(!model('#moderation-settings-reload').is('[disabled]'));
 });
 
 test('icon toggles, tabs, scenic controls and editor tools are not ordinary actions', () => {
@@ -95,6 +107,7 @@ test('icon toggles, tabs, scenic controls and editor tools are not ordinary acti
     ['knowledge.html', '#knowledge-tools-toggle, #knowledge-chat-toggle, .knowledge-tag-button'],
     ['markdown-editor.html', '#markdown-upload-button'],
     ['system-settings-model.html', '#system-model-api-key-toggle'],
+    ['system-settings-model.html', '#moderation-settings-key-toggle'],
     [
       'workbench.html',
       '#workbench-companion-avatar, #workbench-week-previous, #workbench-view-toggle',

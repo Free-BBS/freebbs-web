@@ -77,8 +77,6 @@ for (const [label, patch] of [
     'private directory within checkout',
     { discussionModerationDir: path.resolve(__dirname, '../database/private') },
   ],
-  ['unvalidated text model', { discussionModerationAutoModel: 'other' }],
-  ['unvalidated image model', { discussionModerationImageModel: 'other' }],
 ])
   test(`reject invalid production configuration: ${label}`, () => {
     const value = { ...config(), ...patch };
@@ -166,6 +164,7 @@ test('preflight only reads metadata and never exposes credentials or database er
   assert.equal(failed.readyForAutomaticAcceptance, false);
   assert.doesNotMatch(JSON.stringify(failed), /test-secret-password/);
   const migrationNames = [
+    '016_create_system_secret_settings.sql',
     '067_discussion_moderation.sql',
     '068_moderation_policy_audit.sql',
     '069_moderation_automation.sql',

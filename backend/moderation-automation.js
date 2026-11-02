@@ -5,7 +5,11 @@ const { ModerationAiError, validateAssessment } = require('./moderation-ai-clien
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { POLICY_VERSION } = require('./moderation-policy');
 const { normalizePolicyDecision } = require('./moderation-policy-decision');
-const { buildAutomaticResult, IMAGE_MODEL } = require('./moderation-automation-result');
+const {
+  buildAutomaticResult,
+  IMAGE_MODEL,
+  automaticModelSettings,
+} = require('./moderation-automation-result');
 const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
 
 const PRIMARY_MODEL = 'qwen3.6-27b';
@@ -25,17 +29,13 @@ function automationEnvironmentEnabled(config = {}) {
   return Boolean(
     aiTestEnvironmentEnabled(config) &&
     ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(config.db?.host) &&
-    config.discussionModerationAutoTestEnabled === true &&
-    (config.discussionModerationAutoModel ?? PRIMARY_MODEL) === PRIMARY_MODEL &&
-    (config.discussionModerationBackupModel ?? BACKUP_MODEL) === BACKUP_MODEL,
+    config.discussionModerationAutoTestEnabled === true,
   );
 }
 
 function imageAutomationEnabled(config = {}) {
   return (
-    automationEnvironmentEnabled(config) &&
-    config.discussionModerationAutoImagesEnabled === true &&
-    (config.discussionModerationImageModel ?? IMAGE_MODEL) === IMAGE_MODEL
+    automationEnvironmentEnabled(config) && config.discussionModerationAutoImagesEnabled === true
   );
 }
 
@@ -64,11 +64,12 @@ function snapshotValid(snapshot, claim) {
   );
 }
 
-function responseMetadataValid(response) {
+function responseMetadataValid(response, modelSettings) {
   return Boolean(
-    response?.model === PRIMARY_MODEL &&
+    response?.model === (modelSettings?.textModel || PRIMARY_MODEL) &&
     Number.isSafeInteger(response.settingsRevision) &&
     response.settingsRevision >= 0 &&
+    (!modelSettings || response.settingsRevision === modelSettings.revision) &&
     response.policyVersion === POLICY_VERSION,
   );
 }
@@ -78,6 +79,7 @@ function createModerationAutomation({
   client,
   imageClient,
   config,
+  readSettings,
   isEnabled = async () => false,
   logger = console,
   setTimeoutImpl = setTimeout,
@@ -102,6 +104,7 @@ function createModerationAutomation({
   let nextMaintenance = 0;
   let nextWarning = 0;
   let lastOutcome = 'stopped';
+  let lastModels = null;
   // Do not allow accidental tight loops even when a caller supplies a bad interval.
   const interval = Number.isFinite(pollIntervalMs)
     ? Math.max(1000, Math.min(2000, Math.round(pollIntervalMs)))
@@ -114,9 +117,9 @@ function createModerationAutomation({
       environmentEnabled: environmentEnabled(),
       running: started,
       busy,
-      primaryModel: PRIMARY_MODEL,
-      backupModel: BACKUP_MODEL,
-      imageModel: IMAGE_MODEL,
+      primaryModel: lastModels?.textModel || null,
+      backupModel: null,
+      imageModel: lastModels?.imageModel || null,
       imagesEnabled: imageAutomationEnabled(config),
       lastOutcome,
     };
@@ -149,7 +152,7 @@ function createModerationAutomation({
     return allowed && current(epoch);
   }
 
-  function baseResult(claim, snapshot, startedAt) {
+  function baseResult(claim, snapshot, startedAt, modelSettings) {
     return {
       submissionId: claim.submissionId,
       version: claim.submissionVersion,
@@ -164,8 +167,8 @@ function createModerationAutomation({
         redactionCounts: snapshot?.counts || {},
       }),
       policyEvidence: [],
-      model: PRIMARY_MODEL,
-      settingsRevision: null,
+      model: modelSettings?.textModel || PRIMARY_MODEL,
+      settingsRevision: modelSettings?.revision ?? null,
       policyVersion: POLICY_VERSION,
       redactorVersion: snapshot?.redactorVersion || null,
       elapsedMs: Math.max(0, Math.round(now() - startedAt)),
@@ -179,9 +182,9 @@ function createModerationAutomation({
     };
   }
 
-  function notAttempted(claim, snapshot, startedAt, reason) {
+  function notAttempted(claim, snapshot, startedAt, reason, modelSettings) {
     return {
-      ...baseResult(claim, snapshot, startedAt),
+      ...baseResult(claim, snapshot, startedAt, modelSettings),
       automationReason: reason,
       manualReview: {
         required: true,
@@ -191,13 +194,15 @@ function createModerationAutomation({
     };
   }
 
-  function failedResult(claim, snapshot, startedAt, error) {
+  function failedResult(claim, snapshot, startedAt, error, modelSettings) {
     const trusted = error instanceof ModerationAiError;
     const diagnostics = trusted ? sanitizeDiagnostics(error.diagnostics) : null;
     const context =
-      trusted && responseMetadataValid(error.reviewContext) ? error.reviewContext : null;
+      trusted && responseMetadataValid(error.reviewContext, modelSettings)
+        ? error.reviewContext
+        : null;
     if (diagnostics && !context) delete diagnostics.reviewSignal;
-    const result = baseResult(claim, snapshot, startedAt);
+    const result = baseResult(claim, snapshot, startedAt, modelSettings);
     // Image errors retain only bounded structural diagnostics, never raw replies.
     const { ModerationImageError, safeImageError } = require('./moderation-image-client');
     const imageDiagnostics =
@@ -217,15 +222,18 @@ function createModerationAutomation({
     };
   }
 
-  async function processClaim(claim, epoch) {
+  async function processClaim(claim, epoch, settingsSnapshot) {
     const startedAt = now();
+    const modelSettings = settingsSnapshot ? automaticModelSettings(settingsSnapshot) : null;
+    const skipped = (snapshot, reason) =>
+      notAttempted(claim, snapshot, startedAt, reason, modelSettings);
     let snapshot;
     let result;
     try {
       snapshot = await store.prepare(claim);
       if (!snapshotValid(snapshot, claim)) {
         snapshot = null;
-        result = notAttempted(claim, null, startedAt, 'snapshot_invalid');
+        result = skipped(null, 'snapshot_invalid');
       } else {
         // Store snapshots are copied before any await or model call can mutate them.
         snapshot = structuredClone(snapshot);
@@ -234,16 +242,13 @@ function createModerationAutomation({
           getReviewFocus({ title: snapshot.title, content: snapshot.content }),
         );
         if (!(await enabled(epoch))) {
-          result = notAttempted(
-            claim,
-            snapshot,
-            startedAt,
-            current(epoch) ? 'worker_paused' : 'worker_stopped',
-          );
+          result = skipped(snapshot, current(epoch) ? 'worker_paused' : 'worker_stopped');
+        } else if (settingsSnapshot && (!settingsSnapshot.apiKey || !settingsSnapshot.baseUrl)) {
+          result = skipped(snapshot, 'configuration_invalid');
         } else if (localFocus.political || localFocus.psychological) {
-          result = notAttempted(claim, snapshot, startedAt, 'focus_requires_review');
+          result = skipped(snapshot, 'focus_requires_review');
         } else if (snapshot.imageCount > 0 && !imageAutomationEnabled(config)) {
-          result = notAttempted(claim, snapshot, startedAt, 'image_requires_review');
+          result = skipped(snapshot, 'image_requires_review');
         } else {
           const input = Object.freeze({
             title: snapshot.title,
@@ -251,15 +256,15 @@ function createModerationAutomation({
             inputMode: 'redacted',
             redactionCounts: Object.freeze({ ...snapshot.counts }),
             hasImages: false,
-            model: PRIMARY_MODEL,
+            model: modelSettings?.textModel || PRIMARY_MODEL,
             requireReviewTopics: true,
           });
           let response;
           try {
-            // Exactly one attempt. GLM is a manual alternative, never a retry path.
-            response = await client.assess(input);
-            if (!responseMetadataValid(response)) {
-              result = notAttempted(claim, snapshot, startedAt, 'assessment_invalid');
+            // Exactly one attempt using the claimed configuration; never retry on another model.
+            response = await client.assess(input, settingsSnapshot);
+            if (!responseMetadataValid(response, modelSettings)) {
+              result = skipped(snapshot, 'assessment_invalid');
               result.manualReview.validation = 'failed';
             } else {
               const assessment = validateAssessment(response.assessment, input, {
@@ -267,7 +272,7 @@ function createModerationAutomation({
               });
               const textResult = {
                 assessment,
-                model: PRIMARY_MODEL,
+                model: modelSettings?.textModel || PRIMARY_MODEL,
                 requireReviewTopics: true,
                 settingsRevision: response.settingsRevision,
                 policyVersion: POLICY_VERSION,
@@ -297,22 +302,26 @@ function createModerationAutomation({
                 for (let offset = 0; offset < snapshot.images.length; offset += 3) {
                   if (!(await enabled(epoch))) throw new Error('worker_paused');
                   const batch = snapshot.images.slice(offset, offset + 3);
-                  const imageResponse = await imageClient.assess({
-                    model: IMAGE_MODEL,
-                    requireReviewTopics: true,
-                    title: snapshot.title,
-                    content: snapshot.content,
-                    images: batch.map((image) => ({
-                      mimeType: image.mimeType,
-                      dataBase64: image.dataBase64,
-                    })),
-                  });
+                  const imageResponse = await imageClient.assess(
+                    {
+                      model: modelSettings?.imageModel || IMAGE_MODEL,
+                      requireReviewTopics: true,
+                      title: snapshot.title,
+                      content: snapshot.content,
+                      images: batch.map((image) => ({
+                        mimeType: image.mimeType,
+                        dataBase64: image.dataBase64,
+                      })),
+                    },
+                    settingsSnapshot,
+                  );
                   imageResults.push({
                     attachmentIds: batch.map((image) => image.id),
                     response: imageResponse,
                   });
                   const checkedCount = offset + batch.length;
                   const partial = buildAutomaticResult({
+                    modelSettings,
                     textResult,
                     imageResults,
                     snapshot: {
@@ -325,6 +334,7 @@ function createModerationAutomation({
                 }
               }
               result = buildAutomaticResult({
+                modelSettings,
                 textResult,
                 imageResults,
                 snapshot,
@@ -332,12 +342,12 @@ function createModerationAutomation({
               });
             }
           } catch (error) {
-            result = failedResult(claim, snapshot, startedAt, error);
+            result = failedResult(claim, snapshot, startedAt, error, modelSettings);
           }
         }
       }
     } catch {
-      result = notAttempted(claim, snapshot, startedAt, 'snapshot_invalid');
+      result = skipped(snapshot, 'snapshot_invalid');
       warn();
     }
     // The store also locks/rechecks the persistent pause revision, submission,
@@ -378,12 +388,19 @@ function createModerationAutomation({
         lastOutcome = current(epoch) ? 'paused' : 'stopped';
         return { status: lastOutcome };
       }
-      const claim = await store.claim();
+      // Bind endpoint, credential, model IDs and revision once for this job.
+      // Reading failure leaves the queue untouched and never falls back to Max.
+      const settingsSnapshot = readSettings
+        ? Object.freeze({ ...(await readSettings({ includeSecret: true })) })
+        : undefined;
+      const modelSettings = settingsSnapshot ? automaticModelSettings(settingsSnapshot) : undefined;
+      if (modelSettings) lastModels = modelSettings;
+      const claim = await store.claim(modelSettings);
       if (!claim) {
         lastOutcome = 'idle';
         return { status: lastOutcome };
       }
-      await processClaim(claim, epoch);
+      await processClaim(claim, epoch, settingsSnapshot);
       lastOutcome = current(epoch) ? 'processed' : 'stopped';
       return { status: lastOutcome };
     } catch {

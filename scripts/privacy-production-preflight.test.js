@@ -23,7 +23,7 @@ function settings() {
   };
 }
 
-function metadataConnection(names = TABLES) {
+function metadataConnection(names = TABLES, moderationKey = true) {
   const statements = [];
   let closed = false;
   return {
@@ -38,6 +38,11 @@ function metadataConnection(names = TABLES) {
           statements.push({ sql, params });
           assert.match(sql, /^SELECT /);
           if (sql.includes('information_schema.TABLES')) return [names.map((name) => ({ name }))];
+          if (sql.includes('FROM system_secret_settings')) {
+            assert.deepEqual(params, ['moderation_api_key']);
+            assert.ok(!/ciphertext|auth_tag|iv|last_four/.test(sql));
+            return [moderationKey ? [{ setting_key: 'moderation_api_key' }] : []];
+          }
           if (sql === 'SELECT paused FROM moderation_auto_control WHERE id = 1')
             return [[{ paused: 1 }]];
           if (sql === 'SELECT COUNT(*) AS total FROM moderation_reviewers WHERE active = 1')
@@ -71,8 +76,16 @@ test('production preflight includes privacy and export schemas without reading p
     assert.ok(tableQuery.params.includes(name));
     assert.ok(database.statements.every(({ sql }) => !sql.includes(`FROM ${name}`)));
   }
-  assert.equal(database.statements.length, 3);
+  assert.equal(database.statements.length, 4);
   assert.doesNotMatch(JSON.stringify(report), /database-private|content_sha256|messages_json/);
+});
+
+test('preflight requires an independent moderation key only for automatic readiness', async () => {
+  const database = metadataConnection(TABLES, false);
+  const report = await inspect({ settings: settings(), connect: database.connect });
+  assert.equal(report.readyForManualAcceptance, true);
+  assert.equal(report.moderationApiConfigured, false);
+  assert.equal(report.readyForAutomaticAcceptance, false);
 });
 
 function storageFixture(t) {

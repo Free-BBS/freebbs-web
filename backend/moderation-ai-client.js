@@ -1,5 +1,8 @@
 const { performance } = require('node:perf_hooks');
-const { modelCatalog } = require('./ai-models');
+const MODEL_PROFILES = require('./ai-model-catalog.json');
+const { normalizeModerationBaseUrl } = require('./moderation-settings');
+const { moderationFetch } = require('./moderation-endpoint');
+const { topicSchema, topicPrompt, validateReviewTopics } = require('./moderation-review-topics');
 const {
   POLICY_VERSION,
   CATEGORIES,
@@ -34,7 +37,6 @@ const COUNT_KEYS = Object.freeze([
   'url',
   'address',
 ]);
-const { topicSchema, topicPrompt, validateReviewTopics } = require('./moderation-review-topics');
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -241,20 +243,22 @@ function inputData({ title, content, inputMode, redactionCounts = {}, hasImages 
   return { title, content, inputMode, redactionCounts: counts, hasImages };
 }
 
-function requestBody(model, data, required = false) {
-  const thinking = DISABLE_THINKING_MODELS.has(model)
-    ? { thinking: { type: 'disabled' } }
-    : ['glm-5.3', 'glm-5.3-flash', 'kimi-k3'].includes(model)
-      ? { reasoning_effort: 'low' }
-      : model === 'qwen3.6-27b'
-        ? { enable_thinking: false }
-        : {};
+function requestBody(model, data, required = false, infini = true) {
+  const thinking = !infini
+    ? {}
+    : DISABLE_THINKING_MODELS.has(model)
+      ? { thinking: { type: 'disabled' } }
+      : ['glm-5.3', 'glm-5.3-flash', 'kimi-k3'].includes(model)
+        ? { reasoning_effort: 'low' }
+        : model === 'qwen3.6-27b'
+          ? { enable_thinking: false }
+          : {};
   return {
     model,
     messages: [
       {
         role: 'system',
-        content: `${extendedPrompt(SYSTEM_PROMPT, required)}\n\n${buildPolicyPrompt()}\n\n${required ? topicPrompt() : ''}\n\n${outputContract(model, required)}`,
+        content: `${extendedPrompt(SYSTEM_PROMPT, required)}\n\n${buildPolicyPrompt()}\n\n${required ? topicPrompt() : ''}\n\n${outputContract(infini ? model : '', required)}`,
       },
       { role: 'user', content: JSON.stringify(data) },
     ],
@@ -262,19 +266,20 @@ function requestBody(model, data, required = false) {
     n: 1,
     temperature: 0,
     max_tokens: 2200,
-    response_format: SCHEMA_MODELS.has(model)
-      ? {
-          type: 'json_schema',
-          json_schema: {
-            name: 'moderation_assessment',
-            strict: true,
-            schema: assessmentSchema(required),
-          },
-        }
-      : { type: 'json_object' },
+    response_format:
+      infini && SCHEMA_MODELS.has(model)
+        ? {
+            type: 'json_schema',
+            json_schema: {
+              name: 'moderation_assessment',
+              strict: true,
+              schema: assessmentSchema(required),
+            },
+          }
+        : { type: 'json_object' },
     // M2.x thinking cannot be disabled. Keep it outside the final JSON content.
     // https://docs.infini-ai.com/gen-studio/api/text-generation/tutorial-reasoning/minimax.html
-    ...(model === 'minimax-m2.7' ? { reasoning_split: true } : {}),
+    ...(infini && model === 'minimax-m2.7' ? { reasoning_split: true } : {}),
     ...thinking,
   };
 }
@@ -426,25 +431,34 @@ function parseAssessment(body, data, options) {
 
 function createModerationAiClient({
   readSettings,
-  fetchImpl = globalThis.fetch,
+  fetchImpl = moderationFetch,
   modelOverride = '',
 }) {
-  async function readCatalog(includeSecret) {
+  async function readCatalog(includeSecret, settingsSnapshot) {
     try {
-      const settings = await readSettings({ includeSecret });
-      const defaultModel = modelOverride || settings?.model;
+      const settings = settingsSnapshot || (await readSettings({ includeSecret }));
+      const baseUrl = normalizeModerationBaseUrl(settings?.baseUrl);
+      const independent = settings && Object.prototype.hasOwnProperty.call(settings, 'textModel');
+      const defaultModel = independent ? settings.textModel : modelOverride || settings?.model;
       if (
         !settings ||
-        ![BASE_URL, `${BASE_URL}/`].includes(settings.baseUrl) ||
         !validModelId(defaultModel) ||
         !Number.isSafeInteger(settings.revision) ||
         settings.revision < 0
       )
         throw new ModerationAiError(503);
-      const catalog = modelCatalog({ baseUrl: settings.baseUrl, model: defaultModel });
+      // Independent production settings permit only their configured text model.
+      // The legacy offline evaluation runner may still compare the static Infini list.
+      const models =
+        !independent && baseUrl === BASE_URL
+          ? MODEL_PROFILES.map(({ id, label }) => ({ id, label }))
+          : [];
+      if (!models.some(({ id }) => id === defaultModel))
+        models.unshift({ id: defaultModel, label: defaultModel });
       return {
+        baseUrl,
         defaultModel,
-        models: catalog.models.map(({ id, label }) => ({ id, label })),
+        models,
         settingsRevision: settings.revision,
         ...(includeSecret ? { apiKey: settings.apiKey } : {}),
       };
@@ -454,11 +468,12 @@ function createModerationAiClient({
   }
 
   async function listModels() {
-    // Listing the shared Max catalog does not decrypt a key or call the provider.
-    return readCatalog(false);
+    // Listing does not decrypt a key or call the provider.
+    const { defaultModel, models, settingsRevision } = await readCatalog(false);
+    return { defaultModel, models, settingsRevision };
   }
 
-  async function assess(input) {
+  async function assess(input, settingsSnapshot) {
     const started = performance.now();
     let data;
     let requestedModel;
@@ -470,7 +485,11 @@ function createModerationAiClient({
     } catch {
       throw new ModerationAiError(400);
     }
-    const { defaultModel, models, apiKey, settingsRevision } = await readCatalog(true);
+    const { baseUrl, defaultModel, models, apiKey, settingsRevision } = await readCatalog(
+      true,
+      settingsSnapshot,
+    );
+    const endpoint = `${baseUrl}/chat/completions`;
     const model =
       requestedModel === undefined || requestedModel === '' ? defaultModel : requestedModel;
     if (!models.some((item) => item.id === model))
@@ -510,14 +529,16 @@ function createModerationAiClient({
     });
     const execute = async () => {
       try {
-        const response = await fetchImpl(`${BASE_URL}/chat/completions`, {
+        const response = await fetchImpl(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify(requestBody(model, data, input.requireReviewTopics === true)),
+          body: JSON.stringify(
+            requestBody(model, data, input.requireReviewTopics === true, baseUrl === BASE_URL),
+          ),
           redirect: 'error',
           cache: 'no-store',
           credentials: 'omit',
@@ -526,10 +547,7 @@ function createModerationAiClient({
         httpStatus = response?.status;
         responseBody = response?.body;
         if (timedOut) throw new ModerationAiError(504);
-        if (
-          response?.redirected ||
-          (response?.url && response.url !== `${BASE_URL}/chat/completions`)
-        )
+        if (response?.redirected || (response?.url && response.url !== endpoint))
           throw new ModerationAiError(502, 'response_redirected');
         if (!response?.ok) throw new ModerationAiError(502, 'http_error');
         if (!responseBody || typeof responseBody.getReader !== 'function')

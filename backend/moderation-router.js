@@ -163,6 +163,10 @@ function createModerationRouter({
         throw Object.assign(new Error('暂停状态必须为布尔值。'), { status: 400 });
       if (!automation?.enabled)
         throw Object.assign(new Error('本机自动审核尚未启用。'), { status: 503 });
+      if (!body.paused && (await automation.status()).configured === false)
+        throw Object.assign(new Error('请先在系统设置中配置监管 Agent 的独立 API Key。'), {
+          status: 503,
+        });
       await automation.store.setPaused({ actorId: user.id, paused: body.paused });
       response.json({ automation: await automation.status() });
     }),
