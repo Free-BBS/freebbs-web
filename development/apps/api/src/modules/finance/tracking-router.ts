@@ -78,6 +78,10 @@ const settings = z
             name: z.string().trim().min(1).max(100),
             portId,
             teamId: identifier.optional(),
+            reviewPolicy: z
+              .object({ reviewerUids: z.array(identifier).min(1).max(20) })
+              .strict()
+              .optional(),
           })
           .strict(),
       )

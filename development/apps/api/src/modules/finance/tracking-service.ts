@@ -18,6 +18,7 @@ import type {
   UserContext,
 } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
+import { normalizeFinancePilotUids } from '../../config/finance-pilot.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { parseFinanceBudgetWorkbook, type FinanceImportParseOptions } from './import-parser.js';
 import { financeDepartmentAccess, isFinanceFinalReviewer } from './shared-access.js';
@@ -27,6 +28,8 @@ export interface FinanceTrackingServiceOptions {
   authMode?: 'main' | 'demo';
   nodeEnvironment?: string;
   defaultDepartments?: FinanceDepartment[];
+  /** Optional deployment trial gate; membership narrows, but never grants, financial authority. */
+  pilotUids?: readonly string[];
   getSharedTeams?: () => Promise<readonly { id: string; name: string; status: string }[]>;
 }
 interface FinanceAudit {
@@ -129,8 +132,11 @@ function summarize(
 export class FinanceTrackingService {
   private readonly storage;
   private readonly importStorage;
+  private readonly pilotUids: ReadonlySet<string> | undefined;
 
   constructor(private readonly options: FinanceTrackingServiceOptions) {
+    const pilotUids = normalizeFinancePilotUids(options.pilotUids);
+    this.pilotUids = pilotUids === undefined ? undefined : new Set(pilotUids);
     this.storage = options.directory
       ? featureStorage<FinanceLedger>(options.directory, 'finance-tracking')
       : null;
@@ -241,6 +247,18 @@ export class FinanceTrackingService {
     );
   }
 
+  /** Restrictions narrow existing authority; a listed UID does not gain a financial role. */
+  private canReviewDepartment(
+    state: FinanceLedger,
+    actor: UserContext,
+    departmentId: string,
+  ): boolean {
+    if (!this.isChief(actor)) return false;
+    const department = state.settings.departments.find(({ id }) => id === departmentId);
+    if (!department) return false;
+    return !department.reviewPolicy || department.reviewPolicy.reviewerUids.includes(actor.uid);
+  }
+
   private allowedActions(
     state: FinanceLedger,
     actor: UserContext,
@@ -257,14 +275,14 @@ export class FinanceTrackingService {
     }
     if (
       claim.status === 'department_review' &&
-      this.hasRole(state, actor, claim.departmentId, ['counselor'])
+      this.canReviewDepartment(state, actor, claim.departmentId)
     )
       actions.push('approve');
     if (
       (claim.status === 'department_review' &&
-        this.hasRole(state, actor, claim.departmentId, ['counselor'])) ||
+        this.canReviewDepartment(state, actor, claim.departmentId)) ||
       (claim.status === 'school_review' &&
-        this.hasRole(state, actor, claim.departmentId, ['counselor', 'teacher']))
+        this.canReviewDepartment(state, actor, claim.departmentId))
     )
       actions.push('return');
     if (
@@ -277,7 +295,7 @@ export class FinanceTrackingService {
     if (
       claim.status === 'school_review' &&
       !claim.teacherApprovedAt &&
-      this.hasRole(state, actor, claim.departmentId, ['teacher'])
+      this.canReviewDepartment(state, actor, claim.departmentId)
     )
       actions.push('record_teacher_approval');
     return actions;
@@ -288,6 +306,7 @@ export class FinanceTrackingService {
       return {
         configured: false,
         canManageBudget: false,
+        canManageReviewPolicies: false,
         ownerUid: null,
         departments: [],
         submittableDepartmentIds: [],
@@ -302,6 +321,7 @@ export class FinanceTrackingService {
     return snapshot({
       configured: true,
       canManageBudget: this.isChief(actor) && !actor.previewing,
+      canManageReviewPolicies: actor.rootAdmin === true && !actor.previewing,
       ownerUid: null,
       departments,
       submittableDepartmentIds: actor.previewing
@@ -337,6 +357,11 @@ export class FinanceTrackingService {
 
   private requireActualIdentity(actor: UserContext): void {
     if (actor.previewing || (actor.viewer && actor.viewer.uid !== actor.uid)) forbidden();
+    if (!this.inPilot(actor)) forbidden();
+  }
+
+  private inPilot(actor: UserContext): boolean {
+    return this.pilotUids === undefined || this.pilotUids.has(actor.uid);
   }
 
   /** Run before multipart parsing so unauthorized callers never allocate an upload buffer. */
@@ -490,6 +515,8 @@ export class FinanceTrackingService {
   async access(
     actor: UserContext,
   ): Promise<{ configured: boolean; canAccess: boolean; canManageBudget: boolean }> {
+    if (!this.inPilot(actor))
+      return { configured: false, canAccess: false, canManageBudget: false };
     this.requireActualIdentity(actor);
     await this.synchronizeSharedTeams();
     const state = (await this.storage?.get(LEDGER_ID)) ?? this.initial();
@@ -567,11 +594,47 @@ export class FinanceTrackingService {
     actor: UserContext,
     input: FinanceTrackingSettings,
   ): Promise<FinanceTrackingPayload> {
+    this.requireActualIdentity(actor);
     const sharedTeams = this.options.getSharedTeams ? await this.options.getSharedTeams() : [];
     return this.change(actor, (state) => {
       if (!this.isChief(actor)) forbidden();
       if (input.revision !== state.settings.revision) conflict();
       const nextDepartments = snapshot(input.departments);
+      for (const department of nextDepartments) {
+        if (!department.reviewPolicy) continue;
+        const reviewerUids = department.reviewPolicy.reviewerUids;
+        if (
+          !Array.isArray(reviewerUids) ||
+          reviewerUids.length < 1 ||
+          reviewerUids.length > 20 ||
+          reviewerUids.some((uid) => typeof uid !== 'string' || !uid.trim() || uid.length > 128) ||
+          new Set(reviewerUids).size !== reviewerUids.length
+        )
+          fail(400, 'finance_invalid_review_policy', '专属审核人须为 1–20 位不重复的有效 UID');
+        department.reviewPolicy.reviewerUids = reviewerUids.map((uid) => uid.trim()).sort();
+        if (new Set(department.reviewPolicy.reviewerUids).size !== reviewerUids.length)
+          fail(400, 'finance_invalid_review_policy', '专属审核人 UID 不能重复');
+      }
+      if (!actor.rootAdmin) {
+        for (const department of nextDepartments) {
+          const existing = state.settings.departments.find(({ id }) => id === department.id);
+          if (
+            JSON.stringify(existing?.reviewPolicy?.reviewerUids.slice().sort() ?? null) !==
+            JSON.stringify(department.reviewPolicy?.reviewerUids ?? null)
+          )
+            forbidden();
+        }
+        for (const existing of state.settings.departments) {
+          if (!existing.reviewPolicy) continue;
+          const replacement = nextDepartments.find(({ id }) => id === existing.id);
+          if (
+            !replacement ||
+            replacement.portId !== existing.portId ||
+            replacement.teamId !== existing.teamId
+          )
+            forbidden();
+        }
+      }
       // Directory entries already bound to shared teams remain available for historical claims.
       for (const existing of state.settings.departments) {
         if (!existing.teamId) continue;
@@ -670,6 +733,16 @@ export class FinanceTrackingService {
       if (!project) fail(404, 'finance_project_missing', '项目不存在');
       if (project.revision !== revision) conflict();
       this.validateProject(state, input, id);
+      if (
+        !actor.rootAdmin &&
+        project.departmentId !== input.departmentId &&
+        state.settings.departments.some(
+          (department) =>
+            (department.id === project.departmentId || department.id === input.departmentId) &&
+            department.reviewPolicy !== undefined,
+        )
+      )
+        forbidden();
       if (
         state.claims.some((claim) => claim.projectId === id) &&
         (project.departmentId !== input.departmentId || project.year !== input.year)

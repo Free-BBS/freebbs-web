@@ -1392,7 +1392,10 @@ function SettingsEditor({
 }) {
   const initialDepartments = data.settings?.departments ?? data.departments;
   const [departments, setDepartments] = useState(() =>
-    initialDepartments.map((department) => ({ ...department })),
+    initialDepartments.map((department) => ({
+      ...department,
+      reviewerText: department.reviewPolicy?.reviewerUids.join(', ') ?? '',
+    })),
   );
   const existingIds = new Set(initialDepartments.map((department) => department.id));
   return (
@@ -1404,7 +1407,18 @@ function SettingsEditor({
       pending={pending}
       error={error}
       onClose={onClose}
-      onSubmit={() => onSave(departments)}
+      onSubmit={() =>
+        onSave(
+          departments.map(({ reviewerText, ...department }) => {
+            if (!data.canManageReviewPolicies) return department;
+            const reviewerUids = [...new Set(reviewerText.split(/[\s,，;；]+/).filter(Boolean))];
+            return {
+              ...department,
+              reviewPolicy: reviewerUids.length ? { reviewerUids } : undefined,
+            };
+          }),
+        )
+      }
     >
       <div className="ft-form ft-settings">
         <p className="ft-explanation">
@@ -1474,6 +1488,28 @@ function SettingsEditor({
             >
               移除
             </button>
+            {data.canManageReviewPolicies ? (
+              <details className="ft-review-policy">
+                <summary>审核权限：{department.reviewerText ? '仅指定审核人' : '通用审核'}</summary>
+                <label>
+                  指定审核人 UID {index + 1}（留空沿用通用审核）
+                  <input
+                    value={department.reviewerText}
+                    onChange={(event) => {
+                      setDepartments((current) =>
+                        current.map((value, position) =>
+                          position === index
+                            ? { ...value, reviewerText: event.target.value }
+                            : value,
+                        ),
+                      );
+                    }}
+                  />
+                </label>
+              </details>
+            ) : department.reviewPolicy ? (
+              <p className="ft-review-policy">仅指定审核人可处理审核，由最高管理员维护</p>
+            ) : null}
           </div>
         ))}
         <button
@@ -1481,7 +1517,12 @@ function SettingsEditor({
           onClick={() =>
             setDepartments((current) => [
               ...current,
-              { id: `department-${requestId()}`, name: '', portId: 'youth_league' },
+              {
+                id: `department-${requestId()}`,
+                name: '',
+                portId: 'youth_league',
+                reviewerText: '',
+              },
             ])
           }
         >

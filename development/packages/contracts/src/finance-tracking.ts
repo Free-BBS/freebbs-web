@@ -1,4 +1,4 @@
-/** Independent of legacy social-organization IDs: financial responsibility has six ports. */
+/** Six financial work ports plus a separate department-wide public budget classification. */
 export const FINANCE_PORTS = [
   { id: 'youth_league', name: '团委' },
   { id: 'student_union', name: '学生会' },
@@ -6,6 +6,7 @@ export const FINANCE_PORTS = [
   { id: 'media_center', name: '媒体中心' },
   { id: 'sports', name: '体育+代表队' },
   { id: 'bbs', name: 'BBS' },
+  { id: 'department_common', name: '系级公共' },
 ] as const;
 export type FinancePortId = (typeof FINANCE_PORTS)[number]['id'];
 export type FinanceTrackingRole =
@@ -16,6 +17,8 @@ export interface FinanceDepartment {
   portId: FinancePortId;
   /** Existing shared sports-team identifier; names never confer financial authority. */
   teamId?: string;
+  /** Optional review restriction. Listed users still need current final-reviewer authority. */
+  reviewPolicy?: { reviewerUids: string[] };
 }
 export interface FinanceGrant {
   uid: string;
@@ -108,6 +111,8 @@ export interface FinanceClaimView extends FinanceTrackingClaim {
 export interface FinanceTrackingPayload {
   configured: boolean;
   canManageBudget: boolean;
+  /** False when omitted by an older API. Review restrictions are configurable only by root admins. */
+  canManageReviewPolicies?: boolean;
   ownerUid: string | null;
   departments: FinanceDepartment[];
   submittableDepartmentIds: string[];

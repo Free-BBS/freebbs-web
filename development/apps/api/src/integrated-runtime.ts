@@ -27,6 +27,7 @@ export interface IntegratedRuntimeOptions {
   collectionsUploadDirectory: string;
   sportsUploadDirectory?: string;
   financeDirectory?: string;
+  financePilotUids?: readonly string[];
   publicUploadDirectory?: string;
   developmentRewardProvider?: DevelopmentRewardProvider;
   learningAchievementProvider?: LearningAchievementProvider;
@@ -63,6 +64,9 @@ export async function createIntegratedDevelopmentRuntime(
       festivalUploadDirectory: options.uploadDirectory,
       collectionsUploadDirectory: options.collectionsUploadDirectory,
       ...(options.financeDirectory ? { financeDirectory: options.financeDirectory } : {}),
+      ...(options.financePilotUids === undefined
+        ? {}
+        : { financePilotUids: options.financePilotUids }),
       ...(options.publicUploadDirectory
         ? { publicUploadDirectory: options.publicUploadDirectory }
         : {}),

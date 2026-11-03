@@ -537,4 +537,51 @@ describe('FinanceWorkspace', () => {
     await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
     await screen.findByText('暂未分配财务查看权限');
   });
+
+  it('preserves an exclusive reviewer when an ordinary budget manager edits the directory', async () => {
+    const department = {
+      id: 'department_common.rooms',
+      name: '系用房',
+      portId: 'department_common' as const,
+      reviewPolicy: { reviewerUids: ['u-room-reviewer'] },
+    };
+    const { request } = setup(
+      fixture({
+        canManageBudget: true,
+        canManageReviewPolicies: false,
+        departments: [department],
+        settings: { revision: 3, departments: [department], grants: [] },
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: '预算目录' }));
+    expect(screen.queryByLabelText(/指定审核人 UID/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '保存预算目录' }));
+    await screen.findByText('预算目录已更新');
+    expect(JSON.parse(request.mock.calls[1][1].body).departments).toEqual([department]);
+  });
+
+  it('lets the highest administrator type a reviewer list without losing separators', async () => {
+    const department = {
+      id: 'department_common.rooms',
+      name: '系用房',
+      portId: 'department_common' as const,
+    };
+    const { request } = setup(
+      fixture({
+        canManageBudget: true,
+        canManageReviewPolicies: true,
+        departments: [department],
+        settings: { revision: 3, departments: [department], grants: [] },
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: '预算目录' }));
+    await userEvent.click(screen.getByText('审核权限：通用审核'));
+    await userEvent.type(screen.getByLabelText(/指定审核人 UID/), 'u-one, u-two');
+    expect(screen.getByLabelText(/指定审核人 UID/)).toHaveValue('u-one, u-two');
+    await userEvent.click(screen.getByRole('button', { name: '保存预算目录' }));
+    await screen.findByText('预算目录已更新');
+    expect(JSON.parse(request.mock.calls[1][1].body).departments).toEqual([
+      { ...department, reviewPolicy: { reviewerUids: ['u-one', 'u-two'] } },
+    ]);
+  });
 });
