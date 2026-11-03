@@ -1,5 +1,5 @@
 import type { ApiEnvelope } from '@freebbs-development/contracts';
-import { FINANCE_PORTS } from '@freebbs-development/contracts';
+import { FINANCE_PORTS, FINANCE_INVOICE_CATEGORIES } from '@freebbs-development/contracts';
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
@@ -7,6 +7,7 @@ import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-mid
 import { HttpError } from '../../core/errors/http-error.js';
 import { FinanceTrackingService, type FinanceTrackingServiceOptions } from './tracking-service.js';
 import { createFinanceImportTemplate, FINANCE_IMPORT_MAX_BYTES } from './import-parser.js';
+import { createFinancePrivateFilesRouter } from './private-files.js';
 
 export interface FinanceTrackingRouterOptions extends FinanceTrackingServiceOptions {
   authenticate: (headers: AuthHeaders) => Promise<AuthenticationResult>;
@@ -50,23 +51,67 @@ const claim = z
       .array(
         z
           .object({
-            description: z.string().trim().min(1).max(500),
-            quantity: z.string().trim().min(1).max(100),
+            description: z.string().trim().max(500),
+            quantity: z.string().trim().max(100),
           })
           .strict(),
       )
-      .min(1)
       .max(100),
-    amountCents: cents.positive(),
-    payeeName: z.string().trim().min(1).max(100),
-    payeeStudentId: z.string().trim().min(1).max(80),
-    materials: z.array(z.string().trim().min(1).max(500)).min(1).max(100),
+    amountCents: cents,
+    payeeName: z.string().trim().max(100),
+    payeeStudentId: z.string().trim().max(80),
+    materials: z.array(z.string().trim().min(1).max(500)).max(100),
     externalReference: z.string().trim().max(300),
     externalSubmittedAt: externalDate,
     notes: z.string().trim().max(4000),
+    invoiceLines: z
+      .array(
+        z
+          .object({
+            category: z.enum(
+              FINANCE_INVOICE_CATEGORIES.map(({ id }) => id) as [
+                (typeof FINANCE_INVOICE_CATEGORIES)[number]['id'],
+                ...(typeof FINANCE_INVOICE_CATEGORIES)[number]['id'][],
+              ],
+            ),
+            amountCents: cents,
+            repeatCount: z.number().int().min(1).max(1000),
+            description: z.string().trim().max(500).optional(),
+          })
+          .strict(),
+      )
+      .max(100)
+      .optional(),
+    checklist: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
+    directPayment: z
+      .object({
+        hourlyRateCents: cents,
+        workContent: z.string().trim().max(4000),
+        proofFileIds: z.array(identifier).max(5),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const createClaim = z.object({ requestId: identifier, input: claim }).strict();
+const processPerson = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    employeeNumber: z.string().trim().min(1).max(80),
+  })
+  .strict();
+const workflowGuide = z
+  .object({
+    portId,
+    financeOfficer: processPerson.optional(),
+    workPortLead: processPerson.optional(),
+    counselors: z.array(processPerson).max(20),
+    teacher: processPerson.optional(),
+    reimbursementSteps: z.array(z.string().trim().min(1).max(1000)).max(30),
+    directPaymentSteps: z.array(z.string().trim().min(1).max(1000)).max(30),
+    instructionFileId: identifier.optional(),
+  })
+  .strict();
 const settings = z
   .object({
     revision,
@@ -105,6 +150,7 @@ const settings = z
           .strict(),
       )
       .max(1000),
+    workflowGuides: z.array(workflowGuide).max(FINANCE_PORTS.length).optional(),
   })
   .strict();
 const action = z
@@ -154,6 +200,17 @@ export function createFinanceTrackingRouter(options: FinanceTrackingRouterOption
   router.get('/access', async (_request, response) => {
     send(response, 200, await service.access(response.locals.financeActor));
   });
+  if (service.privateFileStore)
+    router.use(
+      '/files',
+      createFinancePrivateFilesRouter({
+        store: service.privateFileStore,
+        getActor: (response) => response.locals.financeActor,
+        assertAccess: (actor) => service.assertActualAccess(actor),
+        authorizeUpload: (actor, purpose) => service.assertCanUploadFile(actor, purpose),
+        authorizeRead: (actor, file) => service.authorizeFileRead(actor, file),
+      }),
+    );
   router.get('/', async (_request, response) => {
     send(response, 200, await service.read(response.locals.financeActor));
   });

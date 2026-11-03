@@ -3,13 +3,18 @@ import { ROLE_KEYS } from './modules.js';
 import * as organizations from './organizations.js';
 import { canEditDepartment, departmentsForRoles } from './departments.js';
 import { validateIdentitySelection } from './development-identities.js';
+import { FINANCE_WORK_PORT_ROLES } from './development-identities.js';
 
 describe('completed organization identity policy', () => {
-  it('maps all 81 keys to canonical membership or an explicit nonmembership category', () => {
-    expect(ROLE_KEYS).toHaveLength(81);
+  it('maps all keys to canonical membership or an explicit nonmembership category', () => {
+    expect(ROLE_KEYS).toHaveLength(85);
     for (const role of ROLE_KEYS) {
       const memberships = organizations.organizationMembershipsForRole(role);
-      if (role.startsWith('platform.') || role.startsWith('counselor.')) {
+      if (
+        role.startsWith('platform.') ||
+        role.startsWith('counselor.') ||
+        FINANCE_WORK_PORT_ROLES.some((key) => key === role)
+      ) {
         expect(memberships, role).toEqual([]);
       } else {
         expect(memberships.length, role).toBeGreaterThan(0);

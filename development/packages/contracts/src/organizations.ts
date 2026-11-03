@@ -130,6 +130,9 @@ const UNION_ORGANIZATIONS = [
 
 /** Business membership projection. Counselors supervise departments without holding a position. */
 export function organizationMembershipsForRole(roleKey: string): OrganizationRole[] {
+  // Work-port finance visibility is resolved from trusted scoped appointments, not legacy business permissions.
+  if (['media_center.director', 'sports.finance', 'bbs.finance', 'bbs.lead'].includes(roleKey))
+    return [];
   const legacy = ORGANIZATION_BY_ROLE.get(roleKey as RoleKey);
   if (legacy !== undefined) return [{ ...legacy }];
   if (roleKey === 'student_union.executive_president' || roleKey === 'student_union.presidium') {

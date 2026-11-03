@@ -89,6 +89,13 @@ describe('public budget categories', () => {
           kind: 'reimbursement',
           items: [{ description: '测试物料', quantity: '1' }],
           amountCents: 1000,
+          invoiceLines: [{ category: 'activity_materials', amountCents: 1000, repeatCount: 1 }],
+          checklist: [
+            'payee_confirmed',
+            'approval_route_acknowledged',
+            'invoice_materials_ready',
+            'school_authorization_acknowledged',
+          ],
           payeeName: '收款同学',
           payeeStudentId: '2026010001',
           materials: ['发票'],
@@ -100,9 +107,11 @@ describe('public budget categories', () => {
       const submitted = await service.act(root, claim.id, 1, 'submit');
       expect(submitted.claims[0].allowedActions).toContain('approve');
       const approved = await service.act(root, claim.id, 2, 'approve');
-      expect(approved.claims[0].status).toBe('school_review');
+      expect(approved.claims[0].status).toBe('initial_approved');
       expect(approved.claims[0].history.at(-1)?.actorUid).toBe(root.uid);
-      expect(approved.projects[0].reimbursement.schoolReviewCents).toBe(1000);
+      expect(approved.projects[0].reimbursement.departmentReviewCents).toBe(1000);
+      const school = await service.act(root, claim.id, 3, 'record_school_submission');
+      expect(school.projects[0].reimbursement.schoolReviewCents).toBe(1000);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

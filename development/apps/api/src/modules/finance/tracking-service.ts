@@ -12,16 +12,30 @@ import type {
   FinanceTrackingClaim,
   FinanceTrackingPayload,
   FinanceTrackingSettings,
+  FinanceWorkflowGuide,
   FinanceImportPreview,
   FinanceImportEntry,
   FinanceImportCommitResult,
   UserContext,
+} from '@freebbs-development/contracts';
+import {
+  financeClaimChecklist,
+  financeBudgetPools,
+  financeBudgetPoolOverlaps,
+  financeBudgetPoolCode,
+  financeWorkflowPort,
+  FINANCE_INVOICE_CATEGORIES,
 } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { normalizeFinancePilotUids } from '../../config/finance-pilot.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { parseFinanceBudgetWorkbook, type FinanceImportParseOptions } from './import-parser.js';
 import { financeDepartmentAccess, isFinanceFinalReviewer } from './shared-access.js';
+import {
+  FinancePrivateFileStore,
+  type FinanceFilePurpose,
+  type FinancePrivateFileMetadata,
+} from './private-files.js';
 
 export interface FinanceTrackingServiceOptions {
   directory?: string;
@@ -78,7 +92,12 @@ const budgetValue = (project: FinanceBudgetInput): FinanceBudgetInput => ({
   notes: project.notes,
 });
 const LEDGER_ID = 'finance-tracking';
-const RESERVED: readonly FinanceClaimStatus[] = ['department_review', 'school_review', 'received'];
+const RESERVED: readonly FinanceClaimStatus[] = [
+  'department_review',
+  'initial_approved',
+  'school_review',
+  'received',
+];
 function fail(status: number, code: string, message: string): never {
   throw new HttpError(status, code, message);
 }
@@ -108,15 +127,19 @@ function balance(allocatedCents: number): FinanceChannelBalance {
   };
 }
 function summarize(
-  project: FinanceBudgetProject,
+  project: FinanceBudgetProject & { memberProjectIds?: string[] },
   claims: FinanceTrackingClaim[],
 ): FinanceBudgetSummary {
   const reimbursement = balance(project.reimbursementCents);
   const directPayment = balance(project.directPaymentCents);
   for (const claim of claims) {
-    if (claim.projectId !== project.id || !RESERVED.includes(claim.status)) continue;
+    if (
+      !(project.memberProjectIds ?? [project.id]).includes(claim.projectId) ||
+      !RESERVED.includes(claim.status)
+    )
+      continue;
     const channel = claim.kind === 'reimbursement' ? reimbursement : directPayment;
-    if (claim.status === 'department_review')
+    if (claim.status === 'department_review' || claim.status === 'initial_approved')
       channel.departmentReviewCents = sum(channel.departmentReviewCents, claim.amountCents);
     if (claim.status === 'school_review')
       channel.schoolReviewCents = sum(channel.schoolReviewCents, claim.amountCents);
@@ -133,6 +156,7 @@ export class FinanceTrackingService {
   private readonly storage;
   private readonly importStorage;
   private readonly pilotUids: ReadonlySet<string> | undefined;
+  readonly privateFileStore: FinancePrivateFileStore | null;
 
   constructor(private readonly options: FinanceTrackingServiceOptions) {
     const pilotUids = normalizeFinancePilotUids(options.pilotUids);
@@ -143,6 +167,182 @@ export class FinanceTrackingService {
     this.importStorage = options.directory
       ? featureStorage<StoredImport>(options.directory, 'finance-imports')
       : null;
+    this.privateFileStore = options.directory
+      ? new FinancePrivateFileStore(options.directory)
+      : null;
+  }
+
+  private normalizeState(state: FinanceLedger, persisting = false): FinanceLedger {
+    const legacy = state.claims
+      .filter((claim) => claim.workflowVersion !== 2)
+      .map(({ id, status }) => ({ id, status }));
+    state.claims = state.claims.map((claim) =>
+      claim.workflowVersion === 2
+        ? claim
+        : {
+            ...claim,
+            workflowVersion: 2 as const,
+            // Legacy "school_review" meant BBS approval, not counselor approval in school finance.
+            status: claim.status === 'school_review' ? 'initial_approved' : claim.status,
+            initialApprovedAt:
+              claim.status === 'school_review' || claim.status === 'received'
+                ? claim.updatedAt
+                : null,
+            counselorFinancialApprovedAt: null,
+          },
+    );
+    if (persisting && legacy.length)
+      state.audit.push({
+        id: randomUUID(),
+        at: new Date().toISOString(),
+        actorUid: 'system:finance-workflow-v2',
+        action: 'workflow.compat_v2',
+        resourceId: LEDGER_ID,
+        before: legacy,
+        after: state.claims
+          .filter((claim) => legacy.some((previous) => previous.id === claim.id))
+          .map(({ id, status }) => ({ id, status })),
+      });
+    return state;
+  }
+
+  assertActualAccess(actor: UserContext): void {
+    this.requireActualIdentity(actor);
+    if (!this.storage) fail(503, 'finance_not_configured', '尚未配置财务私有存储目录');
+  }
+
+  async assertCanUploadFile(actor: UserContext, purpose: FinanceFilePurpose): Promise<void> {
+    this.assertActualAccess(actor);
+    const state = (await this.storage!.get(LEDGER_ID)) ?? this.initial();
+    if (purpose === 'instruction') {
+      if (!this.isChief(actor)) forbidden();
+      return;
+    }
+    if (
+      !this.isChief(actor) &&
+      !state.settings.departments.some(({ id }) => this.canSubmit(state, actor, id))
+    )
+      forbidden();
+  }
+
+  async authorizeFileRead(actor: UserContext, file: FinancePrivateFileMetadata): Promise<void> {
+    this.assertActualAccess(actor);
+    const state = this.normalizeState((await this.storage!.get(LEDGER_ID)) ?? this.initial());
+    if (file.purpose === 'instruction') {
+      if (file.ownerUid === actor.uid || this.isChief(actor)) return;
+      const visiblePorts = new Set(
+        state.settings.departments
+          .filter(({ id }) => this.readable(state, actor, id))
+          .map(financeWorkflowPort),
+      );
+      if (
+        state.settings.workflowGuides?.some(
+          (guide) => guide.instructionFileId === file.id && visiblePorts.has(guide.portId),
+        )
+      )
+        return;
+    } else {
+      const boundClaims = state.claims.filter((claim) =>
+        claim.directPayment?.proofFileIds.includes(file.id),
+      );
+      if (
+        boundClaims.length
+          ? boundClaims.some((claim) => this.claimReadable(state, actor, claim))
+          : file.ownerUid === actor.uid
+      )
+        return;
+    }
+    fail(404, 'finance_file_missing', '文件不存在或不可查看');
+  }
+
+  private guideFor(state: FinanceLedger, departmentId: string): FinanceWorkflowGuide | undefined {
+    const department = state.settings.departments.find(({ id }) => id === departmentId);
+    return department
+      ? state.settings.workflowGuides?.find(
+          (guide) => guide.portId === financeWorkflowPort(department),
+        )
+      : undefined;
+  }
+
+  private normalizedClaimInput(input: FinanceClaimInput): FinanceClaimInput {
+    const result = snapshot(input);
+    if (input.kind === 'reimbursement') delete result.directPayment;
+    if (input.kind === 'reimbursement' && input.invoiceLines !== undefined) {
+      if (input.invoiceLines.length > 100)
+        fail(400, 'finance_invoice_limit', '发票信息最多填写100行');
+      let amount = 0;
+      for (const line of input.invoiceLines) {
+        if (
+          !FINANCE_INVOICE_CATEGORIES.some(({ id }) => id === line.category) ||
+          !Number.isSafeInteger(line.amountCents) ||
+          line.amountCents < 0 ||
+          !Number.isSafeInteger(line.repeatCount) ||
+          line.repeatCount < 1 ||
+          line.repeatCount > 1000
+        )
+          fail(400, 'finance_invoice_invalid', '请检查发票类别、整张金额和重复张数');
+        amount = sum(amount, line.amountCents * line.repeatCount);
+      }
+      result.amountCents = amount;
+      result.items = input.invoiceLines.map((line) => ({
+        description:
+          line.description?.trim() ||
+          FINANCE_INVOICE_CATEGORIES.find(({ id }) => id === line.category)!.name,
+        quantity: `${line.repeatCount} 张`,
+      }));
+      delete result.directPayment;
+    } else if (input.kind === 'direct_payment') {
+      if (
+        input.directPayment &&
+        (!Number.isSafeInteger(input.directPayment.hourlyRateCents) ||
+          input.directPayment.hourlyRateCents < 0 ||
+          input.directPayment.proofFileIds.length > 5)
+      )
+        fail(400, 'finance_direct_payment_invalid', '请检查时薪和工作证明数量');
+      result.items = [
+        { description: (input.directPayment?.workContent ?? '').slice(0, 500), quantity: '' },
+      ];
+      delete result.invoiceLines;
+    }
+    return result;
+  }
+
+  private validateSubmission(state: FinanceLedger, claim: FinanceTrackingClaim): void {
+    const project = state.projects.find(({ id }) => id === claim.projectId);
+    const allocated =
+      claim.kind === 'reimbursement' ? project?.reimbursementCents : project?.directPaymentCents;
+    // The positive allowance is checked for the entire numbered pool, including historic members.
+    const pool = financeBudgetPools(state.projects).find((p) =>
+      p.memberProjectIds.includes(claim.projectId),
+    );
+    const poolAllowance =
+      claim.kind === 'reimbursement' ? pool?.reimbursementCents : pool?.directPaymentCents;
+    if ((poolAllowance ?? allocated ?? 0) <= 0)
+      fail(400, 'finance_channel_unavailable', '本项目没有该类款项的批准额度');
+    if (
+      !Number.isSafeInteger(claim.amountCents) ||
+      claim.amountCents <= 0 ||
+      !claim.payeeName.trim() ||
+      !claim.payeeStudentId.trim()
+    )
+      fail(400, 'finance_claim_incomplete', '请填写金额、收款人姓名和学号');
+    if (claim.kind === 'reimbursement') {
+      if (!claim.invoiceLines?.length || claim.invoiceLines.some((line) => line.amountCents <= 0))
+        fail(400, 'finance_invoice_required', '请填写至少一张发票的类别、整张金额及重复张数');
+    } else if (
+      !claim.directPayment ||
+      claim.directPayment.hourlyRateCents <= 0 ||
+      !claim.directPayment.workContent.trim() ||
+      !claim.directPayment.proofFileIds.length
+    )
+      fail(400, 'finance_direct_payment_incomplete', '请填写时薪、工作内容并上传工作证明');
+    const completed = new Set(claim.checklist ?? []);
+    if (
+      financeClaimChecklist(claim, this.guideFor(state, claim.departmentId)).some(
+        ({ key }) => !completed.has(key),
+      )
+    )
+      fail(400, 'finance_checklist_incomplete', '请完成材料清单和办理流程确认后再提交');
   }
 
   private initial(): FinanceLedger {
@@ -232,19 +432,16 @@ export class FinanceTrackingService {
     );
   }
 
-  private hasRole(
+  private claimReadable(
     state: FinanceLedger,
     actor: UserContext,
-    departmentId: string,
-    roles: ('finance_officer' | 'counselor' | 'teacher')[],
+    claim: FinanceTrackingClaim,
   ): boolean {
-    if (this.isChief(actor)) return true;
-    const department = state.settings.departments.find(({ id }) => id === departmentId);
-    return (
-      department !== undefined &&
-      roles.includes('finance_officer') &&
-      financeDepartmentAccess(actor, department).officer
-    );
+    if (!this.readable(state, actor, claim.departmentId)) return false;
+    const neverSubmitted = !claim.history.some((event) => event.action === 'submit');
+    const privateDraft =
+      claim.status === 'draft' || (claim.status === 'withdrawn' && neverSubmitted);
+    return !privateDraft || claim.submitterUid === actor.uid || this.isChief(actor);
   }
 
   /** Restrictions narrow existing authority; a listed UID does not gain a financial role. */
@@ -281,15 +478,13 @@ export class FinanceTrackingService {
     if (
       (claim.status === 'department_review' &&
         this.canReviewDepartment(state, actor, claim.departmentId)) ||
-      (claim.status === 'school_review' &&
+      (claim.status === 'initial_approved' &&
         this.canReviewDepartment(state, actor, claim.departmentId))
     )
       actions.push('return');
     if (
-      claim.kind === 'reimbursement' &&
-      !claim.schoolSubmittedAt &&
-      (claim.status === 'department_review' || claim.status === 'school_review') &&
-      this.hasRole(state, actor, claim.departmentId, ['finance_officer', 'counselor'])
+      claim.status === 'initial_approved' &&
+      this.canReviewDepartment(state, actor, claim.departmentId)
     )
       actions.push('record_school_submission');
     if (
@@ -327,15 +522,11 @@ export class FinanceTrackingService {
       submittableDepartmentIds: actor.previewing
         ? []
         : departments.filter(({ id }) => this.canSubmit(state, actor, id)).map(({ id }) => id),
-      projects: state.projects
-        .filter(({ departmentId }) => this.readable(state, actor, departmentId))
-        .map((project) => summarize(project, state.claims)),
+      projects: financeBudgetPools(
+        state.projects.filter(({ departmentId }) => this.readable(state, actor, departmentId)),
+      ).map((project) => summarize(project, state.claims)),
       claims: state.claims
-        .filter(
-          (claim) =>
-            this.readable(state, actor, claim.departmentId) &&
-            (claim.status !== 'draft' || claim.submitterUid === actor.uid || this.isChief(actor)),
-        )
+        .filter((claim) => this.claimReadable(state, actor, claim))
         .map((claim): FinanceClaimView => ({
           ...claim,
           canEdit:
@@ -346,13 +537,19 @@ export class FinanceTrackingService {
           allowedActions: this.allowedActions(state, actor, claim),
         })),
       settings: this.isChief(actor) ? { ...state.settings, grants: [] } : null,
+      workflowGuides: (state.settings.workflowGuides ?? []).filter((guide) =>
+        departments.some((department) => financeWorkflowPort(department) === guide.portId),
+      ),
     });
   }
 
   async read(actor: UserContext): Promise<FinanceTrackingPayload> {
     this.requireActualIdentity(actor);
     await this.synchronizeSharedTeams();
-    return this.view((await this.storage?.get(LEDGER_ID)) ?? this.initial(), actor);
+    return this.view(
+      this.normalizeState((await this.storage?.get(LEDGER_ID)) ?? this.initial()),
+      actor,
+    );
   }
 
   private requireActualIdentity(actor: UserContext): void {
@@ -396,18 +593,48 @@ export class FinanceTrackingService {
         : JSON.stringify(budgetValue(previous)) === JSON.stringify(budgetValue(entry))
           ? 'unchanged'
           : 'update';
-      if (previous) {
-        const proposed = summarize({ ...previous, ...budgetValue(entry) }, state.claims);
-        if (proposed.reimbursement.overBudget || proposed.directPayment.overBudget)
-          parsed.issues.push({
-            severity: 'warning',
-            sheet: entry.sourceRows[0].sheet,
-            row: entry.sourceRows[0].row,
-            message: `项目 ${entry.code} 导入后的额度低于已占用或到账金额，将显示超支预警`,
-          });
-      }
       return { ...entry, action, ...(previous ? { previous } : {}) };
     });
+    const proposedProjects = snapshot(state.projects);
+    for (const entry of entries) {
+      const existing = proposedProjects.find((project) => project.id === entry.previous?.id);
+      if (existing) Object.assign(existing, budgetValue(entry));
+      else
+        proposedProjects.push({
+          ...budgetValue(entry),
+          id: `import-${entry.departmentId}-${entry.code}`,
+          revision: 1,
+          updatedAt: '',
+        });
+    }
+    if (financeBudgetPoolOverlaps(proposedProjects).length)
+      parsed.issues.push({
+        severity: 'error',
+        sheet: '',
+        row: 0,
+        message: '同一额度池同时出现父级总额和子项目额度，请保留一种口径后重新导入，避免重复计算',
+      });
+    const proposedPools = financeBudgetPools(proposedProjects);
+    const warnedPools = new Set<string>();
+    for (const entry of entries) {
+      const pool = proposedPools.find(
+        (project) =>
+          project.year === entry.year &&
+          project.departmentId === entry.departmentId &&
+          project.code === financeBudgetPoolCode(entry.code),
+      );
+      if (!pool || warnedPools.has(pool.id)) continue;
+      const proposed = summarize(pool, state.claims);
+      if (proposed.reimbursement.overBudget || proposed.directPayment.overBudget) {
+        warnedPools.add(pool.id);
+        parsed.issues.push({
+          severity: 'warning',
+          sheet: entry.sourceRows[0].sheet,
+          row: entry.sourceRows[0].row,
+          message: `项目 ${pool.code} 导入后的额度低于已占用或到账金额，将显示超支预警`,
+        });
+      }
+    }
     const preview: FinanceImportPreview = {
       previewId: randomUUID(),
       expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
@@ -539,7 +766,7 @@ export class FinanceTrackingService {
     if (this.storage === null) fail(503, 'finance_not_configured', '尚未配置财务私有存储目录');
     await this.synchronizeSharedTeams();
     return this.storage.change(LEDGER_ID, (stored) => {
-      const state = stored ?? this.initial();
+      const state = this.normalizeState(stored ?? this.initial(), true);
       state.settings.grants = [];
       operation(state);
       // Verify every derived amount before committing, including claims hidden from this viewer.
@@ -595,6 +822,22 @@ export class FinanceTrackingService {
     input: FinanceTrackingSettings,
   ): Promise<FinanceTrackingPayload> {
     this.requireActualIdentity(actor);
+    this.assertActualAccess(actor);
+    const previousSettings = ((await this.storage!.get(LEDGER_ID)) ?? this.initial()).settings;
+    if (input.workflowGuides !== undefined) {
+      if (!this.isChief(actor)) forbidden();
+      const previousIds = new Set(
+        previousSettings.workflowGuides?.map((guide) => guide.instructionFileId).filter(Boolean),
+      );
+      for (const guide of input.workflowGuides) {
+        if (guide.instructionFileId && !previousIds.has(guide.instructionFileId))
+          await this.privateFileStore!.assertOwnedFiles(
+            actor.uid,
+            [guide.instructionFileId],
+            'instruction',
+          );
+      }
+    }
     const sharedTeams = this.options.getSharedTeams ? await this.options.getSharedTeams() : [];
     return this.change(actor, (state) => {
       if (!this.isChief(actor)) forbidden();
@@ -671,10 +914,16 @@ export class FinanceTrackingService {
         department.name = shared.name;
       }
       const before = snapshot(state.settings);
+      const workflowGuides = snapshot(input.workflowGuides ?? state.settings.workflowGuides ?? []);
+      if (new Set(workflowGuides.map((guide) => guide.portId)).size !== workflowGuides.length)
+        fail(400, 'finance_duplicate_workflow_guide', '同一工作口只能配置一套办理指引');
+      for (const guide of workflowGuides)
+        if (guide.portId === 'youth_league') delete guide.workPortLead;
       state.settings = {
         departments: nextDepartments,
         grants: [],
         revision: state.settings.revision + 1,
+        workflowGuides,
       };
       this.audit(state, actor, 'settings.update', LEDGER_ID, before, state.settings);
     });
@@ -697,6 +946,26 @@ export class FinanceTrackingService {
       )
     )
       fail(409, 'finance_project_code_conflict', '同一年度、同一部门的项目编号不能重复');
+    const proposed = state.projects
+      .filter((project) => project.id !== exceptId)
+      .concat({ ...input, id: exceptId ?? 'proposed', revision: 1, updatedAt: '' });
+    if (financeBudgetPoolOverlaps(proposed).length)
+      fail(
+        409,
+        'finance_budget_pool_overlap',
+        '同一额度池不能同时录入父级总额和子项目额度，以免重复计算',
+      );
+    if (exceptId) {
+      const pool = financeBudgetPools(state.projects).find((item) =>
+        item.memberProjectIds.includes(exceptId),
+      );
+      if (pool && pool.memberProjectIds.length > 1 && input.code === pool.code)
+        fail(
+          409,
+          'finance_budget_pool_aggregate_edit',
+          '该额度由多个原始项目合并，请通过导入原始明细更新，不能将汇总额度覆盖单条明细',
+        );
+    }
   }
 
   async createProject(
@@ -761,9 +1030,19 @@ export class FinanceTrackingService {
     state: FinanceLedger,
     actor: UserContext,
     projectId: string,
+    kind?: FinanceClaimInput['kind'],
   ): FinanceBudgetProject {
     const project = state.projects.find(({ id }) => id === projectId);
     if (!project || !this.canSubmit(state, actor, project.departmentId)) forbidden();
+    if (kind) {
+      const pool = financeBudgetPools(state.projects).find((item) =>
+        item.memberProjectIds.includes(projectId),
+      );
+      const allowance =
+        kind === 'reimbursement' ? pool?.reimbursementCents : pool?.directPaymentCents;
+      if ((allowance ?? 0) <= 0)
+        fail(400, 'finance_channel_unavailable', '本项目没有该类款项的批准额度');
+    }
     return project;
   }
 
@@ -772,8 +1051,16 @@ export class FinanceTrackingService {
     requestId: string,
     input: FinanceClaimInput,
   ): Promise<FinanceTrackingPayload> {
+    this.assertActualAccess(actor);
+    input = this.normalizedClaimInput(input);
+    if (input.directPayment?.proofFileIds.length)
+      await this.privateFileStore!.assertOwnedFiles(
+        actor.uid,
+        input.directPayment.proofFileIds,
+        'work_proof',
+      );
     return this.change(actor, (state) => {
-      const project = this.claimProject(state, actor, input.projectId);
+      const project = this.claimProject(state, actor, input.projectId, input.kind);
       const { duplicate, receipt } = this.creation(state, actor, 'claim', requestId, input);
       if (duplicate) return;
       const at = new Date().toISOString();
@@ -789,6 +1076,9 @@ export class FinanceTrackingService {
         updatedAt: at,
         schoolSubmittedAt: null,
         teacherApprovedAt: null,
+        workflowVersion: 2,
+        initialApprovedAt: null,
+        counselorFinancialApprovedAt: null,
         history: [
           {
             action: 'create',
@@ -809,11 +1099,7 @@ export class FinanceTrackingService {
 
   private visibleClaim(state: FinanceLedger, actor: UserContext, id: string): FinanceTrackingClaim {
     const claim = state.claims.find((item) => item.id === id);
-    if (
-      !claim ||
-      !this.readable(state, actor, claim.departmentId) ||
-      (claim.status === 'draft' && claim.submitterUid !== actor.uid && !this.isChief(actor))
-    )
+    if (!claim || !this.claimReadable(state, actor, claim))
       fail(404, 'finance_claim_missing', '报销记录不存在或不可见');
     return claim;
   }
@@ -824,6 +1110,14 @@ export class FinanceTrackingService {
     revision: number,
     input: FinanceClaimInput,
   ): Promise<FinanceTrackingPayload> {
+    this.assertActualAccess(actor);
+    input = this.normalizedClaimInput(input);
+    if (input.directPayment?.proofFileIds.length)
+      await this.privateFileStore!.assertOwnedFiles(
+        actor.uid,
+        input.directPayment.proofFileIds,
+        'work_proof',
+      );
     return this.change(actor, (state) => {
       const claim = this.visibleClaim(state, actor, id);
       if (claim.submitterUid !== actor.uid || !this.canSubmit(state, actor, claim.departmentId))
@@ -831,10 +1125,12 @@ export class FinanceTrackingService {
       if (claim.revision !== revision) conflict();
       if (claim.status !== 'draft' && claim.status !== 'returned')
         fail(409, 'finance_claim_not_editable', '只有草稿或退回的记录可以修改');
-      const project = this.claimProject(state, actor, input.projectId);
+      const project = this.claimProject(state, actor, input.projectId, input.kind);
       const before = snapshot(claim);
       const at = new Date().toISOString();
       Object.assign(claim, snapshot(input), {
+        invoiceLines: input.kind === 'reimbursement' ? input.invoiceLines : undefined,
+        directPayment: input.kind === 'direct_payment' ? input.directPayment : undefined,
         departmentId: project.departmentId,
         revision: claim.revision + 1,
         updatedAt: at,
@@ -859,6 +1155,17 @@ export class FinanceTrackingService {
     action: FinanceClaimAction,
     note = '',
   ): Promise<FinanceTrackingPayload> {
+    this.assertActualAccess(actor);
+    if (action === 'submit') {
+      const state = this.normalizeState((await this.storage!.get(LEDGER_ID)) ?? this.initial());
+      const claim = this.visibleClaim(state, actor, id);
+      if (claim.directPayment?.proofFileIds.length)
+        await this.privateFileStore!.assertOwnedFiles(
+          actor.uid,
+          claim.directPayment.proofFileIds,
+          'work_proof',
+        );
+    }
     return this.change(actor, (state) => {
       const claim = this.visibleClaim(state, actor, id);
       if (claim.revision !== revision) conflict();
@@ -869,20 +1176,24 @@ export class FinanceTrackingService {
       const from = claim.status;
       const at = new Date().toISOString();
       if (action === 'submit') {
-        if (!claim.externalSubmittedAt || !claim.externalReference.trim())
-          fail(
-            400,
-            'finance_external_submission_required',
-            '请填写校财务提交编号或代发邮件主题，以及提交日期',
-          );
+        this.validateSubmission(state, claim);
         claim.status = 'department_review';
         claim.schoolSubmittedAt = null;
         claim.teacherApprovedAt = null;
+        claim.initialApprovedAt = null;
+        claim.counselorFinancialApprovedAt = null;
       }
-      if (action === 'approve') claim.status = 'school_review';
+      if (action === 'approve') {
+        claim.status = 'initial_approved';
+        claim.initialApprovedAt = at;
+      }
       if (action === 'return') claim.status = 'returned';
       if (action === 'withdraw') claim.status = 'withdrawn';
-      if (action === 'record_school_submission') claim.schoolSubmittedAt = at;
+      if (action === 'record_school_submission') {
+        claim.status = 'school_review';
+        claim.schoolSubmittedAt = at;
+        claim.counselorFinancialApprovedAt = at;
+      }
       if (action === 'record_teacher_approval') claim.teacherApprovedAt = at;
       if (action === 'confirm_received') claim.status = 'received';
       claim.revision += 1;

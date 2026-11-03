@@ -7,6 +7,7 @@ import type {
   FinanceDepartment,
 } from '@freebbs-development/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
+import { financeClaimChecklist } from '@freebbs-development/contracts';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { FinanceTrackingService } from './tracking-service.js';
 
@@ -59,6 +60,8 @@ const claimInput = (projectId: string): FinanceClaimInput => ({
   kind: 'reimbursement',
   items: [{ description: '物料', quantity: '1' }],
   amountCents: 2000,
+  invoiceLines: [{ category: 'activity_materials', amountCents: 2000, repeatCount: 1 }],
+  checklist: financeClaimChecklist({ kind: 'reimbursement' }).map(({ key }) => key),
   payeeName: '收款同学',
   payeeStudentId: '2026010001',
   materials: ['发票'],
@@ -101,22 +104,25 @@ describe('directory-specific final review restrictions', () => {
     }
     expect((await service.read(root)).claims[0].allowedActions).toContain('approve');
     await service.act(root, created.id, 2, 'approve');
+    expect((await service.read(second)).claims[0].allowedActions).not.toContain('confirm_received');
+    await service.act(root, created.id, 3, 'record_school_submission');
     const schoolClaim = (await service.read(second)).claims[0];
     expect(schoolClaim.allowedActions).toContain('confirm_received');
     expect(schoolClaim.allowedActions).not.toContain('record_teacher_approval');
     await expect(
-      service.act(second, created.id, 3, 'record_teacher_approval'),
+      service.act(second, created.id, 4, 'record_teacher_approval'),
     ).rejects.toMatchObject({ status: 403 });
-    await expect(service.act(second, created.id, 3, 'return', '退回')).rejects.toMatchObject({
+    await expect(service.act(second, created.id, 4, 'return', '退回')).rejects.toMatchObject({
       status: 403,
     });
-    await service.act(root, created.id, 3, 'record_teacher_approval');
-    const received = await service.act(second, created.id, 4, 'confirm_received');
+    await service.act(root, created.id, 4, 'record_teacher_approval');
+    const received = await service.act(second, created.id, 5, 'confirm_received');
     expect(received.claims[0].status).toBe('received');
     expect(received.claims[0].history.map(({ action }) => action)).toEqual([
       'create',
       'submit',
       'approve',
+      'record_school_submission',
       'record_teacher_approval',
       'confirm_received',
     ]);
@@ -145,7 +151,7 @@ describe('directory-specific final review restrictions', () => {
       status: 403,
     });
     await expect(service.act(second, created.id, 2, 'approve')).resolves.toMatchObject({
-      claims: [expect.objectContaining({ status: 'school_review' })],
+      claims: [expect.objectContaining({ status: 'initial_approved' })],
     });
   });
 
@@ -194,7 +200,7 @@ describe('directory-specific final review restrictions', () => {
     const created = (await service.createClaim(second, 'c1', claimInput(projectId))).claims[0];
     await service.act(second, created.id, 1, 'submit');
     await expect(service.act(second, created.id, 2, 'approve')).resolves.toMatchObject({
-      claims: [expect.objectContaining({ status: 'school_review' })],
+      claims: [expect.objectContaining({ status: 'initial_approved' })],
     });
   });
 
@@ -220,7 +226,7 @@ describe('directory-specific final review restrictions', () => {
       status: 403,
     });
     await expect(reloaded.act(second, created.id, 2, 'approve')).resolves.toMatchObject({
-      claims: [expect.objectContaining({ status: 'school_review' })],
+      claims: [expect.objectContaining({ status: 'initial_approved' })],
     });
   });
 });

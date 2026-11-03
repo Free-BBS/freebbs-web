@@ -6,6 +6,7 @@ import request from 'supertest';
 import type { FinanceClaimInput, RoleKey } from '@freebbs-development/contracts';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { afterEach, describe, expect, it } from 'vitest';
+import { financeClaimChecklist } from '@freebbs-development/contracts';
 import { HttpError } from '../../core/errors/http-error.js';
 import { createFinanceTrackingRouter } from './tracking-router.js';
 
@@ -101,6 +102,8 @@ async function fixture() {
     kind: 'reimbursement',
     items: [{ description: '活动物料', quantity: '2 件' }],
     amountCents: 3000,
+    invoiceLines: [{ category: 'activity_materials', amountCents: 3000, repeatCount: 1 }],
+    checklist: financeClaimChecklist({ kind: 'reimbursement' }).map(({ key }) => key),
     payeeName: '同学',
     payeeStudentId: '2026010001',
     materials: ['发票'],
@@ -112,6 +115,57 @@ async function fixture() {
 }
 
 describe('finance tracking HTTP boundary', () => {
+  it('round-trips a long direct-payment draft through checklist editing and submission', async () => {
+    const { app, input } = await fixture();
+    const bytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const upload = await request(app)
+      .post('/finance/tracking/files/work-proof')
+      .set('X-Test-User', 'head')
+      .attach('file', bytes, { filename: 'proof.png', contentType: 'image/png' })
+      .expect(201);
+    const draft: FinanceClaimInput = {
+      ...input,
+      kind: 'direct_payment',
+      amountCents: 3000,
+      invoiceLines: undefined,
+      checklist: [],
+      directPayment: {
+        hourlyRateCents: 1000,
+        workContent: '测试工作说明'.repeat(300),
+        proofFileIds: [upload.body.data.id],
+      },
+    };
+    const created = await request(app)
+      .post('/finance/tracking/claims')
+      .set('X-Test-User', 'head')
+      .send({ requestId: 'long-work', ...draft })
+      .expect(201);
+    const claim = created.body.data.claims[0];
+    expect(claim.items[0].description).toHaveLength(500);
+    expect(claim.directPayment.workContent).toBe(draft.directPayment!.workContent);
+    const edited = await request(app)
+      .put(`/finance/tracking/claims/${claim.id}`)
+      .set('X-Test-User', 'head')
+      .send({
+        revision: 1,
+        ...draft,
+        items: claim.items,
+        checklist: financeClaimChecklist(draft).map(({ key }) => key),
+      })
+      .expect(200);
+    const submitted = await request(app)
+      .post(`/finance/tracking/claims/${claim.id}/actions`)
+      .set('X-Test-User', 'head')
+      .send({ revision: edited.body.data.claims[0].revision, action: 'submit' })
+      .expect(200);
+    expect(submitted.body.data.claims[0]).toMatchObject({
+      status: 'department_review',
+      directPayment: { workContent: draft.directPayment!.workContent },
+    });
+  });
   it('authenticates every route and exposes a minimal access response without financial details', async () => {
     const { app } = await fixture();
     await request(app).get('/finance/tracking').expect(401);
@@ -141,10 +195,9 @@ describe('finance tracking HTTP boundary', () => {
       { amountCents: -1 },
       { amountCents: 1.5 },
       { amountCents: Number.MAX_SAFE_INTEGER + 1 },
-      { amountCents: 0 },
       { externalSubmittedAt: '2026-02-31' },
       { externalSubmittedAt: 'tomorrow' },
-      { materials: [] },
+      { invoiceLines: [{ category: 'other', amountCents: 3000, repeatCount: 0 }] },
     ]) {
       await request(app)
         .post('/finance/tracking/claims')

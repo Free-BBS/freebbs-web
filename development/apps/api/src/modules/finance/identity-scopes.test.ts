@@ -1,7 +1,11 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import type { RoleKey, SocialOrganizationId } from '@freebbs-development/contracts';
-import { ROLE_KEYS, SOCIAL_ORGANIZATION_IDS } from '@freebbs-development/contracts';
+import {
+  ROLE_KEYS,
+  SOCIAL_ORGANIZATION_IDS,
+  financeWorkPortRoleScope,
+} from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
 import { loadAuthorizationContext } from '../../core/authorization/load-authorization-context.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
@@ -256,6 +260,7 @@ const union: SocialOrganizationId[] = [
   'rights_development_center',
 ];
 function expectedOrganizations(role: RoleKey): (SocialOrganizationId | null)[] {
+  if (financeWorkPortRoleScope(role)) return [];
   if (
     ['platform.admin', 'counselor.youth_league', 'counselor.youth_league_secretary'].includes(role)
   )
@@ -293,8 +298,8 @@ function expectedMaintainer(role: RoleKey): boolean {
 }
 
 describe('finance canonical identity matrix', () => {
-  it('covers all 81 shared catalog identities', () => {
-    expect(ROLE_KEYS).toHaveLength(81);
+  it('covers all 85 shared catalog identities', () => {
+    expect(ROLE_KEYS).toHaveLength(85);
   });
   it.each(ROLE_KEYS)(
     '%s reads its organizations and maintains only its authorized budgets',
