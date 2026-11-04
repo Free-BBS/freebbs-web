@@ -94,6 +94,7 @@ describe('public budget categories', () => {
             'payee_confirmed',
             'approval_route_acknowledged',
             'invoice_materials_ready',
+            'material_situations_confirmed',
             'school_authorization_acknowledged',
           ],
           payeeName: '收款同学',

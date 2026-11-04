@@ -1,5 +1,9 @@
 import type { ApiEnvelope } from '@freebbs-development/contracts';
-import { FINANCE_PORTS, FINANCE_INVOICE_CATEGORIES } from '@freebbs-development/contracts';
+import {
+  FINANCE_PORTS,
+  FINANCE_INVOICE_CATEGORIES,
+  FINANCE_MATERIAL_SITUATIONS,
+} from '@freebbs-development/contracts';
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
@@ -81,6 +85,17 @@ const claim = z
           .strict(),
       )
       .max(100)
+      .optional(),
+    materialSituations: z
+      .array(
+        z.enum(
+          FINANCE_MATERIAL_SITUATIONS.map(({ id }) => id) as [
+            (typeof FINANCE_MATERIAL_SITUATIONS)[number]['id'],
+            ...(typeof FINANCE_MATERIAL_SITUATIONS)[number]['id'][],
+          ],
+        ),
+      )
+      .max(FINANCE_MATERIAL_SITUATIONS.length)
       .optional(),
     checklist: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
     directPayment: z

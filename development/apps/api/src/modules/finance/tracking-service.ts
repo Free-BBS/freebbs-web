@@ -25,6 +25,7 @@ import {
   financeBudgetPoolCode,
   financeWorkflowPort,
   FINANCE_INVOICE_CATEGORIES,
+  FINANCE_MATERIAL_SITUATIONS,
 } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { normalizeFinancePilotUids } from '../../config/finance-pilot.js';
@@ -266,6 +267,21 @@ export class FinanceTrackingService {
 
   private normalizedClaimInput(input: FinanceClaimInput): FinanceClaimInput {
     const result = snapshot(input);
+    if (
+      input.materialSituations !== undefined &&
+      (!Array.isArray(input.materialSituations) ||
+        input.materialSituations.length > FINANCE_MATERIAL_SITUATIONS.length ||
+        input.materialSituations.some(
+          (situation) => !FINANCE_MATERIAL_SITUATIONS.some(({ id }) => id === situation),
+        ))
+    )
+      fail(400, 'finance_material_situations_invalid', '请检查报销材料的适用情况');
+    result.materialSituations =
+      input.kind === 'reimbursement'
+        ? FINANCE_MATERIAL_SITUATIONS.filter(({ id }) =>
+            input.materialSituations?.includes(id),
+          ).map(({ id }) => id)
+        : undefined;
     if (input.kind === 'reimbursement') delete result.directPayment;
     if (input.kind === 'reimbursement' && input.invoiceLines !== undefined) {
       if (input.invoiceLines.length > 100)
@@ -1128,9 +1144,14 @@ export class FinanceTrackingService {
       const project = this.claimProject(state, actor, input.projectId, input.kind);
       const before = snapshot(claim);
       const at = new Date().toISOString();
+      const situationsChanged =
+        JSON.stringify([...(claim.materialSituations ?? [])].sort()) !==
+        JSON.stringify([...(input.materialSituations ?? [])].sort());
       Object.assign(claim, snapshot(input), {
         invoiceLines: input.kind === 'reimbursement' ? input.invoiceLines : undefined,
         directPayment: input.kind === 'direct_payment' ? input.directPayment : undefined,
+        materialSituations: input.materialSituations,
+        checklist: situationsChanged ? [] : input.checklist,
         departmentId: project.departmentId,
         revision: claim.revision + 1,
         updatedAt: at,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   FINANCE_INVOICE_CATEGORIES,
+  FINANCE_MATERIAL_SITUATIONS,
   FINANCE_PORTS,
   financeClaimChecklist,
   financeClaimWarnings,
@@ -8,6 +9,7 @@ import {
   type FinanceClaimView,
   type FinanceDepartment,
   type FinanceInvoiceLine,
+  type FinanceMaterialSituation,
   type FinancePaymentKind,
   type FinanceTrackingPayload,
   type FinanceWorkflowGuide,
@@ -65,6 +67,9 @@ export function financeClaimInputOf(
     externalSubmittedAt: claim.externalSubmittedAt,
     notes: claim.notes,
     ...(claim.invoiceLines ? { invoiceLines: claim.invoiceLines } : {}),
+    ...(claim.kind === 'reimbursement' && claim.materialSituations
+      ? { materialSituations: claim.materialSituations }
+      : {}),
     ...(checklist ? { checklist } : {}),
     ...(claim.directPayment ? { directPayment: claim.directPayment } : {}),
   };
@@ -202,6 +207,45 @@ interface InvoiceDraft {
   repeatCount: string;
   description: string;
 }
+
+function ReimbursementMaterials() {
+  const rows = [
+    ['每笔报销', '发票、收款人姓名及学号；核对整张发票总额，每张发票只计一次'],
+    ['网约车', '行程单，核对起终点位置合理'],
+    ['发票项目含糊，不能体现单价、数量', '订单截图，金额须与发票金额完全一致'],
+    ['单张发票超过 1000 元', '支付记录截图'],
+    ['打印费', '打印店盖章明细扫描件'],
+    ['活动发放物资', '有同学签字的领用清单扫描件'],
+    ['单张超过 5000 元且不是场地费用', '先与团委辅导员确认开票及办理要求'],
+    [
+      '学校系统与 BBS 提交',
+      '按指引录入学校系统并授权经费负责人；材料齐全后勾选确认，提交辅导员审核',
+    ],
+    ['项目超预算', '页面提示预警，仍可提交辅导员审核；报销与代发额度分开核算'],
+  ];
+  return (
+    <section className="ft-materials ft-wide" aria-label="报销材料准备要求">
+      <h3>材料准备要求</h3>
+      <table className="ft-materials-table">
+        <thead>
+          <tr>
+            <th scope="col">情况</th>
+            <th scope="col">需要准备与核对</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([situation, requirement]) => (
+            <tr key={situation}>
+              <th scope="row">{situation}</th>
+              <td>{requirement}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export function FinanceClaimEditor({
   data,
   claim,
@@ -256,6 +300,9 @@ export function FinanceClaimEditor({
   const [workContent, setWorkContent] = useState(claim?.directPayment?.workContent ?? '');
   const [proofFileIds, setProofFileIds] = useState(claim?.directPayment?.proofFileIds ?? []);
   const [checklist, setChecklist] = useState(claim?.checklist ?? []);
+  const [materialSituations, setMaterialSituations] = useState<FinanceMaterialSituation[]>(
+    claim?.materialSituations ?? [],
+  );
   const [invoices, setInvoices] = useState<InvoiceDraft[]>(
     claim?.invoiceLines?.map((line) => ({
       category: line.category,
@@ -302,7 +349,7 @@ export function FinanceClaimEditor({
       notes,
       checklist,
       ...(kind === 'reimbursement'
-        ? { invoiceLines }
+        ? { invoiceLines, materialSituations }
         : { directPayment: { hourlyRateCents: centsOf(hourlyRate), workContent, proofFileIds } }),
     };
   };
@@ -321,6 +368,7 @@ export function FinanceClaimEditor({
       externalReference,
       externalSubmittedAt,
       notes,
+      ...(kind === 'reimbursement' ? { materialSituations } : {}),
       invoiceLines: invoices.map((line) => ({
         category: line.category,
         amountCents: 0,
@@ -477,6 +525,32 @@ export function FinanceClaimEditor({
             </span>
           ) : null}
         </label>
+        {kind === 'reimbursement' ? (
+          <>
+            <ReimbursementMaterials />
+            <fieldset className="ft-checklist ft-wide">
+              <legend>本次适用情况</legend>
+              <p className="ft-explanation">可多选；不涉及则不选。系统会根据选择补充材料核对项。</p>
+              {FINANCE_MATERIAL_SITUATIONS.map((situation) => (
+                <label className="ft-checkbox" key={situation.id}>
+                  <input
+                    type="checkbox"
+                    checked={materialSituations.includes(situation.id)}
+                    onChange={(event) => {
+                      setMaterialSituations((current) =>
+                        event.target.checked
+                          ? [...current, situation.id]
+                          : current.filter((id) => id !== situation.id),
+                      );
+                      setChecklist([]);
+                    }}
+                  />
+                  <span>{situation.name}</span>
+                </label>
+              ))}
+            </fieldset>
+          </>
+        ) : null}
         {kind === 'reimbursement' ? (
           <fieldset className="ft-wide ft-invoice-list">
             <legend>发票信息表</legend>

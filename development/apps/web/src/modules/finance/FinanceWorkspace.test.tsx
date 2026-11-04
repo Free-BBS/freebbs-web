@@ -334,6 +334,58 @@ describe('FinanceWorkspace', () => {
     );
   });
 
+  it.each([
+    {
+      kind: 'reimbursement' as const,
+      action: '确认进入校财务流程',
+      status: '校财务流程中',
+      confirmation: '已完成本笔款项对应的财务办理操作',
+    },
+    {
+      kind: 'direct_payment' as const,
+      action: '确认进入系学生组审核',
+      status: '系学生组审核中',
+      confirmation: '已确认本笔代发进入系学生组审核中',
+    },
+  ])(
+    'uses the correct next-stage instructions and status for $kind',
+    async ({ kind, action, status, confirmation }) => {
+      const ready: FinanceClaimView = {
+        ...claim,
+        kind,
+        status: 'initial_approved',
+        allowedActions: ['record_school_submission'],
+        ...(kind === 'direct_payment'
+          ? { directPayment: { hourlyRateCents: 10000, workContent: '活动摄影', proofFileIds: [] } }
+          : {}),
+      };
+      const { request } = setup(fixture({ claims: [ready] }), 'claims');
+      await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
+      await userEvent.click(screen.getByRole('button', { name: action }));
+      const dialog = screen.getByRole('dialog', { name: action });
+      if (kind === 'direct_payment') {
+        expect(dialog).toHaveTextContent('确认本笔代发已进入系学生组审核中；无需录入学校报销单。');
+        expect(dialog).not.toHaveTextContent('请在学校财务系统完成对应审核');
+      } else expect(dialog).toHaveTextContent('请在学校财务系统完成对应审核后');
+      await userEvent.click(within(dialog).getByRole('button', { name: action }));
+      expect(await screen.findByText('请先勾选确认项')).toBeInTheDocument();
+      expect(request).toHaveBeenCalledTimes(1);
+      await userEvent.click(within(dialog).getByLabelText(confirmation));
+      request.mockResolvedValueOnce(
+        fixture({ claims: [{ ...ready, status: 'school_review', allowedActions: [] }] }),
+      );
+      await userEvent.click(within(dialog).getByRole('button', { name: action }));
+      await screen.findByText('办理进度已更新');
+      expect(screen.getByRole('article')).toHaveTextContent(status);
+      expect(request).toHaveBeenLastCalledWith(
+        '/finance/tracking/claims/claim-1/actions',
+        expect.objectContaining({
+          body: JSON.stringify({ revision: 3, action: 'record_school_submission', note: '' }),
+        }),
+      );
+    },
+  );
+
   it('allows a final reviewer to edit budget metadata while discarding legacy finance personnel grants', async () => {
     const data = fixture({
       canManageBudget: true,

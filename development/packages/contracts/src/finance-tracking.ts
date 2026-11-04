@@ -90,6 +90,7 @@ export interface FinanceClaimInput {
   externalSubmittedAt: string;
   notes: string;
   invoiceLines?: FinanceInvoiceLine[];
+  materialSituations?: FinanceMaterialSituation[];
   checklist?: string[];
   directPayment?: FinanceDirectPaymentDetails;
 }
@@ -107,6 +108,13 @@ export interface FinanceInvoiceLine {
   repeatCount: number;
   description?: string;
 }
+/** Conditions that cannot be inferred from invoice category or amount. */
+export const FINANCE_MATERIAL_SITUATIONS = [
+  { id: 'ride_hailing', name: '网约车' },
+  { id: 'unclear_invoice', name: '发票项目含糊，不能体现单价、数量' },
+  { id: 'printing', name: '打印费' },
+] as const;
+export type FinanceMaterialSituation = (typeof FINANCE_MATERIAL_SITUATIONS)[number]['id'];
 export interface FinanceDirectPaymentDetails {
   hourlyRateCents: number;
   workContent: string;
@@ -118,7 +126,7 @@ export interface FinanceChecklistItem {
 }
 /** Completion means materials are ready and the upcoming route is understood, not future approvals. */
 export function financeClaimChecklist(
-  input: Pick<FinanceClaimInput, 'kind' | 'invoiceLines'>,
+  input: Pick<FinanceClaimInput, 'kind' | 'invoiceLines' | 'materialSituations'>,
   guide?: FinanceWorkflowGuide,
 ): FinanceChecklistItem[] {
   const items: FinanceChecklistItem[] = [
@@ -128,13 +136,35 @@ export function financeClaimChecklist(
   if (input.kind === 'reimbursement') {
     items.push({ key: 'invoice_materials_ready', label: '已准备本次报销的发票及相关材料' });
     items.push({
+      key: 'material_situations_confirmed',
+      label: '已核对本次是否涉及网约车、发票项目含糊或打印费，并如实选择适用情况',
+    });
+    items.push({
       key: 'school_authorization_acknowledged',
       label: '已按指引核对学校系统录入及授权经费负责人的操作',
     });
     if (input.invoiceLines?.some((line) => line.amountCents > 100000))
-      items.push({ key: 'payment_screenshot_ready', label: '超过1000元的发票已准备支付截图' });
+      items.push({
+        key: 'payment_screenshot_ready',
+        label: '单张超过1000元的发票已准备支付记录截图',
+      });
     if (input.invoiceLines?.some((line) => line.category === 'distributed_goods'))
-      items.push({ key: 'distribution_list_ready', label: '下发物资已准备领用清单' });
+      items.push({
+        key: 'distribution_list_ready',
+        label: '下发物资已准备同学签字的领用清单扫描件',
+      });
+    if (input.materialSituations?.includes('ride_hailing'))
+      items.push({
+        key: 'ride_itinerary_ready',
+        label: '网约车已准备行程单，并核对起终点位置合理',
+      });
+    if (input.materialSituations?.includes('unclear_invoice'))
+      items.push({
+        key: 'invoice_order_ready',
+        label: '发票项目含糊的已准备订单截图，金额与对应发票完全一致',
+      });
+    if (input.materialSituations?.includes('printing'))
+      items.push({ key: 'printing_details_ready', label: '打印费已准备打印店盖章的明细扫描件' });
   } else items.push({ key: 'work_proof_ready', label: '已核对代发金额、时薪、工作内容及工作证明' });
   const steps =
     input.kind === 'reimbursement' ? guide?.reimbursementSteps : guide?.directPaymentSteps;

@@ -115,6 +115,74 @@ async function fixture() {
 }
 
 describe('finance tracking HTTP boundary', () => {
+  it('persists applicable material situations, requires their checklist and resets confirmations after a change', async () => {
+    const { app, input } = await fixture();
+    const draft: FinanceClaimInput = {
+      ...input,
+      materialSituations: ['printing', 'ride_hailing', 'unclear_invoice'],
+      invoiceLines: [{ category: 'distributed_goods', amountCents: 100001, repeatCount: 1 }],
+      checklist: [],
+    };
+    const created = await request(app)
+      .post('/finance/tracking/claims')
+      .set('X-Test-User', 'head')
+      .send({ requestId: 'material-situations', ...draft })
+      .expect(201);
+    const original = created.body.data.claims[0];
+    expect(original.materialSituations).toEqual(['ride_hailing', 'unclear_invoice', 'printing']);
+    const read = await request(app).get('/finance/tracking').set('X-Test-User', 'head').expect(200);
+    expect(read.body.data.claims[0].materialSituations).toEqual(original.materialSituations);
+    await request(app)
+      .post(`/finance/tracking/claims/${original.id}/actions`)
+      .set('X-Test-User', 'head')
+      .send({ revision: 1, action: 'submit' })
+      .expect(400);
+    const completed = financeClaimChecklist(draft).map(({ key }) => key);
+    // Unrelated order changes do not invalidate confirmations, but omitting one required material blocks submission.
+    const incomplete = await request(app)
+      .put(`/finance/tracking/claims/${original.id}`)
+      .set('X-Test-User', 'head')
+      .send({
+        revision: 1,
+        ...draft,
+        checklist: completed.filter((key) => key !== 'printing_details_ready'),
+      })
+      .expect(200);
+    expect(incomplete.body.data.claims[0].checklist).toContain('ride_itinerary_ready');
+    await request(app)
+      .post(`/finance/tracking/claims/${original.id}/actions`)
+      .set('X-Test-User', 'head')
+      .send({ revision: 2, action: 'submit' })
+      .expect(400);
+    const changed: FinanceClaimInput = {
+      ...draft,
+      materialSituations: ['ride_hailing', 'unclear_invoice'],
+    };
+    const changedResult = await request(app)
+      .put(`/finance/tracking/claims/${original.id}`)
+      .set('X-Test-User', 'head')
+      .send({ revision: 2, ...changed, checklist: completed })
+      .expect(200);
+    expect(changedResult.body.data.claims[0].materialSituations).toEqual(
+      changed.materialSituations,
+    );
+    expect(changedResult.body.data.claims[0].checklist).toEqual([]);
+    const updated = await request(app)
+      .put(`/finance/tracking/claims/${original.id}`)
+      .set('X-Test-User', 'head')
+      .send({
+        revision: 3,
+        ...changed,
+        checklist: financeClaimChecklist(changed).map(({ key }) => key),
+      })
+      .expect(200);
+    expect(updated.body.data.claims[0].revision).toBe(4);
+    await request(app)
+      .post(`/finance/tracking/claims/${original.id}/actions`)
+      .set('X-Test-User', 'head')
+      .send({ revision: 4, action: 'submit' })
+      .expect(200);
+  });
   it('round-trips a long direct-payment draft through checklist editing and submission', async () => {
     const { app, input } = await fixture();
     const bytes = Buffer.from(
@@ -198,6 +266,12 @@ describe('finance tracking HTTP boundary', () => {
       { externalSubmittedAt: '2026-02-31' },
       { externalSubmittedAt: 'tomorrow' },
       { invoiceLines: [{ category: 'other', amountCents: 3000, repeatCount: 0 }] },
+      { materialSituations: 'printing' },
+      { materialSituations: null },
+      { materialSituations: { printing: true } },
+      { materialSituations: ['unknown'] },
+      { materialSituations: [1] },
+      { materialSituations: ['printing', 'printing', 'printing', 'printing'] },
     ]) {
       await request(app)
         .post('/finance/tracking/claims')

@@ -54,6 +54,12 @@ const actionLabels: Record<FinanceClaimAction, string> = {
   record_teacher_approval: '记录老师审核通过',
   confirm_received: '确认收到款项',
 };
+const claimStatusLabel = (status: FinanceClaimStatus, kind: FinanceClaimInput['kind']) =>
+  status === 'school_review' && kind === 'direct_payment' ? '系学生组审核中' : statusLabels[status];
+const claimActionLabel = (action: FinanceClaimAction, kind: FinanceClaimInput['kind']) =>
+  action === 'record_school_submission' && kind === 'direct_payment'
+    ? '确认进入系学生组审核'
+    : actionLabels[action];
 const kindLabel = (kind: FinanceClaimInput['kind']) => (kind === 'reimbursement' ? '报销' : '代发');
 const money = (cents: number) =>
   new Intl.NumberFormat('zh-CN', {
@@ -143,7 +149,7 @@ function Progress({ claim }: { claim: FinanceClaimView }) {
           aria-current={claim.status === status ? 'step' : undefined}
         >
           <span aria-hidden="true">{current > index ? '✓' : index + 1}</span>
-          {statusLabels[status]}
+          {claimStatusLabel(status, claim.kind)}
         </li>
       ))}
     </ol>
@@ -156,7 +162,7 @@ function handlingHint(claim: FinanceClaimView) {
   if (claim.status === 'school_review')
     return claim.teacherApprovedAt
       ? '老师审核已记录；款项到账后，由提交负责人确认'
-      : '校财务流程中，实际收到款项后由提交负责人确认';
+      : `${claimStatusLabel(claim.status, claim.kind)}，实际收到款项后由提交负责人确认`;
   if (claim.status === 'received') return '本笔款项已由提交负责人确认到账';
   if (claim.status === 'returned') return '已退回提交负责人，请按办理记录中的意见修改';
   if (claim.status === 'withdrawn') return '本笔已撤回，不占用预算额度';
@@ -512,7 +518,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                   <option value="">全部状态</option>
                   {Object.entries(statusLabels).map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {value === 'school_review' ? '校财务流程中 / 系学生组审核中' : label}
                     </option>
                   ))}
                 </select>
@@ -638,7 +644,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                           <div className="ft-claim-amount">
                             <strong>{money(claim.amountCents)}</strong>
                             <span className="ft-status" data-status={claim.status}>
-                              {statusLabels[claim.status]}
+                              {claimStatusLabel(claim.status, claim.kind)}
                             </span>
                           </div>
                         </header>
@@ -872,7 +878,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
           <div className="ft-detail">
             <div className="ft-detail-heading">
               <span className="ft-status" data-status={detail.status}>
-                {statusLabels[detail.status]}
+                {claimStatusLabel(detail.status, detail.kind)}
               </span>
               <strong>{money(detail.amountCents)}</strong>
             </div>
@@ -1002,7 +1008,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                   }
                   onClick={() => open({ kind: 'action', claim: detail, action })}
                 >
-                  {actionLabels[action]}
+                  {claimActionLabel(action, detail.kind)}
                 </button>
               ))}
             </div>
@@ -1018,7 +1024,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                           ? '更新草稿'
                           : event.action === 'record_school_submission' && event.from === event.to
                             ? '经费负责人提交记录（旧版）'
-                            : actionLabels[event.action]}
+                            : claimActionLabel(event.action, detail.kind)}
                     </strong>
                     <time dateTime={event.at}>{dateLabel(event.at)}</time>
                   </div>
@@ -1028,7 +1034,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                       ? '系内初审已通过（旧版记录）'
                       : event.action === 'record_school_submission' && event.from === event.to
                         ? '旧版提交记录，不代表辅导员已确认财务办理'
-                        : statusLabels[event.to]}
+                        : claimStatusLabel(event.to, detail.kind)}
                   </p>
                   {event.note ? <p>{event.note}</p> : null}
                 </li>
@@ -1230,16 +1236,18 @@ function ActionDialog({
       : action === 'approve'
         ? '确认本笔信息无误后通过系内初审；财务办理进展另行确认。'
         : action === 'record_school_submission'
-          ? '请在学校财务系统完成对应审核后，再确认进入财务办理阶段。'
+          ? claim.kind === 'direct_payment'
+            ? '确认本笔代发已进入系学生组审核中；无需录入学校报销单。'
+            : '请在学校财务系统完成对应审核后，再确认进入财务办理阶段。'
           : action === 'submit'
             ? undefined
             : '此操作同步本笔办理记录。';
   return (
     <DialogForm
       open
-      title={actionLabels[action]}
+      title={claimActionLabel(action, claim.kind)}
       description={description}
-      submitLabel={actionLabels[action]}
+      submitLabel={claimActionLabel(action, claim.kind)}
       pending={pending}
       error={localError ?? error}
       onClose={onClose}
@@ -1313,7 +1321,9 @@ function ActionDialog({
             <span>
               {action === 'confirm_received'
                 ? '已核实本笔款项实际到账'
-                : '已完成本笔款项对应的财务办理操作'}
+                : claim.kind === 'direct_payment'
+                  ? '已确认本笔代发进入系学生组审核中'
+                  : '已完成本笔款项对应的财务办理操作'}
             </span>
           </label>
         ) : null}

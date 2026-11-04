@@ -145,6 +145,7 @@ describe('finance budget import transactions', () => {
         'payee_confirmed',
         'approval_route_acknowledged',
         'invoice_materials_ready',
+        'material_situations_confirmed',
         'school_authorization_acknowledged',
       ],
       items: [{ description: '物料', quantity: '1 批' }],
