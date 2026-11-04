@@ -177,6 +177,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   const [financeAccess, setFinanceAccess] = useState<{
     identity: string;
     client: typeof auth.client;
+    user: typeof auth.user;
     allowed: boolean;
   } | null>(null);
 
@@ -196,6 +197,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           setFinanceAccess({
             identity: financeIdentity,
             client: auth.client,
+            user: auth.user,
             allowed: access?.configured === true && access.canAccess === true,
           });
       } catch {
@@ -205,11 +207,12 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
     return () => {
       current = false;
     };
-  }, [auth.client, auth.status, financeIdentity, financeModuleEnabled, previewing]);
+  }, [auth.client, auth.status, auth.user, financeIdentity, financeModuleEnabled, previewing]);
   const canAccessFinance =
     !previewing &&
     financeAccess?.identity === financeIdentity &&
     financeAccess.client === auth.client &&
+    financeAccess.user === auth.user &&
     financeAccess.allowed;
 
   const theme = useMainSiteTheme();
