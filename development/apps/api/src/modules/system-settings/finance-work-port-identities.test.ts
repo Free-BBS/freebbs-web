@@ -99,7 +99,9 @@ describe('shared work-port identity appointments', () => {
         { revision: saved.revision, roles: [], captainTeamIds: [] },
         'admin',
       );
-      expect((await loadAuthorizationContext(store, user, new Date())).roles).not.toContain(roleKey);
+      expect((await loadAuthorizationContext(store, user, new Date())).roles).not.toContain(
+        roleKey,
+      );
     },
   );
 
