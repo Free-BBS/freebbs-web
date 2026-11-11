@@ -21,6 +21,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.community-page > .festival-banner {
+  margin-bottom: 28px;
+}
+
 .community-hero {
   display: flex;
   align-items: center;

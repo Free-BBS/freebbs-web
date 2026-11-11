@@ -1,0 +1,140 @@
+.festival-banner {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 208px;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 28px 40px 32px;
+  border: 1px solid #9c1625;
+  border-radius: 8px;
+  background: #bd2433;
+  color: #ffffff;
+  box-shadow: 0 5px 0 -2px rgb(128 19 33 / 14%);
+  font-family: var(--font-ui);
+  text-align: center;
+}
+
+.festival-banner::before {
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 3px;
+  content: '';
+  pointer-events: none;
+}
+
+.festival-banner-kicker {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.16em;
+}
+
+.festival-banner-message {
+  width: 100%;
+  min-width: 0;
+}
+
+.festival-banner .festival-banner-text {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(34px, 3.8vw, 48px);
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: 0.045em;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.festival-banner .festival-banner-source {
+  margin: 6px 0 0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.festival-banner-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 3px;
+}
+
+.festival-banner-controls button {
+  display: inline-flex;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 65%);
+  border-radius: 6px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.festival-banner-controls button:hover {
+  border-color: #ffffff;
+  background: rgb(255 255 255 / 14%);
+  color: #ffffff;
+}
+
+.festival-banner-controls button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.festival-banner-count {
+  min-width: 42px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-dark .festival-banner {
+  border-color: #b13d49;
+  background: #992330;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .festival-banner {
+    min-height: 188px;
+    padding: 24px 30px 28px;
+  }
+}
+
+@media (max-width: 600px) {
+  .festival-banner {
+    min-height: 168px;
+    gap: 8px;
+    padding: 22px 20px 26px;
+  }
+
+  .festival-banner .festival-banner-text {
+    font-size: 28px;
+    line-height: 1.5;
+    letter-spacing: 0.025em;
+  }
+
+  .festival-banner .festival-banner-source {
+    font-size: 14px;
+  }
+}

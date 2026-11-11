@@ -8,6 +8,7 @@ import type {
   CreateCommunityPostInput,
 } from '@freebbs-development/contracts';
 import type { ApiClient } from '../../core/api/client.js';
+import { FestivalBanner } from '../../app/FestivalBanner.js';
 import { CommunityPostDialog } from './CommunityPostDialog.js';
 import { CommunityIcon } from './CommunityIcon.js';
 import { CommunityFestivalFeed } from './CommunityFestivalFeed.js';
@@ -407,6 +408,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
 
   return (
     <section className="community-page" aria-labelledby="community-title">
+      <FestivalBanner />
       <header className="community-hero">
         <div>
           <p className="community-eyebrow">OPEN CAMPUS SQUARE</p>

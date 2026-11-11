@@ -50,6 +50,15 @@ const trends: CommunityTrendingPayload = {
 };
 
 describe('CommunityPage', () => {
+  it('shows the festival display immediately even when the feed is still loading', () => {
+    const request = vi.fn(() => new Promise(() => undefined));
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    expect(screen.getByRole('region', { name: '男生节横幅' })).toHaveTextContent(
+      '男生节横幅展示位',
+    );
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading');
+  });
+
   it('distinguishes failed, loading and successfully empty feeds', async () => {
     let resolveFeed!: (value: CommunityFeedItem[]) => void;
     const nextFeed = new Promise<CommunityFeedItem[]>((resolve) => {
