@@ -408,7 +408,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
 
   return (
     <section className="community-page" aria-labelledby="community-title">
-      <FestivalBanner />
+      <FestivalBanner client={client} />
       <header className="community-hero">
         <div>
           <p className="community-eyebrow">OPEN CAMPUS SQUARE</p>

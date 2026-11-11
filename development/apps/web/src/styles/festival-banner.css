@@ -1,5 +1,6 @@
 .festival-banner {
   position: relative;
+  isolation: isolate;
   display: flex;
   width: 100%;
   min-width: 0;
@@ -27,6 +28,96 @@
   border-radius: 3px;
   content: '';
   pointer-events: none;
+}
+
+.festival-banner-kicker,
+.festival-banner-message,
+.festival-banner-controls,
+.festival-banner-reactions,
+.festival-banner-feedback {
+  position: relative;
+  z-index: 2;
+}
+
+.festival-banner-reactions {
+  display: grid;
+  width: min(100%, 450px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.festival-banner-reactions > button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid rgb(255 255 255 / 62%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
+  font: 650 14px / 1.5 var(--font-ui);
+  cursor: pointer;
+}
+
+.festival-banner-reactions > button:hover:not(:disabled) {
+  border-color: #fff;
+  background: rgb(255 255 255 / 18%);
+}
+
+.festival-banner-reactions > button.is-active {
+  border-color: #fff;
+  background: #fff;
+  color: #a61e2d;
+}
+
+.festival-banner-reactions > button:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.festival-banner-reactions > button.is-active:disabled {
+  opacity: 1;
+}
+
+.festival-banner-reactions > button:focus-visible,
+.festival-banner-feedback button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.festival-reaction-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.festival-reaction-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.festival-banner .festival-banner-feedback {
+  min-height: 21px;
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.festival-banner-feedback button {
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .festival-banner-kicker {
@@ -136,5 +227,22 @@ body.theme-dark .festival-banner {
 
   .festival-banner .festival-banner-source {
     font-size: 14px;
+  }
+
+  .festival-banner-reactions {
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .festival-banner-reactions > button {
+    gap: 5px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 420px) {
+  .festival-banner-reactions .festival-reaction-icon {
+    display: none;
   }
 }

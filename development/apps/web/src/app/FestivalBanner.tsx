@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import type { ApiClient } from '../core/api/client.js';
+import { BannerInteractions } from './BannerInteractions.js';
 
 import { BOYS_DAY_BANNER, type FestivalBannerMessage } from './festival-banner-content.js';
 
 export interface FestivalBannerProps {
+  client?: ApiClient;
   enabled?: boolean;
   messages?: readonly FestivalBannerMessage[];
   /** Only local development previews show an empty placement. */
@@ -15,6 +18,7 @@ const PREVIEW_MESSAGE: FestivalBannerMessage = {
 };
 
 export function FestivalBanner({
+  client,
   enabled = BOYS_DAY_BANNER.enabled,
   messages = BOYS_DAY_BANNER.messages,
   preview = import.meta.env.DEV,
@@ -63,6 +67,7 @@ export function FestivalBanner({
           </button>
         </nav>
       ) : null}
+      <BannerInteractions key={active.id} bannerId={active.id} client={client} />
     </section>
   );
 }

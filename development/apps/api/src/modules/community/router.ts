@@ -10,6 +10,8 @@ import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-mid
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
+import { authorize } from '../../core/authorization/authorize.js';
+import { BannerReactionsService } from './banner-reactions.js';
 import { CommunityService } from './service.js';
 import { CommunityTrendingCache } from './trending.js';
 
@@ -21,6 +23,9 @@ export interface CommunityRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
   now?: () => Date;
+  bannerReactionsDirectory?: string;
+  nodeEnvironment?: string;
+  publicDirectories?: readonly string[];
 }
 
 interface ErrorData {
@@ -83,6 +88,13 @@ const postRouteSchema = z.object({ postId: identifier }).strict();
 const targetRouteSchema = z
   .object({ targetType: z.enum(['post', 'comment']), targetId: identifier })
   .strict();
+const bannerRouteSchema = z
+  .object({ bannerId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/) })
+  .strict();
+const bannerReactionSchema = z
+  .object({ liked: z.boolean().optional(), blessed: z.literal(true).optional() })
+  .strict()
+  .refine((input) => input.liked !== undefined || input.blessed === true);
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.output<T> {
   const result = schema.safeParse(value);
@@ -111,6 +123,11 @@ async function requireActor(
 export function createCommunityRouter(options: CommunityRouterOptions): Router {
   const router = Router();
   const service = new CommunityService(options.store, options.now);
+  const bannerReactions = new BannerReactionsService({
+    directory: options.bannerReactionsDirectory,
+    nodeEnvironment: options.nodeEnvironment,
+    publicDirectories: options.publicDirectories,
+  });
   const trending = new CommunityTrendingCache(
     async () => ({
       posts: await options.store.communityPosts.list(),
@@ -136,6 +153,47 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.use('/banner-reactions', (_request, response, next) => {
+    response.setHeader('Cache-Control', 'private, no-store');
+    next();
+  });
+
+  async function bannerActor(request: Request, response: Response) {
+    const actor = await requireActor(options, request, response);
+    if (!actor) return null;
+    const subject = (await options.store.subjects.list({ query: actor.uid })).find(
+      ({ uid }) => uid === actor.uid,
+    );
+    if (!actor.uid || subject?.status !== 'active')
+      throw new HttpError(403, 'banner_identity_inactive', '当前账号暂不能参与横幅互动');
+    return actor;
+  }
+
+  router.get('/banner-reactions/:bannerId', async (request, response) => {
+    const actor = await bannerActor(request, response);
+    if (!actor) return;
+    const { bannerId } = parse(bannerRouteSchema, request.params);
+    send(response, 200, await bannerReactions.read(bannerId, actor.uid));
+  });
+
+  router.put('/banner-reactions/:bannerId', async (request, response) => {
+    const actor = await bannerActor(request, response);
+    if (!actor) return;
+    if (
+      actor.previewing ||
+      (actor.viewer && actor.viewer.uid !== actor.uid) ||
+      !authorize(actor, {
+        action: 'community.post.interact',
+        resource: 'community_post',
+        scope: { type: 'public', id: '*' },
+      }).allowed
+    )
+      throw new HttpError(403, 'banner_interaction_forbidden', '当前身份不能参与横幅互动');
+    const { bannerId } = parse(bannerRouteSchema, request.params);
+    const input = parse(bannerReactionSchema, request.body);
+    send(response, 200, await bannerReactions.update(bannerId, actor.uid, input));
   });
 
   router.get('/feed', async (request, response) => {

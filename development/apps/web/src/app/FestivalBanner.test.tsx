@@ -9,7 +9,7 @@ describe('FestivalBanner', () => {
     expect(screen.getByRole('region', { name: '男生节横幅' })).toHaveTextContent(
       '男生节横幅展示位',
     );
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '横幅切换' })).not.toBeInTheDocument();
 
     view.rerender(<FestivalBanner messages={[]} preview={false} />);
     expect(screen.queryByRole('region', { name: '男生节横幅' })).not.toBeInTheDocument();
@@ -30,7 +30,7 @@ describe('FestivalBanner', () => {
     const banner = screen.getByRole('region', { name: '男生节横幅' });
     expect(banner).toHaveTextContent('已确认的横幅文案');
     expect(banner).toHaveTextContent('提交班级');
-    expect(within(banner).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(banner).queryByRole('navigation', { name: '横幅切换' })).not.toBeInTheDocument();
     expect(screen.queryByText('男生节横幅展示位')).not.toBeInTheDocument();
   });
 
@@ -50,6 +50,6 @@ describe('FestivalBanner', () => {
     view.rerender(<FestivalBanner messages={[first]} preview={false} />);
     expect(screen.getByText('第一幅横幅')).toBeInTheDocument();
     expect(screen.queryByText('第二幅横幅')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '横幅切换' })).not.toBeInTheDocument();
   });
 });
