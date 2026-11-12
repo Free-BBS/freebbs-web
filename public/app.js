@@ -8648,7 +8648,7 @@ function renderAdminUserEditor(user, permissionCatalog) {
         <header>
           <div>
             <h3>负责范围</h3>
-            <p>选择该用户可以管理的讨论板块与课程资料。</p>
+            <p>设置讨论板块、课程资料和小班辅导权限。</p>
           </div>
         </header>
         <div class="admin-user-permissions">
@@ -8664,6 +8664,26 @@ function renderAdminUserEditor(user, permissionCatalog) {
             permissionCatalog.courses || [],
             user.courseManagerSlugs || [],
           )}
+          <fieldset class="admin-permission-group" data-admin-training-access
+            data-saved-staff-role="${escapeHtml(user.trainingAccess?.staffRole || '')}"
+            data-saved-revoked="${Boolean(user.trainingAccess?.revoked)}" ${user.isAdmin ? 'disabled' : ''}>
+            <legend>小班辅导权限</legend>
+            <p data-admin-training-inherited ${user.isAdmin ? '' : 'hidden'}>主站管理员继承全部学培权限。</p>
+            <div class="admin-permission-options">
+              <label class="admin-user-field">
+                <span>学培身份</span>
+                <select data-field="trainingStaffRole" aria-label="${escapeHtml(ownerLabel)}的学培身份">
+                  <option value="">未分配学培身份</option>
+                  <option value="member" ${user.trainingAccess?.staffRole === 'member' ? 'selected' : ''}>学培部部员</option>
+                  <option value="minister" ${user.trainingAccess?.staffRole === 'minister' ? 'selected' : ''}>学培部部长</option>
+                </select>
+              </label>
+              <label class="admin-permission-toggle">
+                <input data-field="trainingRevoked" type="checkbox" ${user.trainingAccess?.revoked ? 'checked' : ''} />
+                <span>暂停小班辅导课程查看</span>
+              </label>
+            </div>
+          </fieldset>
         </div>
       </section>
 
@@ -9124,6 +9144,13 @@ function handleAdminUserFieldInput(event) {
   const roleField = card.querySelector('[data-field="role"]');
   if (field === adminToggle && !adminToggle.checked && roleField?.value === 'admin') {
     roleField.value = 'student';
+  }
+  if (field === adminToggle) {
+    const trainingFields = card.querySelector('[data-admin-training-access]');
+    if (trainingFields) {
+      trainingFields.disabled = adminToggle.checked;
+      trainingFields.querySelector('[data-admin-training-inherited]').hidden = !adminToggle.checked;
+    }
   }
   if (field.dataset.field === 'companyName') field.setCustomValidity('');
   refreshAdminCompanyField(card);
@@ -9614,6 +9641,18 @@ async function handleAdminUsersClick(event) {
       setAdminUserCardStatus(card, '正在保存…');
       setAdminMessage('正在保存用户...');
       const updateOwner = `${userState.uid}:${userState.token}`;
+      const trainingFields = card.querySelector('[data-admin-training-access]');
+      let trainingAccess;
+      if (trainingFields && !trainingFields.disabled) {
+        const staffRole = trainingFields.querySelector('[data-field="trainingStaffRole"]').value;
+        const revoked = trainingFields.querySelector('[data-field="trainingRevoked"]').checked;
+        if (
+          staffRole !== trainingFields.dataset.savedStaffRole ||
+          String(revoked) !== trainingFields.dataset.savedRevoked
+        ) {
+          trainingAccess = { staffRole: staffRole || null, revoked };
+        }
+      }
       const payload = await callApi(`/admin/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -9626,6 +9665,7 @@ async function handleAdminUsersClick(event) {
           heat: values.heat,
           boardModeratorSlugs: values.boardModeratorSlugs,
           courseManagerSlugs: values.courseManagerSlugs,
+          trainingAccess,
         }),
       });
       if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
@@ -9641,6 +9681,13 @@ async function handleAdminUsersClick(event) {
       }
       if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
       card.dataset.savedRole = savedUser?.role || values.role;
+      if (trainingFields && savedUser?.trainingAccess) {
+        const { staffRole, revoked } = savedUser.trainingAccess;
+        trainingFields.dataset.savedStaffRole = staffRole || '';
+        trainingFields.dataset.savedRevoked = String(revoked);
+        trainingFields.querySelector('[data-field="trainingStaffRole"]').value = staffRole || '';
+        trainingFields.querySelector('[data-field="trainingRevoked"]').checked = revoked;
+      }
       if (Array.isArray(savedUser?.certifications)) {
         const savedCompanyName = getAdminCertifiedCompanyName(savedUser);
         const companyField = card.querySelector('[data-field="companyName"]');
