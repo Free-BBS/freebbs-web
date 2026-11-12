@@ -124,7 +124,7 @@
   learningButton.setAttribute('aria-expanded', 'false');
   learningButton.setAttribute('aria-haspopup', 'menu');
   learningButton.setAttribute('aria-controls', 'mobile-learning-menu');
-  if (['/world', '/laboratory', '/creative-workshop'].includes(activePath))
+  if (['/world', '/training', '/laboratory', '/creative-workshop'].includes(activePath))
     learningButton.classList.add('is-active');
   const learningMenu = document.createElement('div');
   learningMenu.id = 'mobile-learning-menu';
@@ -132,9 +132,14 @@
   learningMenu.setAttribute('role', 'menu');
   learningMenu.setAttribute('aria-label', '学习');
   learningMenu.hidden = true;
-  const knowledge = link(['/world', 'map', '学习世界'], 'mobile-tool-link');
-  knowledge.setAttribute('role', 'menuitem');
-  learningMenu.append(knowledge);
+  for (const item of [
+    ['/world', 'map', '学习世界'],
+    ['/training', 'book', '小班辅导'],
+  ]) {
+    const node = link(item, 'mobile-tool-link');
+    node.setAttribute('role', 'menuitem');
+    learningMenu.append(node);
+  }
   const creativeLabel = document.createElement('p');
   creativeLabel.className = 'mobile-menu-label';
   creativeLabel.textContent = '探索与实践';
