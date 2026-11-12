@@ -11,6 +11,10 @@ const MAX_LECTURERS = 20;
 const DEFAULT_QUESTIONS = ['讲解清晰程度', '课程内容的实用性', '课堂节奏'];
 const BATCH_FIELDS = `id, slug, title, opens_at AS opensAt, closes_at AS closesAt,
   published_at AS publishedAt, revision`;
+const COURSE_VISIBILITY = `(c.offered = 1 OR (c.capacity > 0 AND b.published_at IS NOT NULL))
+  AND (? OR (b.published_at IS NOT NULL AND EXISTS (
+    SELECT 1 FROM training_assignments assigned WHERE assigned.course_id = c.id
+  )))`;
 
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
@@ -192,9 +196,9 @@ async function getCourse(db, courseId, context, lock = false) {
     c.starts_at AS startsAt, c.ends_at AS endsAt, c.location, c.feedback_questions AS questions,
     c.feedback_version AS feedbackVersion, b.slug AS batchSlug, b.title AS batchTitle
     FROM training_courses c JOIN training_batches b ON b.id = c.batch_id
-    WHERE c.id = ? AND (c.offered = 1 OR (c.capacity > 0 AND b.published_at IS NOT NULL))
+    WHERE c.id = ? AND ${COURSE_VISIBILITY}
     ${lock ? 'FOR UPDATE OF c' : ''}`,
-    [courseId],
+    [courseId, context.access.staff],
   );
   if (!course) fail(404, '课程不存在或尚未发布');
   const assigned = await one(
@@ -288,12 +292,14 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
               `SELECT c.id, c.batch_id AS batchId, c.title, c.teacher,
         c.starts_at AS startsAt, c.ends_at AS endsAt, c.location
         FROM training_courses c JOIN training_batches b ON b.id = c.batch_id
-        WHERE c.offered = 1 OR (c.capacity > 0 AND b.published_at IS NOT NULL) ORDER BY c.id`,
+        WHERE ${COURSE_VISIBILITY} ORDER BY c.id`,
+              [access.staff],
             ),
         access.revoked ? new Map() : assignmentsByCourse(pool),
       ]);
       const cards = new Map();
       courses.forEach((course) => {
+        if (!access.staff && !lecturers.has(course.id)) return;
         if (!cards.has(course.batchId)) cards.set(course.batchId, []);
         cards.get(course.batchId).push(courseCard(course, lecturers));
       });
@@ -410,12 +416,15 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
     '/batches/:slug',
     route(async (request, response, { user }) => {
       const batch = await batchBySlug(pool, request.params.slug);
+      const currentPhase = phase(batch);
       const [courses, application] = await Promise.all([
-        rows(
-          pool,
-          'SELECT id, title, teacher FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
-          [batch.id],
-        ),
+        currentPhase === 'open'
+          ? rows(
+              pool,
+              'SELECT id, title FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
+              [batch.id],
+            )
+          : [],
         one(
           pool,
           `SELECT a.id, a.submitted_at AS submittedAt, c.title AS assignedCourse
@@ -428,11 +437,32 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         title: batch.title,
         opensAt: batch.opensAt,
         closesAt: batch.closesAt,
-        phase: phase(batch),
+        phase: currentPhase,
         courses,
         application: application || null,
         fullName: user.full_name,
       });
+    }),
+  );
+
+  router.post(
+    '/batches/:slug/close',
+    route(async (request, response, { access }) => {
+      requirePermission(access.admin);
+      const closesAt = await transaction(pool, async (db) => {
+        const batch = await batchBySlug(db, request.params.slug, true);
+        const now = Date.now();
+        const currentPhase = phase(batch, now);
+        if (currentPhase === 'upcoming') fail(409, '报名尚未开始');
+        if (currentPhase !== 'open') return batch.closesAt;
+        await rows(
+          db,
+          'UPDATE training_batches SET closes_at = ?, revision = revision + 1 WHERE id = ?',
+          [now, batch.id],
+        );
+        return now;
+      });
+      response.json({ message: '报名已截止', closesAt });
     }),
   );
 
