@@ -254,7 +254,6 @@ const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
 const {
   createTrainingRouter,
   ensureTrainingTables,
-  readTrainingUserAccess,
   setTrainingUserAccess,
 } = require('./training');
 const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
@@ -6731,8 +6730,9 @@ app.patch('/api/admin/users/:id', async (request, response) => {
       boardModeratorSlugs,
       courseManagerSlugs,
     );
+    let trainingAccess;
     if (request.body.trainingAccess !== undefined) {
-      await setTrainingUserAccess(
+      trainingAccess = await setTrainingUserAccess(
         connection,
         targetId,
         request.body.trainingAccess,
@@ -6742,10 +6742,7 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     await connection.commit();
 
     const user = await getUserById(targetId);
-    const [certificationsByUser, trainingAccess] = await Promise.all([
-      readApprovedCertifications(pool, [targetId]),
-      readTrainingUserAccess(pool, targetId),
-    ]);
+    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
 
     response.json({
       user: {
