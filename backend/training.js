@@ -208,7 +208,12 @@ function courseCard(course, lecturers) {
   };
 }
 
-async function getCourse(db, courseId, context, lock = false) {
+async function getCourse(
+  db,
+  courseId,
+  context,
+  { lock = false, includeDraft = context.access.staff } = {},
+) {
   if (context.access.revoked) fail(403, '你的课程查看权限已暂停');
   const course = await one(
     db,
@@ -218,7 +223,7 @@ async function getCourse(db, courseId, context, lock = false) {
     FROM training_courses c JOIN training_batches b ON b.id = c.batch_id
     WHERE c.id = ? AND ${COURSE_VISIBILITY}
     ${lock ? 'FOR UPDATE OF c' : ''}`,
-    [courseId, context.access.staff],
+    [courseId, includeDraft],
   );
   if (!course) fail(404, '课程不存在或尚未发布');
   const assigned = await one(
@@ -303,6 +308,8 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
   router.get(
     '/',
     route(async (request, response, { access }) => {
+      const manage = request.query.manage === '1';
+      if (manage) requirePermission(access.staff);
       const [batches, courses, lecturers] = await Promise.all([
         rows(pool, `SELECT ${BATCH_FIELDS} FROM training_batches ORDER BY opens_at DESC, id DESC`),
         access.revoked
@@ -313,13 +320,13 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         c.starts_at AS startsAt, c.ends_at AS endsAt, c.location
         FROM training_courses c JOIN training_batches b ON b.id = c.batch_id
         WHERE ${COURSE_VISIBILITY} ORDER BY c.id`,
-              [access.staff],
+              [manage],
             ),
         access.revoked ? new Map() : assignmentsByCourse(pool),
       ]);
       const cards = new Map();
       courses.forEach((course) => {
-        if (!access.staff && !lecturers.has(course.id)) return;
+        if (!manage && !lecturers.has(course.id)) return;
         if (!cards.has(course.batchId)) cards.set(course.batchId, []);
         cards.get(course.batchId).push(courseCard(course, lecturers));
       });
@@ -750,7 +757,11 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
     '/courses/:id',
     route(async (request, response, context) => {
       const courseId = id(request.params.id);
-      const course = await getCourse(pool, courseId, context);
+      const manage = request.query.manage === '1';
+      const course = await getCourse(pool, courseId, context, {
+        includeDraft: manage && context.access.staff,
+      });
+      if (manage) requirePermission(course.canEdit);
       const [lecturers, materials, feedback] = await Promise.all([
         assignmentsByCourse(pool, course.batchId),
         rows(
@@ -787,7 +798,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const location = input(request.body.location, 160, '上课地点');
       if (endsAt <= startsAt) fail(400, '下课时间必须晚于上课时间');
       await transaction(pool, async (db) => {
-        const course = await getCourse(db, id(request.params.id), context, true);
+        const course = await getCourse(db, id(request.params.id), context, { lock: true });
         requirePermission(course.canEdit);
         const teacher =
           context.access.staff && request.body.teacher !== undefined
@@ -893,7 +904,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const titles = questions.map((question) => input(question, 120, '评分题'));
       if (new Set(titles).size !== titles.length) fail(400, '评分题不能重复');
       await transaction(pool, async (db) => {
-        const course = await getCourse(db, id(request.params.id), context, true);
+        const course = await getCourse(db, id(request.params.id), context, { lock: true });
         requirePermission(course.canEditFeedback);
         if (course.feedbackVersion !== feedbackVersion) fail(409, '问卷已更新，请刷新页面');
         if (
@@ -918,7 +929,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const suggestion = input(request.body.suggestion, 2000, '其他建议和意见', true);
       const { scores, feedbackVersion } = request.body;
       await transaction(pool, async (db) => {
-        const course = await getCourse(db, id(request.params.id), context, true);
+        const course = await getCourse(db, id(request.params.id), context, { lock: true });
         if (course.endsAt === null || Date.now() < course.endsAt) fail(409, '下课后可填写反馈问卷');
         if (course.feedbackVersion !== feedbackVersion) fail(409, '问卷已更新，请刷新页面');
         if (!Array.isArray(scores) || scores.length !== course.questions.length)

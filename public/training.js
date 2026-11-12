@@ -6,8 +6,11 @@
   const applySlug = params.get('apply');
   const reviewSlug = params.get('review');
   const courseId = params.get('course');
+  const manage = params.get('manage') === '1';
+  const register = params.get('register') === '1';
   if (applySlug) content.dataset.view = 'application';
   else if (courseId) content.dataset.view = 'course';
+  else if (register) content.dataset.view = 'application';
   const phases = {
     upcoming: '报名即将开始',
     open: '报名中',
@@ -25,16 +28,22 @@
   });
   const escape = (value) => escapeHtml(String(value ?? ''));
   const date = (value) => formatDate.format(value);
-  const button = (label, attributes = '') =>
-    `<button type="button" class="training-button" ${attributes}>${label}</button>`;
+  const dateRange = (start, end) =>
+    formatDate.formatRange?.(start, end) ?? `${date(start)} 至 ${date(end)}`;
+  const button = (label, attributes = '', variant = '') =>
+    `<button type="button" class="training-button${variant ? ` training-${variant}` : ''}" ${attributes}>${label}</button>`;
   const submit = (label) =>
     `<button type="submit" class="training-button training-primary">${label}</button>`;
-  const link = (label, path) =>
-    `<a class="training-button" href="${escape(path)}">${escape(label)}</a>`;
+  const link = (label, path, variant = '') =>
+    `<a class="training-button${variant ? ` training-${variant}` : ''}" href="${escape(path)}">${escape(label)}</a>`;
   const route = (key, value) => `/training?${new URLSearchParams({ [key]: value })}`;
+  const managementPage = route('manage', '1');
+  const coursePage = (id, managing = false) => route('course', id) + (managing ? '&manage=1' : '');
   const batchEndpoint = (slug) => `/batches/${encodeURIComponent(slug)}`;
   const courseEndpoint = `/courses/${encodeURIComponent(courseId || '')}`;
-  const back = '<a class="training-back" href="/training">‹ 小班辅导</a>';
+  const backTo = (label, path) =>
+    `<a class="training-back" href="${escape(path)}"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>${escape(label)}</a>`;
+  const back = backTo('小班辅导', '/training');
   const empty = (message) => `<p class="training-empty">${escape(message)}</p>`;
   const errorField = '<p class="training-error" role="alert" hidden></p>';
 
@@ -42,13 +51,16 @@
     return callApi(`/training${path}`, { method, body: JSON.stringify(payload) });
   }
 
-  function setPage(title, markup, intro = '', actions = '') {
+  function setPage(title, markup, intro = '', actions = '', returnLink = '') {
     content.innerHTML =
-      `<header class="training-heading"><div>` +
+      `<header class="training-heading">${returnLink ? `<div class="training-return">${returnLink}</div>` : ''}<div class="training-heading-copy">` +
       `<h1>${escape(title)}</h1>${intro ? `<p>${escape(intro)}</p>` : ''}</div>${
         actions ? `<div class="training-actions">${actions}</div>` : ''
       }</header>${markup}`;
     document.title = `${title} · FREE-BBS`;
+    content.closest('main').dataset.pageTitle = title;
+    const desktopTitle = document.querySelector('.desktop-header-title');
+    if (desktopTitle) desktopTitle.textContent = title;
   }
 
   function tell(message) {
@@ -113,7 +125,7 @@
       ['讲师', course.lecturers.join('、') || '待定'],
       [
         '上课时间',
-        course.startsAt === null ? '待定' : `${date(course.startsAt)} 至 ${date(course.endsAt)}`,
+        course.startsAt === null ? '待定' : `${dateRange(course.startsAt, course.endsAt)}`,
       ],
       ['上课地点', course.location || '待定'],
     ]
@@ -140,51 +152,107 @@
     }
   }
 
+  function courseCards(courses, manage = false) {
+    return `<div class="training-grid">${courses
+      .map(
+        (course) =>
+          `<a class="training-card" href="${escape(coursePage(course.id, manage))}"><h3>${escape(
+            course.title,
+          )}</h3>${courseFacts(course)}</a>`,
+      )
+      .join('')}</div>`;
+  }
+
+  function openRegistrations(batches) {
+    return batches.filter(({ phase }) => phase === 'open');
+  }
+
   async function renderDirectory() {
     const { access, batches } = await api('/');
+    const open = openRegistrations(batches);
+    const apply = open.length
+      ? link(
+          '我要报名',
+          open.length === 1 ? route('apply', open[0].slug) : route('register', '1'),
+          'primary',
+        )
+      : button('我要报名', 'disabled aria-describedby="training-no-registration"', 'primary') +
+        '<span id="training-no-registration" class="training-action-note">暂无开放报名</span>';
+    const courses = batches
+      .filter((batch) => batch.courses.length > 0)
+      .map(
+        (batch) =>
+          `<section class="training-course-group"><h2>${escape(batch.title)}</h2>${courseCards(batch.courses)}</section>`,
+      )
+      .join('');
+    setPage(
+      '小班辅导',
+      access.revoked ? empty('你的课程查看权限已暂停。') : courses || empty('暂无已发布课程。'),
+      '',
+      `<div class="training-entry">${apply}</div>${
+        access.staff ? link('管理小班辅导', managementPage) : ''
+      }`,
+    );
+  }
+
+  async function renderRegistration() {
+    const { batches } = await api('/');
+    const open = openRegistrations(batches);
+    const options = open.map(
+      (batch) =>
+        `<li class="training-row"><div><h2>${escape(batch.title)}</h2><p>截止时间：${date(
+          batch.closesAt,
+        )}（北京时间）</p></div>${link('填写报名', route('apply', batch.slug), 'primary')}</li>`,
+    );
+    setPage(
+      '讲师报名',
+      options.length
+        ? `<ul class="training-rows">${options.join('')}</ul>`
+        : empty('目前没有开放的报名。'),
+      options.length > 1 ? '选择要报名的批次。' : '',
+      '',
+      backTo('小班辅导', '/training'),
+    );
+  }
+
+  async function renderManagement() {
+    const { access, batches } = await api('/?manage=1');
     const actions =
-      (access.minister ? button('新建报名批次', 'id="training-new"') : '') +
-      (access.admin ? link('学培权限', '/adminusers') : '');
+      (access.minister ? button('新建报名批次', 'id="training-new"', 'primary') : '') +
+      (access.admin ? link('用户管理', '/adminusers') : '');
     const markup = batches
       .map((batch) => {
-        const application = batch.phase === 'open' ? '讲师报名' : '查看报名';
+        const reviewing = batch.phase === 'closed' || batch.phase === 'published';
         const tools =
-          link(application, route('apply', batch.slug)) +
-          (access.minister ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`) : '') +
-          (access.admin && batch.phase === 'open'
-            ? button('截止报名', `data-close-registration="${escape(batch.slug)}"`)
-            : '') +
-          (access.minister && ['closed', 'published'].includes(batch.phase)
+          (access.minister && reviewing
             ? link(
                 batch.phase === 'published' ? '录取名单' : '审核与排班',
                 route('review', batch.slug),
+                'primary',
               )
+            : '') +
+          (access.minister ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`) : '') +
+          link('打开报名页', route('apply', batch.slug)) +
+          (access.admin && batch.phase === 'open'
+            ? button('截止报名', `data-close-registration="${escape(batch.slug)}"`, 'danger')
             : '');
-        const cards = batch.courses
-          .map(
-            (course) =>
-              `<a class="training-card" href="${route('course', course.id)}"><h3>${escape(
-                course.title,
-              )}</h3>${courseFacts(course)}</a>`,
-          )
-          .join('');
         return (
           `<section class="training-batch"><header class="training-section-heading">` +
-          `<div><p class="training-phase">${phases[batch.phase]}</p><h2>${escape(
-            batch.title,
-          )}</h2><p>${date(batch.opensAt)} 至 ${date(batch.closesAt)}（北京时间）</p></div>` +
+          `<div><div class="training-batch-title"><h2>${escape(batch.title)}</h2>` +
+          `<span class="training-phase" data-phase="${escape(batch.phase)}">${phases[batch.phase]}</span></div>` +
+          `<p>报名时间：${date(batch.opensAt)} 至 ${date(batch.closesAt)}（北京时间）</p></div>` +
           `<div class="training-actions">${tools}</div></header>${
-            cards ? `<div class="training-grid">${cards}</div>` : ''
+            batch.courses.length ? courseCards(batch.courses, true) : ''
           }</section>`
         );
       })
       .join('');
     setPage(
-      '小班辅导',
-      (access.revoked ? empty('你的课程查看权限已暂停。') : '') +
-        (markup || empty('暂无小班辅导批次。')),
+      '管理小班辅导',
+      markup || empty('暂无小班辅导批次。'),
       '',
       actions,
+      backTo('小班辅导', '/training'),
     );
     content.querySelector('#training-new')?.addEventListener('click', openBatchForm);
     content.querySelectorAll('[data-copy]').forEach((control) => {
@@ -207,7 +275,7 @@
     bindForm(modal.querySelector('form'), async () => {
       await api(`${batchEndpoint(batch.slug)}/close`, 'POST');
       modal.close();
-      await renderDirectory();
+      await renderManagement();
       tell('报名已截止');
     });
   }
@@ -265,7 +333,7 @@
         })),
       });
       modal.close();
-      await renderDirectory();
+      await renderManagement();
       tell('报名批次已创建');
     });
   }
@@ -383,11 +451,11 @@
           ? `你已被录取为「${application.assignedCourse}」的讲师。`
           : '本期报名未录取。';
       }
-      setPage(`${batch.title} · 讲师报名`, empty(status), intro, back);
+      setPage(`${batch.title} · 讲师报名`, empty(status), intro, '', back);
       return;
     }
     if (batch.phase !== 'open') {
-      setPage(`${batch.title} · 讲师报名`, empty(phases[batch.phase]), intro, back);
+      setPage(`${batch.title} · 讲师报名`, empty(phases[batch.phase]), intro, '', back);
       return;
     }
     markup =
@@ -415,7 +483,7 @@
         '手写签名',
         'id="training-sign"',
       )}</fieldset>${errorField}<div class="training-actions">${submit('提交报名')}</div></form>`;
-    setPage(`${batch.title} · 讲师报名`, markup, intro, back);
+    setPage(`${batch.title} · 讲师报名`, markup, intro, '', back);
     const form = content.querySelector('form');
     const pick = form.querySelector('#training-pick');
     const custom = form.querySelector('#training-custom');
@@ -604,9 +672,11 @@
         : `<div id="training-schedule-preview"></div><div class="training-actions">${button(
             '一键排班',
             'id="training-start"',
+            'primary',
           )}${button('继续排班', 'id="training-continue" hidden')}${button(
             '签名并发布',
             'id="training-publish" hidden',
+            'primary',
           )}</div>${errorField}`
     }</section>`;
     setPage(
@@ -619,7 +689,8 @@
           schedule
         }`,
       '',
-      back,
+      '',
+      backTo('管理小班辅导', managementPage),
     );
     applications.forEach((application) => {
       showSignature(content.querySelector(`#application-${application.id}`), application.signature);
@@ -958,7 +1029,9 @@
   }
 
   async function renderCourse() {
-    const course = await api(courseEndpoint);
+    const course = await api(courseEndpoint + (manage ? '?manage=1' : ''));
+    const canEdit = manage && course.canEdit;
+    const canEditFeedback = manage && course.canEditFeedback;
     const materials = course.materials
       .map((material) => {
         const action =
@@ -971,7 +1044,7 @@
           `<li class="training-material"><div><strong>${escape(material.title)}</strong>` +
           `<small>${material.kind === 'pdf' ? 'PDF 讲义' : '腾讯会议回放'}</small></div>` +
           `<div class="training-actions">${action}${
-            course.canEdit ? button('删除', `data-delete="${material.id}"`) : ''
+            canEdit ? button('删除', `data-delete="${material.id}"`) : ''
           }</div></li>`
         );
       })
@@ -980,29 +1053,36 @@
     setPage(
       course.title,
       `<section class="training-panel" aria-label="上课安排">${courseFacts(course)}${
-        course.canEdit
+        canEdit
           ? `<div class="training-actions">${button(
               '编辑上课安排',
               'id="training-edit-session"',
             )}</div>`
           : ''
       }</section><section class="training-panel"><header class="training-section-heading"><h2>课程资料</h2>${
-        course.canEdit ? button('添加资料', 'id="training-add-material"') : ''
+        canEdit ? button('添加资料', 'id="training-add-material"') : ''
       }</header>${
         materials
           ? `<ul class="training-stack training-materials">${materials}</ul>`
           : empty('暂无课程资料。')
       }</section><section class="training-panel" id="training-feedback"><h2>课程反馈</h2>${
-        course.feedbackOpen && !course.feedbackSubmitted ? '' : `<p>${status}</p>`
+        manage || (course.feedbackOpen && !course.feedbackSubmitted) ? '' : `<p>${status}</p>`
       }<div class="training-actions">${
-        course.feedbackOpen && !course.feedbackSubmitted
-          ? button('填写反馈问卷', 'id="training-write-feedback"')
+        !manage && course.feedbackOpen && !course.feedbackSubmitted
+          ? button('填写反馈问卷', 'id="training-write-feedback"', 'primary')
           : ''
-      }${course.canEdit ? button('查看反馈统计', 'id="training-stats"') : ''}${
-        course.canEditFeedback ? button('设置反馈问卷', 'id="training-edit-feedback"') : ''
+      }${canEdit ? button('查看反馈统计', 'id="training-stats"') : ''}${
+        canEditFeedback ? button('设置反馈问卷', 'id="training-edit-feedback"') : ''
       }</div>${errorField}</section>`,
       course.batchTitle,
-      back,
+      !manage && course.canEdit && !course.canEditTeacher
+        ? link('管理本课程', coursePage(course.id, true))
+        : '',
+      manage
+        ? course.canEditTeacher
+          ? backTo('管理小班辅导', managementPage)
+          : backTo('返回课程', coursePage(course.id))
+        : back,
     );
     content
       .querySelector('#training-edit-session')
@@ -1033,6 +1113,8 @@
     else if (reviewSlug) await renderReview();
     else if (courseId) await renderCourse();
     else if (params.has('people')) window.location.replace('/adminusers');
+    else if (manage) await renderManagement();
+    else if (register) await renderRegistration();
     else await renderDirectory();
   }
 
@@ -1065,6 +1147,6 @@
       );
       return;
     }
-    setPage('小班辅导', empty(error.message), '', back);
+    setPage('小班辅导', empty(error.message), '', '', back);
   });
 })();
