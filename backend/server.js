@@ -251,6 +251,7 @@ const {
   ensureNotificationTables,
 } = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
+const { createTrainingRouter } = require('./training');
 const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
@@ -3076,6 +3077,7 @@ app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
 );
+app.use('/api/training', createTrainingRouter({ pool, requireAuth, notifications }));
 app.use(
   '/api',
   createAdminRewardsRouter({

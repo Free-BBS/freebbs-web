@@ -740,8 +740,13 @@ function createNotificationService({
     };
   }
 
+  function notifyInApp(connection, recipients, notification) {
+    return insertNotifications(connection, recipients, { ...notification, email: false });
+  }
+
   return {
     publish,
+    notifyInApp,
     notifyReply,
     notifyCertification,
     notifyMentions,

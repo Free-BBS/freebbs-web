@@ -547,6 +547,7 @@ function activityReturnPath() {
       next.pathname === '/publish' ||
       next.pathname === '/moderation' ||
       next.pathname === '/surveys' ||
+      next.pathname === '/training' ||
       next.pathname.startsWith('/development/') ||
       (next.pathname === '/discussion' &&
         /^[a-zA-Z0-9_-]{1,80}$/.test(next.searchParams.get('post') || ''));

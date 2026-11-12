@@ -55,6 +55,7 @@ const pageRoutes = new Map([
   ['/system-settings/model', '/system-settings-model.html'],
   ['/system-settings/data-retention', '/system-settings-data-retention.html'],
   ['/workbench', '/workbench.html'],
+  ['/training', '/training.html'],
   ['/world', '/world.html'],
 ]);
 const htmlRedirects = new Map([
@@ -97,6 +98,7 @@ const htmlRedirects = new Map([
   ['/system-settings-data-retention.html', '/system-settings/data-retention'],
   ['/system-settings.html', '/system-settings'],
   ['/workbench.html', '/workbench'],
+  ['/training.html', '/training'],
   ['/world.html', '/world'],
 ]);
 

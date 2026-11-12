@@ -2006,3 +2006,39 @@ body.theme-dark:not(.auth-page-body) .economy-shortcut-shop .economy-shortcut-ic
     padding-top: calc(184px + env(safe-area-inset-top, 0px)) !important;
   }
 }
+
+#mobile-learning-menu {
+  position: fixed;
+  inset: auto auto calc(var(--mobile-nav-height, 56px) + 8px) 12px;
+  width: min(240px, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: 18px;
+  color: var(--ui-text);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--ui-shadow), 0 8px 28px rgb(0 0 0 / 14%);
+}
+
+body:not(.auth-page-body) #mobile-learning-menu .nav-link {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ui-text) !important;
+  font: 600 0.95rem/1.35 var(--font-ui);
+}
+
+body:not(.auth-page-body) #mobile-learning-menu .nav-link:is(:hover, [aria-current='page']) {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent) !important;
+}
+
+#mobile-learning-menu .nav-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.theme-dark #mobile-learning-menu .nav-icon {
+  filter: brightness(0) invert(1);
+}
