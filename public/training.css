@@ -1,0 +1,506 @@
+.training-page {
+  --training-radius: 16px;
+  --training-inset: 6px;
+  --training-control-radius: calc(var(--training-radius) - var(--training-inset));
+}
+
+body.training-page .training-main::before {
+  display: none !important;
+}
+
+body.training-page .training-main {
+  padding-top: calc(88px + env(safe-area-inset-top, 0px)) !important;
+}
+
+.training-content {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.training-content[data-view='course'],
+.training-content[data-view='application'] {
+  max-width: 860px;
+  margin-inline: 0 auto;
+}
+
+.training-content,
+.training-dialog {
+  color: var(--ui-text);
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.training-content :is(h1, h2, h3, p, dl, ol, ul, dd),
+.training-dialog :is(h2, h3, p, ol, ul) {
+  margin: 0;
+}
+
+.training-content h1 {
+  font-size: clamp(1.85rem, 4vw, 2.8rem);
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+}
+
+.training-content h2,
+.training-dialog h2 {
+  font-size: clamp(1.13rem, 2vw, 1.38rem);
+  line-height: 1.3;
+}
+
+.training-content h3,
+.training-dialog h3 {
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.training-heading,
+.training-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px 24px;
+}
+
+.training-heading {
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.training-heading p,
+.training-section-heading p {
+  margin-top: 6px;
+  color: var(--ui-muted);
+}
+
+.training-section-heading .training-phase {
+  margin: 0 0 5px;
+  color: var(--ui-accent);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.training-batch,
+.training-panel {
+  display: grid;
+  gap: 16px;
+  padding: clamp(16px, 2.3vw, 28px);
+  border-radius: var(--training-radius);
+  background: var(--ui-surface);
+}
+
+.training-batch:has(.training-grid) {
+  padding: var(--training-inset);
+}
+
+.training-batch:has(.training-grid) > header {
+  padding: 12px 14px 0;
+}
+
+.training-grid {
+  display: grid;
+  gap: var(--training-inset);
+  grid-template-columns: repeat(auto-fit, minmax(min(275px, 100%), 1fr));
+}
+
+.training-card {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 17px;
+  border-radius: var(--training-control-radius);
+  background: var(--ui-surface-soft);
+  color: var(--ui-text) !important;
+  text-decoration: none;
+}
+
+.training-card:hover {
+  background: var(--ui-accent-soft);
+}
+
+.training-card:hover h3 {
+  color: var(--ui-accent);
+}
+
+.training-facts,
+.training-results {
+  display: grid;
+  gap: 7px;
+  font-size: 0.92rem;
+}
+
+.training-facts > div,
+.training-results > div {
+  display: grid;
+  grid-template-columns: minmax(4.3em, 25%) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.training-results > div {
+  grid-template-columns: minmax(7em, 40%) minmax(0, 1fr);
+}
+
+.training-facts dt,
+.training-results dt,
+.training-content small,
+.training-empty {
+  color: var(--ui-muted);
+}
+
+.training-actions,
+.training-options,
+.training-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.training-inline {
+  align-items: end;
+}
+
+.training-stack,
+.training-form {
+  display: grid;
+  gap: 12px;
+}
+
+.training-content ol,
+.training-materials,
+.training-stats {
+  list-style: none;
+  padding: 0;
+}
+
+.training-content fieldset,
+.training-dialog fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.training-content legend,
+.training-dialog legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.training-content label,
+.training-dialog label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.training-content :is(input, select, textarea),
+.training-dialog :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: var(--training-control-radius);
+  color: var(--ui-text);
+  background: var(--ui-surface-soft);
+  font: inherit;
+}
+
+.training-content textarea,
+.training-dialog textarea {
+  resize: vertical;
+}
+
+.training-content input[type='datetime-local'],
+.training-dialog input[type='datetime-local'] {
+  color-scheme: light;
+}
+
+.theme-dark .training-content input,
+.theme-dark .training-dialog input,
+.theme-dark .training-content select,
+.theme-dark .training-dialog select {
+  color-scheme: dark;
+}
+
+.training-content :is(input[type='checkbox'], input[type='radio']),
+.training-dialog :is(input[type='checkbox'], input[type='radio']) {
+  width: 1em;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ui-action);
+}
+
+.training-options label,
+.training-candidates label,
+.training-form .training-check {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 44px;
+  padding: 5px 9px;
+  border-radius: var(--training-control-radius);
+  background: var(--ui-surface-soft);
+}
+
+.training-columns,
+.training-offered-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.training-offered-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(75px, 1fr) auto;
+}
+
+.training-review-row strong {
+  flex: 1 1 145px;
+  align-self: center;
+}
+
+.training-review-row label {
+  flex: 1 1 96px;
+}
+
+.training-review-row .training-error {
+  flex-basis: 100%;
+}
+
+.training-button,
+.training-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: var(--training-control-radius);
+  color: var(--ui-accent) !important;
+  background: var(--ui-accent-soft);
+  font: 650 0.9rem/1.3 var(--font-ui);
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+
+.training-back {
+  background: transparent;
+}
+
+.training-button:hover:not(:disabled),
+.training-back:hover {
+  background: var(--ui-surface-soft);
+}
+
+.training-button.training-primary {
+  color: var(--ui-action-contrast) !important;
+  background: var(--ui-action);
+}
+
+.training-button.training-primary:hover:not(:disabled) {
+  background: var(--ui-action-hover);
+}
+
+.training-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.training-content :focus-visible,
+.training-dialog :focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.training-content [hidden],
+.training-dialog [hidden] {
+  display: none !important;
+}
+
+.training-error {
+  color: var(--ui-danger);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.training-applicant,
+.training-material,
+.training-person,
+.training-preference {
+  padding: 10px 14px;
+  border-radius: var(--training-control-radius);
+  background: var(--ui-surface-soft);
+}
+
+.training-applicant summary {
+  display: list-item;
+  min-height: 44px;
+  padding: 9px 0;
+  cursor: pointer;
+}
+
+.training-applicant-body {
+  display: grid;
+  gap: 12px;
+  padding-block: 8px;
+}
+
+.training-applicant select,
+.training-person :is(input, select),
+.training-person .training-check {
+  background: var(--ui-surface);
+}
+
+.training-person {
+  align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+}
+
+.training-preserve {
+  white-space: pre-wrap;
+}
+
+.training-material,
+.training-preference {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.training-material small {
+  display: block;
+}
+
+.training-stats li {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr) 3em;
+  align-items: center;
+  gap: 12px;
+}
+
+.training-stats progress {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--ui-action);
+}
+
+.training-dialog {
+  display: none;
+  width: min(650px, calc(100vw - 28px));
+  max-width: none;
+  max-height: calc(100dvh - 28px);
+  margin: auto;
+  padding: clamp(16px, 4vw, 24px);
+  border: 0;
+  border-radius: var(--training-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.training-dialog[open] {
+  display: grid;
+  gap: 14px;
+}
+
+.training-dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.training-dialog .training-actions {
+  justify-content: end;
+}
+
+.training-canvas,
+.training-signature-preview {
+  display: block;
+  width: min(100%, 280px);
+  height: auto;
+  border-radius: var(--training-control-radius);
+  background: #f5f8f9;
+}
+
+.training-signature {
+  width: min(780px, calc(100vw - 28px));
+}
+
+.training-signature .training-canvas {
+  width: 100%;
+  max-height: min(45dvh, 300px);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+@media (max-width: 900px) {
+  body.training-page .training-main {
+    padding-top: calc(68px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  body.training-page .mobile-nav {
+    border-top: 0 !important;
+  }
+}
+
+@media (max-width: 540px) {
+  .training-columns,
+  .training-offered-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .training-content,
+  .training-form {
+    gap: 14px;
+  }
+
+  .training-content :is(input, textarea, select),
+  .training-dialog :is(input, textarea, select) {
+    font-size: 16px;
+  }
+
+  .training-heading > div:first-child {
+    flex-basis: 100%;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .training-signature {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    width: calc(100dvh - 24px);
+    height: calc(100dvw - 24px);
+    max-height: none;
+    margin: 0;
+    transform: translate(-50%, -50%) rotate(90deg);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .training-signature:has(.training-error:not([hidden])) {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .training-signature .training-canvas {
+    max-height: none;
+    height: 100%;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .training-signature .training-canvas {
+    max-height: 52dvh;
+  }
+}
