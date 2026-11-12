@@ -18,8 +18,15 @@ const {
   claimTrainingRoster,
   createTrainingRouter,
   ensureTrainingTables,
+  findTrainingRosterInvitation,
   setTrainingUserAccess,
 } = require('./training');
+const {
+  assertRegistrationWhitelisted,
+  claimRegistrationWhitelist,
+  ensureRegistrationWhitelistTables,
+  fingerprintIdentity,
+} = require('./registration-whitelist');
 const {
   normalizeAdminAccount,
   ensureTeacherAccountTables,
@@ -243,23 +250,31 @@ test(
       toUserProfile: (user) => ({ id: user.id, username: user.username }),
       issueToken: (user) => `qa:${user.id}`,
     });
+    await ensureRegistrationWhitelistTables(pool);
     await pool.query(`CREATE TABLE email_verification_codes (
       id BIGINT PRIMARY KEY AUTO_INCREMENT, email VARCHAR(128) NOT NULL,
-      code_hash VARCHAR(192) NOT NULL, used_at DATETIME NULL, expires_at DATETIME NOT NULL
+      code_hash VARCHAR(192) NOT NULL, used_at DATETIME NULL, expires_at DATETIME NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB`);
     const registerStart = source.indexOf("app.post('/api/auth/register',");
-    const registerEnd = source.indexOf("app.post('/api/auth/send-email-code',", registerStart);
+    const registerEnd = source.indexOf("app.post('/api/auth/send-reset-code',", registerStart);
     assert.ok(registerStart >= 0 && registerEnd > registerStart);
+    const sentVerificationEmails = [];
     Object.assign(routeContext, {
       isValidUsername,
       claimTrainingRoster,
+      findTrainingRosterInvitation,
       hashCode: (email, code) => `${email}:${code}`,
       privacyPolicyService,
       issueToken: (user) => `qa:${user.id}`,
       assertCommunityAgreement: () => {},
       consumeRegistrationChallenge: async () => null,
-      assertRegistrationWhitelisted: async () => {},
-      claimRegistrationWhitelist: async () => {},
+      assertRegistrationWhitelisted,
+      claimRegistrationWhitelist,
+      CODE_TTL_MINUTES: 10,
+      generateEmailCode: () => '123456',
+      buildExpiryDate: () => new Date(Date.now() + 600_000),
+      sendVerificationCode: async (email, code) => sentVerificationEmails.push({ email, code }),
       recordCommunityAgreement: async () => {},
     });
     vm.runInContext(source.slice(registerStart, registerEnd), routeContext);
@@ -988,7 +1003,7 @@ test(
     );
 
     await t.test(
-      'a name-only tutoring invite requires verified signup and grants exactly once',
+      'a tutoring invite authorizes email verification and signup for its named recipient exactly once',
       async () => {
         const roster = '/training/roster';
         const payload = { fullNames: ['学培新同学'], staffRole: 'member' };
@@ -1003,7 +1018,12 @@ test(
         const list = await request(roster, 1);
         assert.equal(list.status, 200);
         assert.deepEqual(list.data.entries, [
-          { id: entryId, fullName: payload.fullNames[0], staffRole: 'member', claimedAt: null },
+          {
+            id: entryId,
+            fullName: payload.fullNames[0],
+            staffRole: 'member',
+            claimedAt: null,
+          },
         ]);
         assert.match(list.headers.get('cache-control'), /no-store/);
         const rotated = await request(`${roster}/${entryId}/link`, 1, 'POST');
@@ -1011,35 +1031,68 @@ test(
         const { token } = rotated.data;
         assert.notEqual(original, token);
 
+        const identityFor = (index, fullName = payload.fullNames[0]) => ({
+          fullName,
+          studentId: `20260100${index}`,
+          email: `tutoring-${index}@example.test`,
+        });
+        const sendCode = (index, trainingInvite, name) =>
+          request('/auth/send-email-code', null, 'POST', {
+            ...identityFor(index, name),
+            trainingInvite,
+          });
+
         async function register(
           index,
-          invite,
-          { name = payload.fullNames[0], code = '123456' } = {},
+          trainingInvite,
+          { name, code = '123456', prefillCode = true } = {},
         ) {
-          const email = `tutoring-${index}@example.test`;
-          await pool.execute(
-            'INSERT INTO email_verification_codes (email, code_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
-            [email, `${email}:123456`],
-          );
+          const identity = identityFor(index, name);
+          if (prefillCode) {
+            await pool.execute(
+              'INSERT INTO email_verification_codes (email, code_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
+              [identity.email, `${identity.email}:123456`],
+            );
+          }
           return request('/auth/register', null, 'POST', {
-            fullName: name,
+            ...identity,
             username: `tutoring_${index}`,
-            studentId: `20260100${index}`,
-            email,
             emailCode: code,
             password: 'test-only-pass',
-            trainingInvite: invite,
+            trainingInvite,
           });
         }
+
+        assert.equal((await sendCode(15)).status, 403);
+        assert.equal((await sendCode(15, original)).status, 409);
+        assert.equal((await sendCode(15, token, '同名名单以外')).status, 409);
+        assert.equal(sentVerificationEmails.length, 0);
+        assert.equal((await sendCode(15, token)).status, 200);
+        assert.deepEqual(sentVerificationEmails, [
+          { email: identityFor(15).email, code: '123456' },
+        ]);
+        assert.equal((await sendCode(15, token)).status, 429);
 
         assert.equal((await register(11, original)).status, 409);
         assert.equal((await register(12, token, { name: '同名名单以外' })).status, 409);
         assert.equal((await register(13, token, { code: '000000' })).status, 400);
-        const sameName = await register(14);
+        assert.equal((await register(18)).status, 403);
+        const regularIdentity = identityFor(14);
+        await pool.execute(
+          'INSERT INTO registration_whitelist (fingerprint, student_id, full_name, email) VALUES (?, ?, ?, ?)',
+          [
+            fingerprintIdentity(regularIdentity),
+            regularIdentity.studentId,
+            regularIdentity.fullName,
+            regularIdentity.email,
+          ],
+        );
+        assert.equal((await sendCode(14)).status, 200);
+        const sameName = await register(14, undefined, { prefillCode: false });
         assert.equal(sameName.status, 201);
         assert.equal((await request('/training/?manage=1', sameName.data.user.id)).status, 403);
 
-        const accepted = await register(15, token);
+        const accepted = await register(15, token, { prefillCode: false });
         assert.equal(accepted.status, 201);
         const managed = await request('/training/?manage=1', accepted.data.user.id);
         assert.equal(managed.status, 200);
@@ -1049,6 +1102,7 @@ test(
           staff: true,
           revoked: false,
         });
+        assert.equal((await sendCode(16, token)).status, 409);
         assert.equal((await register(16, token)).status, 409);
         assert.ok((await request(roster, 1)).data.entries[0].claimedAt);
         assert.equal((await request(`${roster}/${entryId}/link`, 1, 'POST')).status, 404);

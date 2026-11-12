@@ -180,20 +180,29 @@ function rosterName(value) {
   return name;
 }
 
-// Called only inside the registration transaction after whitelist and email verification.
-async function claimTrainingRoster(db, { token, fullName, userId }) {
-  if (token === undefined) return;
+async function findTrainingRosterInvitation(db, token, fullName, { lock = false } = {}) {
+  if (token === undefined) return null;
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
     fail(409, '学培注册链接无效、姓名不匹配或已使用');
   }
   const entry = await one(
     db,
-    'SELECT id, full_name AS fullName, staff_role AS staffRole FROM training_roster WHERE token_hash = ? AND claimed_at IS NULL FOR UPDATE',
+    `SELECT id, full_name AS fullName, staff_role AS staffRole FROM training_roster
+     WHERE token_hash = ? AND claimed_at IS NULL${lock ? ' FOR UPDATE' : ''}`,
     [hashRosterToken(token)],
   );
-  if (!entry || entry.fullName !== fullName.normalize('NFC')) {
+  if (
+    !entry ||
+    typeof fullName !== 'string' ||
+    entry.fullName !== fullName.trim().normalize('NFC')
+  ) {
     fail(409, '学培注册链接无效、姓名不匹配或已使用');
   }
+  return entry;
+}
+
+// The registration transaction holds the invitation lock until the account and role are saved.
+async function claimTrainingRoster(db, entry, userId) {
   await setTrainingUserAccess(db, userId, { staffRole: entry.staffRole, revoked: false }, false);
   await rows(
     db,
@@ -1108,5 +1117,6 @@ module.exports = {
   claimTrainingRoster,
   createTrainingRouter,
   ensureTrainingTables,
+  findTrainingRosterInvitation,
   setTrainingUserAccess,
 };
