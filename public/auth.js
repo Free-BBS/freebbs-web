@@ -14,10 +14,11 @@ const trainingInvite =
     ? (new URLSearchParams(window.location.hash?.slice(1)).get('training-invite') ?? undefined)
     : undefined;
 if (trainingInvite !== undefined) {
-  const notice = document.createElement('p');
-  notice.className = 'registration-note';
-  notice.textContent = '这是学培部专属注册链接。请填写名单上的姓名；注册成功后将自动获得学培身份。';
-  authForm.before(notice);
+  const notice = document.getElementById('registration-eligibility-note');
+  if (notice) {
+    notice.textContent =
+      '这是学培部专属注册链接。请填写名单上的姓名和本人学号，并验证邮箱。注册成功后将自动获得学培身份。';
+  }
 }
 
 const authMessage = document.getElementById('auth-message');
@@ -519,7 +520,10 @@ async function handleSendEmailCode() {
           studentId: studentIdInput?.value.trim() || '',
           ...(mode === 'remake' ? resetIdentity() : {}),
           ...(mode === 'register'
-            ? { fullName: document.getElementById('auth-full-name').value.trim() }
+            ? {
+                fullName: document.getElementById('auth-full-name').value.trim(),
+                trainingInvite,
+              }
             : {}),
         }),
       },

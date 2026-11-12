@@ -255,6 +255,7 @@ const {
   claimTrainingRoster,
   createTrainingRouter,
   ensureTrainingTables,
+  findTrainingRosterInvitation,
   setTrainingUserAccess,
 } = require('./training');
 const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
@@ -5712,7 +5713,15 @@ app.post('/api/auth/register', async (request, response) => {
       );
       if (challengeError) return { challengeError };
       const identity = { studentId, fullName, email };
-      await assertRegistrationWhitelisted(connection, identity, { lock: true });
+      const invitation = await findTrainingRosterInvitation(
+        connection,
+        request.body.trainingInvite,
+        fullName,
+        { lock: true },
+      );
+      if (!invitation) {
+        await assertRegistrationWhitelisted(connection, identity, { lock: true });
+      }
       const [codeRows] = await connection.execute(
         `SELECT id FROM email_verification_codes
          WHERE email = ? AND code_hash = ? AND used_at IS NULL AND expires_at > NOW()
@@ -5738,12 +5747,11 @@ app.post('/api/auth/register', async (request, response) => {
           '电子信息科学与技术',
         ],
       );
-      await claimRegistrationWhitelist(connection, identity, result.insertId);
-      await claimTrainingRoster(connection, {
-        token: request.body.trainingInvite,
-        fullName,
-        userId: result.insertId,
-      });
+      if (invitation) {
+        await claimTrainingRoster(connection, invitation, result.insertId);
+      } else {
+        await claimRegistrationWhitelist(connection, identity, result.insertId);
+      }
       await connection.execute('UPDATE email_verification_codes SET used_at = NOW() WHERE id = ?', [
         codeRows[0].id,
       ]);
@@ -5782,11 +5790,9 @@ app.post('/api/auth/send-email-code', async (request, response) => {
   }
 
   try {
-    await assertRegistrationWhitelisted(pool, {
-      studentId: request.body.studentId,
-      fullName: request.body.fullName,
-      email,
-    });
+    const { studentId, fullName, trainingInvite } = request.body;
+    const invitation = await findTrainingRosterInvitation(pool, trainingInvite, fullName);
+    if (!invitation) await assertRegistrationWhitelisted(pool, { studentId, fullName, email });
     const [existingUsers] = await pool.execute(`SELECT id FROM users WHERE email = ? LIMIT 1`, [
       email,
     ]);
