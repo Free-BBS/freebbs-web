@@ -14,7 +14,12 @@ const {
 } = require('./development-integration');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 const { ensureNotificationTables, createNotificationService } = require('./notifications');
-const { ensureTrainingTables, setTrainingUserAccess } = require('./training');
+const {
+  claimTrainingRoster,
+  createTrainingRouter,
+  ensureTrainingTables,
+  setTrainingUserAccess,
+} = require('./training');
 const {
   normalizeAdminAccount,
   ensureTeacherAccountTables,
@@ -142,6 +147,7 @@ test(
     };
     const app = express();
     app.use(express.json());
+    app.use('/api/training', createTrainingRouter({ pool, requireAuth, notifications }));
     app.use('/api', createUserCertificationRouter({ service, requireAuth, requireAdmin }));
     const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
     const start = source.indexOf("app.post('/api/admin/users',");
@@ -237,6 +243,26 @@ test(
       toUserProfile: (user) => ({ id: user.id, username: user.username }),
       issueToken: (user) => `qa:${user.id}`,
     });
+    await pool.query(`CREATE TABLE email_verification_codes (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT, email VARCHAR(128) NOT NULL,
+      code_hash VARCHAR(192) NOT NULL, used_at DATETIME NULL, expires_at DATETIME NOT NULL
+    ) ENGINE=InnoDB`);
+    const registerStart = source.indexOf("app.post('/api/auth/register',");
+    const registerEnd = source.indexOf("app.post('/api/auth/send-email-code',", registerStart);
+    assert.ok(registerStart >= 0 && registerEnd > registerStart);
+    Object.assign(routeContext, {
+      isValidUsername,
+      claimTrainingRoster,
+      hashCode: (email, code) => `${email}:${code}`,
+      privacyPolicyService,
+      issueToken: (user) => `qa:${user.id}`,
+      assertCommunityAgreement: () => {},
+      consumeRegistrationChallenge: async () => null,
+      assertRegistrationWhitelisted: async () => {},
+      claimRegistrationWhitelist: async () => {},
+      recordCommunityAgreement: async () => {},
+    });
+    vm.runInContext(source.slice(registerStart, registerEnd), routeContext);
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
     t.after(
@@ -958,6 +984,83 @@ test(
           { code: 'payment_confirmation_required' },
         );
         assert.equal((await getUserById(3)).username, 'student_repaired');
+      },
+    );
+
+    await t.test(
+      'a name-only tutoring invite requires verified signup and grants exactly once',
+      async () => {
+        const roster = '/training/roster';
+        const payload = { fullNames: ['学培新同学'], staffRole: 'member' };
+        assert.equal((await request(roster)).status, 401);
+        assert.equal((await request(roster, 3, 'POST', payload)).status, 403);
+        assert.equal((await request(roster, 5)).status, 403);
+
+        const created = await request(roster, 1, 'POST', payload);
+        assert.equal(created.status, 201);
+        const [{ id: entryId, token: original }] = created.data.links;
+        assert.match(original, /^[A-Za-z0-9_-]{43}$/);
+        const list = await request(roster, 1);
+        assert.equal(list.status, 200);
+        assert.deepEqual(list.data.entries, [
+          { id: entryId, fullName: payload.fullNames[0], staffRole: 'member', claimedAt: null },
+        ]);
+        assert.match(list.headers.get('cache-control'), /no-store/);
+        const rotated = await request(`${roster}/${entryId}/link`, 1, 'POST');
+        assert.equal(rotated.status, 200);
+        const { token } = rotated.data;
+        assert.notEqual(original, token);
+
+        async function register(
+          index,
+          invite,
+          { name = payload.fullNames[0], code = '123456' } = {},
+        ) {
+          const email = `tutoring-${index}@example.test`;
+          await pool.execute(
+            'INSERT INTO email_verification_codes (email, code_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
+            [email, `${email}:123456`],
+          );
+          return request('/auth/register', null, 'POST', {
+            fullName: name,
+            username: `tutoring_${index}`,
+            studentId: `20260100${index}`,
+            email,
+            emailCode: code,
+            password: 'test-only-pass',
+            trainingInvite: invite,
+          });
+        }
+
+        assert.equal((await register(11, original)).status, 409);
+        assert.equal((await register(12, token, { name: '同名名单以外' })).status, 409);
+        assert.equal((await register(13, token, { code: '000000' })).status, 400);
+        const sameName = await register(14);
+        assert.equal(sameName.status, 201);
+        assert.equal((await request('/training/?manage=1', sameName.data.user.id)).status, 403);
+
+        const accepted = await register(15, token);
+        assert.equal(accepted.status, 201);
+        const managed = await request('/training/?manage=1', accepted.data.user.id);
+        assert.equal(managed.status, 200);
+        assert.deepEqual(managed.data.access, {
+          admin: false,
+          minister: false,
+          staff: true,
+          revoked: false,
+        });
+        assert.equal((await register(16, token)).status, 409);
+        assert.ok((await request(roster, 1)).data.entries[0].claimedAt);
+        assert.equal((await request(`${roster}/${entryId}/link`, 1, 'POST')).status, 404);
+
+        const canceled = await request(roster, 1, 'POST', {
+          fullNames: ['另一位学培同学'],
+          staffRole: 'minister',
+        });
+        assert.equal(canceled.status, 201);
+        const [pending] = canceled.data.links;
+        assert.equal((await request(`${roster}/${pending.id}`, 1, 'DELETE')).status, 200);
+        assert.equal((await register(17, pending.token, { name: '另一位学培同学' })).status, 409);
       },
     );
   },

@@ -166,6 +166,42 @@ async function setTrainingUserAccess(db, userId, settings, isAdmin) {
   return { staffRole, revoked };
 }
 
+function hashRosterToken(token) {
+  return crypto.createHash('sha256').update(token).digest();
+}
+
+function createRosterToken() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function rosterName(value) {
+  const name = input(value, 64, '姓名').normalize('NFC');
+  if (name.length > 64 || /[\r\n\t]/.test(name)) fail(400, '请输入有效的姓名');
+  return name;
+}
+
+// Called only inside the registration transaction after whitelist and email verification.
+async function claimTrainingRoster(db, { token, fullName, userId }) {
+  if (token === undefined) return;
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+    fail(409, '学培注册链接无效、姓名不匹配或已使用');
+  }
+  const entry = await one(
+    db,
+    'SELECT id, full_name AS fullName, staff_role AS staffRole FROM training_roster WHERE token_hash = ? AND claimed_at IS NULL FOR UPDATE',
+    [hashRosterToken(token)],
+  );
+  if (!entry || entry.fullName !== fullName.normalize('NFC')) {
+    fail(409, '学培注册链接无效、姓名不匹配或已使用');
+  }
+  await setTrainingUserAccess(db, userId, { staffRole: entry.staffRole, revoked: false }, false);
+  await rows(
+    db,
+    'UPDATE training_roster SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [userId, entry.id],
+  );
+}
+
 async function getAccess(db, user) {
   const access = await readTrainingUserAccess(db, user.id);
   const admin = Boolean(user.is_admin);
@@ -341,6 +377,75 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
           courses: cards.get(batchId) || [],
         })),
       });
+    }),
+  );
+
+  router.get(
+    '/roster',
+    route(async (request, response, { access }) => {
+      requirePermission(access.admin);
+      const entries = await rows(
+        pool,
+        `SELECT id, full_name AS fullName, staff_role AS staffRole, claimed_at AS claimedAt
+        FROM training_roster ORDER BY claimed_at IS NOT NULL, id DESC`,
+      );
+      response.json({ entries });
+    }),
+  );
+
+  router.post(
+    '/roster',
+    route(async (request, response, { user, access }) => {
+      requirePermission(access.admin);
+      const { fullNames, staffRole } = request.body || {};
+      if (!Array.isArray(fullNames) || fullNames.length < 1 || fullNames.length > 100) {
+        fail(400, '每次可添加 1 至 100 个姓名');
+      }
+      if (!['member', 'minister'].includes(staffRole)) fail(400, '请选择有效的学培身份');
+      const names = [...new Set(fullNames.map(rosterName))];
+      const links = await transaction(pool, async (db) => {
+        const created = [];
+        for (const fullName of names) {
+          const token = createRosterToken();
+          const result = await rows(
+            db,
+            'INSERT INTO training_roster (full_name, staff_role, token_hash, created_by) VALUES (?, ?, ?, ?)',
+            [fullName, staffRole, hashRosterToken(token), user.id],
+          );
+          created.push({ id: result.insertId, token });
+        }
+        return created;
+      });
+      response.status(201).json({ links });
+    }),
+  );
+
+  router.post(
+    '/roster/:id/link',
+    route(async (request, response, { access }) => {
+      requirePermission(access.admin);
+      const token = createRosterToken();
+      const result = await rows(
+        pool,
+        'UPDATE training_roster SET token_hash = ? WHERE id = ? AND claimed_at IS NULL',
+        [hashRosterToken(token), id(request.params.id)],
+      );
+      if (!result.affectedRows) fail(404, '待领取的名单记录不存在');
+      response.json({ token });
+    }),
+  );
+
+  router.delete(
+    '/roster/:id',
+    route(async (request, response, { access }) => {
+      requirePermission(access.admin);
+      const result = await rows(
+        pool,
+        'DELETE FROM training_roster WHERE id = ? AND claimed_at IS NULL',
+        [id(request.params.id)],
+      );
+      if (!result.affectedRows) fail(404, '待领取的名单记录不存在');
+      response.json({ ok: true });
     }),
   );
 
@@ -986,15 +1091,22 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
 }
 
 async function ensureTrainingTables(pool) {
-  const migration = readFileSync(
-    path.join(__dirname, '../database/migrations/074_training_courses.sql'),
-    'utf8',
-  );
-  const statements = migration
-    .split(';')
-    .map((statement) => statement.trim())
-    .filter(Boolean);
-  for (const statement of statements) await pool.execute(statement);
+  for (const filename of ['074_training_courses.sql', '075_training_roster.sql']) {
+    const migration = readFileSync(
+      path.join(__dirname, '../database/migrations', filename),
+      'utf8',
+    );
+    const statements = migration
+      .split(';')
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    for (const statement of statements) await pool.execute(statement);
+  }
 }
 
-module.exports = { createTrainingRouter, ensureTrainingTables, setTrainingUserAccess };
+module.exports = {
+  claimTrainingRoster,
+  createTrainingRouter,
+  ensureTrainingTables,
+  setTrainingUserAccess,
+};
