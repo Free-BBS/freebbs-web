@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { DEMO_USER_IDS as deterministicDemoUserIds } from '@freebbs-development/contracts';
+import { normalizeFinancePilotUids } from './finance-pilot.js';
 
 export type AuthMode = 'main' | 'demo';
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -13,6 +14,7 @@ export interface Environment {
   authTimeoutMs: number;
   demoUserIds: string[];
   previewAllowedUids: string[];
+  financePilotUids?: string[];
 }
 
 function readNodeEnvironment(value: string | undefined): NodeEnvironment {
@@ -72,6 +74,9 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
         .filter(Boolean),
     ),
   ];
+  const financePilotUids = normalizeFinancePilotUids(
+    source.FINANCE_PILOT_UIDS === undefined ? undefined : source.FINANCE_PILOT_UIDS.split(','),
+  );
 
   return {
     nodeEnv,
@@ -85,5 +90,6 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     authTimeoutMs: readPositiveInteger(source.AUTH_TIMEOUT_MS, 3_000),
     demoUserIds,
     previewAllowedUids,
+    ...(financePilotUids === undefined ? {} : { financePilotUids }),
   };
 }

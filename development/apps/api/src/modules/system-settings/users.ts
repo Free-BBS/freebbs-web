@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import {
   validateIdentitySelection,
+  financeWorkPortRoleScope,
   organizationMembershipsForRole,
   ROLE_KEYS,
   DEVELOPMENT_ADMIN_ROLE_KEYS,
@@ -392,9 +393,12 @@ export async function updateSettingsUser(
       // A checked role represents existing current grants, not authority to
       // restore every historical scope or replace a future expiry with null.
       if (previous.roles.includes(roleKey)) continue;
+      const appointmentScope = financeWorkPortRoleScope(roleKey) ?? scope;
       const canonical = existing.find(
         (row) =>
-          row.roleKey === roleKey && row.scope.type === scope.type && row.scope.id === scope.id,
+          row.roleKey === roleKey &&
+          row.scope.type === appointmentScope.type &&
+          row.scope.id === appointmentScope.id,
       );
       if (canonical) {
         await tx.roleAssignments.update(canonical.id, {
@@ -409,7 +413,7 @@ export async function updateSettingsUser(
           expiresAt: null,
           status: 'active',
           ownerUid: actorUid,
-          scope,
+          scope: appointmentScope,
         });
       }
     }

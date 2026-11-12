@@ -99,6 +99,10 @@ export const ROLE_KEYS = [
   'media_center.new_media_reporters.minister',
   'media_center.new_media_reporters.member',
   'media_center.finance',
+  'media_center.director',
+  'sports.finance',
+  'bbs.finance',
+  'bbs.lead',
 ] as const;
 
 export type RoleKey = (typeof ROLE_KEYS)[number];

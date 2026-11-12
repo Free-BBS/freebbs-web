@@ -188,6 +188,54 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
   });
 
+  it('hides both financial entrances while refreshing a changed appointment for the same user', async () => {
+    let finishRefresh: ((access: { configured: boolean; canAccess: boolean }) => void) | undefined;
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ configured: true, canAccess: true, canManageBudget: false })
+      .mockImplementationOnce(() => new Promise((resolve) => (finishRefresh = resolve)));
+    const client = financeAccessClient(request);
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ client, user: { ...user, roles: ['student_union.finance'] } }),
+    );
+    const view = renderShell('/finance/budget');
+    expect(await screen.findAllByRole('link', { name: '财务治理' })).toHaveLength(2);
+
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client, user: { ...user, roles: [] } }));
+    view.rerender(
+      <MemoryRouter initialEntries={['/finance/budget']}>
+        <AppShell />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(2);
+    await act(async () => finishRefresh?.({ configured: true, canAccess: false }));
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+  });
+
+  it('shows both financial entrances after the same user receives an effective financial appointment', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ configured: true, canAccess: false, canManageBudget: false })
+      .mockResolvedValueOnce({ configured: true, canAccess: true, canManageBudget: false });
+    const client = financeAccessClient(request);
+    mockUseAuth.mockReturnValue(authenticatedAuth({ client }));
+    const view = renderShell();
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('link', { name: '财务治理' })).not.toBeInTheDocument();
+
+    mockUseAuth.mockReturnValue(
+      authenticatedAuth({ client, user: { ...user, roles: ['student_union.finance'] } }),
+    );
+    view.rerender(
+      <MemoryRouter initialEntries={['/knowledge']}>
+        <AppShell />
+      </MemoryRouter>,
+    );
+    expect(await screen.findAllByRole('link', { name: '财务治理' })).toHaveLength(2);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps identity preview out of the global shell even for a qualified lead', () => {
     mockUseAuth.mockReturnValue(
       authenticatedAuth({

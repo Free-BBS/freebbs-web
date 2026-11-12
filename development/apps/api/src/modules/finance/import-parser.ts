@@ -237,6 +237,8 @@ function sourcePort(value: string): FinancePortId | undefined {
     体育: 'sports',
     体育部: 'sports',
     '体育+代表队': 'sports',
+    系级公共: 'department_common',
+    系用房: 'department_common',
     bbs: 'bbs',
     freebbs: 'bbs',
   };

@@ -203,9 +203,15 @@ export function systemSettingsIdentityLabels(
           continue;
         }
         if (
-          ['counselors.position', 'student_union.executive', 'science_association.chair'].includes(
-            group.id,
-          )
+          [
+            'counselors.position',
+            'student_union.executive',
+            'science_association.chair',
+            'media_center.director',
+            'sports.finance',
+            'bbs.finance',
+            'bbs.lead',
+          ].includes(group.id)
         )
           labels.push(option.label);
         else if (group.id === 'tms.position')

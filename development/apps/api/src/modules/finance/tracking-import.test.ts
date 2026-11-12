@@ -140,6 +140,14 @@ describe('finance budget import transactions', () => {
       projectId: project.id,
       kind: 'reimbursement',
       amountCents: 3000,
+      invoiceLines: [{ category: 'activity_materials', amountCents: 3000, repeatCount: 1 }],
+      checklist: [
+        'payee_confirmed',
+        'approval_route_acknowledged',
+        'invoice_materials_ready',
+        'material_situations_confirmed',
+        'school_authorization_acknowledged',
+      ],
       items: [{ description: '物料', quantity: '1 批' }],
       payeeName: '收款人',
       payeeStudentId: 'fake-id',
@@ -151,7 +159,8 @@ describe('finance budget import transactions', () => {
     const claimId = created.claims[0].id;
     await service.act(chief(), claimId, 1, 'submit');
     await service.act(chief(), claimId, 2, 'approve');
-    await service.act(chief(), claimId, 3, 'confirm_received');
+    await service.act(chief(), claimId, 3, 'record_school_submission');
+    await service.act(chief(), claimId, 4, 'confirm_received');
     const beforeClaims = JSON.stringify((await service.read(chief())).claims);
     const updated = await service.previewImport(
       chief(),

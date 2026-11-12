@@ -1,5 +1,9 @@
 import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
-import { CLASS_SECRETARY_TAG, validateIdentitySelection } from '@freebbs-development/contracts';
+import {
+  CLASS_SECRETARY_TAG,
+  validateIdentitySelection,
+  financeWorkPortRoleScope,
+} from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
 import { RecordConflictError } from '../../core/database/record-conflict-error.js';
@@ -92,6 +96,16 @@ export async function createRoleAssignment(
   const now = context.now ?? new Date();
   const scope = input.scope ?? publicScope;
   validateScope(scope);
+  const requiredFinanceScope = financeWorkPortRoleScope(input.roleKey);
+  if (
+    requiredFinanceScope &&
+    (scope.type !== requiredFinanceScope.type || scope.id !== requiredFinanceScope.id)
+  )
+    throw new HttpError(
+      400,
+      'invalid_finance_work_port_scope',
+      '工作口岗位须绑定对应组织的准确范围',
+    );
   validateExpiry(input.expiresAt, now);
   if (isRootManagedGlobalAppointment(input.roleKey, scope))
     requireRootAppointmentAuthority(context.actorUid, context.rootAdmin);

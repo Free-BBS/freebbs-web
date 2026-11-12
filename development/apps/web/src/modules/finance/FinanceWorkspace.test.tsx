@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { financeClaimChecklist } from '@freebbs-development/contracts';
 import type {
   FinanceBudgetSummary,
   FinanceClaimView,
@@ -177,8 +178,8 @@ describe('FinanceWorkspace', () => {
 
   it('limits draft organization and department choices to submitting grants and resets the selected project on ancestor changes', async () => {
     setup(cascadeFixture(), 'claims');
-    await userEvent.click(await screen.findByRole('button', { name: '新增报销 / 代发' }));
-    const dialog = screen.getByRole('dialog', { name: '新增报销 / 代发' });
+    await userEvent.click(await screen.findByRole('button', { name: '新增报销' }));
+    const dialog = screen.getByRole('dialog', { name: '新增报销' });
     const organization = within(dialog).getByLabelText('所属组织');
     const department = within(dialog).getByLabelText('所属部门');
     const project = within(dialog).getByLabelText('预算项目');
@@ -257,26 +258,20 @@ describe('FinanceWorkspace', () => {
     unmount();
     setup(fixture({ departments: [], projects: [], claims: [], submittableDepartmentIds: [] }));
     await screen.findByText('暂未分配财务查看权限');
-    expect(screen.queryByRole('button', { name: '新增报销 / 代发' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增报销' })).not.toBeInTheDocument();
   });
 
-  it('creates itemized drafts with exact cents and a stable retry identifier, without uploading files', async () => {
+  it('creates repeated-invoice drafts with exact cents and a stable retry identifier, without purchase quantities', async () => {
     const { request } = setup(fixture(), 'claims');
-    await userEvent.click(await screen.findByRole('button', { name: '新增报销 / 代发' }));
-    const dialog = screen.getByRole('dialog', { name: '新增报销 / 代发' });
+    await userEvent.click(await screen.findByRole('button', { name: '新增报销' }));
+    const dialog = screen.getByRole('dialog', { name: '新增报销' });
     expect(within(dialog).queryByLabelText(/垫款人/)).not.toBeInTheDocument();
-    await userEvent.type(within(dialog).getByLabelText('金额（元）'), '0.29');
-    await userEvent.type(within(dialog).getByLabelText('内容 1'), '实践纪念册');
-    await userEvent.type(within(dialog).getByLabelText('数量 1'), '3 本');
+    await userEvent.type(within(dialog).getByLabelText('单张金额（元） 1'), '0.29');
+    await userEvent.clear(within(dialog).getByLabelText('重复张数 1'));
+    await userEvent.type(within(dialog).getByLabelText('重复张数 1'), '3');
     await userEvent.type(within(dialog).getByLabelText('收款人姓名'), '测试同学');
     await userEvent.type(within(dialog).getByLabelText('收款人学号'), '2026000002');
-    fireEvent.change(within(dialog).getByLabelText('外部提交日期'), {
-      target: { value: '2026-10-23' },
-    });
-    await userEvent.type(
-      within(dialog).getByLabelText('所含材料（每行一项）'),
-      '发票 1 张\n签收表',
-    );
+    expect(within(dialog).queryByLabelText('购买数量')).not.toBeInTheDocument();
     expect(dialog.querySelector('input[type="file"]')).toBeNull();
     request.mockRejectedValueOnce(new Error('网络中断，请重试'));
     await userEvent.click(within(dialog).getByRole('button', { name: '保存草稿' }));
@@ -284,27 +279,30 @@ describe('FinanceWorkspace', () => {
     const firstBody = JSON.parse(request.mock.calls[1][1].body);
     expect(firstBody).toMatchObject({
       projectId: project.id,
-      amountCents: 29,
+      amountCents: 87,
       payeeName: '测试同学',
       payeeStudentId: '2026000002',
-      externalSubmittedAt: '2026-10-23',
-      items: [{ description: '实践纪念册', quantity: '3 本' }],
-      materials: ['发票 1 张', '签收表'],
+      externalSubmittedAt: '',
+      items: [],
+      materials: [],
+      invoiceLines: [{ category: 'activity_materials', amountCents: 29, repeatCount: 3 }],
     });
     expect(firstBody).not.toHaveProperty('payerName');
     expect(firstBody).not.toHaveProperty('payerStudentId');
     await userEvent.click(within(dialog).getByRole('button', { name: '保存草稿' }));
-    await screen.findByText('款项草稿已保存，请在详情中提交系内审批');
+    await screen.findByText('草稿已保存，可在详情中提交辅导员审核');
     expect(JSON.parse(request.mock.calls[2][1].body).requestId).toBe(firstBody.requestId);
   });
 
   it('does not truncate fractions of a cent when recording a draft', async () => {
     const { request } = setup(fixture(), 'claims');
-    await userEvent.click(await screen.findByRole('button', { name: '新增报销 / 代发' }));
+    await userEvent.click(await screen.findByRole('button', { name: '新增报销' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('金额（元）'), { target: { value: '1.005' } });
+    fireEvent.change(within(dialog).getByLabelText('单张金额（元） 1'), {
+      target: { value: '1.005' },
+    });
     fireEvent.submit(dialog.querySelector('form')!);
-    await screen.findByText('金额请填写非负数，最多保留两位小数');
+    await screen.findByText('金额最多保留两位小数');
     expect(request).toHaveBeenCalledTimes(1);
   });
 
@@ -316,16 +314,16 @@ describe('FinanceWorkspace', () => {
     };
     const { request } = setup(fixture({ claims: [payable] }), 'claims');
     await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
-    expect(screen.queryByRole('button', { name: '系内审核通过' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '同意初审' })).not.toBeInTheDocument();
     expect(screen.getByText(claim.payeeStudentId, { exact: false })).toBeInTheDocument();
     expect(screen.getByText('已授权工作口经费负责人')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '确认实际到账' }));
-    const dialog = screen.getByRole('dialog', { name: '确认实际到账' });
-    await userEvent.click(within(dialog).getByRole('button', { name: '确认实际到账' }));
+    await userEvent.click(screen.getByRole('button', { name: '确认收到款项' }));
+    const dialog = screen.getByRole('dialog', { name: '确认收到款项' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '确认收到款项' }));
     await screen.findByText('请先勾选确认项');
     expect(request).toHaveBeenCalledTimes(1);
     await userEvent.click(within(dialog).getByLabelText('已核实本笔款项实际到账'));
-    await userEvent.click(within(dialog).getByRole('button', { name: '确认实际到账' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '确认收到款项' }));
     await screen.findByText('办理进度已更新');
     expect(request).toHaveBeenLastCalledWith(
       '/finance/tracking/claims/claim-1/actions',
@@ -335,6 +333,58 @@ describe('FinanceWorkspace', () => {
       }),
     );
   });
+
+  it.each([
+    {
+      kind: 'reimbursement' as const,
+      action: '确认进入校财务流程',
+      status: '校财务流程中',
+      confirmation: '已完成本笔款项对应的财务办理操作',
+    },
+    {
+      kind: 'direct_payment' as const,
+      action: '确认进入系学生组审核',
+      status: '系学生组审核中',
+      confirmation: '已确认本笔代发进入系学生组审核中',
+    },
+  ])(
+    'uses the correct next-stage instructions and status for $kind',
+    async ({ kind, action, status, confirmation }) => {
+      const ready: FinanceClaimView = {
+        ...claim,
+        kind,
+        status: 'initial_approved',
+        allowedActions: ['record_school_submission'],
+        ...(kind === 'direct_payment'
+          ? { directPayment: { hourlyRateCents: 10000, workContent: '活动摄影', proofFileIds: [] } }
+          : {}),
+      };
+      const { request } = setup(fixture({ claims: [ready] }), 'claims');
+      await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
+      await userEvent.click(screen.getByRole('button', { name: action }));
+      const dialog = screen.getByRole('dialog', { name: action });
+      if (kind === 'direct_payment') {
+        expect(dialog).toHaveTextContent('确认本笔代发已进入系学生组审核中；无需录入学校报销单。');
+        expect(dialog).not.toHaveTextContent('请在学校财务系统完成对应审核');
+      } else expect(dialog).toHaveTextContent('请在学校财务系统完成对应审核后');
+      await userEvent.click(within(dialog).getByRole('button', { name: action }));
+      expect(await screen.findByText('请先勾选确认项')).toBeInTheDocument();
+      expect(request).toHaveBeenCalledTimes(1);
+      await userEvent.click(within(dialog).getByLabelText(confirmation));
+      request.mockResolvedValueOnce(
+        fixture({ claims: [{ ...ready, status: 'school_review', allowedActions: [] }] }),
+      );
+      await userEvent.click(within(dialog).getByRole('button', { name: action }));
+      await screen.findByText('办理进度已更新');
+      expect(screen.getByRole('article')).toHaveTextContent(status);
+      expect(request).toHaveBeenLastCalledWith(
+        '/finance/tracking/claims/claim-1/actions',
+        expect.objectContaining({
+          body: JSON.stringify({ revision: 3, action: 'record_school_submission', note: '' }),
+        }),
+      );
+    },
+  );
 
   it('allows a final reviewer to edit budget metadata while discarding legacy finance personnel grants', async () => {
     const data = fixture({
@@ -444,13 +494,13 @@ describe('FinanceWorkspace', () => {
       'claims',
     );
     await screen.findByRole('button', { name: '详情与办理' });
-    expect(screen.queryByRole('button', { name: '新增报销 / 代发' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增报销' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '预算目录' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '详情与办理' }));
     expect(screen.getByRole('dialog', { name: '款项详情与办理记录' })).toHaveTextContent(
       '实践手册',
     );
-    for (const name of ['编辑草稿', '提交系内审批', '系内审核通过', '确认实际到账']) {
+    for (const name of ['编辑草稿', '提交辅导员审核', '同意初审', '确认收到款项']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
@@ -536,5 +586,273 @@ describe('FinanceWorkspace', () => {
     );
     await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
     await screen.findByText('暂未分配财务查看权限');
+  });
+
+  it('preserves an exclusive reviewer when an ordinary budget manager edits the directory', async () => {
+    const department = {
+      id: 'department_common.rooms',
+      name: '系用房',
+      portId: 'department_common' as const,
+      reviewPolicy: { reviewerUids: ['u-room-reviewer'] },
+    };
+    const { request } = setup(
+      fixture({
+        canManageBudget: true,
+        canManageReviewPolicies: false,
+        departments: [department],
+        settings: { revision: 3, departments: [department], grants: [] },
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: '预算目录' }));
+    expect(screen.queryByLabelText(/指定审核人 UID/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '保存预算目录' }));
+    await screen.findByText('预算目录已更新');
+    expect(JSON.parse(request.mock.calls[1][1].body).departments).toEqual([department]);
+  });
+
+  it('lets the highest administrator type a reviewer list without losing separators', async () => {
+    const department = {
+      id: 'department_common.rooms',
+      name: '系用房',
+      portId: 'department_common' as const,
+    };
+    const { request } = setup(
+      fixture({
+        canManageBudget: true,
+        canManageReviewPolicies: true,
+        departments: [department],
+        settings: { revision: 3, departments: [department], grants: [] },
+      }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: '预算目录' }));
+    await userEvent.click(screen.getByText('审核权限：通用审核'));
+    await userEvent.type(screen.getByLabelText(/指定审核人 UID/), 'u-one, u-two');
+    expect(screen.getByLabelText(/指定审核人 UID/)).toHaveValue('u-one, u-two');
+    await userEvent.click(screen.getByRole('button', { name: '保存预算目录' }));
+    await screen.findByText('预算目录已更新');
+    expect(JSON.parse(request.mock.calls[1][1].body).departments).toEqual([
+      { ...department, reviewPolicy: { reviewerUids: ['u-one', 'u-two'] } },
+    ]);
+  });
+
+  it('requires all checklist items and submits their saved revision before requesting counselor review', async () => {
+    const draft: FinanceClaimView = {
+      ...claim,
+      status: 'draft',
+      canEdit: true,
+      allowedActions: ['submit'],
+      invoiceLines: [{ category: 'venue', amountCents: 20000, repeatCount: 1 }],
+      checklist: [],
+    };
+    const { request } = setup(fixture({ claims: [draft] }), 'claims');
+    await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
+    await userEvent.click(screen.getByRole('button', { name: '提交辅导员审核' }));
+    const dialog = screen.getByRole('dialog', { name: '提交辅导员审核' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '提交辅导员审核' }));
+    expect(await screen.findByText('请完成全部材料与办理确认项')).toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(1);
+    const requirements = financeClaimChecklist(draft);
+    for (const item of requirements)
+      await userEvent.click(within(dialog).getByLabelText(item.label));
+    const checked = requirements.map((item) => item.key);
+    request.mockResolvedValueOnce(
+      fixture({ claims: [{ ...draft, checklist: checked, revision: 4 }] }),
+    );
+    request.mockResolvedValueOnce(
+      fixture({
+        claims: [{ ...draft, checklist: checked, revision: 5, status: 'department_review' }],
+      }),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '提交辅导员审核' }));
+    await screen.findByText('办理进度已更新');
+    expect(request.mock.calls[1][0]).toBe('/finance/tracking/claims/claim-1');
+    expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({
+      revision: 3,
+      checklist: checked,
+    });
+    expect(JSON.parse(request.mock.calls[2][1].body)).toEqual({
+      revision: 4,
+      action: 'submit',
+      note: '',
+    });
+  });
+
+  it('filters historical member claims through the combined pool and does not offer editing its summed allowance', async () => {
+    const pool = {
+      ...project,
+      name: '部门建设',
+      code: '5-4',
+      memberProjectIds: ['source-a', 'source-b'],
+    };
+    const budget = setup(fixture({ projects: [pool], canManageBudget: true }));
+    await screen.findByRole('table', { name: '部门建设 分项余额' });
+    expect(screen.queryByRole('button', { name: '编辑预算 部门建设' })).not.toBeInTheDocument();
+    budget.unmount();
+    setup(
+      fixture({
+        projects: [pool],
+        claims: [
+          { ...claim, id: 'a', projectId: 'source-a' },
+          { ...claim, id: 'b', projectId: 'source-b' },
+        ],
+      }),
+      'claims',
+    );
+    await screen.findAllByRole('article');
+    await userEvent.selectOptions(screen.getByLabelText('项目'), pool.id);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.getAllByRole('article')[1]).toHaveTextContent('5-4 部门建设');
+  });
+
+  it('keeps legacy submission timestamps separate from counselor confirmation of school finance', async () => {
+    const legacy: FinanceClaimView = {
+      ...claim,
+      status: 'initial_approved',
+      workflowVersion: 2,
+      schoolSubmittedAt: '2026-10-23T03:00:00Z',
+      counselorFinancialApprovedAt: null,
+      history: [
+        ...claim.history,
+        {
+          action: 'approve',
+          from: 'department_review',
+          to: 'school_review',
+          at: '2026-10-23T02:30:00Z',
+          actorUid: 'reviewer',
+          actorDisplayName: '辅导员',
+          note: '',
+        },
+        {
+          action: 'record_school_submission',
+          from: 'school_review',
+          to: 'school_review',
+          at: '2026-10-23T03:00:00Z',
+          actorUid: 'officer',
+          actorDisplayName: '经费负责人',
+          note: '',
+        },
+      ],
+    };
+    setup(fixture({ claims: [legacy] }), 'claims');
+    await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
+    const dialog = screen.getByRole('dialog', { name: '款项详情与办理记录' });
+    expect(within(dialog).getByText('辅导员确认财务办理').nextElementSibling).toHaveTextContent(
+      '尚未确认',
+    );
+    expect(within(dialog).getByText('旧版校财务提交记录').nextElementSibling).not.toHaveTextContent(
+      '尚未确认',
+    );
+    expect(within(dialog).getByText('经费负责人提交记录（旧版）')).toBeInTheDocument();
+    expect(within(dialog).queryByText('确认进入校财务流程')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('辅导员 · 系内初审已通过（旧版记录）')).toBeInTheDocument();
+  });
+
+  it('saves a new application, opens its material review directly, and waits for explicit final submission', async () => {
+    const { request } = setup(fixture(), 'claims');
+    await userEvent.click(await screen.findByRole('button', { name: '新增报销' }));
+    let dialog = screen.getByRole('dialog', { name: '新增报销' });
+    fireEvent.change(within(dialog).getByLabelText('单张金额（元） 1'), {
+      target: { value: '200' },
+    });
+    await userEvent.type(within(dialog).getByLabelText('收款人姓名'), '测试同学');
+    await userEvent.type(within(dialog).getByLabelText('收款人学号'), '2026000001');
+    const draft: FinanceClaimView = {
+      ...claim,
+      id: 'created-claim',
+      status: 'draft',
+      revision: 1,
+      allowedActions: ['submit'],
+      canEdit: true,
+      checklist: [],
+      invoiceLines: [{ category: 'activity_materials', amountCents: 20000, repeatCount: 1 }],
+    };
+    request.mockResolvedValueOnce(fixture({ claims: [claim, draft] }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '核对材料并提交' }));
+    dialog = await screen.findByRole('dialog', { name: '提交辅导员审核' });
+    expect(dialog).toHaveTextContent('学校报销办理指引');
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls.some(([path]) => path.endsWith('/actions'))).toBe(false);
+    const checked = financeClaimChecklist(draft).map((item) => item.key);
+    for (const item of financeClaimChecklist(draft))
+      await userEvent.click(within(dialog).getByLabelText(item.label));
+    request.mockResolvedValueOnce(
+      fixture({ claims: [claim, { ...draft, checklist: checked, revision: 2 }] }),
+    );
+    request.mockResolvedValueOnce(
+      fixture({
+        claims: [claim, { ...draft, checklist: checked, revision: 3, status: 'department_review' }],
+      }),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '提交辅导员审核' }));
+    await screen.findByText('办理进度已更新');
+    expect(request.mock.calls[2][0]).toBe('/finance/tracking/claims/created-claim');
+    expect(request.mock.calls[3][0]).toBe('/finance/tracking/claims/created-claim/actions');
+    expect(JSON.parse(request.mock.calls[3][1].body)).toEqual({
+      revision: 2,
+      action: 'submit',
+      note: '',
+    });
+  });
+
+  it.each(['ambiguous', 'another-owner'] as const)(
+    'does not guess a newly created ID from an %s workspace difference',
+    async (mode) => {
+      const { request } = setup(fixture(), 'claims');
+      await userEvent.click(await screen.findByRole('button', { name: '新增报销' }));
+      const dialog = screen.getByRole('dialog', { name: '新增报销' });
+      fireEvent.change(within(dialog).getByLabelText('单张金额（元） 1'), {
+        target: { value: '200' },
+      });
+      await userEvent.type(within(dialog).getByLabelText('收款人姓名'), '测试同学');
+      await userEvent.type(within(dialog).getByLabelText('收款人学号'), '2026000001');
+      const draft: FinanceClaimView = {
+        ...claim,
+        id: 'created-a',
+        status: 'draft',
+        allowedActions: ['submit'],
+        canEdit: true,
+        submitterUid: mode === 'another-owner' ? 'someone-else' : user.uid,
+      };
+      request.mockResolvedValueOnce(
+        fixture({
+          claims:
+            mode === 'ambiguous' ? [claim, draft, { ...draft, id: 'created-b' }] : [claim, draft],
+        }),
+      );
+      await userEvent.click(within(dialog).getByRole('button', { name: '核对材料并提交' }));
+      await screen.findByText('草稿已保存，可在详情中提交辅导员审核');
+      expect(screen.queryByRole('dialog', { name: '提交辅导员审核' })).not.toBeInTheDocument();
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(request.mock.calls.some(([path]) => path.endsWith('/actions'))).toBe(false);
+    },
+  );
+
+  it('opens the explicit edited draft ID even when other drafts arrive in the same response', async () => {
+    const draft: FinanceClaimView = {
+      ...claim,
+      status: 'draft',
+      revision: 3,
+      allowedActions: ['submit'],
+      canEdit: true,
+      checklist: [],
+      invoiceLines: [{ category: 'activity_materials', amountCents: 20000, repeatCount: 1 }],
+    };
+    const { request } = setup(fixture({ claims: [draft] }), 'claims');
+    await userEvent.click(await screen.findByRole('button', { name: '详情与办理' }));
+    await userEvent.click(screen.getByRole('button', { name: '编辑草稿' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑报销草稿' });
+    request.mockResolvedValueOnce(
+      fixture({
+        claims: [
+          { ...draft, revision: 4 },
+          { ...draft, id: 'other-arrival-a' },
+          { ...draft, id: 'other-arrival-b' },
+        ],
+      }),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '核对材料并提交' }));
+    await screen.findByRole('dialog', { name: '提交辅导员审核' });
+    expect(request.mock.calls[1][0]).toBe('/finance/tracking/claims/claim-1');
+    expect(request).toHaveBeenCalledTimes(2);
   });
 });

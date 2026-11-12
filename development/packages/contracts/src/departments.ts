@@ -24,9 +24,15 @@ export interface DepartmentDefinition {
   roleKeys: readonly RoleKey[];
 }
 export const DEPARTMENT_DIRECTORY: readonly DepartmentDefinition[] =
-  DEVELOPMENT_IDENTITY_SECTIONS.filter(({ id }) => id !== 'counselors').flatMap((section) =>
+  DEVELOPMENT_IDENTITY_SECTIONS.filter(
+    ({ id }) => id !== 'counselors' && id !== 'finance_ports',
+  ).flatMap((section) =>
     section.groups
-      .filter(({ id }) => id === 'tms.position' || !/\.(executive|chair|finance)$/.test(id))
+      .filter(
+        ({ id }) =>
+          id !== 'media_center.director' &&
+          (id === 'tms.position' || !/\.(executive|chair|finance)$/.test(id)),
+      )
       .map((group) => {
         const departmentKey = group.id.split('.').at(-1)!;
         return {

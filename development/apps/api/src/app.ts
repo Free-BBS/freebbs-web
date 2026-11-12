@@ -100,6 +100,7 @@ export interface CreateAppOptions {
   developmentRewardProvider?: DevelopmentRewardProvider;
   systemSettingsDirectory?: string;
   financeDirectory?: string;
+  financePilotUids?: readonly string[];
   publicUploadDirectory?: string;
   learningAchievementProvider?: LearningAchievementProvider;
   developmentMapTokenDigest?: string;
@@ -513,6 +514,10 @@ export function createApp(options: CreateAppOptions = {}) {
       },
       authMode,
       nodeEnvironment: environment.nodeEnv,
+      pilotUids:
+        options.financePilotUids === undefined
+          ? environment.financePilotUids
+          : options.financePilotUids,
       directory: financeDataDirectory({
         directory: options.financeDirectory ?? environmentSource.FINANCE_DATA_DIR,
         nodeEnvironment: environment.nodeEnv,

@@ -197,6 +197,7 @@ export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = [...exhibiti
         .filter(
           ({ id }) =>
             !/\.(executive|chair|position|finance)$/.test(id) &&
+            id !== 'media_center.director' &&
             id !== 'science_association.office',
         )
         .map((group) => {

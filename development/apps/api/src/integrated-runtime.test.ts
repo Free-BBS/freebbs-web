@@ -46,6 +46,7 @@ it('exposes the shared root authority to the learning platform before a first de
   await runtime.close();
 });
 it('passes private finance configuration and public upload roots into the app', async () => {
+  vi.stubEnv('FINANCE_PILOT_UIDS', 'pilot-owner');
   const runtime = await createIntegratedDevelopmentRuntime({
     ...options,
     financeDirectory: '/private-finance',
@@ -55,8 +56,14 @@ it('passes private finance configuration and public upload roots into the app', 
     expect.objectContaining({
       financeDirectory: '/private-finance',
       publicUploadDirectory: '/public-uploads',
+      environment: expect.objectContaining({ FINANCE_PILOT_UIDS: 'pilot-owner' }),
     }),
   );
+  await runtime.close();
+});
+it('passes explicit finance pilot options without replacing an empty list with open access', async () => {
+  const runtime = await createIntegratedDevelopmentRuntime({ ...options, financePilotUids: [] });
+  expect(mocks.app).toHaveBeenCalledWith(expect.objectContaining({ financePilotUids: [] }));
   await runtime.close();
 });
 it('starts the integrated feed with the effective app environment and stops it before closing once', async () => {

@@ -6,6 +6,8 @@ import {
   identityLabels,
   validateIdentitySelection,
   toggleIdentitySelection,
+  FINANCE_WORK_PORT_ROLES,
+  financeWorkPortRoleScope,
 } from './development-identities.js';
 
 describe('development identity catalog', () => {
@@ -17,6 +19,7 @@ describe('development identity catalog', () => {
       'tms',
       'science_association',
       'media_center',
+      'finance_ports',
     ]);
   });
 
@@ -57,7 +60,39 @@ describe('development identity catalog', () => {
     expect(section('youth_league')?.groups).toHaveLength(8);
     expect(section('tms')?.groups.flatMap(({ options }) => options)).toHaveLength(3);
     expect(section('science_association')?.groups).toHaveLength(7);
-    expect(section('media_center')?.groups).toHaveLength(4);
+    expect(section('media_center')?.groups).toHaveLength(5);
+    expect(section('finance_ports')?.groups).toHaveLength(3);
+  });
+
+  it('offers scoped work-port appointments without making finance positions conflict with ordinary roles', () => {
+    expect(FINANCE_WORK_PORT_ROLES).toEqual([
+      'media_center.director',
+      'sports.finance',
+      'bbs.finance',
+      'bbs.lead',
+    ]);
+    expect(financeWorkPortRoleScope('sports.finance')).toEqual({
+      type: 'organization',
+      id: 'sports',
+    });
+    expect(financeWorkPortRoleScope('bbs.finance')).toEqual({ type: 'organization', id: 'bbs' });
+    expect(financeWorkPortRoleScope('media_center.director')).toEqual({
+      type: 'organization',
+      id: 'media_center',
+    });
+    expect(financeWorkPortRoleScope('department.arts_member')).toBeNull();
+    expect(
+      validateIdentitySelection(['domain.arts_lead', 'sports.finance', 'bbs.lead', 'bbs.finance']),
+    ).toEqual({ ok: true });
+    expect(identityLabels(FINANCE_WORK_PORT_ROLES)).toEqual([
+      '媒体中心主任',
+      '体育经费负责人',
+      'BBS负责人',
+      'BBS经费负责人',
+    ]);
+    expect(
+      validateIdentitySelection(['media_center.director', 'media_center.creative.minister']),
+    ).toMatchObject({ ok: false, groupId: 'media_center' });
   });
   it('replaces hidden legacy positions and keeps finance appointments and other organizations', () => {
     expect(

@@ -8,6 +8,7 @@ import type {
   RoleKey,
 } from '@freebbs-development/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
+import { financeClaimChecklist } from '@freebbs-development/contracts';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { FinanceTrackingService } from './tracking-service.js';
 
@@ -68,12 +69,40 @@ function input(projectId: string, amountCents = 3000): FinanceClaimInput {
     kind: 'reimbursement',
     items: [{ description: '活动物料', quantity: '3 件' }],
     amountCents,
+    invoiceLines: [{ category: 'activity_materials', amountCents, repeatCount: 1 }],
+    checklist: financeClaimChecklist({ kind: 'reimbursement' }).map(({ key }) => key),
     payeeName: '收款同学',
     payeeStudentId: '2026010001',
     materials: ['发票', '活动说明'],
     externalReference: '校财务-001',
     externalSubmittedAt: '2026-10-23',
     notes: '',
+  };
+}
+async function directInput(
+  service: FinanceTrackingService,
+  projectId: string,
+  amountCents = 3000,
+): Promise<FinanceClaimInput> {
+  const buffer = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII=',
+    'base64',
+  );
+  const proof = await service.privateFileStore!.create(head.uid, 'work_proof', {
+    originalname: 'proof.png',
+    mimetype: 'image/png',
+    buffer,
+    size: buffer.length,
+  } as Express.Multer.File);
+  return {
+    ...input(projectId, amountCents),
+    kind: 'direct_payment',
+    directPayment: {
+      hourlyRateCents: 1000,
+      workContent: '整理测试活动资料',
+      proofFileIds: [proof.id],
+    },
+    checklist: financeClaimChecklist({ kind: 'direct_payment' }).map(({ key }) => key),
   };
 }
 async function fixture() {
@@ -203,13 +232,16 @@ describe('finance shared-identity permissions and accounting', () => {
       remainingCents: 7000,
     });
     payload = await service.act(counselor, id, 2, 'approve');
+    expect(payload.claims[0].status).toBe('initial_approved');
+    expect(payload.projects[0].reimbursement.departmentReviewCents).toBe(3000);
+    payload = await service.act(counselor, id, 3, 'record_school_submission');
     expect(payload.projects[0].reimbursement).toMatchObject({
       departmentReviewCents: 0,
       schoolReviewCents: 3000,
       receivedCents: 0,
       remainingCents: 7000,
     });
-    payload = await service.act(head, id, 3, 'confirm_received');
+    payload = await service.act(head, id, 4, 'confirm_received');
     expect(payload.projects[0].reimbursement).toMatchObject({
       departmentReviewCents: 0,
       schoolReviewCents: 0,
@@ -217,10 +249,7 @@ describe('finance shared-identity permissions and accounting', () => {
       remainingCents: 7000,
     });
     const direct = (
-      await service.createClaim(head, 'direct', {
-        ...input(projectId, 6000),
-        kind: 'direct_payment',
-      })
+      await service.createClaim(head, 'direct', await directInput(service, projectId, 6000))
     ).claims.find(({ kind }) => kind === 'direct_payment')!;
     payload = await service.act(head, direct.id, 1, 'submit');
     expect(payload.projects[0].directPayment).toMatchObject({
@@ -234,13 +263,14 @@ describe('finance shared-identity permissions and accounting', () => {
     const { service, projectId } = await fixture();
     const id = (await service.createClaim(head, 'c1', input(projectId))).claims[0].id;
     await service.act(head, id, 1, 'submit');
-    await service.act(officer, id, 2, 'record_school_submission');
+    await service.act(counselor, id, 2, 'approve');
     await expect(service.act(counselor, id, 3, 'return')).rejects.toMatchObject({ status: 400 });
     let payload = await service.act(counselor, id, 3, 'return', '请补充发票抬头');
     expect(payload.projects[0].reimbursement.remainingCents).toBe(10000);
     await service.updateClaim(head, id, 4, input(projectId, 4000));
     payload = await service.act(head, id, 5, 'submit');
     expect(payload.claims[0].schoolSubmittedAt).toBeNull();
+    expect(payload.claims[0].initialApprovedAt).toBeNull();
     payload = await service.act(head, id, 6, 'withdraw');
     expect(payload.projects[0].reimbursement.remainingCents).toBe(10000);
     await expect(service.updateClaim(head, id, 7, input(projectId))).rejects.toMatchObject({
@@ -267,9 +297,10 @@ describe('finance shared-identity permissions and accounting', () => {
     await expect(service.act(other, id, 3, 'return', 'other')).rejects.toMatchObject({
       status: 404,
     });
-    await service.act(owner, id, 3, 'record_teacher_approval');
-    await service.act(head, id, 4, 'confirm_received');
-    await expect(service.act(counselor, id, 5, 'return', 'late')).rejects.toMatchObject({
+    await service.act(owner, id, 3, 'record_school_submission');
+    await service.act(owner, id, 4, 'record_teacher_approval');
+    await service.act(head, id, 5, 'confirm_received');
+    await expect(service.act(counselor, id, 6, 'return', 'late')).rejects.toMatchObject({
       status: 403,
     });
   });
@@ -339,7 +370,7 @@ describe('finance shared-identity permissions and accounting', () => {
     expect(await persisted.read(owner)).not.toHaveProperty('audit');
   });
 
-  it('protects project identity, unique codes, master revisions and external submission information', async () => {
+  it('protects project identity and revisions without requiring an external reference before BBS submission', async () => {
     const { service, projectId } = await fixture();
     await expect(service.createProject(owner, 'duplicate', budget)).rejects.toMatchObject({
       status: 409,
@@ -351,7 +382,7 @@ describe('finance shared-identity permissions and accounting', () => {
         externalSubmittedAt: '',
       })
     ).claims[0].id;
-    await expect(service.act(head, id, 1, 'submit')).rejects.toMatchObject({ status: 400 });
+    expect((await service.act(head, id, 1, 'submit')).claims[0].status).toBe('department_review');
     await expect(
       service.updateProject(owner, projectId, 1, { ...budget, departmentId: departments[1].id }),
     ).rejects.toMatchObject({ status: 409 });
@@ -370,34 +401,33 @@ describe('finance shared-identity permissions and accounting', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
-  it('records school-finance submission only for reimbursements while keeping direct-payment review usable', async () => {
+  it('lets only the counselor confirm external processing after BBS approval for both channels', async () => {
     const { service, projectId } = await fixture();
     const reimbursement = (await service.createClaim(head, 'reimbursement', input(projectId)))
       .claims[0];
     const direct = (
-      await service.createClaim(head, 'direct', {
-        ...input(projectId),
-        kind: 'direct_payment',
-        externalReference: '代发邮件主题',
-      })
+      await service.createClaim(head, 'direct', await directInput(service, projectId))
     ).claims.find(({ kind }) => kind === 'direct_payment')!;
     await service.act(head, reimbursement.id, 1, 'submit');
     await service.act(head, direct.id, 1, 'submit');
     expect(
       (await service.read(officer)).claims.find(({ id }) => id === reimbursement.id)!
         .allowedActions,
-    ).toContain('record_school_submission');
-    await service.act(officer, reimbursement.id, 2, 'record_school_submission');
+    ).not.toContain('record_school_submission');
     for (const actor of [officer, counselor, owner])
       await expect(
         service.act(actor, direct.id, 2, 'record_school_submission'),
       ).rejects.toMatchObject({ status: 403 });
     await service.act(counselor, direct.id, 2, 'approve');
-    await service.act(owner, direct.id, 3, 'record_teacher_approval');
-    const received = await service.act(head, direct.id, 4, 'confirm_received');
+    await expect(
+      service.act(officer, direct.id, 3, 'record_school_submission'),
+    ).rejects.toMatchObject({ status: 403 });
+    await service.act(counselor, direct.id, 3, 'record_school_submission');
+    await service.act(owner, direct.id, 4, 'record_teacher_approval');
+    const received = await service.act(head, direct.id, 5, 'confirm_received');
     expect(received.claims.find(({ id }) => id === direct.id)).toMatchObject({
       status: 'received',
-      schoolSubmittedAt: null,
+      schoolSubmittedAt: expect.any(String),
     });
   });
 

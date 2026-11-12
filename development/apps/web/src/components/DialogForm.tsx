@@ -27,6 +27,7 @@ export interface DialogFormProps {
   pending?: boolean;
   error?: string | null;
   feedback?: string | null;
+  footerActions?: ReactNode;
   initialFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSubmit: () => void | Promise<void>;
@@ -42,6 +43,7 @@ export function DialogForm({
   pending = false,
   error,
   feedback,
+  footerActions,
   initialFocusRef,
   onClose,
   onSubmit,
@@ -155,6 +157,7 @@ export function DialogForm({
             <button type="submit" disabled={pending}>
               {pending ? '正在提交…' : submitLabel}
             </button>
+            {footerActions}
           </footer>
         </form>
       </div>

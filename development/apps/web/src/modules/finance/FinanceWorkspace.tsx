@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FINANCE_PORTS,
+  FINANCE_INVOICE_CATEGORIES,
+  financeClaimChecklist,
+  financeClaimWarnings,
   type FinanceBudgetInput,
   type FinanceBudgetSummary,
   type FinanceChannelBalance,
@@ -21,26 +24,42 @@ import { ModulePageHeader } from '../../components/ModulePageHeader.js';
 import { createApiClient, type ApiClient } from '../../core/api/client.js';
 import { useOptionalAuth } from '../../core/auth/AuthProvider.js';
 import { BudgetImportDialog } from './BudgetImportDialog.js';
+import {
+  FinanceClaimEditor,
+  FinanceGuide,
+  PrivateFinanceFile,
+  financeClaimInputOf,
+  financeClaimTitle,
+  financeGuideFor,
+} from './FinanceClaimEditor.js';
+import { FinanceWorkflowEditor } from './FinanceWorkflowEditor.js';
 import '../../styles/finance-tracking.css';
 
 const BASE = '/finance/tracking';
 const statusLabels: Record<FinanceClaimStatus, string> = {
   draft: '草稿',
-  department_review: '系内审批',
-  school_review: '校内审批',
-  received: '已到账',
-  returned: '已退回',
+  department_review: '等待辅导员审核',
+  initial_approved: '系内初审已通过',
+  school_review: '校财务流程中',
+  received: '已确认收到款项',
+  returned: '系内初审已驳回',
   withdrawn: '已撤回',
 };
 const actionLabels: Record<FinanceClaimAction, string> = {
-  submit: '提交系内审批',
-  approve: '系内审核通过',
-  return: '退回修改',
+  submit: '提交辅导员审核',
+  approve: '同意初审',
+  return: '需补充内容',
   withdraw: '撤回申请',
-  record_school_submission: '记录校财务提交',
+  record_school_submission: '确认进入校财务流程',
   record_teacher_approval: '记录老师审核通过',
-  confirm_received: '确认实际到账',
+  confirm_received: '确认收到款项',
 };
+const claimStatusLabel = (status: FinanceClaimStatus, kind: FinanceClaimInput['kind']) =>
+  status === 'school_review' && kind === 'direct_payment' ? '系学生组审核中' : statusLabels[status];
+const claimActionLabel = (action: FinanceClaimAction, kind: FinanceClaimInput['kind']) =>
+  action === 'record_school_submission' && kind === 'direct_payment'
+    ? '确认进入系学生组审核'
+    : actionLabels[action];
 const kindLabel = (kind: FinanceClaimInput['kind']) => (kind === 'reimbursement' ? '报销' : '代发');
 const money = (cents: number) =>
   new Intl.NumberFormat('zh-CN', {
@@ -77,15 +96,12 @@ interface ProjectDraft extends Omit<
   reimbursement: string;
   directPayment: string;
 }
-interface ClaimDraft extends Omit<FinanceClaimInput, 'amountCents' | 'materials'> {
-  amount: string;
-  materialText: string;
-}
 type Modal =
   | { kind: 'project'; project?: FinanceBudgetSummary }
   | { kind: 'settings' }
+  | { kind: 'workflow_settings' }
   | { kind: 'import' }
-  | { kind: 'claim'; claim?: FinanceClaimView }
+  | { kind: 'claim'; paymentKind: FinanceClaimInput['kind']; claim?: FinanceClaimView }
   | { kind: 'detail'; id: string }
   | { kind: 'action'; claim: FinanceClaimView; action: FinanceClaimAction }
   | null;
@@ -110,19 +126,18 @@ function BalanceRow({ label, value }: { label: string; value: FinanceChannelBala
     <tr className={value.overBudget ? 'ft-over-budget' : undefined}>
       <th scope="row">{label}</th>
       <td>{money(value.allocatedCents)}</td>
-      <td>{money(value.departmentReviewCents)}</td>
-      <td>{money(value.schoolReviewCents)}</td>
-      <td>{money(value.receivedCents)}</td>
       <td>
         <strong>{money(value.remainingCents)}</strong>
         {value.overBudget ? <span className="ft-over-label">超出预算</span> : null}
       </td>
+      <td>{money(value.departmentReviewCents + value.schoolReviewCents)}</td>
+      <td>{money(value.receivedCents)}</td>
     </tr>
   );
 }
 
 function Progress({ claim }: { claim: FinanceClaimView }) {
-  const stages = ['department_review', 'school_review', 'received'] as const;
+  const stages = ['department_review', 'initial_approved', 'school_review', 'received'] as const;
   const current = stages.indexOf(claim.status as (typeof stages)[number]);
   return (
     <ol className="ft-progress" aria-label="办理进度">
@@ -134,7 +149,7 @@ function Progress({ claim }: { claim: FinanceClaimView }) {
           aria-current={claim.status === status ? 'step' : undefined}
         >
           <span aria-hidden="true">{current > index ? '✓' : index + 1}</span>
-          {statusLabels[status]}
+          {claimStatusLabel(status, claim.kind)}
         </li>
       ))}
     </ol>
@@ -142,11 +157,12 @@ function Progress({ claim }: { claim: FinanceClaimView }) {
 }
 
 function handlingHint(claim: FinanceClaimView) {
-  if (claim.status === 'department_review') return '当前节点：等待负责辅导员审核';
+  if (claim.status === 'department_review') return '等待辅导员核对本笔信息';
+  if (claim.status === 'initial_approved') return '系内初审已通过，等待辅导员确认财务办理进展';
   if (claim.status === 'school_review')
     return claim.teacherApprovedAt
       ? '老师审核已记录；款项到账后，由提交负责人确认'
-      : '当前节点：校内办理中，等待后续审核与到账';
+      : `${claimStatusLabel(claim.status, claim.kind)}，实际收到款项后由提交负责人确认`;
   if (claim.status === 'received') return '本笔款项已由提交负责人确认到账';
   if (claim.status === 'returned') return '已退回提交负责人，请按办理记录中的意见修改';
   if (claim.status === 'withdrawn') return '本笔已撤回，不占用预算额度';
@@ -222,7 +238,13 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
     submissionRequestId.current = requestId();
     setModal(next);
   }
-  async function mutate(path: string, method: string, body: unknown, feedbackText: string) {
+  async function mutate(
+    path: string,
+    method: string,
+    body: unknown,
+    feedbackText: string,
+    onSaved?: (next: FinanceTrackingPayload) => void,
+  ) {
     setPending(true);
     setFormError(null);
     setFeedback(null);
@@ -237,6 +259,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
         setData(next);
         setModal(null);
         setFeedback(feedbackText);
+        onSaved?.(next);
       }
     } catch (cause) {
       if (current === generation.current) setFormError(messageOf(cause));
@@ -274,17 +297,23 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
           .toLowerCase()
           .includes(search.toLowerCase())),
   );
-  const projectById = new Map((data?.projects ?? []).map((project) => [project.id, project]));
+  const projectById = new Map(
+    (data?.projects ?? []).flatMap((project) =>
+      [...new Set([project.id, ...(project.memberProjectIds ?? [])])].map(
+        (id) => [id, project] as const,
+      ),
+    ),
+  );
   const claims = (data?.claims ?? [])
     .filter(
       (claim) =>
         (!year || projectById.get(claim.projectId)?.year === year) &&
         (!organization || departmentById.get(claim.departmentId)?.portId === organization) &&
         (!department || claim.departmentId === department) &&
-        (!selectedProject || claim.projectId === selectedProject) &&
+        (!selectedProject || projectById.get(claim.projectId)?.id === selectedProject) &&
         (!status || claim.status === status) &&
         (!search ||
-          `${claim.items.map((item) => item.description).join(' ')} ${claim.submitterDisplayName} ${projectById.get(claim.projectId)?.name ?? ''}`
+          `${financeClaimTitle(claim)} ${claim.submitterDisplayName} ${projectById.get(claim.projectId)?.name ?? ''}`
             .toLowerCase()
             .includes(search.toLowerCase())),
     )
@@ -319,13 +348,18 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
         description={
           page === 'budget'
             ? '按项目查看已批准额度、办理中的款项与可用余额'
-            : '每一笔款项，进度有记录，去向看得见'
+            : '查看申请、初审、财务办理与到账进度'
         }
         actions={
           <div className="ft-actions">
             {data?.canManageBudget ? (
               <button type="button" onClick={() => open({ kind: 'settings' })}>
                 预算目录
+              </button>
+            ) : null}
+            {data?.canManageBudget ? (
+              <button type="button" onClick={() => open({ kind: 'workflow_settings' })}>
+                办理指引配置
               </button>
             ) : null}
             {data?.canManageBudget && page === 'budget' ? (
@@ -343,13 +377,21 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
               </>
             ) : null}
             {page === 'claims' && data?.submittableDepartmentIds.length ? (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => open({ kind: 'claim' })}
-              >
-                新增报销 / 代发
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => open({ kind: 'claim', paymentKind: 'reimbursement' })}
+                >
+                  新增报销
+                </button>
+                <button
+                  type="button"
+                  onClick={() => open({ kind: 'claim', paymentKind: 'direct_payment' })}
+                >
+                  新增代发
+                </button>
+              </>
             ) : null}
           </div>
         }
@@ -476,7 +518,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                   <option value="">全部状态</option>
                   {Object.entries(statusLabels).map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {value === 'school_review' ? '校财务流程中 / 系学生组审核中' : label}
                     </option>
                   ))}
                 </select>
@@ -496,18 +538,16 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
             <>
               <div className="ft-metrics" aria-label="当前筛选范围预算汇总">
                 <Metric label="已批准预算" cents={total.allocated} />
-                <Metric label="系内审批中" cents={total.department} tone="pending" />
-                <Metric label="校内审批中" cents={total.school} tone="school" />
-                <Metric label="已实际到账" cents={total.received} />
+                <Metric label="在途" cents={total.department + total.school} tone="pending" />
+                <Metric label="已报（收到款项）" cents={total.received} />
                 <Metric
-                  label="可用余额"
+                  label="没花"
                   cents={total.remaining}
                   tone={total.remaining < 0 ? 'danger' : 'balance'}
                 />
               </div>
               <p className="ft-explanation">
-                可用余额 = 批准额度 − 系内审批 − 校内审批 −
-                已到账。草稿、退回和撤回的款项不占用额度；报销与代发分别核算。
+                没花 = 批准额度 − 在途 − 已报。报销与代发分别核算；草稿、驳回和撤回不占额度。
               </p>
               {projects.length ? (
                 <div className="ft-projects">
@@ -523,7 +563,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                             {project.name}
                           </h3>
                         </div>
-                        {data.canManageBudget ? (
+                        {data.canManageBudget && (project.memberProjectIds?.length ?? 1) === 1 ? (
                           <button
                             type="button"
                             aria-label={`编辑预算 ${project.name}`}
@@ -540,10 +580,9 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                             <tr>
                               <th scope="col">类型</th>
                               <th scope="col">批准额度</th>
-                              <th scope="col">系内审批</th>
-                              <th scope="col">校内审批</th>
-                              <th scope="col">已到账</th>
-                              <th scope="col">可用余额</th>
+                              <th scope="col">没花</th>
+                              <th scope="col">在途</th>
+                              <th scope="col">已报（收到款项）</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -552,6 +591,11 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                           </tbody>
                         </table>
                       </div>
+                      {(project.memberProjectIds?.length ?? 1) > 1 && data.canManageBudget ? (
+                        <p className="ft-project-note">
+                          此额度池合并核算多个预算条目，请通过 Excel 导入更新原始预算。
+                        </p>
+                      ) : null}
                       {project.notes ? <p className="ft-project-note">{project.notes}</p> : null}
                     </article>
                   ))}
@@ -571,7 +615,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
           ) : (
             <>
               <p className="ft-explanation">
-                这里同步学校财务系统或代发邮件的办理情况。系内审核通过后自动转入校内审批；实际到账由提交的部门负责人确认。
+                查看本笔款项的初审、财务办理和到账情况。实际到账由原提交负责人确认。
               </p>
               {claims.length ? (
                 <div className="ft-claims">
@@ -590,8 +634,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                                 type="button"
                                 onClick={() => open({ kind: 'detail', id: claim.id })}
                               >
-                                {claim.items.map((item) => item.description).join('、') ||
-                                  '未填写购买内容'}
+                                {financeClaimTitle(claim)}
                               </button>
                             </h3>
                             <p>
@@ -601,7 +644,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                           <div className="ft-claim-amount">
                             <strong>{money(claim.amountCents)}</strong>
                             <span className="ft-status" data-status={claim.status}>
-                              {statusLabels[claim.status]}
+                              {claimStatusLabel(claim.status, claim.kind)}
                             </span>
                           </div>
                         </header>
@@ -626,7 +669,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                 <AsyncState
                   state="empty"
                   title="暂无相关报销或代发记录"
-                  description="完成校财务提交或代发邮件准备后，可在这里同步信息并跟踪进度。"
+                  description="选择“新增报销”或“新增代发”填写，未完成的信息可以暂存。"
                 />
               )}
             </>
@@ -676,6 +719,28 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
           }
         />
       ) : null}
+      {data && modal?.kind === 'workflow_settings' ? (
+        <FinanceWorkflowEditor
+          data={data}
+          client={activeClient}
+          pending={pending}
+          error={formError}
+          onClose={() => !pending && setModal(null)}
+          onSave={(workflowGuides) =>
+            mutate(
+              '/settings',
+              'PUT',
+              {
+                revision: data.settings?.revision ?? 0,
+                departments: data.settings?.departments ?? data.departments,
+                grants: [],
+                workflowGuides,
+              },
+              '办理指引配置已保存',
+            )
+          }
+        />
+      ) : null}
       {data && modal?.kind === 'settings' ? (
         <SettingsEditor
           data={data}
@@ -686,22 +751,33 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
             mutate(
               '/settings',
               'PUT',
-              { revision: data.settings?.revision ?? 0, departments, grants: [] },
+              {
+                revision: data.settings?.revision ?? 0,
+                departments,
+                grants: [],
+                ...(data.settings?.workflowGuides
+                  ? { workflowGuides: data.settings.workflowGuides }
+                  : {}),
+              },
               '预算目录已更新',
             )
           }
         />
       ) : null}
       {data && modal?.kind === 'claim' ? (
-        <ClaimEditor
+        <FinanceClaimEditor
           key={modal.claim?.id ?? 'new-claim'}
           data={data}
+          kind={modal.paymentKind}
+          client={activeClient}
           claim={modal.claim}
           pending={pending}
           error={formError}
           onClose={() => !pending && setModal(null)}
-          onSave={(input) =>
-            mutate(
+          onSave={(input, prepareSubmit) => {
+            const previousIds = new Set(data.claims.map((claim) => claim.id));
+            const actorUid = user?.uid;
+            return mutate(
               modal.claim ? `/claims/${encodeURIComponent(modal.claim.id)}` : '/claims',
               modal.claim ? 'PUT' : 'POST',
               {
@@ -710,26 +786,87 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                   ? { revision: modal.claim.revision }
                   : { requestId: submissionRequestId.current }),
               },
-              '款项草稿已保存，请在详情中提交系内审批',
-            )
-          }
+              '草稿已保存，可在详情中提交辅导员审核',
+              prepareSubmit
+                ? (next) => {
+                    const candidates = modal.claim
+                      ? next.claims.filter((claim) => claim.id === modal.claim!.id)
+                      : actorUid
+                        ? next.claims.filter(
+                            (claim) =>
+                              !previousIds.has(claim.id) &&
+                              claim.submitterUid === actorUid &&
+                              claim.projectId === input.projectId &&
+                              claim.kind === input.kind &&
+                              claim.status === 'draft',
+                          )
+                        : [];
+                    if (
+                      candidates.length === 1 &&
+                      candidates[0].allowedActions.includes('submit')
+                    ) {
+                      setModal({ kind: 'action', claim: candidates[0], action: 'submit' });
+                      setFeedback('草稿已保存，请核对材料后提交');
+                    }
+                  }
+                : undefined,
+            );
+          }}
         />
       ) : null}
-      {modal?.kind === 'action' ? (
+      {data && modal?.kind === 'action' ? (
         <ActionDialog
           claim={modal.claim}
+          data={data}
+          client={activeClient}
           action={modal.action}
           pending={pending}
           error={formError}
           onClose={() => !pending && setModal(null)}
-          onSave={(note) =>
-            mutate(
-              `/claims/${encodeURIComponent(modal.claim.id)}/actions`,
-              'POST',
-              { revision: modal.claim.revision, action: modal.action, note },
-              '办理进度已更新',
-            )
-          }
+          onSave={async (note, checklist) => {
+            setPending(true);
+            setFormError(null);
+            const current = generation.current;
+            try {
+              let claim = modal.claim;
+              if (
+                modal.action === 'submit' &&
+                checklist &&
+                JSON.stringify(checklist) !== JSON.stringify(claim.checklist ?? [])
+              ) {
+                const updated = await activeClient.request<FinanceTrackingPayload>(
+                  `${BASE}/claims/${encodeURIComponent(claim.id)}`,
+                  {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      ...financeClaimInputOf(claim, checklist),
+                      revision: claim.revision,
+                    }),
+                  },
+                );
+                claim = updated.claims.find((item) => item.id === claim.id) ?? claim;
+                if (current === generation.current) setData(updated);
+              }
+              const updated = await activeClient.request<FinanceTrackingPayload>(
+                `${BASE}/claims/${encodeURIComponent(claim.id)}/actions`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ revision: claim.revision, action: modal.action, note }),
+                },
+              );
+              if (current === generation.current) {
+                setData(updated);
+                setModal(null);
+                setFeedback('办理进度已更新');
+              }
+            } catch (cause) {
+              if (current === generation.current) setFormError(messageOf(cause));
+            } finally {
+              if (current === generation.current) setPending(false);
+            }
+          }}
         />
       ) : null}
       <EditorDrawer
@@ -741,7 +878,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
           <div className="ft-detail">
             <div className="ft-detail-heading">
               <span className="ft-status" data-status={detail.status}>
-                {statusLabels[detail.status]}
+                {claimStatusLabel(detail.status, detail.kind)}
               </span>
               <strong>{money(detail.amountCents)}</strong>
             </div>
@@ -754,23 +891,52 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
             <dl className="ft-detail-list">
               <dt>提交人</dt>
               <dd>{detail.submitterDisplayName}</dd>
-              <dt>购买内容与数量</dt>
+              <dt>
+                {detail.invoiceLines?.length
+                  ? '发票信息'
+                  : detail.kind === 'direct_payment' && detail.directPayment
+                    ? '工作内容'
+                    : '原始购买明细'}
+              </dt>
               <dd>
-                {detail.items.map((item, index) => (
-                  <div key={index}>
-                    {item.description} × {item.quantity}
-                  </div>
-                ))}
+                {detail.invoiceLines?.length ? (
+                  detail.invoiceLines.map((line, index) => (
+                    <div key={index}>
+                      {FINANCE_INVOICE_CATEGORIES.find((item) => item.id === line.category)?.name} ·{' '}
+                      {money(line.amountCents)} × {line.repeatCount} 张
+                      {line.description ? ` · ${line.description}` : ''}
+                    </div>
+                  ))
+                ) : detail.directPayment ? (
+                  <>
+                    <div>{detail.directPayment.workContent || '未填写'}</div>
+                    <div>时薪 {money(detail.directPayment.hourlyRateCents)}</div>
+                  </>
+                ) : (
+                  detail.items.map((item, index) => (
+                    <div key={index}>
+                      {item.description} × {item.quantity}
+                    </div>
+                  ))
+                )}
               </dd>
               <dt>收款人 / 学号</dt>
               <dd>
                 {detail.payeeName || '未填写'} / {detail.payeeStudentId || '未填写'}
               </dd>
-              <dt>材料清单</dt>
+              <dt>材料与办理确认</dt>
               <dd>
-                {detail.materials.length
-                  ? detail.materials.map((material, index) => <div key={index}>{material}</div>)
-                  : '未填写'}
+                {detail.checklist
+                  ? financeClaimChecklist(detail, financeGuideFor(data!, detail.departmentId)).map(
+                      (item) => (
+                        <div key={item.key}>
+                          {detail.checklist?.includes(item.key) ? '✓' : '○'} {item.label}
+                        </div>
+                      ),
+                    )
+                  : detail.materials.length
+                    ? detail.materials.map((material, index) => <div key={index}>{material}</div>)
+                    : '未填写'}
               </dd>
               <dt>校财务 / 邮件凭据</dt>
               <dd>{detail.externalReference || '未填写'}</dd>
@@ -778,12 +944,18 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
               <dd>
                 {detail.externalSubmittedAt ? dateLabel(detail.externalSubmittedAt) : '未填写'}
               </dd>
-              <dt>校财务提交记录</dt>
+              <dt>辅导员确认财务办理</dt>
               <dd>
-                {detail.schoolSubmittedAt
-                  ? dateLabel(detail.schoolSubmittedAt)
-                  : '尚未经费负责人记录'}
+                {detail.counselorFinancialApprovedAt
+                  ? dateLabel(detail.counselorFinancialApprovedAt)
+                  : '尚未确认'}
               </dd>
+              {!detail.counselorFinancialApprovedAt && detail.schoolSubmittedAt ? (
+                <>
+                  <dt>旧版校财务提交记录</dt>
+                  <dd>{dateLabel(detail.schoolSubmittedAt)}</dd>
+                </>
+              ) : null}
               <dt>老师审核记录</dt>
               <dd>{detail.teacherApprovedAt ? dateLabel(detail.teacherApprovedAt) : '尚未记录'}</dd>
               {detail.notes ? (
@@ -793,9 +965,35 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                 </>
               ) : null}
             </dl>
+            {financeClaimWarnings(detail).map((warning) => (
+              <p className="ft-warning" role="alert" key={warning}>
+                ⚠ {warning}
+              </p>
+            ))}
+            {detail.directPayment?.proofFileIds.length ? (
+              <div className="ft-proof-grid">
+                {detail.directPayment.proofFileIds.map((id, index) => (
+                  <PrivateFinanceFile
+                    key={id}
+                    client={activeClient}
+                    id={id}
+                    label={`工作证明 ${index + 1}`}
+                    image
+                  />
+                ))}
+              </div>
+            ) : null}
+            <FinanceGuide
+              guide={financeGuideFor(data!, detail.departmentId)}
+              kind={detail.kind}
+              client={activeClient}
+            />
             <div className="ft-actions">
               {detail.canEdit ? (
-                <button type="button" onClick={() => open({ kind: 'claim', claim: detail })}>
+                <button
+                  type="button"
+                  onClick={() => open({ kind: 'claim', paymentKind: detail.kind, claim: detail })}
+                >
                   编辑草稿
                 </button>
               ) : null}
@@ -810,7 +1008,7 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                   }
                   onClick={() => open({ kind: 'action', claim: detail, action })}
                 >
-                  {actionLabels[action]}
+                  {claimActionLabel(action, detail.kind)}
                 </button>
               ))}
             </div>
@@ -824,12 +1022,19 @@ export function FinanceWorkspace({ page, client, user: suppliedUser }: FinanceWo
                         ? '建立草稿'
                         : event.action === 'edit'
                           ? '更新草稿'
-                          : actionLabels[event.action]}
+                          : event.action === 'record_school_submission' && event.from === event.to
+                            ? '经费负责人提交记录（旧版）'
+                            : claimActionLabel(event.action, detail.kind)}
                     </strong>
                     <time dateTime={event.at}>{dateLabel(event.at)}</time>
                   </div>
                   <p>
-                    {event.actorDisplayName} · {statusLabels[event.to]}
+                    {event.actorDisplayName} ·{' '}
+                    {event.action === 'approve' && event.to === 'school_review'
+                      ? '系内初审已通过（旧版记录）'
+                      : event.action === 'record_school_submission' && event.from === event.to
+                        ? '旧版提交记录，不代表辅导员已确认财务办理'
+                        : claimStatusLabel(event.to, detail.kind)}
                   </p>
                   {event.note ? <p>{event.note}</p> : null}
                 </li>
@@ -1000,315 +1205,10 @@ function ProjectEditor({
   );
 }
 
-function ClaimEditor({
-  data,
-  claim,
-  pending,
-  error,
-  onClose,
-  onSave,
-}: {
-  data: FinanceTrackingPayload;
-  claim?: FinanceClaimView;
-  pending: boolean;
-  error: string | null;
-  onClose: () => void;
-  onSave: (input: FinanceClaimInput) => Promise<void>;
-}) {
-  const departments = data.departments.filter((department) =>
-    data.submittableDepartmentIds.includes(department.id),
-  );
-  const options = data.projects.filter((project) =>
-    data.submittableDepartmentIds.includes(project.departmentId),
-  );
-  const organizations = FINANCE_PORTS.filter((port) =>
-    departments.some((department) => department.portId === port.id),
-  );
-  const [draft, setDraft] = useState<ClaimDraft>({
-    projectId: claim?.projectId ?? options[0]?.id ?? '',
-    kind: claim?.kind ?? 'reimbursement',
-    items: claim?.items.map((item) => ({ ...item })) ?? [{ description: '', quantity: '' }],
-    amount: claim ? amountText(claim.amountCents) : '',
-    payeeName: claim?.payeeName ?? '',
-    payeeStudentId: claim?.payeeStudentId ?? '',
-    materialText: claim?.materials.join('\n') ?? '',
-    externalReference: claim?.externalReference ?? '',
-    externalSubmittedAt: claim?.externalSubmittedAt ? claim.externalSubmittedAt.slice(0, 10) : '',
-    notes: claim?.notes ?? '',
-  });
-  const [selectedDepartment, setSelectedDepartment] = useState(
-    claim?.departmentId ?? options[0]?.departmentId ?? '',
-  );
-  const [organization, setOrganization] = useState(
-    departments.find(
-      (department) => department.id === (claim?.departmentId ?? options[0]?.departmentId),
-    )?.portId ??
-      organizations[0]?.id ??
-      '',
-  );
-  const [localError, setLocalError] = useState<string | null>(null);
-  const field = (key: keyof Omit<ClaimDraft, 'items'>, value: string) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-  const project = data.projects.find((item) => item.id === draft.projectId);
-  const balance = project
-    ? draft.kind === 'reimbursement'
-      ? project.reimbursement
-      : project.directPayment
-    : null;
-  let amount = 0;
-  try {
-    amount = centsOf(draft.amount || '0');
-  } catch {
-    /* Invalid amount is explained on submit. */
-  }
-  return (
-    <DialogForm
-      open
-      title={claim ? '编辑款项草稿' : '新增报销 / 代发'}
-      description="材料只需列明内容，无需上传原件。保存草稿后，在详情中提交系内审批。"
-      submitLabel="保存草稿"
-      pending={pending}
-      error={localError ?? error}
-      onClose={onClose}
-      onSubmit={async () => {
-        try {
-          const { amount, materialText, ...rest } = draft;
-          const input = {
-            ...rest,
-            amountCents: centsOf(amount),
-            materials: materialText
-              .split('\n')
-              .map((value) => value.trim())
-              .filter(Boolean),
-          };
-          setLocalError(null);
-          await onSave(input);
-        } catch (cause) {
-          setLocalError(messageOf(cause));
-        }
-      }}
-    >
-      <div className="ft-form ft-form-grid">
-        <label>
-          所属组织
-          <select
-            required
-            value={organization}
-            onChange={(event) => {
-              setOrganization(event.target.value as FinanceDepartment['portId']);
-              setSelectedDepartment('');
-              field('projectId', '');
-            }}
-          >
-            <option value="" disabled>
-              请选择组织
-            </option>
-            {organizations.map((port) => (
-              <option key={port.id} value={port.id}>
-                {port.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          所属部门
-          <select
-            required
-            value={selectedDepartment}
-            onChange={(event) => {
-              const id = event.target.value;
-              setSelectedDepartment(id);
-              field('projectId', '');
-            }}
-          >
-            <option value="" disabled>
-              请选择部门
-            </option>
-            {departments
-              .filter((department) => department.portId === organization)
-              .map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label className="ft-wide">
-          预算项目
-          <select
-            required
-            value={draft.projectId}
-            onChange={(event) => field('projectId', event.target.value)}
-          >
-            <option value="" disabled>
-              请选择项目
-            </option>
-            {options
-              .filter((item) => item.departmentId === selectedDepartment)
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.year} · {item.code} {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          款项类型
-          <select value={draft.kind} onChange={(event) => field('kind', event.target.value)}>
-            <option value="reimbursement">报销</option>
-            <option value="direct_payment">代发</option>
-          </select>
-        </label>
-        <label>
-          金额（元）
-          <input
-            required
-            inputMode="decimal"
-            placeholder="0.00"
-            value={draft.amount}
-            onChange={(event) => field('amount', event.target.value)}
-          />
-        </label>
-        {balance ? (
-          <p
-            className={`ft-inline-balance ft-wide ${amount > balance.remainingCents ? 'ft-warning' : ''}`}
-            role={amount > balance.remainingCents ? 'alert' : undefined}
-          >
-            本项目{kindLabel(draft.kind)}可用余额 {money(balance.remainingCents)}
-            {amount > balance.remainingCents
-              ? `；本笔将超出 ${money(amount - balance.remainingCents)}，提交后请与辅导员确认`
-              : ''}
-          </p>
-        ) : null}
-        <fieldset className="ft-wide">
-          <legend>购买内容与数量</legend>
-          {draft.items.map((item, index) => (
-            <div className="ft-item-row" key={index}>
-              <label>
-                内容 {index + 1}
-                <input
-                  required
-                  maxLength={300}
-                  value={item.description}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      items: current.items.map((value, position) =>
-                        position === index ? { ...value, description: event.target.value } : value,
-                      ),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                数量 {index + 1}
-                <input
-                  required
-                  maxLength={80}
-                  placeholder="例如 20 本 / 2 人次"
-                  value={item.quantity}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      items: current.items.map((value, position) =>
-                        position === index ? { ...value, quantity: event.target.value } : value,
-                      ),
-                    }))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                disabled={draft.items.length === 1}
-                aria-label={`删除内容 ${index + 1}`}
-                onClick={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    items: current.items.filter((_, position) => position !== index),
-                  }))
-                }
-              >
-                删除
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            disabled={draft.items.length >= 50}
-            onClick={() =>
-              setDraft((current) => ({
-                ...current,
-                items: [...current.items, { description: '', quantity: '' }],
-              }))
-            }
-          >
-            ＋ 添加一项
-          </button>
-        </fieldset>
-        <label>
-          收款人姓名
-          <input
-            required
-            autoComplete="off"
-            maxLength={100}
-            value={draft.payeeName}
-            onChange={(event) => field('payeeName', event.target.value)}
-          />
-        </label>
-        <label>
-          收款人学号
-          <input
-            required
-            autoComplete="off"
-            maxLength={40}
-            value={draft.payeeStudentId}
-            onChange={(event) => field('payeeStudentId', event.target.value)}
-          />
-        </label>
-        <label className="ft-wide">
-          所含材料（每行一项）
-          <textarea
-            required
-            rows={3}
-            maxLength={10000}
-            placeholder="例如：发票 2 张、活动签到表、购买明细"
-            value={draft.materialText}
-            onChange={(event) => field('materialText', event.target.value)}
-          />
-        </label>
-        <label className="ft-wide">
-          校财务单号 / 代发邮件说明
-          <input
-            maxLength={500}
-            placeholder="提交审批前填写，可注明授权对象或邮件主题"
-            value={draft.externalReference}
-            onChange={(event) => field('externalReference', event.target.value)}
-          />
-        </label>
-        <label>
-          外部提交日期
-          <input
-            type="date"
-            value={draft.externalSubmittedAt}
-            onChange={(event) => field('externalSubmittedAt', event.target.value)}
-          />
-        </label>
-        <label className="ft-wide">
-          补充说明
-          <textarea
-            rows={3}
-            maxLength={3000}
-            value={draft.notes}
-            onChange={(event) => field('notes', event.target.value)}
-          />
-        </label>
-      </div>
-    </DialogForm>
-  );
-}
-
 function ActionDialog({
   claim,
+  data,
+  client,
   action,
   pending,
   error,
@@ -1316,54 +1216,119 @@ function ActionDialog({
   onSave,
 }: {
   claim: FinanceClaimView;
+  data: FinanceTrackingPayload;
+  client: ApiClient;
   action: FinanceClaimAction;
   pending: boolean;
   error: string | null;
   onClose: () => void;
-  onSave: (note: string) => Promise<void>;
+  onSave: (note: string, checklist?: string[]) => Promise<void>;
 }) {
   const [note, setNote] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [checklist, setChecklist] = useState(claim.checklist ?? []);
   const [localError, setLocalError] = useState<string | null>(null);
+  const guide = financeGuideFor(data, claim.departmentId);
+  const requirements = financeClaimChecklist(claim, guide);
   const description =
     action === 'confirm_received'
-      ? `请确认 ${money(claim.amountCents)} 已实际到账，确认后本笔计入已到账金额。`
+      ? `请核实 ${money(claim.amountCents)} 已实际到账，确认后计入已报金额。`
       : action === 'approve'
-        ? '通过后，系统将本笔款项转入校内审批阶段，并保留审核记录。'
-        : action === 'submit'
-          ? '请先完成校财务系统提交及授权，或发送代发邮件，再同步提交系内审批。'
-          : '此操作仅同步办理记录，不会在学校财务系统执行操作。';
+        ? '确认本笔信息无误后通过系内初审；财务办理进展另行确认。'
+        : action === 'record_school_submission'
+          ? claim.kind === 'direct_payment'
+            ? '确认本笔代发已进入系学生组审核中；无需录入学校报销单。'
+            : '请在学校财务系统完成对应审核后，再确认进入财务办理阶段。'
+          : action === 'submit'
+            ? undefined
+            : '此操作同步本笔办理记录。';
   return (
     <DialogForm
       open
-      title={actionLabels[action]}
+      title={claimActionLabel(action, claim.kind)}
       description={description}
-      submitLabel={actionLabels[action]}
+      submitLabel={claimActionLabel(action, claim.kind)}
       pending={pending}
       error={localError ?? error}
       onClose={onClose}
       onSubmit={async () => {
-        if (['submit', 'confirm_received'].includes(action) && !acknowledged) {
+        if (action === 'submit') {
+          if (
+            !claim.payeeName.trim() ||
+            !claim.payeeStudentId.trim() ||
+            claim.amountCents <= 0 ||
+            (claim.kind === 'reimbursement' &&
+              (!claim.invoiceLines?.length ||
+                claim.invoiceLines.some((line) => line.amountCents <= 0))) ||
+            (claim.kind === 'direct_payment' &&
+              (!claim.directPayment?.workContent.trim() ||
+                claim.directPayment.hourlyRateCents <= 0 ||
+                !claim.directPayment.proofFileIds.length))
+          ) {
+            setLocalError('请先编辑草稿，补全发票或代发信息、收款人及工作证明');
+            return;
+          }
+          if (requirements.some((item) => !checklist.includes(item.key))) {
+            setLocalError('请完成全部材料与办理确认项');
+            return;
+          }
+        }
+        if (['confirm_received', 'record_school_submission'].includes(action) && !acknowledged) {
           setLocalError('请先勾选确认项');
           return;
         }
         setLocalError(null);
-        await onSave(note);
+        await onSave(note, action === 'submit' ? checklist : undefined);
       }}
     >
       <div className="ft-form">
-        {['submit', 'confirm_received'].includes(action) ? (
+        {action === 'submit' ? (
+          <>
+            <FinanceGuide guide={guide} kind={claim.kind} client={client} embedded />
+            {financeClaimWarnings(claim).map((warning) => (
+              <p className="ft-warning" role="alert" key={warning}>
+                ⚠ {warning}
+              </p>
+            ))}
+            <fieldset className="ft-checklist">
+              <legend>材料与办理确认</legend>
+              {requirements.map((item) => (
+                <label className="ft-checkbox" key={item.key}>
+                  <input
+                    type="checkbox"
+                    checked={checklist.includes(item.key)}
+                    onChange={(event) =>
+                      setChecklist((current) =>
+                        event.target.checked
+                          ? [...new Set([...current, item.key])]
+                          : current.filter((key) => key !== item.key),
+                      )
+                    }
+                  />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          </>
+        ) : null}
+        {['confirm_received', 'record_school_submission'].includes(action) ? (
           <label className="ft-checkbox">
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
-            {action === 'submit' ? '已完成外部流程，提交信息准确' : '已核实本笔款项实际到账'}
+            <span>
+              {action === 'confirm_received'
+                ? '已核实本笔款项实际到账'
+                : claim.kind === 'direct_payment'
+                  ? '已确认本笔代发进入系学生组审核中'
+                  : '已完成本笔款项对应的财务办理操作'}
+            </span>
           </label>
         ) : null}
         <label>
-          {action === 'return' ? '退回原因' : '办理备注（选填）'}
+          {action === 'return' ? '需补充内容及原因' : '办理备注（选填）'}
           <textarea
             rows={3}
             required={action === 'return'}
@@ -1392,7 +1357,10 @@ function SettingsEditor({
 }) {
   const initialDepartments = data.settings?.departments ?? data.departments;
   const [departments, setDepartments] = useState(() =>
-    initialDepartments.map((department) => ({ ...department })),
+    initialDepartments.map((department) => ({
+      ...department,
+      reviewerText: department.reviewPolicy?.reviewerUids.join(', ') ?? '',
+    })),
   );
   const existingIds = new Set(initialDepartments.map((department) => department.id));
   return (
@@ -1404,7 +1372,18 @@ function SettingsEditor({
       pending={pending}
       error={error}
       onClose={onClose}
-      onSubmit={() => onSave(departments)}
+      onSubmit={() =>
+        onSave(
+          departments.map(({ reviewerText, ...department }) => {
+            if (!data.canManageReviewPolicies) return department;
+            const reviewerUids = [...new Set(reviewerText.split(/[\s,，;；]+/).filter(Boolean))];
+            return {
+              ...department,
+              reviewPolicy: reviewerUids.length ? { reviewerUids } : undefined,
+            };
+          }),
+        )
+      }
     >
       <div className="ft-form ft-settings">
         <p className="ft-explanation">
@@ -1474,6 +1453,28 @@ function SettingsEditor({
             >
               移除
             </button>
+            {data.canManageReviewPolicies ? (
+              <details className="ft-review-policy">
+                <summary>审核权限：{department.reviewerText ? '仅指定审核人' : '通用审核'}</summary>
+                <label>
+                  指定审核人 UID {index + 1}（留空沿用通用审核）
+                  <input
+                    value={department.reviewerText}
+                    onChange={(event) => {
+                      setDepartments((current) =>
+                        current.map((value, position) =>
+                          position === index
+                            ? { ...value, reviewerText: event.target.value }
+                            : value,
+                        ),
+                      );
+                    }}
+                  />
+                </label>
+              </details>
+            ) : department.reviewPolicy ? (
+              <p className="ft-review-policy">仅指定审核人可处理审核，由最高管理员维护</p>
+            ) : null}
           </div>
         ))}
         <button
@@ -1481,7 +1482,12 @@ function SettingsEditor({
           onClick={() =>
             setDepartments((current) => [
               ...current,
-              { id: `department-${requestId()}`, name: '', portId: 'youth_league' },
+              {
+                id: `department-${requestId()}`,
+                name: '',
+                portId: 'youth_league',
+                reviewerText: '',
+              },
             ])
           }
         >

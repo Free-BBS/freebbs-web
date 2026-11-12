@@ -1,4 +1,25 @@
 import type { RoleKey } from './modules.js';
+import type { ScopeRef } from './permissions.js';
+
+/** These read-only work-port appointments do not create social-organization memberships. */
+export const FINANCE_WORK_PORT_ROLES = [
+  'media_center.director',
+  'sports.finance',
+  'bbs.finance',
+  'bbs.lead',
+] as const satisfies readonly RoleKey[];
+
+export function financeWorkPortRoleScope(roleKey: RoleKey): ScopeRef | null {
+  const id =
+    roleKey === 'media_center.director'
+      ? 'media_center'
+      : roleKey === 'sports.finance'
+        ? 'sports'
+        : roleKey === 'bbs.finance' || roleKey === 'bbs.lead'
+          ? 'bbs'
+          : null;
+  return id ? { type: 'organization', id } : null;
+}
 
 export interface DevelopmentIdentityOption {
   roleKey: RoleKey;
@@ -19,7 +40,8 @@ export interface DevelopmentIdentitySection {
     | 'youth_league'
     | 'tms'
     | 'science_association'
-    | 'media_center';
+    | 'media_center'
+    | 'finance_ports';
   label: string;
   groups: readonly DevelopmentIdentityGroup[];
 }
@@ -235,6 +257,12 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
     id: 'media_center',
     label: '电子系学生媒体中心',
     groups: [
+      {
+        id: 'media_center.director',
+        label: '中心主任',
+        selection: 'single',
+        options: [option('media_center.director', '媒体中心主任')],
+      },
       threeLevelGroup(
         'media_center.creative',
         '创意设计部',
@@ -261,6 +289,30 @@ export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[
         label: '兼任岗位',
         selection: 'toggle',
         options: [option('media_center.finance', '财务负责人')],
+      },
+    ],
+  },
+  {
+    id: 'finance_ports',
+    label: '工作口岗位',
+    groups: [
+      {
+        id: 'sports.finance',
+        label: '体育+代表队',
+        selection: 'toggle',
+        options: [option('sports.finance', '体育经费负责人')],
+      },
+      {
+        id: 'bbs.lead',
+        label: 'BBS',
+        selection: 'toggle',
+        options: [option('bbs.lead', 'BBS负责人')],
+      },
+      {
+        id: 'bbs.finance',
+        label: 'BBS',
+        selection: 'toggle',
+        options: [option('bbs.finance', 'BBS经费负责人')],
       },
     ],
   },
@@ -366,9 +418,15 @@ export function identityLabels(roles: readonly RoleKey[]): string[] {
     const group = groupByRole.get(roleKey);
     if (
       group === undefined ||
-      ['counselors.position', 'student_union.executive', 'science_association.chair'].includes(
-        group.id,
-      )
+      [
+        'counselors.position',
+        'student_union.executive',
+        'science_association.chair',
+        'media_center.director',
+        'sports.finance',
+        'bbs.finance',
+        'bbs.lead',
+      ].includes(group.id)
     ) {
       labels.push(label);
     } else if (group.id === 'tms.position') {

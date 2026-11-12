@@ -1,5 +1,6 @@
 import {
   DEPARTMENT_DIRECTORY,
+  financeWorkPortRoleScope,
   type FinanceDepartment,
   type RoleKey,
   type ScopeRef,
@@ -58,6 +59,8 @@ const financeOfficers: Partial<Record<RoleKey, string>> = {
   'student_union.finance': 'student_union',
   'science_association.office.vice_chair': 'science_association',
   'media_center.finance': 'media_center',
+  'sports.finance': 'sports',
+  'bbs.finance': 'bbs',
 };
 const organizationLeads: Partial<Record<RoleKey, string>> = {
   'student_union.executive_president': 'student_union',
@@ -67,6 +70,8 @@ const organizationLeads: Partial<Record<RoleKey, string>> = {
   'affiliation.tuanwei_director': 'youth_league',
   'affiliation.sast_lead': 'science_association',
   'affiliation.sast_director': 'science_association',
+  'media_center.director': 'media_center',
+  'bbs.lead': 'bbs',
 };
 
 export function financeDepartmentAccess(
@@ -74,7 +79,10 @@ export function financeDepartmentAccess(
   department: FinanceDepartment,
 ): { read: boolean; submit: boolean; officer: boolean } {
   if (isFinanceFinalReviewer(actor)) return { read: true, submit: true, officer: true };
-  const grants = appointments(actor);
+  const grants = appointments(actor).filter(({ roleKey, scope }) => {
+    const exact = financeWorkPortRoleScope(roleKey);
+    return !exact || (scope.type === exact.type && scope.id === exact.id);
+  });
   const directoryId = department.id === 'youth_league.tms' ? 'tms.position' : department.id;
   const definition = DEPARTMENT_DIRECTORY.find(({ id }) => id === directoryId);
   const ownDepartment = grants.some(
@@ -83,10 +91,11 @@ export function financeDepartmentAccess(
       !/(?:[._]member|\.student)$/.test(roleKey) &&
       coversDepartment(scope, department),
   );
-  const officer = grants.some(
-    ({ roleKey, scope }) =>
-      financeOfficers[roleKey] === financeOrganization(department) &&
-      coversDepartment(scope, department),
+  const officer = grants.some(({ roleKey, scope }) =>
+    financeWorkPortRoleScope(roleKey)
+      ? financeOfficers[roleKey] === department.portId
+      : financeOfficers[roleKey] === financeOrganization(department) &&
+        coversDepartment(scope, department),
   );
   const orgLead = grants.some(
     ({ roleKey, scope }) =>
