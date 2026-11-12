@@ -144,7 +144,7 @@
     const { access, batches } = await api('/');
     const actions =
       (access.minister ? button('新建报名批次', 'id="training-new"') : '') +
-      (access.admin ? link('学培权限', '/training?people=1') : '');
+      (access.admin ? link('学培权限', '/adminusers') : '');
     const markup = batches
       .map((batch) => {
         const application = batch.phase === 'open' ? '讲师报名' : '查看报名';
@@ -1028,65 +1028,11 @@
     });
   }
 
-  async function renderPeople(query = '') {
-    const { users } = await api(`/people?${new URLSearchParams({ q: query })}`);
-    const people = users
-      .map(
-        (user) =>
-          `<form class="training-form training-person" data-user="${user.id}">` +
-          `<div><h3>${escape(user.fullName)}</h3><p>${escape(user.username)} · ${escape(
-            user.studentId,
-          )}</p></div>${
-            user.admin
-              ? '<p>主站管理员</p>'
-              : `<label>学培身份<select name="staffRole"><option value="">学生</option>` +
-                `<option value="member" ${
-                  user.staffRole === 'member' ? 'selected' : ''
-                }>学培部部员</option>` +
-                `<option value="minister" ${
-                  user.staffRole === 'minister' ? 'selected' : ''
-                }>学培部部长</option></select></label>` +
-                `<label class="training-check"><input type="checkbox" name="revoked" ${
-                  user.revoked ? 'checked' : ''
-                }>暂停课程查看权限</label>${submit('保存权限')}`
-          }${errorField}</form>`,
-      )
-      .join('');
-    setPage(
-      '学培权限',
-      `<form id="training-people-search" class="training-panel training-form"><label>按姓名、用户名或学号搜索` +
-        `<input name="q" type="search" value="${escape(query)}" maxlength="64"></label>` +
-        `<div class="training-actions">${submit('搜索账号')}</div>${errorField}</form>` +
-        `<section class="training-stack" aria-label="账号权限">${
-          people || empty('暂无匹配账号。')
-        }</section>`,
-      '',
-      back,
-    );
-    bindForm(content.querySelector('#training-people-search'), (values) =>
-      renderPeople(values.get('q')),
-    );
-    content.querySelectorAll('[data-user]').forEach((form) => {
-      if (!form.elements.staffRole) return;
-      bindForm(form, async (values) => {
-        await api(`/people/${form.dataset.user}`, 'PUT', {
-          staffRole: values.get('staffRole') || null,
-          revoked: values.get('revoked') === 'on',
-        });
-        tell('学培权限已保存');
-        form.querySelector('[type=submit]').textContent = '已保存';
-      });
-      form.addEventListener('change', () => {
-        form.querySelector('[type=submit]').textContent = '保存权限';
-      });
-    });
-  }
-
   async function init() {
     if (applySlug) await renderApplication();
     else if (reviewSlug) await renderReview();
     else if (courseId) await renderCourse();
-    else if (params.has('people')) await renderPeople();
+    else if (params.has('people')) window.location.replace('/adminusers');
     else await renderDirectory();
   }
 

@@ -251,7 +251,12 @@ const {
   ensureNotificationTables,
 } = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
-const { createTrainingRouter, ensureTrainingTables } = require('./training');
+const {
+  createTrainingRouter,
+  ensureTrainingTables,
+  readTrainingUserAccess,
+  setTrainingUserAccess,
+} = require('./training');
 const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
@@ -6336,6 +6341,10 @@ async function addUserResponsibilities(users, executor = pool) {
     certifications: certificationsByUser.get(Number(row.id)) || [],
     boardModeratorSlugs: boardSlugsByUser.get(Number(row.id)) || [],
     courseManagerSlugs: courseSlugsByUser.get(Number(row.id)) || [],
+    trainingAccess: {
+      staffRole: row.training_staff_role ?? null,
+      revoked: Boolean(row.training_viewing_revoked),
+    },
   }));
 }
 
@@ -6401,9 +6410,13 @@ app.get('/api/admin/users', async (request, response) => {
     await ensureDiscussionTables();
     await ensureCourseMapTables(pool);
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
-       FROM users
-       ORDER BY created_at DESC`,
+      `SELECT u.id, u.uid, u.username, u.full_name, u.student_id, u.email, u.email_verified_at,
+              u.role, u.is_admin, u.electrons, u.manetrons, u.heat, u.grade, u.major, u.avatar_path,
+              u.bio, u.website_url, u.created_at, training.staff_role AS training_staff_role,
+              training.viewing_revoked AS training_viewing_revoked
+       FROM users u
+       LEFT JOIN training_user_access training ON training.user_id = u.id
+       ORDER BY u.created_at DESC`,
     );
 
     response.json({
@@ -6718,15 +6731,27 @@ app.patch('/api/admin/users/:id', async (request, response) => {
       boardModeratorSlugs,
       courseManagerSlugs,
     );
+    if (request.body.trainingAccess !== undefined) {
+      await setTrainingUserAccess(
+        connection,
+        targetId,
+        request.body.trainingAccess,
+        isAdmin || isMainSiteRootAdminUid(previousUser.uid),
+      );
+    }
     await connection.commit();
 
     const user = await getUserById(targetId);
-    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
+    const [certificationsByUser, trainingAccess] = await Promise.all([
+      readApprovedCertifications(pool, [targetId]),
+      readTrainingUserAccess(pool, targetId),
+    ]);
 
     response.json({
       user: {
         ...toUserProfile(user),
         certifications: certificationsByUser.get(targetId) || [],
+        trainingAccess,
       },
     });
   } catch (error) {

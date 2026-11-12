@@ -142,12 +142,31 @@ function phase(batch, now = Date.now()) {
   return now < batch.closesAt ? 'open' : 'closed';
 }
 
-async function getAccess(db, user) {
+async function readTrainingUserAccess(db, userId) {
   const access = await one(
     db,
     'SELECT staff_role AS staffRole, viewing_revoked AS revoked FROM training_user_access WHERE user_id = ?',
-    [user.id],
+    [userId],
   );
+  return { staffRole: access?.staffRole ?? null, revoked: Boolean(access?.revoked) };
+}
+
+async function setTrainingUserAccess(db, userId, settings, isAdmin) {
+  if (isAdmin) fail(400, '主站管理员已拥有全部学培权限');
+  const { staffRole, revoked } = settings || {};
+  if (![null, 'member', 'minister'].includes(staffRole) || typeof revoked !== 'boolean') {
+    fail(400, '请选择有效的学培身份和查看权限');
+  }
+  await rows(
+    db,
+    `INSERT INTO training_user_access (user_id, staff_role, viewing_revoked)
+      VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE staff_role = ?, viewing_revoked = ?`,
+    [userId, staffRole, revoked, staffRole, revoked],
+  );
+}
+
+async function getAccess(db, user) {
+  const access = await readTrainingUserAccess(db, user.id);
   const admin = Boolean(user.is_admin);
   return {
     admin,
@@ -344,17 +363,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const userId = id(request.params.id);
       const user = await one(pool, 'SELECT is_admin FROM users WHERE id = ?', [userId]);
       if (!user) fail(404, '用户不存在');
-      if (user.is_admin) fail(400, '主站管理员已拥有全部学培权限');
-      const { staffRole, revoked } = request.body;
-      if (![null, 'member', 'minister'].includes(staffRole) || typeof revoked !== 'boolean') {
-        fail(400, '请选择有效的学培身份和查看权限');
-      }
-      await rows(
-        pool,
-        `INSERT INTO training_user_access (user_id, staff_role, viewing_revoked)
-      VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE staff_role = ?, viewing_revoked = ?`,
-        [userId, staffRole, revoked, staffRole, revoked],
-      );
+      await setTrainingUserAccess(pool, userId, request.body, user.is_admin);
       response.json({ message: '权限已保存' });
     }),
   );
@@ -976,4 +985,9 @@ async function ensureTrainingTables(pool) {
   for (const statement of statements) await pool.execute(statement);
 }
 
-module.exports = { createTrainingRouter, ensureTrainingTables };
+module.exports = {
+  createTrainingRouter,
+  ensureTrainingTables,
+  readTrainingUserAccess,
+  setTrainingUserAccess,
+};

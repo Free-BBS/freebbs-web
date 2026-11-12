@@ -243,8 +243,7 @@ body.training-page .training-main {
 }
 
 .training-options label,
-.training-candidates label,
-.training-form .training-check {
+.training-candidates label {
   display: flex;
   gap: 7px;
   align-items: center;
@@ -338,7 +337,6 @@ body.training-page .training-main {
 
 .training-applicant,
 .training-material,
-.training-person,
 .training-preference {
   padding: 10px 14px;
   border-radius: var(--training-control-radius);
@@ -358,15 +356,8 @@ body.training-page .training-main {
   padding-block: 8px;
 }
 
-.training-applicant select,
-.training-person :is(input, select),
-.training-person .training-check {
+.training-applicant select {
   background: var(--ui-surface);
-}
-
-.training-person {
-  align-items: end;
-  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 }
 
 .training-preserve {
