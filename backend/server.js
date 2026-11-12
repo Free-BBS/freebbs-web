@@ -251,7 +251,7 @@ const {
   ensureNotificationTables,
 } = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
-const { createTrainingRouter } = require('./training');
+const { createTrainingRouter, ensureTrainingTables } = require('./training');
 const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
@@ -6935,6 +6935,7 @@ async function start() {
   await ensureRegistrationWhitelistTables(pool);
   await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);
+  await ensureTrainingTables(pool);
   await ensureSurveyTables(pool);
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);

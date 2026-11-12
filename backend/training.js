@@ -1,4 +1,6 @@
 const crypto = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const path = require('node:path');
 const express = require('express');
 const { makeSchedule } = require('./training-scheduling');
 const { createHandoutProcessor, MAX_PDF_BYTES } = require('./training-handouts');
@@ -932,4 +934,16 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
   return router;
 }
 
-module.exports = { createTrainingRouter };
+async function ensureTrainingTables(pool) {
+  const migration = readFileSync(
+    path.join(__dirname, '../database/migrations/074_training_courses.sql'),
+    'utf8',
+  );
+  const statements = migration
+    .split(';')
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+  for (const statement of statements) await pool.execute(statement);
+}
+
+module.exports = { createTrainingRouter, ensureTrainingTables };
