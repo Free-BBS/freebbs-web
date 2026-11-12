@@ -163,6 +163,7 @@ async function setTrainingUserAccess(db, userId, settings, isAdmin) {
       VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE staff_role = ?, viewing_revoked = ?`,
     [userId, staffRole, revoked, staffRole, revoked],
   );
+  return { staffRole, revoked };
 }
 
 async function getAccess(db, user) {
@@ -985,9 +986,4 @@ async function ensureTrainingTables(pool) {
   for (const statement of statements) await pool.execute(statement);
 }
 
-module.exports = {
-  createTrainingRouter,
-  ensureTrainingTables,
-  readTrainingUserAccess,
-  setTrainingUserAccess,
-};
+module.exports = { createTrainingRouter, ensureTrainingTables, setTrainingUserAccess };

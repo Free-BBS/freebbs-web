@@ -14,6 +14,7 @@ const {
 } = require('./development-integration');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 const { ensureNotificationTables, createNotificationService } = require('./notifications');
+const { ensureTrainingTables, setTrainingUserAccess } = require('./training');
 const {
   normalizeAdminAccount,
   ensureTeacherAccountTables,
@@ -71,6 +72,7 @@ test(
     await ensureUserCertificationTables(pool);
     await ensureTeacherAccountTables(pool);
     await ensureNotificationTables(pool);
+    await ensureTrainingTables(pool);
     await ensureUsernameChangeTables(pool);
     await ensurePrivacyPolicySchema(pool);
     const privacyPolicyService = createPrivacyPolicyService({ pool });
@@ -160,6 +162,7 @@ test(
       approveEnterpriseCertification,
       syncEnterpriseCertification,
       readApprovedCertifications,
+      setTrainingUserAccess,
       hashPassword,
       getUserById,
       toUserProfile: (user) => ({
@@ -653,6 +656,27 @@ test(
         });
       },
     );
+
+    await t.test('admin user editor saves and reads tutoring permissions', async () => {
+      const url = '/admin/users/5';
+      const profile = { fullName: '其他用户', role: 'student' };
+      const trainingAccess = { staffRole: 'minister', revoked: true };
+      assert.equal((await request(url, 3, 'PATCH', { ...profile, trainingAccess })).status, 403);
+
+      const updated = await request(url, 1, 'PATCH', { ...profile, trainingAccess });
+      assert.equal(updated.status, 200);
+      assert.deepEqual(updated.data.user.trainingAccess, trainingAccess);
+
+      const profileOnly = await request(url, 1, 'PATCH', profile);
+      assert.equal(profileOnly.status, 200);
+      assert.equal(profileOnly.data.user.trainingAccess, undefined);
+      const directory = await request('/admin/users', 1);
+      assert.equal(directory.status, 200);
+      assert.deepEqual(
+        directory.data.users.find(({ id }) => id === 5).trainingAccess,
+        trainingAccess,
+      );
+    });
 
     for (const roleOnly of [false, true]) {
       const routeName = roleOnly ? 'role PATCH' : 'full-user PATCH';
