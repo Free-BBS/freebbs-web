@@ -9,6 +9,17 @@ const STORAGE_KEY = 'free_bbs_auth_token';
 const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
 
 const authForm = document.getElementById('auth-page-form');
+const trainingInvite =
+  authForm?.dataset.authMode === 'register'
+    ? (new URLSearchParams(window.location.hash.slice(1)).get('training-invite') ?? undefined)
+    : undefined;
+if (trainingInvite !== undefined) {
+  const notice = document.createElement('p');
+  notice.className = 'registration-note';
+  notice.textContent = '这是学培部专属注册链接。请填写名单上的姓名；注册成功后将自动获得学培身份。';
+  authForm.before(notice);
+}
+
 const authMessage = document.getElementById('auth-message');
 const authSubmit = document.getElementById('auth-submit');
 const sendEmailCodeButton = document.getElementById('send-email-code');
@@ -404,6 +415,7 @@ async function handleAuthSubmit(event) {
         email: document.getElementById('auth-email').value.trim(),
         emailCode: document.getElementById('auth-email-code').value.trim(),
         password: document.getElementById('auth-password').value,
+        trainingInvite,
         communityAgreementAccepted: true,
         communityAgreementVersion: agreement.dataset.version,
       };

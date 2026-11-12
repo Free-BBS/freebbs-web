@@ -252,6 +252,7 @@ const {
 } = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
 const {
+  claimTrainingRoster,
   createTrainingRouter,
   ensureTrainingTables,
   setTrainingUserAccess,
@@ -5738,6 +5739,11 @@ app.post('/api/auth/register', async (request, response) => {
         ],
       );
       await claimRegistrationWhitelist(connection, identity, result.insertId);
+      await claimTrainingRoster(connection, {
+        token: request.body.trainingInvite,
+        fullName,
+        userId: result.insertId,
+      });
       await connection.execute('UPDATE email_verification_codes SET used_at = NOW() WHERE id = ?', [
         codeRows[0].id,
       ]);

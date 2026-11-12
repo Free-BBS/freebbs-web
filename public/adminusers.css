@@ -1355,3 +1355,93 @@ body.adminusers-page .admin-user-empty span {
     grid-template-columns: 1fr;
   }
 }
+
+body.adminusers-page .training-roster {
+  scroll-margin-top: calc(var(--desktop-header-height, 100px) + 16px);
+  border: 0;
+}
+
+.training-roster-body {
+  display: grid;
+  gap: 14px;
+  padding: 4px 14px 14px;
+}
+
+.training-roster-body :is(p, ul) {
+  margin: 0;
+}
+
+.training-roster-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.45fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.training-roster-form label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-weight: 650;
+}
+
+body.adminusers-page .training-roster :is(textarea, select, input) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 2px solid;
+  border-color: color-mix(in srgb, var(--ui-text) 50%, var(--ui-input)) !important;
+  border-radius: 8px;
+  background: var(--ui-input);
+  color: var(--ui-text);
+  font: inherit;
+}
+
+.training-roster-status:empty {
+  display: none;
+}
+
+.training-roster-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.training-roster-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--ui-surface-soft);
+}
+
+.training-roster-row small {
+  display: block;
+  color: var(--ui-muted);
+}
+
+.training-roster-actions,
+.training-roster-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.training-roster-link {
+  flex-basis: 100%;
+}
+
+.training-roster-link button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 680px) {
+  .training-roster-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

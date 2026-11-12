@@ -175,6 +175,12 @@
                 href="#registration-whitelist-panel"
                 >注册白名单</a
               >
+              <a
+                class="admin-button admin-button-secondary bbs-action"
+                data-action-tone="secondary"
+                href="#training-roster-panel"
+                >学培待授权名单</a
+              >
               <button
                 class="admin-button admin-button-secondary admin-export-button bbs-action"
                 data-action-tone="secondary"
@@ -199,6 +205,39 @@
               </button>
             </div>
           </header>
+
+          <details class="admin-utility-settings training-roster" id="training-roster-panel">
+            <summary>
+              <span>
+                <strong>学培待授权名单</strong>
+                <small>给尚未注册的同学发放专属注册链接</small>
+              </span>
+              <span class="admin-utility-summary-state">展开</span>
+            </summary>
+            <div class="training-roster-body">
+              <p>
+                用专属链接完成注册后，系统按名单授予对应角色。每条链接限本人使用一次，换发后旧链接失效。
+              </p>
+              <form class="training-roster-form">
+                <label>
+                  姓名（每行一个）
+                  <textarea name="names" rows="3" maxlength="6500" required></textarea>
+                </label>
+                <label>
+                  学培身份
+                  <select name="staffRole">
+                    <option value="member">学培部部员</option>
+                    <option value="minister">学培部部长</option>
+                  </select>
+                </label>
+                <button class="admin-button bbs-action" data-action-tone="primary" type="submit">
+                  添加并生成注册链接
+                </button>
+              </form>
+              <p class="training-roster-status" role="status"></p>
+              <ul class="training-roster-list" aria-label="学培待授权名单记录"></ul>
+            </div>
+          </details>
 
           <section
             class="settings-shell registration-whitelist-panel"
@@ -499,6 +538,7 @@
     <script src="/admin-ai-dialog-export.js"></script>
     <script src="/admin-account-credentials.js"></script>
     <script src="/admin-certifications.js"></script>
+    <script src="/training-roster.js"></script>
     <script src="/learning-analytics.js?v=20261016-learning-4x4-1"></script>
     <script src="/learning-research.js?v=20261011-research-2"></script>
     <script src="/notifications.js"></script>
