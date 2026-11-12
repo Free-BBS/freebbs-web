@@ -447,28 +447,6 @@ function initializeHorizontalWheelScroll() {
   });
 }
 
-function installMobileLearningMenu(worldLink, activePath) {
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'nav-link';
-  trigger.classList.toggle('is-active', ['/world', '/training'].includes(activePath));
-  trigger.setAttribute('popovertarget', 'mobile-learning-menu');
-  trigger.innerHTML = '<img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习</span>';
-  const menu = document.createElement('nav');
-  menu.id = 'mobile-learning-menu';
-  menu.setAttribute('popover', 'auto');
-  menu.setAttribute('aria-label', '学习');
-  menu.append(
-    createNavLink({ href: '/world', icon: 'map', text: '学习世界' }),
-    createNavLink({ href: '/training', icon: 'book', text: '小班辅导' }),
-  );
-  if (['/world', '/training'].includes(activePath)) {
-    menu.querySelector(`a[href="${activePath}"]`).setAttribute('aria-current', 'page');
-  }
-  worldLink.replaceWith(trigger);
-  document.body.append(menu);
-}
-
 function initializeDashboardShell() {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   const pageTitles = {
@@ -522,7 +500,6 @@ function initializeDashboardShell() {
     { href: '/world', icon: 'map', label: '学习世界' },
     { href: '/discussion', icon: 'people', label: '讨论区' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
-    { href: '/training', icon: 'book', label: '小班辅导' },
     { href: '/laboratory', icon: 'circuit', label: '实验室' },
     { href: '/creative-workshop', icon: 'wrench', label: '创意工坊' },
     { href: '/pbl', icon: 'star', label: 'PBL 计划' },
@@ -554,9 +531,7 @@ function initializeDashboardShell() {
   });
 
   document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
-    const mobile = nav.classList.contains('mobile-nav');
     navItems.forEach(({ href, icon, label, className = '' }) => {
-      if (mobile && href === '/training') return;
       const laboratoryEntry = href === '/laboratory';
       let link = nav.querySelector(`.nav-link[href="${href}"]`);
       if (!link && laboratoryEntry) {
@@ -590,7 +565,19 @@ function initializeDashboardShell() {
         link.removeAttribute('aria-current');
       }
     });
-    if (mobile) installMobileLearningMenu(nav.querySelector('.nav-link[href="/world"]'), activePath);
+    if (!nav.classList.contains('mobile-nav')) {
+      const training = createNavLink({
+        href: '/training',
+        icon: 'book',
+        text: '小班辅导',
+        className: 'training-nav-link',
+      });
+      if (activePath === '/training') {
+        training.classList.add('is-active');
+        training.setAttribute('aria-current', 'page');
+      }
+      nav.querySelector('.nav-link[href="/world"]').after(training);
+    }
   });
 
   centerActiveMobileNavigation();

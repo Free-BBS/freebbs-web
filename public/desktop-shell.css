@@ -186,6 +186,15 @@
   body.desktop-shell-active .nav-actions > [href='/world'] {
     order: 2;
   }
+  body.desktop-shell-active .topbar .nav-actions > .training-nav-link {
+    order: 2;
+    padding-inline-start: 27px !important;
+    font-size: 0.86rem;
+  }
+  body.desktop-shell-active .nav-actions > .training-nav-link .nav-icon {
+    width: 17px;
+    height: 17px;
+  }
   body.desktop-shell-active .nav-actions > [href='/discussion'] {
     order: 3;
   }
