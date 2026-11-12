@@ -269,6 +269,23 @@ body.training-page .training-main {
   font: inherit;
 }
 
+body.training-page.theme-light
+  :is(.training-content, .training-dialog)
+  :is(input:not([type='checkbox'], [type='radio']), select, textarea) {
+  padding: 7px 10px;
+  border: 2px solid;
+  border-color: var(--ui-muted) !important;
+  border-color: color-mix(in srgb, var(--ui-text) 50%, var(--ui-input)) !important;
+  background: var(--ui-input);
+}
+
+body.training-page.theme-light
+  :is(.training-content, .training-dialog)
+  :is(input, textarea)::placeholder {
+  color: var(--ui-muted);
+  opacity: 1;
+}
+
 .training-content textarea,
 .training-dialog textarea {
   resize: vertical;
