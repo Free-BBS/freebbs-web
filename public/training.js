@@ -151,6 +151,9 @@
         const tools =
           link(application, route('apply', batch.slug)) +
           (access.minister ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`) : '') +
+          (access.admin && batch.phase === 'open'
+            ? button('截止报名', `data-close-registration="${escape(batch.slug)}"`)
+            : '') +
           (access.minister && ['closed', 'published'].includes(batch.phase)
             ? link(
                 batch.phase === 'published' ? '录取名单' : '审核与排班',
@@ -186,6 +189,26 @@
     content.querySelector('#training-new')?.addEventListener('click', openBatchForm);
     content.querySelectorAll('[data-copy]').forEach((control) => {
       control.addEventListener('click', () => copyLink(control.dataset.copy, control));
+    });
+    content.querySelectorAll('[data-close-registration]').forEach((control) => {
+      const batch = batches.find(({ slug }) => slug === control.dataset.closeRegistration);
+      control.addEventListener('click', () => openCloseRegistrationDialog(batch));
+    });
+  }
+
+  function openCloseRegistrationDialog(batch) {
+    const modal = dialog(
+      '截止报名',
+      `<form class="training-form"><p>「${escape(batch.title)}」将立即停止接收新报名，随后可进入审核与排班。</p>` +
+        `${errorField}<div class="training-actions">${button('取消', 'data-close')}${submit(
+          '确认截止',
+        )}</div></form>`,
+    );
+    bindForm(modal.querySelector('form'), async () => {
+      await api(`${batchEndpoint(batch.slug)}/close`, 'POST');
+      modal.close();
+      await renderDirectory();
+      tell('报名已截止');
     });
   }
 
