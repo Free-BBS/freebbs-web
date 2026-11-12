@@ -11,7 +11,7 @@ const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
 const authForm = document.getElementById('auth-page-form');
 const trainingInvite =
   authForm?.dataset.authMode === 'register'
-    ? (new URLSearchParams(window.location.hash.slice(1)).get('training-invite') ?? undefined)
+    ? (new URLSearchParams(window.location.hash?.slice(1)).get('training-invite') ?? undefined)
     : undefined;
 if (trainingInvite !== undefined) {
   const notice = document.createElement('p');
