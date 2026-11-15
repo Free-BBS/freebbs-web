@@ -19,7 +19,7 @@ echo "[ci] syntax check"
 for script in scripts/*.sh; do
   bash -n "$script"
 done
-node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js scripts/development-migration-boundary.test.js
+node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js scripts/development-migration-boundary.test.js scripts/provision-banner-storage.test.js
 node --check scripts/map-bridge-configure.js
 node --test scripts/map-bridge-configure.test.js scripts/map-bridge-configure-workflow.test.js
 node --check scripts/moderation-access-check.js
