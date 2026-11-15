@@ -20,6 +20,7 @@ export * from './activity-workspace.js';
 export * from './collaboration.js';
 export * from './publishing.js';
 export * from './organization-group.js';
+export * from './organization-group-roster.js';
 export * from './class-secretaries.js';
 export * from './system-settings.js';
 export * from './achievement-atlas.js';

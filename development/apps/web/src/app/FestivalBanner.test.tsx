@@ -2,8 +2,23 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { FestivalBanner } from './FestivalBanner.js';
+import { BOYS_DAY_BANNER } from './festival-banner-content.js';
 
 describe('FestivalBanner', () => {
+  it('publishes every approved class banner with working navigation and no contact details', () => {
+    render(<FestivalBanner preview={false} />);
+    for (const [index, message] of BOYS_DAY_BANNER.messages.entries()) {
+      const banner = screen.getByRole('region', { name: '男生节横幅' });
+      expect(banner).toHaveTextContent(message.text.replace(/\s+/g, ' '));
+      expect(banner).toHaveTextContent(message.source!);
+      expect(screen.getByLabelText(`第 ${index + 1} 幅，共 7 幅`)).toBeInTheDocument();
+      expect(banner.textContent).not.toMatch(/\b\d{11}\b/);
+      fireEvent.click(screen.getByRole('button', { name: '下一幅横幅' }));
+    }
+    expect(screen.getByLabelText('第 1 幅，共 7 幅')).toBeInTheDocument();
+    expect(screen.queryByText('男生节横幅展示位')).not.toBeInTheDocument();
+  });
+
   it('reserves an honest empty placement in local preview but never publishes it', () => {
     const view = render(<FestivalBanner messages={[]} preview />);
     expect(screen.getByRole('region', { name: '男生节横幅' })).toHaveTextContent(

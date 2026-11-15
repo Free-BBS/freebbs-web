@@ -54,7 +54,7 @@ describe('CommunityPage', () => {
     const request = vi.fn(() => new Promise(() => undefined));
     render(<CommunityPage client={{ request } as unknown as ApiClient} />);
     expect(screen.getByRole('region', { name: '男生节横幅' })).toHaveTextContent(
-      '男生节横幅展示位',
+      '烦忧尽数消元，喜乐满秩长存；',
     );
     expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading');
   });

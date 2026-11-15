@@ -1,0 +1,100 @@
+.og-roster-picker {
+  min-width: 0;
+  margin-top: 10px;
+}
+.og-roster-panel {
+  padding: 18px;
+  margin-top: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-page);
+}
+.og-roster-panel > header,
+.og-roster-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.og-roster-panel > header {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.og-roster-panel > header h3 {
+  margin: 0;
+}
+.og-roster-tools {
+  margin-bottom: 14px;
+}
+.og-roster-tools > span {
+  margin-right: auto;
+  color: var(--color-muted);
+}
+.og-roster-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  margin-bottom: 16px;
+}
+.og-page label.og-roster-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.og-roster-choice:has(input:checked) {
+  border-color: var(--og-accent);
+  background: color-mix(in srgb, var(--og-accent) 9%, var(--surface-raised));
+}
+.og-roster-choice > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+.og-roster-editor {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow: auto;
+}
+.og-roster-editor > li {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+.og-roster-editor label {
+  min-width: 0;
+}
+.og-roster-hint,
+.og-roster-conflict p {
+  color: var(--color-muted);
+}
+.og-roster-conflict {
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+.og-roster-conflict > button + button {
+  margin-left: 8px;
+}
+@media (max-width: 640px) {
+  .og-roster-panel {
+    padding: 14px;
+  }
+  .og-roster-editor > li {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .og-roster-editor > li > button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

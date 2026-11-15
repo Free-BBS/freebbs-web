@@ -80,6 +80,7 @@ rsync -a --delete \
   --exclude "uploads" \
   --exclude "database/uploads" \
   --exclude "database/moderation-private" \
+  --exclude "database/banner-reactions-private" \
   "$ROOT_DIR"/ "$DEPLOY_DIR"/
 
 cd "$DEPLOY_DIR"

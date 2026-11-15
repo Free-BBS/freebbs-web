@@ -90,6 +90,7 @@ envs.sh
 # Database runtime files
 database/uploads/
 database/moderation-private/
+database/banner-reactions-private/
 database/backups/
 database/local-rag/
 *.sqlite

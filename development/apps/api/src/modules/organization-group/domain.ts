@@ -12,6 +12,7 @@ import type {
   OrganizationGroupFile,
   OrganizationGroupMember,
   OrganizationGroupResource,
+  OrganizationGroupRosterSnapshot,
   OrganizationGroupScope,
   OrganizationGroupSettings,
   OrganizationGroupVersion,
@@ -76,6 +77,12 @@ export interface OrganizationState {
   classes: Array<{ id: string; label: string }>;
   members: OrganizationGroupMember[];
   managerUids: string[];
+  classRosters?: Array<
+    OrganizationGroupRosterSnapshot & {
+      classId: string;
+      history: OrganizationGroupRosterSnapshot[];
+    }
+  >;
   years: OrganizationGroupYear[];
   versions: OrganizationGroupVersion[];
   assets: StoredAsset[];

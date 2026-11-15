@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import express from 'express';
@@ -11,6 +12,15 @@ import { createMemoryStore } from '../../core/database/memory-store.js';
 import { BannerReactionsService } from './banner-reactions.js';
 import { bannerReactionsDataDirectory } from './banner-reaction-directory.js';
 import { createCommunityRouter } from './router.js';
+
+const { createDevelopmentBannerReactionsDirectory } = createRequire(import.meta.url)(
+  '../../../../../../backend/development-integration.js',
+) as {
+  createDevelopmentBannerReactionsDirectory(
+    uploadDirectory: string,
+    environment?: { BANNER_REACTIONS_DATA_DIR?: string },
+  ): string;
+};
 
 const roots: string[] = [];
 async function directory() {
@@ -278,6 +288,53 @@ describe('shared banner reactions', () => {
 });
 
 describe('private banner reaction directory', () => {
+  it('persists production reactions in the main backend default without writing public uploads', async () => {
+    const root = await directory();
+    const uploads = join(root, 'uploads');
+    await mkdir(uploads);
+    const configured = createDevelopmentBannerReactionsDirectory(uploads, {});
+    expect(configured).toBe(join(root, 'banner-reactions-private'));
+    const options = {
+      directory: configured,
+      nodeEnvironment: 'production',
+      publicDirectories: [uploads],
+    };
+    const service = new BannerReactionsService(options);
+    await expect(
+      service.update('production-default', 'student-a', { liked: true, blessed: true }),
+    ).resolves.toMatchObject({ likeCount: 1, liked: true, blessingCount: 1, blessed: true });
+    const restarted = new BannerReactionsService(options);
+    await expect(restarted.read('production-default', 'student-a')).resolves.toMatchObject({
+      likeCount: 1,
+      liked: true,
+      blessingCount: 1,
+      blessed: true,
+    });
+    expect(await readdir(uploads)).toEqual([]);
+    expect(await readdir(join(configured, 'banner-reactions'))).toHaveLength(1);
+  });
+
+  it('still rejects public, parent and symlink-overlapping explicit backend overrides', async () => {
+    const root = await directory();
+    const uploads = join(root, 'uploads');
+    await mkdir(uploads);
+    const link = join(root, 'private-link');
+    await symlink(uploads, link, process.platform === 'win32' ? 'junction' : 'dir');
+    for (const override of [uploads, join(uploads, 'reactions'), root, join(link, 'reactions')]) {
+      const configured = createDevelopmentBannerReactionsDirectory(uploads, {
+        BANNER_REACTIONS_DATA_DIR: override,
+      });
+      expect(
+        () =>
+          new BannerReactionsService({
+            directory: configured,
+            nodeEnvironment: 'production',
+            publicDirectories: [uploads],
+          }),
+      ).toThrow('must not overlap');
+    }
+  });
+
   it.each(['', '   '])(
     'uses the local fallback for blank development configuration %j',
     (value) => {

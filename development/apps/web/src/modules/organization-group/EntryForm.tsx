@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   OrganizationGroupEntry,
   OrganizationGroupFile,
@@ -12,6 +12,7 @@ import { ApiError } from '../../core/api/client.js';
 import { jsonOptions } from './api.js';
 import type { GroupClient } from './OrganizationGroupPage.js';
 import { FileTile, uploadFile } from './Files.js';
+import { ClassRosterPicker } from './ClassRosterPicker.js';
 import {
   coreLabels,
   emptyDraft,
@@ -61,6 +62,12 @@ export function EntryForm({
   const [extraFiles, setExtraFiles] = useState<OrganizationGroupFile[]>(entry?.extraPhotos ?? []);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    name: string;
+    index: number;
+    total: number;
+  } | null>(null);
+  const activeUpload = useRef<AbortController | null>(null);
   const [message, setMessage] = useState('');
   const [conflict, setConflict] = useState(false);
   const [latest, setLatest] = useState<OrganizationGroupEntry | null>(null);
@@ -68,6 +75,15 @@ export function EntryForm({
   const token = useRef(crypto.randomUUID());
   const saving = useRef(false);
   const photoInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    setUploading(false);
+    setUploadProgress(null);
+    return () => {
+      const controller = activeUpload.current;
+      activeUpload.current = null;
+      controller?.abort();
+    };
+  }, [api, year.id, entry?.id]);
   const modern = version.template === 'class_activity_v2';
   const maxPhotos = modern ? 5 : workspace.maxPhotos;
   const maxPhotoBytes = modern ? 5 * 1048576 : workspace.maxPhotoBytes;
@@ -95,19 +111,45 @@ export function EntryForm({
           ? '备注'
           : coreLabels[key]);
   const help = (key: keyof typeof coreLabels) => version.corePresentation?.[key]?.help;
+  function cancelUpload() {
+    const controller = activeUpload.current;
+    if (!controller) return;
+    activeUpload.current = null;
+    controller.abort();
+    setUploading(false);
+    setUploadProgress(null);
+    if (photoInput.current) photoInput.current.value = '';
+    setMessage('已取消上传，填写内容和已上传照片已保留，可重新选择图片。');
+  }
   async function upload(files: FileList | null, field?: OrganizationGroupField) {
-    if (!files?.length || uploading) return;
+    if (!files?.length || activeUpload.current) return;
+    const controller = new AbortController();
+    activeUpload.current = controller;
+    const current = () => activeUpload.current === controller && !controller.signal.aborted;
+    const selected = Array.from(files);
     setMessage('');
     setUploading(true);
     try {
-      if (!field && draft.photos.length + files.length > maxPhotos)
+      if (!field && draft.photos.length + selected.length > maxPhotos)
         throw new Error(`活动照片最多 ${maxPhotos} 张。`);
-      for (const file of Array.from(files)) {
+      for (const file of selected) {
         if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > maxPhotoBytes)
           throw new Error(
             `请选择 PNG、JPEG 或 WebP 图片，单张不超过 ${Math.round(maxPhotoBytes / 1048576)} MiB。`,
           );
-        const uploaded = await uploadFile(api, file, year.id, 'activity_photo', entry?.id);
+      }
+      for (const [index, file] of selected.entries()) {
+        if (!current()) return;
+        setUploadProgress({ name: file.name, index: index + 1, total: selected.length });
+        const uploaded = await uploadFile(
+          api,
+          file,
+          year.id,
+          'activity_photo',
+          entry?.id,
+          controller.signal,
+        );
+        if (!current()) return;
         if (field) {
           setExtraFiles((current) => [...current, uploaded]);
           setDraft((current) => ({
@@ -125,14 +167,23 @@ export function EntryForm({
         } else setDraft((current) => ({ ...current, photos: [...current.photos, uploaded] }));
       }
     } catch (cause) {
-      setMessage(errorMessage(cause));
+      if (current())
+        setMessage(
+          cause instanceof Error && cause.name === 'TimeoutError'
+            ? '图片上传超时，请检查网络后重试。填写内容和已上传照片已保留。'
+            : errorMessage(cause),
+        );
     } finally {
-      setUploading(false);
-      if (photoInput.current) photoInput.current.value = '';
+      if (activeUpload.current === controller) {
+        activeUpload.current = null;
+        setUploading(false);
+        setUploadProgress(null);
+        if (photoInput.current) photoInput.current.value = '';
+      }
     }
   }
   async function submit() {
-    if (saving.current || uploading || conflict) return;
+    if (saving.current || activeUpload.current || conflict) return;
     const invalid = validateEntry(draft, version, workspace);
     if (invalid) {
       setMessage(invalid);
@@ -398,7 +449,18 @@ export function EntryForm({
               {help('photos') ??
                 `${modern ? '选填，' : '至少 1 张，'}最多 ${maxPhotos} 张；单张 ${Math.round(maxPhotoBytes / 1048576)} MiB。`}
             </small>
-            {uploading ? <p role="status">正在上传图片，请稍候…</p> : null}
+            {uploading ? (
+              <div className="og-actions">
+                <p role="status">
+                  {uploadProgress
+                    ? `正在上传 ${uploadProgress.index} / ${uploadProgress.total}：${uploadProgress.name}`
+                    : '准备上传图片…'}
+                </p>
+                <button type="button" onClick={cancelUpload}>
+                  取消上传
+                </button>
+              </div>
+            ) : null}
             <div className="og-file-grid">
               {draft.photos.map((file) => (
                 <FileTile
@@ -431,14 +493,31 @@ export function EntryForm({
             </small>
           </label>
           {modern ? (
-            <label className="og-span">
-              {label('participantNames')}
-              <textarea
-                aria-label={label('participantNames')}
-                rows={3}
-                required
-                value={draft.participantNames ?? ''}
-                onChange={(event) => change('participantNames', event.target.value)}
+            <div className="og-span">
+              <label>
+                {label('participantNames')}
+                <textarea
+                  aria-label={label('participantNames')}
+                  rows={3}
+                  required
+                  value={draft.participantNames ?? ''}
+                  onChange={(event) => change('participantNames', event.target.value)}
+                />
+              </label>
+              <ClassRosterPicker
+                api={api}
+                classId={draft.classId}
+                classLabel={
+                  classes.find((item) => item.id === draft.classId)?.label ?? draft.classId
+                }
+                participantNames={draft.participantNames ?? ''}
+                onApply={(names) =>
+                  setDraft((current) => ({
+                    ...current,
+                    participantNames: names.join('、'),
+                    participantCount: String(names.length),
+                  }))
+                }
               />
               <small>
                 {help('participantNames') ??
@@ -450,7 +529,7 @@ export function EntryForm({
                   人；请核对，提示不影响提交。
                 </small>
               ) : null}
-            </label>
+            </div>
           ) : null}
           {version.fields.map((field) => (
             <div
@@ -647,7 +726,10 @@ function ExtraField({
         accept="image/png,image/jpeg,image/webp"
         multiple
         disabled={uploading}
-        onChange={(event) => onUpload(event.target.files)}
+        onChange={(event) => {
+          onUpload(event.target.files);
+          event.currentTarget.value = '';
+        }}
       />
     ) : (
       <input

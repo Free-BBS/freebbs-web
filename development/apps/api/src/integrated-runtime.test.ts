@@ -45,15 +45,17 @@ it('exposes the shared root authority to the learning platform before a first de
     });
   await runtime.close();
 });
-it('passes private finance configuration and public upload roots into the app', async () => {
+it('passes private finance/banner storage and public upload roots into the app', async () => {
   const runtime = await createIntegratedDevelopmentRuntime({
     ...options,
     financeDirectory: '/private-finance',
+    bannerReactionsDirectory: '/private-banner-reactions',
     publicUploadDirectory: '/public-uploads',
   });
   expect(mocks.app).toHaveBeenCalledWith(
     expect.objectContaining({
       financeDirectory: '/private-finance',
+      bannerReactionsDirectory: '/private-banner-reactions',
       publicUploadDirectory: '/public-uploads',
     }),
   );
