@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { BannerReactions, UpdateBannerReactionsInput } from '@freebbs-development/contracts';
+import {
+  PUBLISHED_FESTIVAL_BANNER_IDS,
+  type BannerReactions,
+  type UpdateBannerReactionsInput,
+} from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { bannerReactionsDataDirectory } from './banner-reaction-directory.js';
@@ -26,7 +30,9 @@ export class BannerReactionsService {
       : null;
   }
 
-  private configured() {
+  private configured(bannerId: string) {
+    if (!PUBLISHED_FESTIVAL_BANNER_IDS.includes(bannerId))
+      throw new HttpError(404, 'banner_not_published', '横幅未发布或已下线');
     if (!this.storage)
       throw new HttpError(503, 'banner_storage_not_configured', '横幅互动暂未配置，请稍后再试');
     return this.storage;
@@ -48,7 +54,7 @@ export class BannerReactionsService {
   }
 
   async read(bannerId: string, uid: string): Promise<BannerReactions> {
-    const record = (await this.configured().get(bannerId)) ?? {
+    const record = (await this.configured(bannerId).get(bannerId)) ?? {
       id: bannerId,
       likes: [],
       blessings: [],
@@ -61,7 +67,7 @@ export class BannerReactionsService {
     uid: string,
     input: UpdateBannerReactionsInput,
   ): Promise<BannerReactions> {
-    return this.configured().change(bannerId, (stored) => {
+    return this.configured(bannerId).change(bannerId, (stored) => {
       const record = stored ?? { id: bannerId, likes: [], blessings: [] };
       const key = this.readerKey(uid);
       if (input.liked === true && !record.likes.includes(key)) record.likes.push(key);

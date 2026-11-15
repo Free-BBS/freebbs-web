@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
+import { PUBLISHED_FESTIVAL_BANNER_IDS } from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { BASE_STUDENT_PERMISSIONS } from '../../core/authorization/permission-catalog.js';
@@ -124,14 +126,16 @@ async function fixture(options: { productionWithoutStorage?: boolean } = {}) {
   return { app, store, module, directory: root };
 }
 
-const route = '/community/banner-reactions/boys-day-2026-class-a';
+const bannerId = PUBLISHED_FESTIVAL_BANNER_IDS[0]!;
+const anotherBannerId = PUBLISHED_FESTIVAL_BANNER_IDS[1]!;
+const route = `/community/banner-reactions/${bannerId}`;
 describe('shared banner reactions', () => {
   it('counts distinct readers and supports idempotent likes and cancellation', async () => {
     const { app } = await fixture();
     const first = await request(app).get(route).set('X-User', 'student-a').expect(200);
     expect(first.headers['cache-control']).toBe('private, no-store');
     expect(first.body.data).toEqual({
-      bannerId: 'boys-day-2026-class-a',
+      bannerId,
       likeCount: 0,
       liked: false,
       blessingCount: 0,
@@ -168,11 +172,11 @@ describe('shared banner reactions', () => {
     );
     const total = await request(app).get(route).set('X-User', 'student-a').expect(200);
     expect(total.body.data).toMatchObject({ blessingCount: 2, blessed: true });
-    const preview = await request(app)
-      .get('/community/banner-reactions/preview-boys-day-placement')
+    const another = await request(app)
+      .get(`/community/banner-reactions/${anotherBannerId}`)
       .set('X-User', 'student-a')
       .expect(200);
-    expect(preview.body.data).toMatchObject({
+    expect(another.body.data).toMatchObject({
       likeCount: 0,
       liked: false,
       blessingCount: 0,
@@ -188,7 +192,7 @@ describe('shared banner reactions', () => {
       .send({ liked: true, blessed: true })
       .expect(200);
     const restored = new BannerReactionsService({ directory: root, nodeEnvironment: 'test' });
-    const result = await restored.read('boys-day-2026-class-a', 'student-a');
+    const result = await restored.read(bannerId, 'student-a');
     expect(result).toMatchObject({ likeCount: 1, liked: true, blessingCount: 1, blessed: true });
     expect(JSON.stringify(result)).not.toContain('student-a');
     const files = await readdir(join(root, 'banner-reactions'));
@@ -201,6 +205,99 @@ describe('shared banner reactions', () => {
       'utf8',
     );
     expect(stored).not.toContain('student-a');
+  });
+
+  it('accepts all seven published banners with independent persisted totals', async () => {
+    const { app, directory: root } = await fixture();
+    expect(PUBLISHED_FESTIVAL_BANNER_IDS).toHaveLength(7);
+    for (const id of PUBLISHED_FESTIVAL_BANNER_IDS) {
+      const path = `/community/banner-reactions/${id}`;
+      expect(
+        (
+          await request(app)
+            .put(path)
+            .set('X-User', 'student-a')
+            .send({ liked: true, blessed: true })
+            .expect(200)
+        ).body.data,
+      ).toMatchObject({ bannerId: id, likeCount: 1, liked: true, blessingCount: 1, blessed: true });
+      expect(
+        (await request(app).get(path).set('X-User', 'student-b').expect(200)).body.data,
+      ).toMatchObject({
+        bannerId: id,
+        likeCount: 1,
+        liked: false,
+        blessingCount: 1,
+        blessed: false,
+      });
+    }
+    expect(await readdir(join(root, 'banner-reactions'))).toHaveLength(7);
+  });
+
+  it('rejects unknown and preview IDs for every interaction without creating any storage', async () => {
+    const { app, directory: root } = await fixture();
+    const unknownIds = [
+      'boys-day-placement-preview',
+      'preview-boys-day-placeholder',
+      'boys-day-2026-unpublished',
+      ...Array.from({ length: 32 }, (_, index) => `unknown-banner-${index}`),
+    ];
+    for (const id of unknownIds) {
+      const path = `/community/banner-reactions/${id}`;
+      const response = await request(app).get(path).set('X-User', 'student-a').expect(404);
+      expect(response.body.data.error.code).toBe('banner_not_published');
+      for (const input of [{ liked: false }, { liked: true }, { blessed: true }])
+        await request(app).put(path).set('X-User', 'student-a').send(input).expect(404);
+    }
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('leaves existing files and counts unchanged after rejected unknown interactions', async () => {
+    const { app, directory: root } = await fixture();
+    await request(app).put(route).set('X-User', 'student-a').send({ liked: true }).expect(200);
+    const storedDirectory = join(root, 'banner-reactions');
+    const files = await readdir(storedDirectory);
+    const before = await Promise.all(
+      files.map((file) => readFile(join(storedDirectory, file), 'utf8')),
+    );
+    for (let index = 0; index < 16; index++)
+      for (const input of [{ liked: false }, { liked: true }, { blessed: true }])
+        await request(app)
+          .put(`/community/banner-reactions/unknown-${index}`)
+          .set('X-User', 'student-a')
+          .send(input)
+          .expect(404);
+    expect(await readdir(root)).toEqual(['banner-reactions']);
+    expect(await readdir(storedDirectory)).toEqual(files);
+    expect(
+      await Promise.all(files.map((file) => readFile(join(storedDirectory, file), 'utf8'))),
+    ).toEqual(before);
+    expect(
+      (await request(app).get(route).set('X-User', 'student-a').expect(200)).body.data,
+    ).toMatchObject({ likeCount: 1, liked: true, blessingCount: 0 });
+  });
+
+  it('checks publication before accessing even a pre-existing invalid unknown storage record', async () => {
+    const root = await directory();
+    const service = new BannerReactionsService({ directory: root, nodeEnvironment: 'test' });
+    const unknown = 'old-unpublished-record';
+    const storedDirectory = join(root, 'banner-reactions');
+    await mkdir(storedDirectory);
+    const filename = `${createHash('sha256').update(unknown).digest('hex')}.json`;
+    await writeFile(join(storedDirectory, filename), 'invalid JSON must never be read');
+    await expect(service.read(unknown, 'student-a')).rejects.toMatchObject({
+      status: 404,
+      code: 'banner_not_published',
+    });
+    for (const input of [{ liked: false }, { liked: true }, { blessed: true } as const])
+      await expect(service.update(unknown, 'student-a', input)).rejects.toMatchObject({
+        status: 404,
+        code: 'banner_not_published',
+      });
+    expect(await readdir(storedDirectory)).toEqual([filename]);
+    expect(await readFile(join(storedDirectory, filename), 'utf8')).toBe(
+      'invalid JSON must never be read',
+    );
   });
 
   it.each([
@@ -269,7 +366,7 @@ describe('shared banner reactions', () => {
       store: createMemoryStore(),
       systemSettingsDirectory: join(root, 'settings'),
     });
-    const base = '/api/development/v1/community/banner-reactions/env-configured-banner';
+    const base = `/api/development/v1/community/banner-reactions/${bannerId}`;
     const saved = await request(app)
       .put(base)
       .set('X-Demo-User', 'demo-student')
@@ -301,10 +398,10 @@ describe('private banner reaction directory', () => {
     };
     const service = new BannerReactionsService(options);
     await expect(
-      service.update('production-default', 'student-a', { liked: true, blessed: true }),
+      service.update(bannerId, 'student-a', { liked: true, blessed: true }),
     ).resolves.toMatchObject({ likeCount: 1, liked: true, blessingCount: 1, blessed: true });
     const restarted = new BannerReactionsService(options);
-    await expect(restarted.read('production-default', 'student-a')).resolves.toMatchObject({
+    await expect(restarted.read(bannerId, 'student-a')).resolves.toMatchObject({
       likeCount: 1,
       liked: true,
       blessingCount: 1,

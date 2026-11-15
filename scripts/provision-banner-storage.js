@@ -177,12 +177,60 @@ function provisionBannerStorage(settings, dependencies = {}) {
     );
   };
   // Inspect every ancestor before any creation. Never follow an alias into another tree.
-  const segments = path.posix.dirname(target).split('/').filter(Boolean);
+  const segments = deployDir.split('/').filter(Boolean);
   let ancestor = '/';
+  let deployment;
   for (const segment of ['', ...segments]) {
     ancestor = path.posix.join(ancestor, segment);
-    if (access(metadata(ancestor)) % 2 !== 1) fail(`Backend cannot traverse ${ancestor}`);
+    deployment = metadata(ancestor);
+    if (access(deployment) % 2 !== 1) fail(`Backend cannot traverse ${ancestor}`);
   }
+  const sameDirectory = (left, right) =>
+    left.stat.dev === right.stat.dev &&
+    left.stat.ino === right.stat.ino &&
+    left.stat.uid === right.stat.uid;
+  const databaseDir = path.posix.dirname(target);
+  let database = metadata(databaseDir, true);
+  if (!database) {
+    if (deployment.stat.uid !== deployerUid)
+      fail('Deployment root is not owned by the deployment account');
+    let created = false;
+    try {
+      disk.mkdirSync(databaseDir, { mode: 0o755 });
+      created = true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') fail('Cannot create the fixed database parent directory');
+    }
+    if (!sameDirectory(deployment, metadata(deployDir)))
+      fail('Deployment root changed during parent creation');
+    database = metadata(databaseDir);
+    if (database.stat.uid !== deployerUid)
+      fail('Database parent is not owned by the deployment account');
+    if (created) {
+      // Set the new SQL/source parent independently of umask. An open directory handle
+      // prevents a path replacement from redirecting chmod onto another object.
+      let descriptor;
+      try {
+        descriptor = disk.openSync(
+          databaseDir,
+          fs.constants.O_RDONLY + (fs.constants.O_DIRECTORY || 0) + (fs.constants.O_NOFOLLOW || 0),
+        );
+        const opened = disk.fstatSync(descriptor);
+        if (!opened.isDirectory() || !sameDirectory(database, { stat: opened }))
+          fail('Database parent changed before permission setup');
+        disk.fchmodSync(descriptor, 0o755);
+      } catch (error) {
+        fail(`Cannot verify or set new database parent permissions: ${error.message}`);
+      } finally {
+        if (descriptor !== undefined) disk.closeSync(descriptor);
+      }
+      const verified = metadata(databaseDir);
+      if (!sameDirectory(database, verified))
+        fail('Database parent changed during permission setup');
+      database = verified;
+    }
+  }
+  if (access(database) % 2 !== 1) fail(`Backend cannot traverse ${databaseDir}`);
   const existing = metadata(target, true);
   if (existing) {
     if (!isPrivateWritable(existing))
