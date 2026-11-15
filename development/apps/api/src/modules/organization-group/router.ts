@@ -63,6 +63,7 @@ import {
   visibleAsset,
 } from './files.js';
 import { createClassSecretariesRouter } from './secretaries-router.js';
+import { createClassRostersRouter } from './roster-router.js';
 export interface OrganizationGroupOptions {
   authenticate: (headers: AuthHeaders) => Promise<AuthenticationResult>;
   uploadDirectory?: string;
@@ -364,6 +365,14 @@ export function createOrganizationGroupRouter(options: OrganizationGroupOptions)
     response.locals.actor = identity.user;
     next();
   });
+  router.use(
+    '/rosters',
+    createClassRostersRouter({
+      readState: read,
+      changeState: change,
+      authenticate: options.authenticate,
+    }),
+  );
   if (options.store) {
     router.use(
       '/secretaries',

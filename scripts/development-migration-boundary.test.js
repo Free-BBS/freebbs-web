@@ -35,6 +35,17 @@ test('the controlled migration command applies development migrations', () => {
   assert.match(developmentMigrate, /DEVELOPMENT_MYSQL_DATABASE/);
 });
 
+test('normal deployment preserves private banner reaction state outside tracked code and public uploads', () => {
+  const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+  const sync = deploy.match(
+    /^rsync -a --delete\s*\\\r?\n([\s\S]*?)"\$ROOT_DIR"\/ "\$DEPLOY_DIR"\//m,
+  );
+  assert.ok(sync, 'the active deployment synchronization must be identified');
+  assert.match(sync[1], /--exclude ["']database\/banner-reactions-private["']/);
+  assert.doesNotMatch(deploy, /--delete-excluded/);
+  assert.match(ignore, /^database\/banner-reactions-private\/\r?$/m);
+});
+
 for (const [format, ending] of [
   ['LF', '\n'],
   ['CRLF', '\r\n'],

@@ -1,0 +1,85 @@
+.banner-celebration {
+  position: absolute;
+  z-index: 1;
+  inset: 4px;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.banner-firework {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+}
+
+.banner-firework i {
+  position: absolute;
+  width: 3px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--spark-color);
+  opacity: 0;
+  animation: banner-spark 1150ms ease-out var(--bloom-delay) both;
+}
+
+@keyframes banner-spark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(-5px) scale(0.5);
+  }
+  15% {
+    opacity: 0.95;
+  }
+  75% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(-68px) scale(0.15);
+  }
+}
+
+.banner-blessing-heart {
+  position: absolute;
+  top: 65%;
+  color: #ffe4eb;
+  font-size: 20px;
+  line-height: 1;
+  opacity: 0;
+  animation: banner-heart 1250ms ease-out var(--heart-delay) both;
+}
+
+@keyframes banner-heart {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(1.1);
+  }
+}
+
+.banner-celebration-still {
+  display: none;
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  color: #fff2bd;
+  font-size: 26px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner-celebration .banner-firework,
+  .banner-celebration .banner-blessing-heart {
+    display: none;
+    animation: none;
+  }
+  .banner-celebration .banner-celebration-still {
+    display: block;
+  }
+}

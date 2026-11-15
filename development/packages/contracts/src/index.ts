@@ -14,11 +14,14 @@ export * from './development-identities.js';
 export * from './collections.js';
 export * from './departments.js';
 export * from './community.js';
+export * from './banner-reactions.js';
+export * from './festival-banners.js';
 
 export * from './activity-workspace.js';
 export * from './collaboration.js';
 export * from './publishing.js';
 export * from './organization-group.js';
+export * from './organization-group-roster.js';
 export * from './class-secretaries.js';
 export * from './system-settings.js';
 export * from './achievement-atlas.js';

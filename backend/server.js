@@ -67,6 +67,7 @@ const {
 assertProductionConfiguration(config);
 const {
   createDevelopmentAuthClient,
+  createDevelopmentBannerReactionsDirectory,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   configuredPlatformRootAdminUids,
@@ -7008,6 +7009,7 @@ async function start() {
     sportsUploadDirectory: path.join(config.uploadDir, 'development', 'sports'),
     publicUploadDirectory: config.uploadDir,
     financeDirectory: process.env.FINANCE_DATA_DIR?.trim(),
+    bannerReactionsDirectory: createDevelopmentBannerReactionsDirectory(config.uploadDir),
     developmentRewardProvider: createDevelopmentRewardProvider({ pool }),
   });
   await decayHeatIfNeeded(new Date());

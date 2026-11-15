@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   OrganizationGroupWorkspace,
   OrganizationGroupEntry,
+  OrganizationGroupClassRoster,
 } from '@freebbs-development/contracts';
 import { ApiError, type ApiClient, type RequestOptions } from '../../core/api/client.js';
 import { OrganizationGroupPage } from './OrganizationGroupPage.js';
@@ -103,10 +104,12 @@ function setup(
     expect(options?.method).toBe('POST');
     return entry;
   }),
+  roster?: OrganizationGroupClassRoster,
 ) {
   const request = vi.fn(async (path: string, options?: RequestOptions) => {
     if (path === '/organization-group/workspace') return { ...workspace, ...overrides };
     if (path === '/organization-group/uploads') return photo;
+    if (path.startsWith('/organization-group/rosters/') && roster) return roster;
     if (path.endsWith('/draft') && options?.method === 'PUT') {
       const body = JSON.parse(String(options.body));
       overrides.years = [{ ...workspace.years[0]!, revision: 2, draft: body }];
@@ -158,6 +161,33 @@ async function fill() {
   await screen.findByText('活动.png');
 }
 describe('organization group user flows', () => {
+  it('keeps handwritten participants until a class roster selection is explicitly applied', async () => {
+    setup({ versions: [{ ...version, template: 'class_activity_v2' }] }, undefined, {
+      classId: 'class',
+      revision: 1,
+      updatedAt: null,
+      canEdit: true,
+      canImport: false,
+      members: [
+        { id: 'one', displayName: '张三' },
+        { id: 'two', displayName: '李四' },
+      ],
+    });
+    await screen.findByLabelText('具体参与人员');
+    fireEvent.change(screen.getByLabelText('具体参与人员'), { target: { value: '手写同学' } });
+    fireEvent.change(screen.getByLabelText('参与人数'), { target: { value: '9' } });
+    fireEvent.click(screen.getByRole('button', { name: '从班级名单选择' }));
+    await screen.findByRole('checkbox', { name: '张三' });
+    expect(screen.getByLabelText('具体参与人员')).toHaveValue('手写同学');
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(screen.getByLabelText('参与人数')).toHaveValue('9');
+    fireEvent.click(screen.getByRole('button', { name: '从班级名单选择' }));
+    await screen.findByRole('checkbox', { name: '张三' });
+    fireEvent.click(screen.getByRole('button', { name: '全选' }));
+    fireEvent.click(screen.getByRole('button', { name: '填写已选姓名与人数' }));
+    expect(screen.getByLabelText('具体参与人员')).toHaveValue('张三、李四');
+    expect(screen.getByLabelText('参与人数')).toHaveValue('2');
+  });
   it('submits the eight-field form with multiple tags, names and no photos', async () => {
     const modern = {
       ...version,

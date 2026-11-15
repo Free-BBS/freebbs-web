@@ -143,6 +143,7 @@ export async function uploadFile(
   yearId: string,
   purpose: 'activity_photo' | 'resource',
   entryId?: string,
+  signal?: AbortSignal,
 ) {
   const body = new FormData();
   body.append('file', file);
@@ -152,5 +153,6 @@ export async function uploadFile(
   return api.request<OrganizationGroupFile>('/organization-group/uploads', {
     method: 'POST',
     body,
+    signal,
   });
 }

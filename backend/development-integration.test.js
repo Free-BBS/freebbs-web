@@ -3,11 +3,43 @@ const test = require('node:test');
 
 const {
   createDevelopmentAuthClient,
+  createDevelopmentBannerReactionsDirectory,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,
   readDevelopmentMapTokenDigest,
 } = require('./development-integration');
+
+test('banner reactions default to a stable private sibling and honor trimmed explicit configuration', () => {
+  const path = require('node:path');
+  const uploads = path.resolve('database/uploads');
+  const expected = path.join(path.dirname(uploads), 'banner-reactions-private');
+  for (const environment of [
+    {},
+    { BANNER_REACTIONS_DATA_DIR: '' },
+    { BANNER_REACTIONS_DATA_DIR: '   ' },
+  ]) {
+    assert.equal(createDevelopmentBannerReactionsDirectory(uploads, environment), expected);
+    assert.equal(
+      createDevelopmentBannerReactionsDirectory('database/uploads', environment),
+      expected,
+    );
+  }
+  const override = path.resolve('private-volume/reactions');
+  assert.equal(
+    createDevelopmentBannerReactionsDirectory(uploads, {
+      BANNER_REACTIONS_DATA_DIR: `  ${override}  `,
+    }),
+    override,
+  );
+  // Explicit paths remain subject to the canonical API validator, never made safe by coercion.
+  assert.equal(
+    createDevelopmentBannerReactionsDirectory(uploads, {
+      BANNER_REACTIONS_DATA_DIR: 'relative/private',
+    }),
+    'relative/private',
+  );
+});
 
 test('Map verifier loading is bounded and optional without affecting existing backend configuration', async () => {
   const { mkdtemp, writeFile, rm } = require('node:fs/promises');
@@ -207,7 +239,7 @@ test('development initialization failure does not prevent the main backend from 
   assert.equal(reports[0][1], failure);
 });
 
-test('runtime loader forwards the optional development reward provider without invoking it', async () => {
+test('runtime loader forwards private banner storage and optional providers without invoking them', async () => {
   const { mkdtemp, mkdir, writeFile, rm } = require('node:fs/promises');
   const path = require('node:path');
   const { tmpdir } = require('node:os');
@@ -231,14 +263,23 @@ test('runtime loader forwards the optional development reward provider without i
     };
     const digest = 'b'.repeat(64);
     await writeFile(path.join(root, '.development-map-token.sha256'), digest);
+    const publicUploadDirectory = path.join(root, 'database', 'uploads');
+    const bannerReactionsDirectory = createDevelopmentBannerReactionsDirectory(
+      publicUploadDirectory,
+      {},
+    );
     const options = await loadDevelopmentRuntime({
       repositoryRoot: root,
+      publicUploadDirectory,
+      bannerReactionsDirectory,
       developmentRewardProvider: provider,
       learningAchievementProvider: learningProvider,
     });
     assert.equal(options.developmentRewardProvider, provider);
     assert.equal(options.learningAchievementProvider, learningProvider);
     assert.equal(options.developmentMapTokenDigest, digest);
+    assert.equal(options.publicUploadDirectory, publicUploadDirectory);
+    assert.equal(options.bannerReactionsDirectory, bannerReactionsDirectory);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

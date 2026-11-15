@@ -72,6 +72,9 @@ done
 
 mkdir -p "$DEPLOY_DIR"
 
+"$NODE_BINARY" "$ROOT_DIR/scripts/provision-banner-storage.js" \
+  "$DEPLOY_DIR" "$BACKEND_SERVICE_NAME" "$SYSTEMCTL_BINARY" "$SUDO_BINARY"
+
 echo "[deploy] syncing project to $DEPLOY_DIR"
 rsync -a --delete \
   --exclude ".git" \
@@ -80,6 +83,7 @@ rsync -a --delete \
   --exclude "uploads" \
   --exclude "database/uploads" \
   --exclude "database/moderation-private" \
+  --exclude "database/banner-reactions-private" \
   "$ROOT_DIR"/ "$DEPLOY_DIR"/
 
 cd "$DEPLOY_DIR"

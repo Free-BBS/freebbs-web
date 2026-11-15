@@ -94,6 +94,12 @@ sudo install -d -o freebbs-backend -g freebbs-backend -m 0700 /var/lib/free-bbs/
 
 目录位于代码和公开上传目录之外，不配置 Nginx 静态映射。新版部署脚本另保留旧 `database/moderation-private` 目录作为防误删措施，但 production 不允许继续使用代码目录内的存储。
 
+### 首页横幅回应的默认私有存储
+
+横幅回应默认保存在上传目录同级的 `banner-reactions-private`；标准部署对应 `$DEPLOY_DIR/database/banner-reactions-private`，部署同步明确排除此目录。`scripts/deploy.sh` 在 rsync 前运行限定目录预检，查询实际后端服务账号，不读取环境文件。首次部署如缺少 `database`，仅在已验证、部署账号所有的规范部署根目录内创建这一级父目录并设置 0755，验证后端可遍历；已有父目录权限保持不变。已验证为私有且后端可写的目录原样保留；新目录优先使用现有 sudo 策略允许的精确 `install -d -o 后端账号 -g 账号主组 -m 0700 固定目录` 命令，否则只在部署账号新建的目录上清除继承 ACL、设置 0700 基础权限并单独授权后端账号。ACL 的组模式位显示的是 mask，因此不会在授权后再 chmod 0700。
+
+路径为符号链接、已有目录权限不明、后端无法遍历父目录，或缺少精确 install 授权及系统 ACL 工具时，预检会在同步前停止，并输出固定目录的人工准备命令；不会修改组成员、递归权限或扩大 sudo 策略。人工处理后再重跑部署。显式配置的 `BANNER_REACTIONS_DATA_DIR` 或自定义 `UPLOAD_DIR` 仍由运维准备相应私有目录；预检只验证标准默认路径，不读取或推断这些配置，也不证明外部目录可用。
+
 代码合并后由 GitHub 自动部署。检查 Actions 成功、应用健康、普通登录/讨论及原有学习功能。隐私登录确认和受限导出随新版代码上线，不依赖自动审核开关；要把它们一并纳入此次部署验收。新增主线功能按原有 CI 构建，不从台式机复制 node_modules 或 development 构建产物。
 
 本 PR 的增量数据库文件包括：

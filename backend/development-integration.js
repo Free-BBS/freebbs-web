@@ -102,6 +102,13 @@ function createDevelopmentDatabaseConfig(mainDatabase, environment = process.env
   };
 }
 
+function createDevelopmentBannerReactionsDirectory(uploadDirectory, environment = process.env) {
+  return (
+    environment.BANNER_REACTIONS_DATA_DIR?.trim() ||
+    path.join(path.dirname(path.resolve(uploadDirectory)), 'banner-reactions-private')
+  );
+}
+
 function createDevelopmentAuthClient({ verifyToken, getUserById, toUserProfile }) {
   return {
     async introspect(token) {
@@ -217,6 +224,7 @@ async function loadDevelopmentRuntime({
   collectionsUploadDirectory,
   sportsUploadDirectory,
   financeDirectory,
+  bannerReactionsDirectory,
   publicUploadDirectory,
   developmentRewardProvider,
   learningAchievementProvider,
@@ -239,6 +247,7 @@ async function loadDevelopmentRuntime({
     collectionsUploadDirectory,
     sportsUploadDirectory,
     ...(financeDirectory ? { financeDirectory } : {}),
+    ...(bannerReactionsDirectory ? { bannerReactionsDirectory } : {}),
     ...(publicUploadDirectory ? { publicUploadDirectory } : {}),
     ...(developmentRewardProvider ? { developmentRewardProvider } : {}),
     ...(learningAchievementProvider ? { learningAchievementProvider } : {}),
@@ -264,6 +273,7 @@ async function initializeDevelopmentRuntime(options, dependencies = {}) {
 module.exports = {
   configuredPlatformRootAdminUids,
   createDevelopmentAuthClient,
+  createDevelopmentBannerReactionsDirectory,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,

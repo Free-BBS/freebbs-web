@@ -100,6 +100,7 @@ export interface CreateAppOptions {
   developmentRewardProvider?: DevelopmentRewardProvider;
   systemSettingsDirectory?: string;
   financeDirectory?: string;
+  bannerReactionsDirectory?: string;
   publicUploadDirectory?: string;
   learningAchievementProvider?: LearningAchievementProvider;
   developmentMapTokenDigest?: string;
@@ -405,7 +406,22 @@ export function createApp(options: CreateAppOptions = {}) {
         : {}),
     }),
   );
-  app.use(`${API_BASE_PATH}/community`, createCommunityRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/community`,
+    createCommunityRouter({
+      store,
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      bannerReactionsDirectory:
+        options.bannerReactionsDirectory ?? environmentSource.BANNER_REACTIONS_DATA_DIR,
+      publicDirectories: [
+        options.publicUploadDirectory,
+        options.festivalUploadDirectory ?? environmentSource.FESTIVAL_UPLOAD_DIR,
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+        options.sportsUploadDirectory,
+      ].filter((path): path is string => Boolean(path)),
+    }),
+  );
   app.use(
     `${API_BASE_PATH}/organization-group`,
     createOrganizationGroupRouter({
