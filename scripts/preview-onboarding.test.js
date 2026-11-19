@@ -109,7 +109,7 @@ test('preview privacy reads current public policy and a verified synthetic statu
   );
 });
 
-test('the unchanged privacy controller restores synthetic previews without hiding real status failures', async (t) => {
+test('privacy restore shows status failures in the page content below the shell header', async (t) => {
   for (const fail of [false, true]) {
     const { server } = createOnboardingPreview({
       extraApi: fail
@@ -134,7 +134,11 @@ test('the unchanged privacy controller restores synthetic previews without hidin
         assert.equal(name, 'DOMContentLoaded');
         onReady = callback;
       },
-      body: { prepend: (notice) => notices.push(notice) },
+      body: { prepend: () => assert.fail('page shell can obscure notices above main content') },
+      querySelector(selector) {
+        assert.equal(selector, 'main');
+        return { prepend: (notice) => notices.push(notice) };
+      },
       createElement(tag) {
         assert.ok(['p', 'a'].includes(tag), 'a fixture never opens or accepts a privacy dialog');
         return { setAttribute() {}, appendChild() {} };
