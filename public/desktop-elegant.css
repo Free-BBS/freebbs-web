@@ -379,6 +379,22 @@
     white-space: nowrap;
   }
 
+  body.discussion-page .discussion-feed-toolbar,
+  body.discussion-page .discussion-feed-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  body.discussion-page .discussion-feed-toolbar-actions {
+    justify-content: flex-end;
+    min-width: 0;
+    margin-inline-start: auto;
+  }
+
+  body.discussion-page #discussion-filter-status {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter.hidden {
     display: none !important;
   }

@@ -116,7 +116,7 @@
           </a>
         </header>
 
-        <nav class="course-map-studio-tools" aria-label="地图编辑工具" role="toolbar">
+        <nav class="course-map-studio-tools" aria-label="地图编辑工具" role="toolbar" hidden>
           <button
             class="is-active"
             id="course-select-tool"
@@ -284,13 +284,15 @@
         </aside>
 
         <section class="course-map-panel is-editor" aria-label="课程知识地图编辑画布">
-          <p class="course-map-status" id="course-map-status" aria-live="polite">正在载入地图…</p>
+          <div class="course-map-editor-notice">
+            <p class="course-map-status" id="course-map-status" aria-live="polite">正在载入地图…</p>
+          </div>
           <div class="course-map-scroller" id="course-map-scroller">
             <div class="course-map-canvas" id="course-map-canvas"></div>
           </div>
         </section>
 
-        <p class="course-map-studio-hint" id="course-edge-status" aria-live="polite">
+        <p class="course-map-studio-hint" id="course-edge-status" aria-live="polite" hidden>
           拖拽光点移动结点 · 滚动画布浏览地图
         </p>
       </main>

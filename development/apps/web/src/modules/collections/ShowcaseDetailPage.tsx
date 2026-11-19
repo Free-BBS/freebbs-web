@@ -2,25 +2,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import type { ShowcaseArticle } from '@freebbs-development/contracts';
-import { createApiClient, type ApiClient } from '../../core/api/client.js';
+import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 
 export function ShowcaseDetailPage({ client }: { client?: Pick<ApiClient, 'request'> }) {
   const { articleId = '' } = useParams();
   const fallback = useMemo(createApiClient, []);
   const api = client ?? fallback;
   const [article, setArticle] = useState<ShowcaseArticle | null>(null);
+  const [loadError, setLoadError] = useState<'missing' | 'unavailable' | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
+    setArticle(null);
+    setLoadError(null);
     api
       .request<ShowcaseArticle>(`/collections/showcase/${encodeURIComponent(articleId)}`)
       .then((value) => {
         if (active) setArticle(value);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setLoadError(
+            error instanceof ApiError && error.status === 404 ? 'missing' : 'unavailable',
+          );
+        }
       });
     return () => {
       active = false;
     };
-  }, [api, articleId]);
+  }, [api, articleId, loadAttempt]);
   async function toggleLike() {
     if (!article || busy) return;
     setBusy(true);
@@ -37,7 +48,25 @@ export function ShowcaseDetailPage({ client }: { client?: Pick<ApiClient, 'reque
   if (!article)
     return (
       <main className="collections-page collections-subpage">
-        <p className="collections-empty">正在打开文章…</p>
+        <div className="collections-empty">
+          <p role="status">
+            {loadError === 'missing'
+              ? '这篇文章已找不到。'
+              : loadError === 'unavailable'
+                ? '文章暂时无法加载。'
+                : '正在打开文章…'}
+          </p>
+          {loadError === 'unavailable' && (
+            <button
+              className="bbs-action"
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+            >
+              重新加载
+            </button>
+          )}
+          <Link to="/collections/showcase">返回内容橱窗</Link>
+        </div>
       </main>
     );
   return (
