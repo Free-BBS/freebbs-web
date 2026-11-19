@@ -244,7 +244,7 @@
     modal.innerHTML = `
       <div class="course-modal-backdrop" data-action="close-modal"></div>
       <section class="course-modal-panel" role="dialog" aria-modal="true" aria-labelledby="course-modal-title">
-        <button class="course-modal-close" type="button" data-action="close-modal" aria-label="关闭">×</button>
+        <button class="course-modal-close" type="button" data-action="close-modal" aria-label="关闭"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
         <p class="course-kicker">${courseEscapeHtml(course.name)}</p>
         <h2 id="course-modal-title">${courseEscapeHtml(point.title)}</h2>
         <p>${courseEscapeHtml(point.summary)}</p>

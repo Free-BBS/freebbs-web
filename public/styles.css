@@ -6173,18 +6173,16 @@ h3,
 
 .landing-hero .hero-primary-action::after,
 .landing-hero .hero-secondary-action::after {
-  content: '↗';
-  display: inline-grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   margin-left: 4px;
-  font-size: 0.95rem;
-  line-height: 1;
-  transition:
-    transform 680ms var(--landing-ease),
-    background 680ms var(--landing-ease);
+  background: currentColor;
+  -webkit-mask: url('/assets/icons/arrow-up-right.svg') center / contain no-repeat;
+  mask: url('/assets/icons/arrow-up-right.svg') center / contain no-repeat;
+  transition: transform 680ms var(--landing-ease);
 }
 
 .landing-hero .hero-primary-action {
@@ -13308,8 +13306,15 @@ body.home-page .home-panel-link {
 }
 
 body.home-page .home-panel-link::after {
-  content: '→';
-  margin-left: 7px;
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-left: 8px;
+  background: currentColor;
+  -webkit-mask: url('/assets/icons/arrow-right.svg') center / contain no-repeat;
+  mask: url('/assets/icons/arrow-right.svg') center / contain no-repeat;
   transition: transform 160ms ease;
 }
 

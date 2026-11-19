@@ -4802,7 +4802,15 @@ body.knowledge-page .knowledge-main .knowledge-rag-form button {
 }
 
 .knowledge-back::before {
-  content: '← ';
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: currentColor;
+  -webkit-mask: url('/assets/icons/arrow-left.svg') center / contain no-repeat;
+  mask: url('/assets/icons/arrow-left.svg') center / contain no-repeat;
 }
 
 .knowledge-list {

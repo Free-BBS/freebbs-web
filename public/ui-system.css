@@ -1,0 +1,612 @@
+/*
+ * FREE-BBS interface system
+ * Final shared layer: four type sizes, a 4px spacing grid, three component
+ * radii, semantic light/dark colors, and consistent icon/control geometry.
+ */
+
+:root {
+  --text-caption: 0.75rem;
+  --text-secondary: 0.875rem;
+  --text-body: 1rem;
+  --text-title: 1.5rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-overlay: 20px;
+  --control-height: 44px;
+  --icon-size: 20px;
+
+  --ui-page: #f5f5f7;
+  --ui-surface: #ffffff;
+  --ui-surface-raised: #ffffff;
+  --ui-surface-soft: #ececee;
+  --ui-input: #ffffff;
+  --ui-text: #1d1d1f;
+  --ui-muted: #626267;
+  --ui-faint: #86868b;
+  --ui-line: rgba(29, 29, 31, 0.12);
+  --ui-line-strong: rgba(29, 29, 31, 0.22);
+  --ui-accent: #087785;
+  --ui-accent-hover: #065f6a;
+  --ui-accent-contrast: #ffffff;
+  --ui-action: #087785;
+  --ui-action-hover: #065f6a;
+  --ui-action-contrast: #ffffff;
+  --ui-accent-soft: rgba(8, 119, 133, 0.1);
+  --ui-danger: #c43d32;
+  --ui-focus: #087785;
+  --ui-shadow: 0 8px 28px rgba(29, 29, 31, 0.07);
+  --bbs-shell-width: 216px;
+  --bbs-content-gutter: var(--space-8);
+  --bbs-shell-page: var(--ui-page);
+  --bbs-shell-text: var(--ui-text);
+  --bbs-shell-muted: var(--ui-muted);
+  --minimal-bg: var(--ui-page);
+  --minimal-text: var(--ui-text);
+  --minimal-muted: var(--ui-muted);
+  --minimal-line: var(--ui-line);
+}
+
+body.theme-dark {
+  --ui-page: #151517;
+  --ui-surface: #202022;
+  --ui-surface-raised: #28282b;
+  --ui-surface-soft: #303034;
+  --ui-input: #1c1c1f;
+  --ui-text: #f5f5f7;
+  --ui-muted: #b5b5ba;
+  --ui-faint: #8e8e93;
+  --ui-line: rgba(245, 245, 247, 0.13);
+  --ui-line-strong: rgba(245, 245, 247, 0.24);
+  --ui-accent: #68d3de;
+  --ui-accent-hover: #92e2e9;
+  --ui-accent-contrast: #102326;
+  --ui-action: #68d3de;
+  --ui-action-hover: #92e2e9;
+  --ui-action-contrast: #102326;
+  --ui-accent-soft: rgba(104, 211, 222, 0.13);
+  --ui-danger: #ff8f84;
+  --ui-focus: #92e2e9;
+  --ui-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not(.theme-light):not(.theme-dark) {
+    color-scheme: dark;
+    --ui-page: #151517;
+    --ui-surface: #202022;
+    --ui-surface-raised: #28282b;
+    --ui-surface-soft: #303034;
+    --ui-input: #1c1c1f;
+    --ui-text: #f5f5f7;
+    --ui-muted: #b5b5ba;
+    --ui-faint: #8e8e93;
+    --ui-line: rgba(245, 245, 247, 0.13);
+    --ui-line-strong: rgba(245, 245, 247, 0.24);
+    --ui-accent: #68d3de;
+    --ui-accent-hover: #92e2e9;
+    --ui-accent-contrast: #102326;
+    --ui-action: #68d3de;
+    --ui-action-hover: #92e2e9;
+    --ui-action-contrast: #102326;
+    --ui-accent-soft: rgba(104, 211, 222, 0.13);
+    --ui-danger: #ff8f84;
+    --ui-focus: #92e2e9;
+    --ui-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  }
+}
+
+body.theme-light {
+  color-scheme: light;
+}
+
+body.theme-dark {
+  color-scheme: dark;
+}
+
+/* Exactly four interface text roles. Mathematical notation keeps its own
+ * relative script sizing; code uses the secondary role. */
+body {
+  font-size: var(--text-body);
+}
+
+body
+  :where(p, li, dd, dt, blockquote, figure, figcaption, article, section, div):not(
+    .katex,
+    .katex *
+  ) {
+  font-size: var(--text-body) !important;
+}
+
+body
+  :where(a, span, strong, em, b, small, time, output, summary, td, th, legend):not(
+    .katex,
+    .katex *
+  ) {
+  font-size: inherit !important;
+}
+
+body
+  :where(button, input, textarea, select, option, label, nav, .nav-link, .user-panel, .site-footer),
+body :where(button, input, textarea, select, option, label, nav) :where(span, strong, small),
+body :where(pre, code, kbd, samp) {
+  font-size: var(--text-secondary) !important;
+}
+
+body
+  :where(h1, h2, h3, h4, h5, h6, .auth-page-title, .settings-header h1, .system-settings-intro h1),
+body :where(h1, h2, h3, h4, h5, h6) :where(span, strong, small) {
+  font-size: var(--text-title) !important;
+  letter-spacing: -0.02em;
+}
+
+body
+  :where(
+    small,
+    time,
+    .brand-subtitle,
+    .user-role,
+    .site-footer,
+    .site-footer p,
+    .site-footer a,
+    .discussion-kicker,
+    .course-kicker,
+    .aichat-kicker,
+    .home-panel-kicker,
+    .workbench-eyebrow,
+    .workbench-card-eyebrow,
+    .development-kicker,
+    .system-settings-kicker,
+    .training-phase,
+    .auth-message,
+    .discussion-post-card-meta,
+    .discussion-detail-meta,
+    .discussion-comment-meta,
+    .notification-badge,
+    .notification-item time,
+    .notification-item-action,
+    .embed-kind,
+    .embed-meta,
+    .embed-hint,
+    .embed-model
+  ),
+body
+  :where(
+    small,
+    time,
+    .brand-subtitle,
+    .user-role,
+    .site-footer,
+    .discussion-kicker,
+    .course-kicker,
+    .aichat-kicker,
+    .home-panel-kicker,
+    .workbench-eyebrow,
+    .workbench-card-eyebrow,
+    .development-kicker,
+    .system-settings-kicker,
+    .training-phase
+  )
+  :where(span, strong) {
+  font-size: var(--text-caption) !important;
+}
+
+/* Shared shell and page rhythm. */
+body:not(.auth-page-body) .topbar {
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body:not(.auth-page-body) .brand {
+  min-height: 136px;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-4);
+  border: 0 !important;
+}
+
+body:not(.auth-page-body) .brand::before {
+  width: 76px;
+  height: 76px;
+  border: 0 !important;
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+
+body:not(.auth-page-body) .brand-mark::after {
+  font-size: var(--text-title) !important;
+}
+
+body:not(.auth-page-body) .nav-actions {
+  gap: var(--space-1);
+  padding: var(--space-2) 0 0;
+}
+
+body:not(.auth-page-body) .nav-link {
+  min-height: var(--control-height);
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border: 0 !important;
+  border-radius: var(--radius-control) !important;
+}
+
+body:not(.auth-page-body) .main-content {
+  padding-right: var(--bbs-content-gutter) !important;
+  padding-bottom: 64px !important;
+  padding-left: var(--bbs-content-gutter) !important;
+}
+
+body:not(.auth-page-body) .main-content::before {
+  left: calc(var(--bbs-shell-width) + var(--bbs-content-gutter));
+  right: var(--bbs-content-gutter);
+  border: 0 !important;
+  font-size: var(--text-title) !important;
+}
+
+body:not(.auth-page-body) .site-footer {
+  margin-inline: var(--bbs-content-gutter);
+  border: 0 !important;
+}
+
+.searchbar,
+body:not(.auth-page-body) .searchbar {
+  min-height: var(--control-height);
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 0 !important;
+  border-radius: var(--radius-control) !important;
+  background: var(--ui-accent-soft) !important;
+  box-shadow: none !important;
+}
+
+.searchbar input {
+  min-height: var(--control-height);
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* Controls: one radius, one height, quiet pressed/hover feedback. */
+body :where(button, .button, .auth-submit, .settings-upload-button, .home-panel-link),
+body
+  :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, select) {
+  border-radius: var(--radius-control) !important;
+}
+
+body :where(button, [role='button'], .settings-upload-button) {
+  min-height: var(--control-height);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+body :where(button, [role='button'], .settings-upload-button):active {
+  transform: scale(0.98);
+}
+
+body :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), select) {
+  min-height: var(--control-height);
+}
+
+body :where(textarea) {
+  padding: var(--space-3) !important;
+}
+
+body :where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--ui-focus) !important;
+  outline-offset: 3px !important;
+}
+
+/* Cards use surface and space rather than decorative outlines. */
+body
+  :where(
+    .settings-profile,
+    .settings-card,
+    .workbench-card,
+    .workbench-dashboard-card,
+    .workbench-hero,
+    .workbench-dialog-panel,
+    .discussion-board-about,
+    .discussion-compose,
+    .discussion-detail,
+    .discussion-stats-sidebar,
+    .discussion-post-card,
+    .aichat-dialogs,
+    .aichat-main,
+    .aichat-auth-required,
+    .economy-auth-required,
+    .economy-heat-panel,
+    .shop-item-card,
+    .inventory-item-row,
+    .home-dashboard-panel,
+    .public-profile-stat,
+    .admin-user-row,
+    .system-settings-menu,
+    .system-settings-form,
+    .course-hero,
+    .course-overview,
+    .course-toolbar,
+    .course-card,
+    .course-map-panel,
+    .course-map-studio-panel,
+    .knowledge-sidebar,
+    .knowledge-content,
+    .knowledge-section,
+    .knowledge-rag-thread,
+    .knowledge-supplementary-card,
+    .knowledge-chat-panel,
+    .markdown-source-panel,
+    .markdown-preview-panel,
+    .development-hero,
+    .development-card,
+    .development-capability-card,
+    .training-batch,
+    .training-panel,
+    .training-card,
+    .auth-page-panel,
+    .not-found-panel
+  ) {
+  border: 0 !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+body
+  :where(
+    .settings-profile,
+    .settings-card,
+    .workbench-card,
+    .workbench-dialog-panel,
+    .discussion-compose,
+    .discussion-detail,
+    .home-dashboard-panel,
+    .system-settings-form,
+    .course-overview,
+    .course-map-studio-panel,
+    .knowledge-content,
+    .knowledge-section,
+    .markdown-source-panel,
+    .markdown-preview-panel,
+    .development-card,
+    .training-batch,
+    .training-panel,
+    .auth-page-panel,
+    .not-found-panel
+  ) {
+  padding: var(--space-6) !important;
+}
+
+body
+  :where(
+    dialog,
+    .notification-panel,
+    .fortune-panel,
+    .shop-inspect-panel,
+    .band-challenge,
+    .aichat-copy-menu,
+    .world-modal-panel
+  ) {
+  border: 0 !important;
+  border-radius: var(--radius-overlay) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+body
+  :where(
+    .notification-panel-header,
+    .notification-item,
+    .settings-typography-form,
+    .notification-admin,
+    .markdown-toolbar,
+    .discussion-feed-toolbar,
+    .knowledge-editor-toolbar,
+    .circuit-canvas-toolbar,
+    .embed-waves,
+    .embed-channel-picker
+  ) {
+  border: 0 !important;
+}
+
+body :where(.circuit-canvas-panel) {
+  border-radius: var(--radius-card) !important;
+}
+
+.circuit-embed {
+  padding: var(--space-4);
+}
+
+.embed-header,
+.embed-feedback,
+.embed-timeline {
+  gap: var(--space-3);
+}
+
+body :where(.notification-item + .notification-item) {
+  margin-top: var(--space-1);
+}
+
+/* Interface icons share one optical box. External SVG images use a theme
+ * filter because currentColor does not cross an image document boundary. */
+body
+  :where(
+    img.nav-icon,
+    img.user-action-icon,
+    img.auth-label-icon,
+    img.economy-shortcut-icon,
+    img.discussion-action-icon,
+    img.currency-icon,
+    .system-settings-menu-icon img,
+    .notification-bell svg,
+    .ui-icon
+  ) {
+  display: inline-block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: 0 0 var(--icon-size);
+  object-fit: contain;
+  vertical-align: middle;
+  color: currentColor;
+  filter: var(--ui-icon-filter, none) !important;
+}
+
+body.theme-dark {
+  --ui-icon-filter: brightness(0) invert(1);
+}
+
+body
+  :where(
+    .aichat-send,
+    .auth-submit,
+    .knowledge-overview-start,
+    .course-reader-study-link,
+    .workbench-agent-action,
+    .training-primary,
+    .discussion-primary,
+    .discussion-compose-submit,
+    .settings-primary,
+    .system-settings-save
+  ) {
+  --ui-icon-filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not(.theme-light):not(.theme-dark) {
+    --ui-icon-filter: brightness(0) invert(1);
+  }
+}
+
+body :where(.avatar, .avatar-image, .settings-avatar-preview, .settings-avatar-image) {
+  border-radius: 50% !important;
+}
+
+body :where(.search-symbol, .icon-glyph) {
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 var(--icon-size);
+}
+
+body :where(.search-symbol svg, .icon-glyph svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.embed-schematic {
+  border-radius: var(--radius-card) !important;
+}
+
+/* Standalone legal/support documents. */
+body.mobile-document::before,
+body.mobile-document::after {
+  display: none !important;
+}
+
+body.mobile-document {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--ui-page);
+  color: var(--ui-text);
+  font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif);
+  line-height: 1.7;
+}
+
+.mobile-document main {
+  width: min(100%, 760px);
+  margin-inline: auto;
+  padding: var(--space-10) var(--space-6) 64px;
+}
+
+.mobile-document aside {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: var(--text-secondary);
+}
+
+.mobile-document h1,
+.mobile-document h2 {
+  margin: 0 0 var(--space-4);
+  line-height: 1.3;
+}
+
+.mobile-document h2 {
+  margin-top: var(--space-8);
+}
+
+.mobile-document p {
+  margin: 0 0 var(--space-4);
+  white-space: pre-wrap;
+}
+
+.mobile-document a {
+  color: var(--ui-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --bbs-content-gutter: var(--space-5);
+  }
+
+  body:not(.auth-page-body) .main-content::before {
+    left: var(--bbs-content-gutter);
+    right: var(--bbs-content-gutter);
+  }
+
+  body
+    :where(
+      .settings-profile,
+      .settings-card,
+      .workbench-card,
+      .workbench-dialog-panel,
+      .discussion-compose,
+      .discussion-detail,
+      .home-dashboard-panel,
+      .system-settings-form,
+      .course-overview,
+      .course-map-studio-panel,
+      .knowledge-content,
+      .knowledge-section,
+      .markdown-source-panel,
+      .markdown-preview-panel,
+      .development-card,
+      .training-batch,
+      .training-panel,
+      .auth-page-panel,
+      .not-found-panel
+    ) {
+    padding: var(--space-5) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --bbs-content-gutter: var(--space-4);
+  }
+
+  .mobile-document main {
+    padding: var(--space-8) var(--space-5) var(--space-10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body :where(button, [role='button'], .settings-upload-button) {
+    transition: none;
+  }
+}

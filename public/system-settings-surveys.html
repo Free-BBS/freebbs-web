@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/surveys.css" />
     <link rel="stylesheet" href="/admin-navigation.css" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body class="activities-page admin-settings-detail-page">
     <div class="page-shell">
@@ -80,13 +81,13 @@
             class="system-settings-back bbs-action"
             data-action-tone="secondary"
             href="/system-settings"
-            >← 返回系统设置</a
+            ><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /> 返回系统设置</a
           >
         </nav>
         <header class="activity-hero">
           <h1>让每一次招募，<br /><span>有序发生。</span></h1>
           <p>创建活动，分享公开报名链接，按计划抽取测试名额。</p>
-          <a href="/surveys" target="_blank" rel="noopener">打开公开报名大厅 ↗</a>
+          <a href="/surveys" target="_blank" rel="noopener">打开公开报名大厅 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a>
         </header>
         <div id="message" role="status" aria-live="polite"></div>
         <div id="admin-content" class="hidden" data-admin-content hidden>
@@ -185,7 +186,7 @@
                   class="secondary bbs-action"
                   data-action-tone="secondary"
                 >
-                  ＋ 添加题目</button
+                  <img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /> 添加题目</button
                 ><button class="bbs-action" data-action-tone="primary" type="submit">
                   保存草稿</button
                 ><button

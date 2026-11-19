@@ -192,7 +192,7 @@
       button.setAttribute('aria-pressed', String(isActive));
       const indicator = button.querySelector('.knowledge-tag-state');
       if (indicator) {
-        indicator.textContent = isActive ? '✓' : '＋';
+        indicator.innerHTML = `<img class="ui-icon" src="/assets/icons/${isActive ? 'check' : 'plus'}.svg" alt="" aria-hidden="true" />`;
       }
     });
   }
@@ -435,7 +435,7 @@
     state.toolsCollapsed = Boolean(isCollapsed);
     workbench?.classList.toggle('is-tools-collapsed', state.toolsCollapsed);
     if (toggle) {
-      toggle.textContent = state.toolsCollapsed ? '»' : '«';
+      toggle.innerHTML = `<img class="ui-icon" src="/assets/icons/arrow-${state.toolsCollapsed ? 'right' : 'left'}.svg" alt="" aria-hidden="true" />`;
       toggle.setAttribute('aria-expanded', String(!state.toolsCollapsed));
       toggle.setAttribute('aria-label', state.toolsCollapsed ? '展开工具栏' : '收起工具栏');
     }
@@ -584,7 +584,9 @@
     toggle.setAttribute('aria-expanded', String(state.chatOpen));
     toggle.setAttribute('aria-label', state.chatOpen ? '关闭课程学习面板' : '打开课程学习面板');
     if (symbol) {
-      symbol.textContent = state.chatOpen ? '×' : 'AI';
+      symbol.innerHTML = state.chatOpen
+        ? '<img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />'
+        : 'AI';
     }
     if (tooltip) {
       tooltip.textContent = state.chatOpen ? '关闭交互区' : '打开交互区';
@@ -1495,7 +1497,7 @@
     if (!posts.length) {
       list.innerHTML = `
         <section class="knowledge-discussion-empty">
-          <span aria-hidden="true">◌</span>
+          <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/chats.svg" alt="" aria-hidden="true" /></span>
           <strong>这里还没有课程讨论</strong>
           <p>可以从一个概念、一道题或正文里没看懂的步骤开始。</p>
           <button type="button" data-knowledge-discussion-compose>发布第一条讨论</button>
@@ -1530,7 +1532,7 @@
             <span class="knowledge-discussion-card-stats" aria-label="帖子互动">
               <span>评论 ${Number(post.commentCount || 0)}</span>
               <span>反应 ${reactions}</span>
-              <i aria-hidden="true">→</i>
+              <i aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></i>
             </span>
           </button>
         `;

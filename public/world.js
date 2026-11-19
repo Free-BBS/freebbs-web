@@ -384,7 +384,8 @@ function createCoursePlanet(course, index) {
   description.textContent = course.description;
   const action = document.createElement('span');
   action.className = 'island-course-action';
-  action.textContent = '进入课程地图 ↗';
+  action.innerHTML =
+    '进入课程地图 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" />';
 
   const identity = document.createElement('span');
   identity.className = 'island-course-identity';

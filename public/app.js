@@ -922,7 +922,7 @@ function renderCheckinCalendar(container, payload) {
         `<button type="button" class="checkin-day ${fortune?.colorClass || 'is-unchecked'}${key === today ? ' is-today' : ''}" data-day="${key}" aria-label="${escapeHtml(detail)}" title="${escapeHtml(detail)}"${key === today ? ' aria-current="date"' : ''}>${day}</button>`,
       );
     }
-    container.innerHTML = `<div class="checkin-month-heading"><button type="button" data-month-step="-1" aria-label="上个月" ${month <= oldestMonth ? 'disabled' : ''}>‹</button><strong>${year} 年 ${number} 月</strong><button type="button" data-month-step="1" aria-label="下个月" ${month >= currentMonth ? 'disabled' : ''}>›</button></div><p class="checkin-month-summary">本月已签到 ${checked} 天 · 灰色为未签到</p><div class="checkin-calendar" aria-label="${year} 年 ${number} 月签到日历">${['一', '二', '三', '四', '五', '六', '日'].map((label) => `<span class="checkin-weekday">${label}</span>`).join('')}${cells.join('')}</div><p class="checkin-day-detail" aria-live="polite">点击日期查看签到详情 · 按北京时间记录</p>`;
+    container.innerHTML = `<div class="checkin-month-heading"><button type="button" data-month-step="-1" aria-label="上个月" ${month <= oldestMonth ? 'disabled' : ''}><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /></button><strong>${year} 年 ${number} 月</strong><button type="button" data-month-step="1" aria-label="下个月" ${month >= currentMonth ? 'disabled' : ''}><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></button></div><p class="checkin-month-summary">本月已签到 ${checked} 天 · 灰色为未签到</p><div class="checkin-calendar" aria-label="${year} 年 ${number} 月签到日历">${['一', '二', '三', '四', '五', '六', '日'].map((label) => `<span class="checkin-weekday">${label}</span>`).join('')}${cells.join('')}</div><p class="checkin-day-detail" aria-live="polite">点击日期查看签到详情 · 按北京时间记录</p>`;
     container.querySelectorAll('[data-month-step]').forEach((button) => {
       button.onclick = () => {
         month = new Date(Date.UTC(year, number - 1 + Number(button.dataset.monthStep), 1))
@@ -954,7 +954,7 @@ function ensureFortuneModal() {
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close"></div>
     <section class="fortune-panel" aria-labelledby="fortune-title">
-      <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
+      <button class="fortune-close" type="button" data-action="close" aria-label="关闭"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
       <h2 class="fortune-title" id="fortune-title">签到</h2>
       <p class="fortune-date" id="fortune-date"></p>
       <div class="fortune-badge" id="fortune-badge"></div>
@@ -1174,7 +1174,7 @@ function ensureElectromagneticModal() {
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close"></div>
     <section class="fortune-panel electromagnetic-panel currency-guide-panel" role="dialog" aria-modal="true" aria-labelledby="electromagnetic-title">
-      <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
+      <button class="fortune-close" type="button" data-action="close" aria-label="关闭"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
       <h2 class="fortune-title" id="electromagnetic-title">电磁场系统</h2>
       <p class="fortune-tagline">把认真探索和日常陪伴，变成一点点积累。</p>
       <div class="electromagnetic-balances" id="electromagnetic-balances"></div>
@@ -1396,7 +1396,7 @@ function ensureShopInspectModal() {
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close-shop-inspect"></div>
     <section class="fortune-panel shop-inspect-panel" role="dialog" aria-modal="true" aria-labelledby="shop-inspect-title" tabindex="-1">
-      <button class="fortune-close" type="button" data-action="close-shop-inspect" aria-label="关闭">×</button>
+      <button class="fortune-close" type="button" data-action="close-shop-inspect" aria-label="关闭"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
       <div class="shop-inspect-layout">
         <div class="shop-inspect-image">
           <img id="shop-inspect-image" src="/assets/icons/battery.svg" alt="" aria-hidden="true" />
@@ -3139,8 +3139,8 @@ function renderWorkbenchDashboard() {
     const prompt = encodeURIComponent('请根据我本周的学习目标，生成一份可确认的时间计划草稿');
     workbenchAgentAction.href = userState.isLoggedIn ? `/aichat?prompt=${prompt}` : '/login';
     workbenchAgentAction.innerHTML = userState.isLoggedIn
-      ? '让工作管家帮我规划 <span aria-hidden="true">↗</span>'
-      : '登录后使用工作管家 <span aria-hidden="true">↗</span>';
+      ? '让工作管家帮我规划 <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>'
+      : '登录后使用工作管家 <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>';
     workbenchAgentAction.setAttribute(
       'aria-label',
       userState.isLoggedIn ? '让工作管家生成计划草稿' : '登录后使用工作管家',
@@ -4437,7 +4437,7 @@ function renderDiscussionPosts() {
           ${post.canDelete ? `<button class="discussion-delete-action" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></button>` : ''}
         </div>
       </div>
-      <span class="discussion-post-open" aria-hidden="true">↗</span>
+      <span class="discussion-post-open" aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>
     </article>
   `;
     })

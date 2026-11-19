@@ -32,6 +32,7 @@
     <link rel="stylesheet" href="/max-reasoning.css" />
     <link rel="stylesheet" href="/max-models.css" />
     <link rel="stylesheet" href="/circuit-mobile.css" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body class="circuit-page">
     <div class="circuit-page-glow" aria-hidden="true"></div>
@@ -42,7 +43,7 @@
         </a>
 
         <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <span class="search-symbol" aria-hidden="true"><img class="ui-icon" src="/assets/icons/search.svg" alt="" aria-hidden="true" /></span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
 
@@ -348,7 +349,7 @@
               <section class="circuit-workspace" aria-label="电路绘图工作台">
                 <aside class="circuit-palette" aria-labelledby="circuit-palette-title">
                   <h2 id="circuit-palette-title">元件</h2>
-                  <button id="circuit-component-add" type="button">＋ 添加 <kbd>I</kbd></button>
+                  <button id="circuit-component-add" type="button"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /> 添加 <kbd>I</kbd></button>
                   <p>亮度=电压大小，颜色表示正负<br />青色为正，橙色为负。</p>
                   <dialog id="circuit-component-menu" aria-labelledby="circuit-component-title">
                     <header>
@@ -690,7 +691,7 @@
                 </div>
                 <div class="circuit-waveform" id="circuit-waveform"></div>
                 <div id="circuit-extra-plots"></div>
-                <button id="circuit-add-plot" type="button">＋ 添加一张图</button>
+                <button id="circuit-add-plot" type="button"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /> 添加一张图</button>
                 <section
                   id="circuit-annotations"
                   class="circuit-annotations"
@@ -781,7 +782,7 @@
                   aria-label="收起电路侧栏"
                   title="收起电路侧栏"
                 >
-                  ×
+                  <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
                 </button>
               </header>
               <div class="circuit-sidebar-tabs" role="tablist" aria-label="侧栏内容">

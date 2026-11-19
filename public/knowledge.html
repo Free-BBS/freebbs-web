@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="/human-learning-annotations.css?v=20261011-human-2" />
     <link rel="stylesheet" href="/learning-research.css?v=20261011-research-1" />
     <link rel="stylesheet" href="/learning-companion-memory.css?v=20261011-research-1" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body class="knowledge-page">
     <div class="page-shell page-shell-settings">
@@ -42,7 +43,7 @@
         </a>
 
         <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <span class="search-symbol" aria-hidden="true"><img class="ui-icon" src="/assets/icons/search.svg" alt="" aria-hidden="true" /></span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
 
@@ -167,7 +168,7 @@
             href="/course?course=signals"
             aria-label="返回课程目录"
           >
-            <span aria-hidden="true">←</span>
+            <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /></span>
             <strong>课程目录</strong>
           </a>
         </nav>
@@ -185,7 +186,7 @@
                 aria-expanded="true"
                 aria-controls="knowledge-tools-list"
               >
-                «
+                <img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" />
               </button>
             </header>
             <div class="knowledge-tools-list" id="knowledge-tools-list">
@@ -203,12 +204,12 @@
                     aria-pressed="false"
                     title="标记为重要知识点"
                   >
-                    <span class="knowledge-tag-icon" aria-hidden="true">★</span>
+                    <span class="knowledge-tag-icon" aria-hidden="true"><img class="ui-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /></span>
                     <span class="knowledge-tag-copy">
                       <strong>重要</strong>
                       <small>需要重点回看</small>
                     </span>
-                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                    <i class="knowledge-tag-state" aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></i>
                   </button>
                   <button
                     class="knowledge-tag-button is-learned"
@@ -217,12 +218,12 @@
                     aria-pressed="false"
                     title="标记为已学习"
                   >
-                    <span class="knowledge-tag-icon" aria-hidden="true">✓</span>
+                    <span class="knowledge-tag-icon" aria-hidden="true"><img class="ui-icon" src="/assets/icons/check.svg" alt="" aria-hidden="true" /></span>
                     <span class="knowledge-tag-copy">
                       <strong>已学习</strong>
                       <small>已经完成初次学习</small>
                     </span>
-                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                    <i class="knowledge-tag-state" aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></i>
                   </button>
                   <button
                     class="knowledge-tag-button is-consolidated"
@@ -231,12 +232,12 @@
                     aria-pressed="false"
                     title="标记为已巩固"
                   >
-                    <span class="knowledge-tag-icon" aria-hidden="true">◆</span>
+                    <span class="knowledge-tag-icon" aria-hidden="true"><img class="ui-icon" src="/assets/icons/diamond.svg" alt="" aria-hidden="true" /></span>
                     <span class="knowledge-tag-copy">
                       <strong>已巩固</strong>
                       <small>能够稳定理解和运用</small>
                     </span>
-                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                    <i class="knowledge-tag-state" aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></i>
                   </button>
                 </div>
               </section>
@@ -248,27 +249,27 @@
                   data-knowledge-tool="content"
                   aria-pressed="true"
                 >
-                  <span aria-hidden="true">▤</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/book.svg" alt="" aria-hidden="true" /></span>
                   <strong>知识正文</strong>
                 </button>
                 <button type="button" data-knowledge-tool="resources" aria-pressed="false">
-                  <span aria-hidden="true">◇</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/diamond.svg" alt="" aria-hidden="true" /></span>
                   <strong>学习资源</strong>
                 </button>
                 <button type="button" data-knowledge-tool="feedback" aria-pressed="false">
-                  <span aria-hidden="true">↗</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>
                   <strong>学习反馈</strong>
                 </button>
                 <button type="button" data-knowledge-tool="continue" aria-pressed="false">
-                  <span aria-hidden="true">▶</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/run.svg" alt="" aria-hidden="true" /></span>
                   <strong>继续学习</strong>
                 </button>
                 <button type="button" data-knowledge-tool="notes" aria-pressed="false">
-                  <span aria-hidden="true">✎</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/edit.svg" alt="" aria-hidden="true" /></span>
                   <strong>批注</strong>
                 </button>
                 <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
-                  <span aria-hidden="true">＋</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></span>
                   <strong>参与共建</strong>
                 </button>
               </nav>
@@ -300,7 +301,7 @@
                 aria-expanded="false"
                 hidden
               >
-                <span aria-hidden="true">✎</span>
+                <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/edit.svg" alt="" aria-hidden="true" /></span>
                 编辑知识点
               </button>
             </header>
@@ -395,7 +396,7 @@
                       id="knowledge-editor-upload"
                       type="button"
                     >
-                      <span aria-hidden="true">＋</span> 上传图片
+                      <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></span> 上传图片
                     </button>
                     <input
                       id="knowledge-editor-image-input"
@@ -500,7 +501,7 @@
                       <small>ABOUT</small>
                       <strong>资料信息（原文）</strong>
                     </span>
-                    <i aria-hidden="true">＋</i>
+                    <i aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></i>
                   </summary>
                   <div
                     class="discussion-markdown-body knowledge-supplementary-body"
@@ -516,7 +517,7 @@
                       <small>APPLICATIONS</small>
                       <strong>背景与应用（原文）</strong>
                     </span>
-                    <i aria-hidden="true">＋</i>
+                    <i aria-hidden="true"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></i>
                   </summary>
                   <div
                     class="discussion-markdown-body knowledge-supplementary-body"
@@ -535,7 +536,7 @@
                 disabled
               >
                 <span id="knowledge-start-reading-label">正在载入正文…</span>
-                <span id="knowledge-start-reading-arrow" aria-hidden="true" hidden>→</span>
+                <span id="knowledge-start-reading-arrow" aria-hidden="true" hidden><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></span>
               </button>
             </section>
             <section
@@ -571,7 +572,7 @@
                     id="knowledge-return-overview"
                     type="button"
                   >
-                    ← 返回概览
+                    <img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /> 返回概览
                   </button>
                 </div>
               </header>
@@ -1101,7 +1102,7 @@
                 id="knowledge-previous-link"
                 aria-disabled="true"
               >
-                <span aria-hidden="true">←</span>
+                <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /></span>
                 <span>
                   <small>目录上一点</small>
                   <strong id="knowledge-previous-title">正在载入前后知识点…</strong>
@@ -1116,7 +1117,7 @@
                   <small>目录下一点</small>
                   <strong id="knowledge-next-title">正在载入前后知识点…</strong>
                 </span>
-                <span aria-hidden="true">→</span>
+                <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></span>
               </a>
             </nav>
           </article>
@@ -1132,7 +1133,7 @@
             aria-valuenow="480"
             tabindex="0"
           >
-            <span aria-hidden="true">↔</span>
+            <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/resize.svg" alt="" aria-hidden="true" /></span>
           </div>
 
           <div class="knowledge-chat" data-knowledge-chat>
@@ -1154,7 +1155,7 @@
                   type="button"
                   aria-label="关闭课程学习面板"
                 >
-                  ×
+                  <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
                 </button>
               </header>
 
@@ -1168,7 +1169,7 @@
                   aria-controls="knowledge-chat-view-max"
                   data-knowledge-chat-tab="max"
                 >
-                  <span aria-hidden="true">⌁</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" /></span>
                   问问 Max
                   <small>RAG</small>
                 </button>
@@ -1182,7 +1183,7 @@
                   data-knowledge-chat-tab="discussion"
                   tabindex="-1"
                 >
-                  <span aria-hidden="true">◌</span>
+                  <span aria-hidden="true"><img class="ui-icon" src="/assets/icons/chats.svg" alt="" aria-hidden="true" /></span>
                   课程讨论
                   <small id="knowledge-discussion-count">…</small>
                 </button>
@@ -1274,7 +1275,7 @@
                     >
                       刷新
                     </button>
-                    <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 ↗</a>
+                    <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a>
                   </div>
                 </header>
 
@@ -1398,9 +1399,9 @@
                       id="knowledge-discussion-back"
                       type="button"
                     >
-                      ← 返回帖子列表
+                      <img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /> 返回帖子列表
                     </button>
-                    <a id="knowledge-discussion-post-link" href="/discussion">在讨论区打开 ↗</a>
+                    <a id="knowledge-discussion-post-link" href="/discussion">在讨论区打开 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a>
                   </nav>
                   <div class="knowledge-discussion-detail-heading">
                     <div
@@ -1549,7 +1550,7 @@
           <header class="learning-annotation-popover-header">
             <h3 id="learning-annotation-directory-title">我的批注</h3>
             <button type="button" data-annotation-ui="close-directory" aria-label="关闭批注列表">
-              ×
+              <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
             </button>
           </header>
           <div id="learning-annotation-list" class="learning-records"></div>

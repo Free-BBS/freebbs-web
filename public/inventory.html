@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="/wallet-ledger.css" />
     <link rel="stylesheet" href="/inventory-sales.css" />
     <link rel="stylesheet" href="/development-commerce-embed.css" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <!-- Shared cosmetics keep the same theme tokens as the surrounding page. -->
   <body class="inventory-page economy-page">
@@ -34,7 +35,7 @@
           <span class="brand-mark">FREE<br />BBS</span>
         </a>
         <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <span class="search-symbol" aria-hidden="true"><img class="ui-icon" src="/assets/icons/search.svg" alt="" aria-hidden="true" /></span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
         <nav class="nav-actions" aria-label="顶部导航">
@@ -170,7 +171,7 @@
             </a>
           </header>
           <div class="economy-balance-row" id="inventory-balance-row"></div>
-          <p><a id="inventory-profile-link" hidden>我的主页 · 装扮与牧场 ↗</a></p>
+          <p><a id="inventory-profile-link" hidden>我的主页 · 装扮与牧场 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a></p>
           <p id="inventory-message" class="discussion-message"></p>
           <button
             class="wallet-launch"
@@ -179,12 +180,12 @@
             aria-haspopup="dialog"
             aria-controls="wallet-ledger"
           >
-            <span class="wallet-launch-icon" aria-hidden="true">↗</span>
+            <span class="wallet-launch-icon" aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>
             <span class="wallet-launch-copy"
               ><small>我的资产足迹</small><strong>打开钱包账本</strong
               ><span>每一笔收支，都有来处。</span></span
             >
-            <span class="wallet-launch-arrow" aria-hidden="true">→</span>
+            <span class="wallet-launch-arrow" aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></span>
           </button>
           <section
             class="bone-recycling"
@@ -275,7 +276,7 @@
               aria-label="关闭钱包账本"
               autofocus
             >
-              ×
+              <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
             </button>
           </div>
           <p id="wallet-ledger-description">让每笔收支都有迹可循。以下记录按时间由近到远排列。</p>
@@ -351,7 +352,7 @@
             type="button"
             aria-label="关闭出售确认"
           >
-            ×
+            <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
           </button>
         </div>
         <h2 id="bone-sale-title">出售鱼骨</h2>

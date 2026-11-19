@@ -8,13 +8,14 @@
     <link rel="stylesheet" href="/learning-policy-lab.css?v=purpose-level-v1" />
     <script src="/learning-policy.js?v=20261017-needs-flow-1" defer></script>
     <script src="/learning-policy-lab.js?v=purpose-level-v1" defer></script>
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body>
     <a class="skip-link" href="#policy-plan">跳到学习链</a>
     <header class="lab-header">
-      <a href="/world">← 学习世界</a>
+      <a href="/world"><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /> 学习世界</a>
       <span>FREE BBS · 学习链实验</span>
-      <a id="course-directory" href="/course?course=signals">完整课程目录 ↗</a>
+      <a id="course-directory" href="/course?course=signals">完整课程目录 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a>
     </header>
     <main>
       <section class="lab-intro" aria-labelledby="lab-title">
@@ -107,7 +108,7 @@
     </main>
     <dialog id="max-question-dialog" aria-labelledby="max-question-title">
       <form method="dialog">
-        <button class="dialog-close" aria-label="关闭" value="close">×</button>
+        <button class="dialog-close" aria-label="关闭" value="close"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
       </form>
       <h2 id="max-question-title">把问题带给 Max</h2>
       <p class="small">
@@ -119,7 +120,7 @@
       <div class="dialog-actions">
         <button id="max-copy" type="button" class="primary">复制问题</button
         ><a id="max-open-reader" href="/course?course=signals" target="_blank" rel="noopener"
-          >打开原页面的 Max ↗</a
+          >打开原页面的 Max <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a
         >
       </div>
       <p id="max-copy-status" role="status" class="small"></p>

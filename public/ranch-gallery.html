@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/economy.css" />
     <link rel="stylesheet" href="/ranch-creative.css" />
     <link rel="stylesheet" href="/development-commerce-embed.css" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body class="ranch-creative-page ranch-gallery-page">
     <div class="page-shell page-shell-settings">
@@ -33,7 +34,7 @@
         </a>
 
         <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <span class="search-symbol" aria-hidden="true"><img class="ui-icon" src="/assets/icons/search.svg" alt="" aria-hidden="true" /></span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
 
@@ -152,7 +153,7 @@
             <div class="community-clouds" aria-hidden="true"><i></i><i></i><i></i></div>
             <header class="community-heading">
               <div>
-                <a href="/ranch" data-own-ranch>‹ 我的牧场</a>
+                <a href="/ranch" data-own-ranch><img class="ui-icon" src="/assets/icons/arrow-left.svg" alt="" aria-hidden="true" /> 我的牧场</a>
                 <h1 id="community-title">大家的牧场</h1>
                 <span id="gallery-status" role="status" aria-live="polite">羊群正在赶来…</span>
                 <span id="community-wind-status" class="community-wind-status" hidden></span>
@@ -218,7 +219,7 @@
                 data-community-close
                 aria-label="关闭互动栏"
               >
-                ×
+                <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
               </button>
             </aside>
 

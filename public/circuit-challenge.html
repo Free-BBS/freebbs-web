@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-challenge.css" />
     <link rel="stylesheet" href="/circuit-mobile.css" />
+  <link rel="stylesheet" href="/ui-system.css" />
   </head>
   <body class="circuit-page circuit-challenge-page">
     <div class="page-shell page-shell-settings">
@@ -24,7 +25,7 @@
         </a>
 
         <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <span class="search-symbol" aria-hidden="true"><img class="ui-icon" src="/assets/icons/search.svg" alt="" aria-hidden="true" /></span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
 
@@ -310,7 +311,7 @@
                 <div class="challenge-viewport" aria-label="画布视图">
                   <button id="challenge-zoom-out" type="button" aria-label="缩小画布">−</button>
                   <output id="challenge-zoom-value">100%</output>
-                  <button id="challenge-zoom-in" type="button" aria-label="放大画布">＋</button>
+                  <button id="challenge-zoom-in" type="button" aria-label="放大画布"><img class="ui-icon" src="/assets/icons/plus.svg" alt="" aria-hidden="true" /></button>
                   <button id="challenge-zoom-reset" type="button">复位</button>
                   <button id="challenge-pan" type="button" aria-pressed="false">平移</button>
                   <button id="challenge-expand-canvas" type="button" aria-pressed="false">

@@ -1,6 +1,5 @@
 (() => {
-  if (document.getElementById('auth-page-form')?.dataset.authMode !== 'register')
-    return;
+  if (document.getElementById('auth-page-form')?.dataset.authMode !== 'register') return;
   document.body.insertAdjacentHTML(
     'beforeend',
     `
@@ -18,7 +17,7 @@
           type="button"
           aria-label="关闭验证"
         >
-          ×
+          <img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" />
         </button>
       </div>
       <h2 id="band-challenge-title">完成一次实验验证</h2>

@@ -303,7 +303,8 @@
         link.href = actionUrl;
         link.target = actionUrl.startsWith('http') ? '_blank' : '_self';
         link.rel = 'noopener noreferrer';
-        link.textContent = '在网络学堂查看 ↗';
+        link.innerHTML =
+          '在网络学堂查看 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" />';
         item.append(link);
       }
       elements.campusNoticeList.append(item);
@@ -576,7 +577,7 @@
   eventGroupDialog.className = 'workbench-dialog workbench-event-group-dialog';
   eventGroupDialog.setAttribute('aria-labelledby', 'workbench-event-group-title');
   eventGroupDialog.innerHTML =
-    '<div class="workbench-dialog-panel"><header><h2 id="workbench-event-group-title"></h2><button type="button" class="workbench-dialog-close" data-workbench-dialog-close autofocus aria-label="关闭事件列表">×</button></header><div class="workbench-event-group-list"></div></div>';
+    '<div class="workbench-dialog-panel"><header><h2 id="workbench-event-group-title"></h2><button type="button" class="workbench-dialog-close" data-workbench-dialog-close autofocus aria-label="关闭事件列表"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button></header><div class="workbench-event-group-list"></div></div>';
   shell.append(eventGroupDialog);
   const displayedGroups = new Map();
   let activeGroupIds = [];

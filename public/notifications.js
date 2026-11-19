@@ -32,7 +32,7 @@
     <section class="notification-panel" id="notification-panel" role="dialog" aria-label="通知收件箱" hidden>
       <header class="notification-panel-header"><h2>通知</h2>
         <button type="button" class="notification-read-all">全部已读</button>
-        <button type="button" class="notification-close" aria-label="关闭通知">×</button>
+        <button type="button" class="notification-close" aria-label="关闭通知"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
       </header>
       <p class="notification-message" role="status" aria-live="polite"></p>
       <div class="notification-list"></div>
@@ -94,9 +94,9 @@
       <div><p class="achievement-toast-kicker">收获一枚成就铭牌</p>
         <h2>${achievementNames[key]}</h2>
         <p>已收入「我的装扮」，可以和其他铭牌换着戴</p>
-        <a class="achievement-toast-equip">去佩戴 ↗</a>
+        <a class="achievement-toast-equip">去佩戴 <img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></a>
       </div>
-      <button type="button" class="achievement-toast-close" aria-label="关闭成就通知">×</button>`;
+      <button type="button" class="achievement-toast-close" aria-label="关闭成就通知"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>`;
     achievementToast.querySelector('a').href =
       `/profile?uid=${encodeURIComponent(uid)}#public-profile-wardrobe`;
     achievementToast.querySelector('button').addEventListener('click', closeAchievement);
@@ -207,7 +207,10 @@
       action.className = 'notification-item-action';
       const link = safeLink(item.link);
       action.textContent = item.readAt ? '已读' : '标为已读';
-      if (link) action.textContent = '查看详情 →';
+      if (link) {
+        action.innerHTML =
+          '查看详情 <img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" />';
+      }
       button.append(title, body, time, action);
       button.addEventListener('click', async () => {
         button.disabled = true;
@@ -306,7 +309,14 @@
     for (const [id, user] of state.selectedUsers) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = `${user.fullName || user.username} ×`;
+      const label = document.createElement('span');
+      label.textContent = user.fullName || user.username;
+      const icon = document.createElement('img');
+      icon.className = 'ui-icon';
+      icon.src = '/assets/icons/close.svg';
+      icon.alt = '';
+      icon.setAttribute('aria-hidden', 'true');
+      button.append(label, icon);
       button.setAttribute('aria-label', `移除 ${user.fullName || user.username}`);
       button.addEventListener('click', () => removeSelectedUser(id));
       target.append(button);

@@ -33,9 +33,9 @@
   const PROGRESS_STORAGE_KEY = 'free_bbs_course_progress_v1';
   const CURRENT_LEARNING_STORAGE_KEY = 'free_bbs_current_learning_node_v1';
   const KNOWLEDGE_TAGS = [
-    { key: 'important', label: '重要', icon: '★' },
-    { key: 'learned', label: '已学习', icon: '✓' },
-    { key: 'consolidated', label: '已巩固', icon: '◆' },
+    { key: 'important', label: '重要', icon: 'star.svg' },
+    { key: 'learned', label: '已学习', icon: 'check.svg' },
+    { key: 'consolidated', label: '已巩固', icon: 'diamond.svg' },
   ];
   const state = {
     course: null,
@@ -265,7 +265,7 @@
                 class="course-map-topic-tag is-${escapeHtml(key)}"
                 title="${escapeHtml(label)}"
                 aria-hidden="true"
-              >${escapeHtml(icon)}</span>
+              ><img class="ui-icon" src="/assets/icons/${escapeHtml(icon)}" alt="" /></span>
             `,
           )
           .join('')}
@@ -546,7 +546,7 @@
             </span>
           </span>
           <span class="course-map-chapter-action" aria-hidden="true">
-            ${isExpanded ? '收起' : isPreview ? '展开全章' : '展开'} <i>${isPreview ? '↗' : '⌄'}</i>
+            ${isExpanded ? '收起' : isPreview ? '展开全章' : '展开'} <i><img class="ui-icon" src="/assets/icons/${isPreview ? 'arrow-up-right' : 'chevron-down'}.svg" alt="" /></i>
           </span>
         </button>
         ${
@@ -588,7 +588,7 @@
           <strong>${escapeHtml(chapter.title)}</strong>
           <span>${chapter.nodes.length} 个知识点${learningNode ? ` · 学到 ${escapeHtml(learningNode.id)}` : ''}</span>
         </span>
-        <i aria-hidden="true">›</i>
+        <i aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-right.svg" alt="" aria-hidden="true" /></i>
       </button>
     `;
   }
@@ -782,7 +782,7 @@
               >
                 <div class="course-map-focus-arrow-help-heading">
                   <strong>知识关系说明</strong>
-                  <button type="button" data-course-map-arrow-help-close aria-label="关闭知识关系说明">×</button>
+                  <button type="button" data-course-map-arrow-help-close aria-label="关闭知识关系说明"><img class="ui-icon" src="/assets/icons/close.svg" alt="" aria-hidden="true" /></button>
                 </div>
                 <section class="course-map-focus-arrow-help-legend" aria-labelledby="course-map-arrow-help-legend-title">
                   <h4 id="course-map-arrow-help-legend-title">两类知识点连接</h4>
@@ -1300,7 +1300,7 @@
                   <span class="course-map-node-id">${escapeHtml(node.id)}</span>
                   <strong>${escapeHtml(node.title)}</strong>
                 </span>
-                <span class="course-map-node-arrow" aria-hidden="true">↗</span>
+                <span class="course-map-node-arrow" aria-hidden="true"><img class="ui-icon" src="/assets/icons/arrow-up-right.svg" alt="" aria-hidden="true" /></span>
               </span>
               <span class="course-map-beacon" aria-hidden="true">
                 <span></span>
