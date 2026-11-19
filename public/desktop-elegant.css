@@ -395,6 +395,11 @@
     overflow-wrap: anywhere;
   }
 
+  body.discussion-page .discussion-feed-toolbar-actions .discussion-create-toggle {
+    width: auto;
+    flex-shrink: 0;
+  }
+
   body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter.hidden {
     display: none !important;
   }
