@@ -43,6 +43,16 @@
     }
     return node;
   }
+
+  function focusMenuItem(menu, key) {
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    const index = items.indexOf(document.activeElement);
+    let next = 0;
+    if (key === 'End' || (key === 'ArrowUp' && index < 0)) next = items.length - 1;
+    else if (key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+    else if (key === 'ArrowDown') next = (index + 1) % items.length;
+    items[next]?.focus();
+  }
   nav.classList.add('mobile-nav-compact');
   nav.replaceChildren(...primary.map((item) => link(item, 'nav-link mobile-primary')));
   const createGroup = document.createElement('div');
@@ -59,6 +69,7 @@
   createMenu.id = 'mobile-create-menu';
   createMenu.className = 'mobile-tools-menu mobile-create-menu';
   createMenu.setAttribute('role', 'menu');
+  createMenu.setAttribute('aria-label', '发布');
   createMenu.hidden = true;
   for (const item of [
     ['/publish', 'compose', '发帖'],
@@ -73,16 +84,18 @@
     createButton.setAttribute('aria-expanded', 'false');
     if (focus) createButton.focus();
   };
-  createButton.addEventListener('click', () => {
+  createButton.addEventListener('click', (event) => {
     close();
     closeLearning();
     createMenu.hidden = !createMenu.hidden;
     createButton.setAttribute('aria-expanded', String(!createMenu.hidden));
+    if (!createMenu.hidden && event.detail === 0) focusMenuItem(createMenu, 'Home');
   });
   createGroup.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !createMenu.hidden) {
       closeCreate(true);
       event.preventDefault();
+      return;
     }
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault();
@@ -90,15 +103,7 @@
       closeLearning();
       createMenu.hidden = false;
       createButton.setAttribute('aria-expanded', 'true');
-      const items = [...createMenu.querySelectorAll('a')];
-      const index = items.indexOf(document.activeElement);
-      items[
-        event.key === 'Home'
-          ? 0
-          : event.key === 'End'
-            ? items.length - 1
-            : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length
-      ].focus();
+      focusMenuItem(createMenu, event.key);
     }
   });
   document.addEventListener('pointerdown', (event) => {
@@ -157,14 +162,15 @@
     learningButton.setAttribute('aria-expanded', 'false');
     if (restore) learningButton.focus();
   };
-  learningButton.addEventListener('click', () => {
+  learningButton.addEventListener('click', (event) => {
     closeCreate();
     close();
     learningMenu.hidden = !learningMenu.hidden;
     learningButton.setAttribute('aria-expanded', String(!learningMenu.hidden));
+    if (!learningMenu.hidden && event.detail === 0) focusMenuItem(learningMenu, 'Home');
   });
   learningGroup.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !learningMenu.hidden) {
       closeLearning(true);
       event.preventDefault();
       return;
@@ -175,15 +181,7 @@
     close();
     learningMenu.hidden = false;
     learningButton.setAttribute('aria-expanded', 'true');
-    const items = [...learningMenu.querySelectorAll('[role="menuitem"]')];
-    const index = items.indexOf(document.activeElement);
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? items.length - 1
-          : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
-    items[next].focus();
+    focusMenuItem(learningMenu, event.key);
   });
   document.addEventListener('pointerdown', (event) => {
     if (!learningGroup.contains(event.target)) closeLearning();
@@ -273,14 +271,15 @@
   });
   window.freeBbsApp?.sessionReady?.then(syncAdmin);
   syncAdmin();
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (event) => {
     closeCreate();
     closeLearning();
     menu.hidden = !menu.hidden;
     button.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden && event.detail === 0) focusMenuItem(menu, 'Home');
   });
   group.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !menu.hidden) {
       close(true);
       event.preventDefault();
       return;
@@ -291,15 +290,7 @@
     closeLearning();
     menu.hidden = false;
     button.setAttribute('aria-expanded', 'true');
-    const items = [...menu.querySelectorAll('[role="menuitem"]')];
-    const index = items.indexOf(document.activeElement);
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? items.length - 1
-          : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
-    items[next].focus();
+    focusMenuItem(menu, event.key);
   });
   document.addEventListener('pointerdown', (event) => {
     if (!group.contains(event.target)) close();

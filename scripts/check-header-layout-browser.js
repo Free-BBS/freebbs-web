@@ -184,7 +184,7 @@ async function runBoundaryChecks({ page, base, store, output, snapshots, setStag
     for (const mode of ['regular', 'long']) {
       const balances =
         mode === 'regular'
-          ? { electric: 120, magnetic: 86, heat: 24 }
+          ? { electric: 120, magnetic: 86, heat: 203 }
           : { electric: 987654321, magnetic: 876543210, heat: 765432109 };
       Object.assign(store.account(), balances);
       setStage(`boundary ${mode} initialization`);
@@ -199,7 +199,7 @@ async function runBoundaryChecks({ page, base, store, output, snapshots, setStag
         Object.values(balances).join(','),
       );
       await page.evaluate(() => window.freeBbsMaxGuide?.pause());
-      for (const width of [320, 359, 360, 361, 374, 375, 376]) {
+      for (const width of [320, 359, 360, 361, 374, 375, 376, 390, 402, 430]) {
         await page.setViewport({ width, height: 1000 });
         for (const theme of ['light', 'dark']) {
           for (const typeScale of ['standard', 'large']) {
