@@ -177,8 +177,8 @@ function sendFile(filePath, response, options = {}) {
     }
 
     const searchablePage = ext === '.html' && !filePath.endsWith('circuit-embed.html');
-    const mobileShellScript =
-      options.loadMobileShell === false ? '' : '<script src="/mobile-shell.js" defer></script>';
+    const shellScripts =
+      '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>';
     sendStatic(
       response,
       searchablePage
@@ -189,7 +189,9 @@ function sendFile(filePath, response, options = {}) {
             )
             .replace(
               '</body>',
-              `<script src="/site-search.js" defer></script>${mobileShellScript}<script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>`,
+              options.loadMobileShell === false
+                ? shellScripts.replace('<script src="/mobile-shell.js" defer></script>', '')
+                : shellScripts,
             )
         : data,
       headers,

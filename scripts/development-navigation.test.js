@@ -34,7 +34,7 @@ test('the development SPA owns its mobile navigation without the learning shell 
   );
   assert.match(
     serverSource,
-    /options\.loadMobileShell === false \? '' : '<script src="\/mobile-shell\.js" defer><\/script>'/,
+    /options\.loadMobileShell === false\s*\? shellScripts\.replace\('<script src="\/mobile-shell\.js" defer><\/script>', ''\)\s*: shellScripts/,
   );
 });
 
