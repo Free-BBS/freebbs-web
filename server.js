@@ -177,6 +177,8 @@ function sendFile(filePath, response, options = {}) {
     }
 
     const searchablePage = ext === '.html' && !filePath.endsWith('circuit-embed.html');
+    const mobileShellScript =
+      options.loadMobileShell === false ? '' : '<script src="/mobile-shell.js" defer></script>';
     sendStatic(
       response,
       searchablePage
@@ -187,7 +189,7 @@ function sendFile(filePath, response, options = {}) {
             )
             .replace(
               '</body>',
-              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
+              `<script src="/site-search.js" defer></script>${mobileShellScript}<script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>`,
             )
         : data,
       headers,
@@ -259,6 +261,8 @@ const server = http.createServer((request, response) => {
     const extension = path.extname(requestedPath);
     sendFile(extension ? requestedPath : path.join(developmentDir, 'index.html'), response, {
       htmlNotFound: !extension,
+      // The SPA's React tree owns its mobile navigation, including on desktop.
+      loadMobileShell: false,
     });
     return;
   }
