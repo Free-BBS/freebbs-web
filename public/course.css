@@ -2665,6 +2665,12 @@ body.course-map-editor-page .site-footer {
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
 }
 
+@media (min-width: 901px) {
+  .course-map-studio-bar {
+    width: min(calc(100vw - 160px), 840px);
+  }
+}
+
 .course-map-studio-identity {
   min-width: 0;
   display: flex;
@@ -2733,6 +2739,11 @@ body.course-map-editor-page .site-footer {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+body.course-map-editor-page .course-map-studio-identity #course-editor-title {
+  font-size: 1rem !important;
+  text-wrap: nowrap;
 }
 
 .course-map-studio-save-state {
@@ -3067,8 +3078,36 @@ body.course-map-editor-page .site-footer {
   color: #ffaaa2;
 }
 
-.course-map-editor-immersive .course-map-status {
+.course-map-editor-immersive #course-edge-status {
+  color: #add2d0;
+}
+
+.course-map-editor-immersive
+  :is(#course-edge-status, .course-map-status, .course-editor-message).is-error {
+  color: #ffaaa2 !important;
+}
+
+.course-map-editor-immersive :is(.course-map-studio-tools, .course-map-studio-hint)[hidden] {
+  display: none;
+}
+
+.course-map-editor-notice {
+  position: absolute;
   top: max(88px, calc(env(safe-area-inset-top) + 78px));
+  left: 50%;
+  z-index: 8;
+  width: min(520px, calc(100% - 30px));
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.course-map-editor-immersive .course-map-status {
+  position: static;
+  max-width: 100%;
+  transform: none;
   border-color: rgba(137, 239, 230, 0.18);
   border-radius: 8px;
   background: rgba(3, 17, 21, 0.86);
@@ -3076,6 +3115,30 @@ body.course-map-editor-page .site-footer {
   box-shadow: 0 12px 32px rgba(0, 7, 10, 0.24);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+
+.course-map-editor-notice .course-map-load-recovery {
+  position: static;
+  justify-content: center;
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+
+.course-map-editor-notice .course-map-reader-control {
+  width: auto;
+  min-height: 44px;
+  height: auto;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border-color: #658e8a;
+  background: #0d292e;
+  color: #eafffb !important;
+  font-size: 0.85rem;
+}
+
+.course-map-editor-notice .course-map-reader-control:focus-visible {
+  outline: 2px solid #add2d0;
+  outline-offset: 3px;
 }
 
 .course-map-immersive .course-map-status {
@@ -3428,7 +3491,7 @@ body.course-map-editor-page .site-footer {
     display: none;
   }
 
-  .course-map-editor-immersive .course-map-status {
+  .course-map-editor-notice {
     top: max(80px, calc(env(safe-area-inset-top) + 72px));
   }
 }
@@ -5404,10 +5467,10 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   justify-content: center;
   gap: 10px;
   padding: 0 18px;
-  border: 1px solid var(--course-accent);
+  border: 1px solid var(--action-stroke);
   border-radius: 9px;
-  background: var(--course-accent);
-  color: #ffffff;
+  background: var(--action-fill);
+  color: var(--action-foreground);
   font: inherit;
   font-size: 0.94rem;
   font-weight: 850;

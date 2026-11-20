@@ -459,11 +459,11 @@ body.theme-light .activity-status.is-upcoming {
   font-size: 11px;
 }
 .activity-error {
-  border: 1px solid color-mix(in srgb, #d8726b 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 50%, transparent);
   border-radius: 12px;
   padding: 14px 18px;
   margin-bottom: 20px;
-  color: #d8726b;
+  color: var(--color-danger);
   font-size: 13px;
   overflow-wrap: anywhere;
 }

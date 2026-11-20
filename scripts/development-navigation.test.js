@@ -27,6 +27,17 @@ test('static server sends both legacy entry addresses to the released developmen
   assert.match(serverSource, /Location: `\/development\/\$\{requestUrl\.search\}`/);
 });
 
+test('the development SPA owns its mobile navigation without the learning shell script', () => {
+  assert.match(
+    serverSource,
+    /sendFile\(extension \? requestedPath : path\.join\(developmentDir, 'index\.html'\), response, \{[^}]*loadMobileShell: false/,
+  );
+  assert.match(
+    serverSource,
+    /options\.loadMobileShell === false\s*\? shellScripts\.replace\('<script src="\/mobile-shell\.js" defer><\/script>', ''\)\s*: shellScripts/,
+  );
+});
+
 test('legacy development page opens the actual app instead of the construction map', () => {
   assert.equal(fs.existsSync(developmentPagePath), true, 'development entry is missing');
   const pageSource = fs.readFileSync(developmentPagePath, 'utf8');

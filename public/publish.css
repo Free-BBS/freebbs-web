@@ -3,6 +3,24 @@ body.publish-page {
   color: var(--ui-text) !important;
   margin: 0 !important;
 }
+.publish-desktop-brand {
+  display: none !important;
+}
+@media (min-width: 901px) {
+  body.desktop-shell-active.publish-page .topbar > .publish-desktop-brand {
+    display: flex !important;
+  }
+  body.publish-page #discussion-compose-title::placeholder,
+  body.publish-page #discussion-compose-content::placeholder {
+    color: var(--ui-muted);
+    opacity: 1;
+  }
+  body.publish-page #discussion-compose-title:focus-visible,
+  body.publish-page #discussion-compose-content:focus-visible {
+    outline: 2px solid var(--ui-focus) !important;
+    outline-offset: 5px;
+  }
+}
 .publish-editor {
   max-width: 820px !important;
   margin: 0 auto !important;

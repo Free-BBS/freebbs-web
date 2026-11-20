@@ -12,6 +12,11 @@
   background: var(--surface-page);
 }
 
+/* The learning-site dialog still handles keyboard shortcuts on this app. */
+body:has(.main-site-header) > .site-search-floating {
+  display: none;
+}
+
 .main-site-header-title {
   min-width: 0;
   flex: 1;
