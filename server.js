@@ -6,6 +6,7 @@ const { preparePageShell } = require('./page-shell');
 const { clientIpForBackend } = require('./proxy-client-ip');
 const { servePausedCodeLab } = require('./code-lab-availability');
 const { serveOrganizationShowcase } = require('./organization-showcase-static');
+const { blockPrivateDevelopmentUploads } = require('./private-development-uploads');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -196,6 +197,7 @@ function sendFile(filePath, response, options = {}) {
 }
 
 const server = http.createServer((request, response) => {
+  if (blockPrivateDevelopmentUploads(request, response)) return;
   const requestUrl = new URL(
     request.url || '/',
     `http://${request.headers.host || `${host}:${port}`}`,
