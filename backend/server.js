@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
+const { guardPrivateDevelopmentUploads } = require('../private-development-uploads');
 const { createLearningAchievementProvider } = require('./achievement-source');
 const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
@@ -630,6 +631,7 @@ const maxImageAccess = createMaxImageAccess({
 });
 
 // Apply the same decoding and normalization as the static server before guarding documents.
+app.use(guardPrivateDevelopmentUploads);
 app.use(
   '/uploads',
   maxImageAccess.guardUploads,
