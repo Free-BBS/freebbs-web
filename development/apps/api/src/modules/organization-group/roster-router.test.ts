@@ -1,4 +1,5 @@
 import express from 'express';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -104,6 +105,132 @@ async function fixture(existingDirectory?: string) {
 }
 const base = '/org/rosters';
 const one = (displayName = '同学甲') => [{ id: 'member-a', displayName }];
+
+async function excelRoster(rows: ExcelJS.CellValue[][]) {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('班级名单');
+  sheet.addRow(['班级', '姓名', '学号']);
+  rows.forEach((row) => sheet.addRow(row));
+  return Buffer.from(await book.xlsx.writeBuffer());
+}
+
+describe('Excel roster preview and confirmation', () => {
+  it('downloads a genuine configured template only for current import managers', async () => {
+    const f = await fixture();
+    const response = await request(f.app)
+      .get(`${base}/import/template`)
+      .set('x-user', 'department')
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(response.headers['content-type']).toContain('spreadsheetml.sheet');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(response.body as Parameters<typeof book.xlsx.load>[0]);
+    expect(book.getWorksheet('班级对照')!.getCell('B2').value).toBe('无55');
+    await request(f.app).get(`${base}/import/template`).set('x-user', 'a').expect(403);
+  });
+
+  it('authorizes before parsing invalid multipart, including preview identities', async () => {
+    const f = await fixture();
+    for (const uid of ['ordinary', 'a', 'counselor', 'preview-manager']) {
+      await request(f.app)
+        .post(`${base}/import/preview`)
+        .set('x-user', uid)
+        .set('Content-Type', 'multipart/form-data')
+        .send('not multipart')
+        .expect(403);
+    }
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters).toBeUndefined();
+  });
+
+  it('previews without mutation, then atomically confirms using the existing import revisions', async () => {
+    const f = await fixture();
+    const file = await excelRoster([
+      ['无55', '同名同学'],
+      ['a', '同名同学', '001'],
+      ['b', '另一班同学'],
+    ]);
+    const preview = await request(f.app)
+      .post(`${base}/import/preview`)
+      .set('x-user', 'manager')
+      .attach('file', file, '班级名单.xlsx')
+      .field('mode', 'append')
+      .expect(200);
+    expect(preview.body.data.classes).toHaveLength(2);
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters).toBeUndefined();
+    const saved = await request(f.app)
+      .post(`${base}/import`)
+      .set('x-user', 'manager')
+      .send({ batches: preview.body.data.batches })
+      .expect(200);
+    expect(saved.body.data.items[0].members).toHaveLength(2);
+    expect(saved.body.data.items[0].members[0].id).not.toBe(saved.body.data.items[0].members[1].id);
+    await request(f.app)
+      .post(`${base}/import`)
+      .set('x-user', 'manager')
+      .send({ batches: preview.body.data.batches })
+      .expect(409);
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters![0]!.history).toHaveLength(1);
+  });
+
+  it('revalidates organization role after parsing and rejects stale authority before returning a preview', async () => {
+    const f = await fixture();
+    f.setAuthHook((uid, call) => {
+      if (uid === 'department' && call === 3) f.actors.set(uid, person(uid));
+    });
+    await request(f.app)
+      .post(`${base}/import/preview`)
+      .set('x-user', 'department')
+      .field('mode', 'replace')
+      .attach('file', await excelRoster([['a', '甲']]), '名单.xlsx')
+      .expect(403);
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters).toBeUndefined();
+  });
+
+  it('rejects oversized files and unknown classes without writing partial rosters', async () => {
+    const f = await fixture();
+    await request(f.app)
+      .post(`${base}/import/preview`)
+      .set('x-user', 'manager')
+      .attach('file', Buffer.alloc(8 * 1024 * 1024 + 1), '大名单.xlsx')
+      .expect(413);
+    await request(f.app)
+      .post(`${base}/import/preview`)
+      .set('x-user', 'manager')
+      .attach(
+        'file',
+        await excelRoster([
+          ['a', '甲'],
+          ['不存在', '乙'],
+        ]),
+        '名单.xlsx',
+      )
+      .expect(400);
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters).toBeUndefined();
+  });
+
+  it('accepts only explicit append/replace modes and forbids preview identities at confirmation', async () => {
+    const f = await fixture();
+    await request(f.app)
+      .post(`${base}/import/preview`)
+      .set('x-user', 'manager')
+      .attach('file', await excelRoster([['a', '甲']]), '名单.xlsx')
+      .field('mode', 'overwrite')
+      .expect(400);
+    await request(f.app)
+      .post(`${base}/import`)
+      .set('x-user', 'preview-manager')
+      .send({ batches: [{ classId: 'a', revision: 0, members: one() }] })
+      .expect(403);
+    expect((await f.storage.get(WORKSPACE_ID))!.classRosters).toBeUndefined();
+  });
+});
 
 describe('configured class roster API', () => {
   it('starts at revision zero, assigns stable IDs without requiring student IDs, and persists across restart', async () => {

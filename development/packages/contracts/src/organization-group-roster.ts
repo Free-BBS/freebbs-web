@@ -48,3 +48,29 @@ export interface OrganizationGroupRosterHistory {
   /** All committed versions, including the current version, in revision order. */
   items: OrganizationGroupRosterSnapshot[];
 }
+
+export type OrganizationGroupRosterImportMode = 'append' | 'replace';
+
+/** A read-only Excel preview. Confirmation uses the existing atomic JSON import endpoint. */
+export interface OrganizationGroupRosterExcelPreview {
+  mode: OrganizationGroupRosterImportMode;
+  sheetName: string;
+  rowCount: number;
+  warnings: string[];
+  classes: Array<{
+    classId: string;
+    classLabel: string;
+    revision: number;
+    beforeCount: number;
+    afterCount: number;
+    added: OrganizationGroupRosterMemberInput[];
+    updated: Array<{
+      before: OrganizationGroupRosterMember;
+      after: OrganizationGroupRosterMemberInput;
+    }>;
+    removed: OrganizationGroupRosterMember[];
+    unchangedCount: number;
+  }>;
+  /** Contains changed classes only. Empty means the workbook would make no changes. */
+  batches: OrganizationGroupRosterImport['batches'];
+}

@@ -28,6 +28,7 @@ export interface IntegratedRuntimeOptions {
   sportsUploadDirectory?: string;
   financeDirectory?: string;
   bannerReactionsDirectory?: string;
+  bannerReactionsConfigurationIssue?: string;
   publicUploadDirectory?: string;
   developmentRewardProvider?: DevelopmentRewardProvider;
   learningAchievementProvider?: LearningAchievementProvider;
@@ -60,12 +61,16 @@ export async function createIntegratedDevelopmentRuntime(
       checkReadiness: handle.checkReadiness,
       authMode: 'main',
       authClient: options.authClient,
+      bannerReactionsRequired: true,
       userDirectory: options.userDirectory,
       festivalUploadDirectory: options.uploadDirectory,
       collectionsUploadDirectory: options.collectionsUploadDirectory,
       ...(options.financeDirectory ? { financeDirectory: options.financeDirectory } : {}),
       ...(options.bannerReactionsDirectory
         ? { bannerReactionsDirectory: options.bannerReactionsDirectory }
+        : {}),
+      ...(options.bannerReactionsConfigurationIssue
+        ? { bannerReactionsConfigurationIssue: options.bannerReactionsConfigurationIssue }
         : {}),
       ...(options.publicUploadDirectory
         ? { publicUploadDirectory: options.publicUploadDirectory }

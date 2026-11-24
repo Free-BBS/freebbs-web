@@ -27,7 +27,7 @@ import type { AuthorizationContext } from '../../core/authorization/policy.js';
 export const WORKSPACE_ID = 'youth_league.organization';
 export const now = () => new Date().toISOString();
 export const ACTIVITY_PHOTO_LIMIT = 5;
-export const ACTIVITY_PHOTO_BYTES = 5 * 1024 ** 2;
+export const ACTIVITY_PHOTO_BYTES = 20 * 1024 ** 2;
 export function classActivityTemplate(): OrganizationGroupVersionInput {
   return {
     template: 'class_activity_v2',
@@ -50,7 +50,7 @@ export function classActivityTemplate(): OrganizationGroupVersionInput {
       activityTypeId: { label: '活动标签' },
       activityTypeIds: { label: '活动标签' },
       summary: { label: '活动内容', help: '200 字以内' },
-      photos: { label: '活动照片', help: '选填，最多 5 张，每张不超过 5 MiB' },
+      photos: { label: '活动照片', help: '选填，最多 5 张，每张不超过 20 MiB' },
       difficulties: { label: '备注' },
       participantNames: { label: '具体参与人员', help: '请填写本次活动的具体参与人员' },
     },
@@ -486,7 +486,7 @@ export function validateValues(
       (id) => (s.assets.find((asset) => asset.id === id)?.size ?? 0) > photoBytes(s, v),
     )
   )
-    fail(400, 'file_too_large', '每张活动照片不得超过 5 MiB');
+    fail(400, 'file_too_large', '每张活动照片不得超过 20 MiB');
   return extraPhotos;
 }
 export function validDate(value: string) {

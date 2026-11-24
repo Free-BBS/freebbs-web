@@ -27,7 +27,7 @@ afterEach(async () => {
   }
 });
 
-it('round-trips a real Chinese-named JPEG over HTTP multipart as a normal class secretary through createApp', async () => {
+it('round-trips a real JPEG with trailing padding and generic MIME over HTTP as a normal class secretary', async () => {
   directory = await mkdtemp(join(tmpdir(), 'organization-upload-http-'));
   const store = createMemoryStore();
   const rootUid = platformRootAdminUids()[0]!;
@@ -90,17 +90,18 @@ it('round-trips a real Chinese-named JPEG over HTTP multipart as a normal class 
     rootAdmin: false,
     tags: [{ key: 'class.youth_league_secretary', scope: { type: 'class', id: 'wu55' } }],
   });
-  const source = await readFile(
+  const original = await readFile(
     new URL(
       '../../../../../docs/assets/organization-group-user-guide/05-photo-upload.jpg',
       import.meta.url,
     ),
   );
+  const source = Buffer.concat([original, Buffer.alloc(4)]);
   // The existing guide asset is an encoded 50 KB JPEG, rather than a synthetic magic header.
   expect(source.length).toBeGreaterThan(40_000);
   const form = new FormData();
   // Match Files.tsx: the browser sends the file before contextual text fields.
-  form.append('file', new Blob([source], { type: 'image/jpeg' }), '主题团日1.jpeg');
+  form.append('file', new Blob([source], { type: 'application/octet-stream' }), '主题团日1.jpeg');
   form.append('yearId', initial.activeYearId);
   form.append('purpose', 'activity_photo');
   const uploaded = await call('/organization-group/uploads', 'secretary', {
@@ -118,6 +119,8 @@ it('round-trips a real Chinese-named JPEG over HTTP multipart as a normal class 
   const downloaded = await call(`/organization-group/files/${file.id}?preview=1`, 'secretary');
   expect(downloaded.status).toBe(200);
   expect(downloaded.headers.get('content-type')).toContain('image/jpeg');
+  expect(downloaded.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(downloaded.headers.get('content-security-policy')).toBe("sandbox; default-src 'none'");
   const result = Buffer.from(await downloaded.arrayBuffer());
   expect(createHash('sha256').update(result).digest('hex')).toBe(
     createHash('sha256').update(source).digest('hex'),

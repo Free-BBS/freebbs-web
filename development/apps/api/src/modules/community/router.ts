@@ -1,6 +1,7 @@
 import {
   COMMUNITY_CHANNELS,
   COMMUNITY_WISH_STATUSES,
+  PUBLISHED_FESTIVAL_BANNER_IDS,
   type ApiEnvelope,
 } from '@freebbs-development/contracts';
 import { Router } from 'express';
@@ -24,6 +25,8 @@ export interface CommunityRouterOptions {
   authenticate: Authenticate;
   now?: () => Date;
   bannerReactionsDirectory?: string;
+  bannerReactionsConfigurationIssue?: string;
+  registerBannerReadiness?: (check: () => Promise<void>) => void;
   nodeEnvironment?: string;
   publicDirectories?: readonly string[];
 }
@@ -127,7 +130,20 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
     directory: options.bannerReactionsDirectory,
     nodeEnvironment: options.nodeEnvironment,
     publicDirectories: options.publicDirectories,
+    configurationIssue: options.bannerReactionsConfigurationIssue,
   });
+  const checkBannerReadiness = async () => {
+    const module = (await options.store.modules.list({ query: 'community' })).find(
+      (record) => record.moduleId === 'community',
+    );
+    if (module?.enabled && module.status === 'enabled' && PUBLISHED_FESTIVAL_BANNER_IDS.length)
+      await bannerReactions.checkReadiness();
+  };
+  // Keep a failed banner volume isolated from other modules. GET and PUT wait
+  // for the same startup result; a missing record cannot masquerade as a
+  // healthy zero count when the real service account cannot persist changes.
+  const startupReadiness = checkBannerReadiness().catch(() => undefined);
+  options.registerBannerReadiness?.(checkBannerReadiness);
   const trending = new CommunityTrendingCache(
     async () => ({
       posts: await options.store.communityPosts.list(),
@@ -163,6 +179,7 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
   async function bannerActor(request: Request, response: Response) {
     const actor = await requireActor(options, request, response);
     if (!actor) return null;
+    await startupReadiness;
     const subject = (await options.store.subjects.list({ query: actor.uid })).find(
       ({ uid }) => uid === actor.uid,
     );

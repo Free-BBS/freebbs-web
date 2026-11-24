@@ -125,7 +125,7 @@ export function Settings({
             </div>
             <div className="og-fields og-span">
               <p className="og-muted og-span">
-                班级活动表固定为最多 5 张照片，单张 5 MiB；以下照片设置仅用于历史问卷。
+                班级活动表固定为最多 5 张照片，单张 20 MiB；以下照片设置仅用于历史问卷。
               </p>
               <label>
                 历史问卷照片数量上限

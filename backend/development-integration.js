@@ -2,6 +2,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { open, lstat } = require('node:fs/promises');
 const { constants } = require('node:fs');
+const { readdirSync, realpathSync } = require('node:fs');
 const platformAuthority = require('../development/packages/contracts/src/platform-authority.json');
 
 function configuredPlatformRootAdminUids(environment = process.env) {
@@ -107,6 +108,53 @@ function createDevelopmentBannerReactionsDirectory(uploadDirectory, environment 
     environment.BANNER_REACTIONS_DATA_DIR?.trim() ||
     path.join(path.dirname(path.resolve(uploadDirectory)), 'banner-reactions-private')
   );
+}
+
+function createDevelopmentBannerReactionsStorageOptions(
+  uploadDirectory,
+  repositoryRoot,
+  environment = process.env,
+) {
+  const explicit = environment.BANNER_REACTIONS_DATA_DIR?.trim();
+  if (explicit) return { bannerReactionsDirectory: explicit };
+  // Match the fixed private directory prepared and excluded from rsync by
+  // scripts/provision-banner-storage.js, independently of public UPLOAD_DIR.
+  const canonical = path.join(path.resolve(repositoryRoot), 'database/banner-reactions-private');
+  const legacy = createDevelopmentBannerReactionsDirectory(uploadDirectory, {});
+  if (legacy === canonical) return { bannerReactionsDirectory: canonical };
+  const hasRecords = (directory) => {
+    try {
+      return readdirSync(path.join(directory, 'banner-reactions')).some((name) =>
+        /^[a-f0-9]{64}\.json$/.test(name),
+      );
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+  };
+  try {
+    try {
+      if (realpathSync(canonical) === realpathSync(legacy))
+        return { bannerReactionsDirectory: canonical };
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const canonicalHasRecords = hasRecords(canonical);
+    const legacyHasRecords = hasRecords(legacy);
+    if (canonicalHasRecords && legacyHasRecords)
+      return {
+        bannerReactionsDirectory: canonical,
+        bannerReactionsConfigurationIssue: 'ambiguous_storage',
+      };
+    // Preserve existing counters in the former upload sibling. Never migrate,
+    // merge, overwrite or switch away from a store that already contains data.
+    return { bannerReactionsDirectory: legacyHasRecords ? legacy : canonical };
+  } catch {
+    return {
+      bannerReactionsDirectory: canonical,
+      bannerReactionsConfigurationIssue: 'storage_inspection_failed',
+    };
+  }
 }
 
 function createDevelopmentAuthClient({ verifyToken, getUserById, toUserProfile }) {
@@ -225,6 +273,7 @@ async function loadDevelopmentRuntime({
   sportsUploadDirectory,
   financeDirectory,
   bannerReactionsDirectory,
+  bannerReactionsConfigurationIssue,
   publicUploadDirectory,
   developmentRewardProvider,
   learningAchievementProvider,
@@ -248,6 +297,7 @@ async function loadDevelopmentRuntime({
     sportsUploadDirectory,
     ...(financeDirectory ? { financeDirectory } : {}),
     ...(bannerReactionsDirectory ? { bannerReactionsDirectory } : {}),
+    ...(bannerReactionsConfigurationIssue ? { bannerReactionsConfigurationIssue } : {}),
     ...(publicUploadDirectory ? { publicUploadDirectory } : {}),
     ...(developmentRewardProvider ? { developmentRewardProvider } : {}),
     ...(learningAchievementProvider ? { learningAchievementProvider } : {}),
@@ -274,6 +324,7 @@ module.exports = {
   configuredPlatformRootAdminUids,
   createDevelopmentAuthClient,
   createDevelopmentBannerReactionsDirectory,
+  createDevelopmentBannerReactionsStorageOptions,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,

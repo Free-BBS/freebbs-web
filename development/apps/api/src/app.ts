@@ -101,6 +101,9 @@ export interface CreateAppOptions {
   systemSettingsDirectory?: string;
   financeDirectory?: string;
   bannerReactionsDirectory?: string;
+  bannerReactionsConfigurationIssue?: string;
+  /** Integrated deployment requires banner storage; optional standalone modules remain feature-only. */
+  bannerReactionsRequired?: boolean;
   publicUploadDirectory?: string;
   learningAchievementProvider?: LearningAchievementProvider;
   developmentMapTokenDigest?: string;
@@ -173,6 +176,7 @@ export function createApp(options: CreateAppOptions = {}) {
           throw new Error('MySQL readiness check is required');
         }
       : async () => undefined);
+  let checkBannerReadiness: ReadinessCheck = async () => undefined;
   const authMode = options.authMode ?? environment.authMode;
   if (environment.nodeEnv === 'production' && authMode === 'demo') {
     throw new Error('Demo authentication is disabled in production');
@@ -258,10 +262,14 @@ export function createApp(options: CreateAppOptions = {}) {
   app.get(`${API_BASE_PATH}/ready`, async (_request, response) => {
     try {
       await checkReadiness();
+      await checkBannerReadiness();
       sendEnvelope(response, 200, { status: 'ok' });
-    } catch {
+    } catch (error) {
       sendEnvelope<ApiErrorData>(response, 503, {
-        error: { code: 'not_ready', message: 'Service is not ready' },
+        error:
+          error instanceof HttpError && error.code.startsWith('banner_storage_')
+            ? { code: error.code, message: error.message }
+            : { code: 'not_ready', message: 'Service is not ready' },
       });
     }
   });
@@ -414,6 +422,17 @@ export function createApp(options: CreateAppOptions = {}) {
       nodeEnvironment: environment.nodeEnv,
       bannerReactionsDirectory:
         options.bannerReactionsDirectory ?? environmentSource.BANNER_REACTIONS_DATA_DIR,
+      bannerReactionsConfigurationIssue: options.bannerReactionsConfigurationIssue,
+      registerBannerReadiness: (check) => {
+        if (
+          options.bannerReactionsRequired ||
+          (
+            options.bannerReactionsDirectory ?? environmentSource.BANNER_REACTIONS_DATA_DIR
+          )?.trim() ||
+          options.bannerReactionsConfigurationIssue
+        )
+          checkBannerReadiness = check;
+      },
       publicDirectories: [
         options.publicUploadDirectory,
         options.festivalUploadDirectory ?? environmentSource.FESTIVAL_UPLOAD_DIR,

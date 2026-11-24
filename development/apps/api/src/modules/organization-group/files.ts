@@ -3,6 +3,7 @@ import { join, resolve, extname } from 'node:path';
 import JSZip from 'jszip';
 import type { Response } from 'express';
 import type { OrganizationGroupFile, UserContext } from '@freebbs-development/contracts';
+import { recognizedImageMime } from './image-format.js';
 import {
   fail,
   moduleAccess,
@@ -12,7 +13,6 @@ import {
   type StoredAsset,
 } from './domain.js';
 
-const pngMagic = Buffer.from('89504e470d0a1a0a', 'hex');
 const oleMagic = Buffer.from('d0cf11e0a1b11ae1', 'hex');
 const office: Record<string, { mime: string; part: string }> = {
   '.docx': {
@@ -55,34 +55,9 @@ export async function inspectFile(
     (characters.length > 180 && suffixLength < 180
       ? characters.slice(0, 180 - suffixLength).join('') + originalExtension
       : characters.slice(0, 180).join('')) || 'file';
-  if (
-    b.length >= 45 &&
-    b.subarray(0, 8).equals(pngMagic) &&
-    b.toString('ascii', 12, 16) === 'IHDR' &&
-    b.readUInt32BE(16) > 0 &&
-    b.readUInt32BE(20) > 0 &&
-    b.toString('ascii', b.length - 8, b.length - 4) === 'IEND'
-  ) {
-    mime = 'image/png';
-    previewable = true;
-  } else if (
-    b.length >= 12 &&
-    b[0] === 0xff &&
-    b[1] === 0xd8 &&
-    b[2] === 0xff &&
-    b[b.length - 2] === 0xff &&
-    b[b.length - 1] === 0xd9
-  ) {
-    mime = 'image/jpeg';
-    previewable = true;
-  } else if (
-    b.length >= 20 &&
-    b.toString('ascii', 0, 4) === 'RIFF' &&
-    b.toString('ascii', 8, 12) === 'WEBP' &&
-    b.readUInt32LE(4) + 8 === b.length &&
-    ['VP8 ', 'VP8L', 'VP8X'].includes(b.toString('ascii', 12, 16))
-  ) {
-    mime = 'image/webp';
+  const imageMime = recognizedImageMime(b);
+  if (imageMime) {
+    mime = imageMime;
     previewable = true;
   } else if (
     purpose === 'resource' &&
@@ -128,13 +103,17 @@ export async function inspectFile(
     extension === '.rar'
   )
     mime = 'application/vnd.rar';
-  const declared = (file.mimetype ?? '').trim().toLowerCase();
+  const declared = (file.mimetype ?? '').trim().toLowerCase().split(';')[0] ?? '';
   const zipAlias = mime === 'application/zip' && declared === 'application/x-zip-compressed';
   const rarAlias = mime === 'application/vnd.rar' && declared === 'application/x-rar-compressed';
-  // Browsers may send an unknown resource MIME; content recognition above remains mandatory.
-  const genericResource =
-    purpose === 'resource' && (!declared || declared === 'application/octet-stream');
-  if (!mime || (declared !== mime && !zipAlias && !rarAlias && !genericResource))
+  const imageAlias =
+    (mime === 'image/jpeg' && ['image/jpg', 'image/pjpeg'].includes(declared)) ||
+    (mime === 'image/png' && declared === 'image/x-png');
+  // Some file pickers omit MIME. Accept only after recognizing complete image content.
+  const generic =
+    (!declared || declared === 'application/octet-stream') &&
+    (purpose === 'resource' || Boolean(imageMime));
+  if (!mime || (declared !== mime && !zipAlias && !rarAlias && !imageAlias && !generic))
     fail(
       400,
       'invalid_file_type',

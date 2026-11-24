@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   OrganizationGroupFile,
   OrganizationGroupWorkspace,
+  OrganizationGroupVersion,
 } from '@freebbs-development/contracts';
 import { ApiClient } from '../../core/api/client.js';
 import { EntryForm } from './EntryForm.js';
@@ -72,9 +73,15 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function setup(api: GroupClient) {
+function setup(api: GroupClient, selectedVersion: OrganizationGroupVersion = version) {
   return render(
-    <EntryForm api={api} workspace={workspace} year={year} version={version} onSaved={vi.fn()} />,
+    <EntryForm
+      api={api}
+      workspace={workspace}
+      year={year}
+      version={selectedVersion}
+      onSaved={vi.fn()}
+    />,
   );
 }
 function select(...names: string[]) {
@@ -91,6 +98,105 @@ afterEach(() => {
 });
 
 describe('activity photo upload recovery', () => {
+  it('pastes an image through the same cancellable upload path without changing text', async () => {
+    const pending = deferred<OrganizationGroupFile>();
+    const request = vi.fn().mockReturnValue(pending.promise);
+    setup({ request: request as ApiClient['request'] });
+    const input = screen.getByLabelText('活动内容');
+    fireEvent.change(input, { target: { value: '图片粘贴不替换这段文字' } });
+    const image = new File(['jpeg'], '粘贴照片.jpeg', { type: 'image/jpeg' });
+    const clipboardData = { files: [image], items: [], getData: () => '' };
+    expect(fireEvent.paste(input, { clipboardData })).toBe(false);
+    fireEvent.paste(input, { clipboardData });
+    expect(request).toHaveBeenCalledOnce();
+    expect((request.mock.calls[0]![1].body as FormData).get('file')).toBe(image);
+    expect(screen.getByRole('status')).toHaveTextContent('粘贴照片.jpeg');
+    expect(input).toHaveValue('图片粘贴不替换这段文字');
+    fireEvent.click(screen.getByRole('button', { name: '取消上传' }));
+    await act(async () => pending.resolve(photo('粘贴照片.jpeg')));
+    expect(screen.queryByText('粘贴照片.jpeg')).not.toBeInTheDocument();
+    expect(input).toHaveValue('图片粘贴不替换这段文字');
+  });
+
+  it('leaves ordinary and mixed text paste to the browser instead of intercepting it', () => {
+    const request = vi.fn();
+    setup({ request: request as ApiClient['request'] });
+    const clipboardData = {
+      getData: (type: string) => (type === 'text/plain' ? '正常文字' : ''),
+      files: [new File(['png'], '图片.png', { type: 'image/png' })],
+      items: [],
+    };
+    expect(fireEvent.paste(screen.getByLabelText('活动内容'), { clipboardData })).toBe(true);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('accepts an image item when the clipboard file list is empty', async () => {
+    const request = vi.fn().mockResolvedValue(photo('截图.png'));
+    setup({ request: request as ApiClient['request'] });
+    const image = new File(['png'], '截图.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByLabelText('活动内容'), {
+      clipboardData: {
+        files: [],
+        getData: () => '',
+        items: [{ kind: 'file', getAsFile: () => image }],
+      },
+    });
+    await flush();
+    expect(request).toHaveBeenCalledOnce();
+    expect(screen.getByText('截图.png')).toBeInTheDocument();
+  });
+
+  it('accepts a 20-MiB image without resizing and rejects the next byte', async () => {
+    const request = vi.fn().mockResolvedValue(photo('原图.png'));
+    setup(
+      { request: request as ApiClient['request'] },
+      {
+        ...version,
+        corePresentation: {
+          photos: { label: '活动照片', help: '选填，最多 5 张，每张不超过 5 MiB' },
+        },
+      },
+    );
+    expect(screen.getByText('选填，最多 5 张，每张不超过 20 MiB')).toBeInTheDocument();
+    const bytes = new Uint8Array(20 * 1048576);
+    fireEvent.change(screen.getByLabelText('活动照片'), {
+      target: { files: [new File([bytes], '原图.png', { type: 'image/png' })] },
+    });
+    await flush();
+    expect(request).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByLabelText('活动照片'), {
+      target: { files: [new File([bytes, new Uint8Array(1)], '超限.png', { type: 'image/png' })] },
+    });
+    await flush();
+    expect(request).toHaveBeenCalledOnce();
+    expect(screen.getByText(/单张不超过 20 MiB/)).toBeInTheDocument();
+  });
+
+  it('enforces five total pasted photos including an additional image answer', async () => {
+    const request = vi.fn().mockImplementation(async (_path, options) => {
+      const file = (options.body as FormData).get('file') as File;
+      return photo(file.name);
+    });
+    setup(
+      { request: request as ApiClient['request'] },
+      { ...version, fields: [{ id: 'extra', label: '附加图片', kind: 'image', required: false }] },
+    );
+    fireEvent.change(screen.getByLabelText('附加图片'), {
+      target: { files: [new File(['jpeg'], '附加.jpeg', { type: 'image/jpeg' })] },
+    });
+    await flush();
+    const files = Array.from(
+      { length: 5 },
+      (_, index) => new File(['jpeg'], `粘贴${index}.jpeg`, { type: 'image/jpeg' }),
+    );
+    fireEvent.paste(screen.getByLabelText('活动内容'), {
+      clipboardData: { files, items: [], getData: () => '' },
+    });
+    await flush();
+    expect(request).toHaveBeenCalledOnce();
+    expect(screen.getByText(/每条活动最多 5 张/)).toBeInTheDocument();
+  });
+
   it('names the active file and recovers a stalled transport at the existing upload deadline', async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | null | undefined;

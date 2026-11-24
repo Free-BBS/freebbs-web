@@ -433,4 +433,7 @@ test('deployment preflight runs before rsync and its tests are executed in CI', 
   assert.match(ci, /node --test [^\r\n]*scripts\/provision-banner-storage\.test\.js/);
   const helper = fs.readFileSync(path.join(__dirname, 'provision-banner-storage.js'), 'utf8');
   assert.doesNotMatch(helper, /readFileSync|recursive\s*:|chmodSync\([^\n]*0o777|usermod|gpasswd/);
+  const readiness = deploy.indexOf('url.pathname = "/api/development/v1/ready"');
+  assert.ok(readiness > deploy.indexOf('restart "$BACKEND_SERVICE_NAME"'));
+  assert.match(deploy, /curl --fail --silent --show-error "\$DEVELOPMENT_READINESS_URL"/);
 });

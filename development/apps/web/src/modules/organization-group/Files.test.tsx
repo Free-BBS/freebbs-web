@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../core/api/client.js';
-import { FileTile } from './Files.js';
+import { FileTile, isActivityPhoto } from './Files.js';
 const file = {
   id: 'private/photo',
   originalName: '照片.png',
@@ -13,6 +13,20 @@ const file = {
   createdAt: '',
 };
 afterEach(() => vi.restoreAllMocks());
+describe('photo picker MIME compatibility', () => {
+  it.each(['image/jpeg', 'image/jpg', 'image/pjpeg', '', 'application/octet-stream'])(
+    'allows JPEG candidates with transport MIME %j for server content verification',
+    (type) => {
+      expect(isActivityPhoto({ name: '照片.JPEG', type })).toBe(true);
+    },
+  );
+  it('keeps explicit active types and unknown non-image files out of the photo picker', () => {
+    expect(isActivityPhoto({ name: '伪装.jpg', type: 'text/html' })).toBe(false);
+    expect(isActivityPhoto({ name: '资料.pdf', type: 'application/octet-stream' })).toBe(false);
+    expect(isActivityPhoto({ name: 'image.svg', type: 'image/svg+xml' })).toBe(false);
+    expect(isActivityPhoto({ name: '截图.png', type: 'image/x-png' })).toBe(true);
+  });
+});
 describe('authenticated private previews', () => {
   it('requests through authenticated download and revokes object URLs on close and unmount', async () => {
     const create = vi

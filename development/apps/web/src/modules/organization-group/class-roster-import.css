@@ -1,0 +1,95 @@
+.og-roster-import > header {
+  margin-bottom: 1rem;
+}
+.og-roster-import p,
+.og-roster-import li,
+.og-roster-import summary {
+  overflow-wrap: anywhere;
+}
+.og-roster-import-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.og-roster-import-tools span {
+  color: var(--color-muted);
+  flex: 1 1 15rem;
+}
+.og-roster-import form {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 58rem;
+}
+.og-roster-import form > button {
+  justify-self: start;
+}
+.og-roster-import fieldset {
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  min-width: 0;
+  margin: 0;
+}
+.og-roster-import fieldset legend {
+  padding-inline: 0.35rem;
+  font-weight: 600;
+}
+.og-page .og-roster-import-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: inherit;
+  font-weight: 400;
+  margin-block: 0.5rem;
+}
+.og-page .og-roster-import-choice input {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 1.1rem;
+  margin-top: 0.2rem;
+  padding: 0;
+  accent-color: var(--og-accent);
+}
+.og-roster-import-preview {
+  margin-block: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+.og-roster-import-class {
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.65rem;
+  margin-block: 0.65rem;
+  background: var(--surface-page);
+}
+.og-roster-import-class summary {
+  cursor: pointer;
+  padding: 0.75rem;
+}
+.og-roster-import-class summary span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--color-muted);
+}
+.og-roster-import-class > div {
+  padding: 0 0.85rem 0.85rem;
+}
+.og-roster-import-people ul,
+.og-roster-import-classes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 0.35rem 1.5rem;
+  padding-left: 1.25rem;
+}
+.og-roster-import-people + .og-roster-import-people {
+  margin-top: 1rem;
+}
+.og-roster-import-confirm {
+  padding-block: 0.75rem;
+}
+.og-roster-import > details > summary {
+  cursor: pointer;
+  margin-top: 1.5rem;
+}
