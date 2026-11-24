@@ -203,7 +203,7 @@
   color: var(--color-warning);
 }
 .date-strip .is-selected {
-  color: var(--color-sidebar-text);
+  color: var(--action-primary-text);
   border-color: var(--color-active);
   background: var(--color-active);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--color-active) 24%, transparent);
@@ -214,7 +214,7 @@
 }
 .date-strip .is-selected small,
 .date-strip .is-selected span {
-  color: color-mix(in srgb, var(--color-sidebar-text) 78%, transparent);
+  color: var(--action-primary-text);
 }
 .match-form {
   min-width: 0;

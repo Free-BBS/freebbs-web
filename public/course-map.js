@@ -1385,7 +1385,9 @@
 
   function renderEditorHeader() {
     document.title = `FREE-BBS - 编辑${state.course.name}地图`;
-    document.getElementById('course-editor-title').textContent = `编辑「${state.course.name}」地图`;
+    const title = document.getElementById('course-editor-title');
+    title.textContent = `编辑「${state.course.name}」地图`;
+    title.title = title.textContent;
     document.getElementById('course-map-reader-link').href =
       `/course?course=${encodeURIComponent(courseSlug)}`;
   }
@@ -2298,7 +2300,7 @@
   let loadRecovery;
   let retryLoad;
   function showLoadRecovery() {
-    if (!mapPage || loadRecovery) return;
+    if (loadRecovery) return;
     loadRecovery = document.createElement('nav');
     loadRecovery.className = 'course-map-reader-controls course-map-load-recovery';
     loadRecovery.setAttribute('aria-label', '课程加载恢复');
@@ -2357,26 +2359,25 @@
         state.readerLayout = 'structure';
         state.activeChapterId = chapterIdForNodeId(requestedFocus);
       }
-      if (editorPage && !state.course.canEditMap) {
-        renderEditorHeader();
-        renderMap();
-        setStatus('你不是该课程的资料负责人，无法编辑这张地图。', true);
-        editorPage.classList.add('is-readonly');
-        editorPage.querySelectorAll('button, input, textarea').forEach((control) => {
-          control.disabled = true;
-        });
-        return;
-      }
+      const readOnly = editorPage && !state.course.canEditMap;
       const focusBeforeRetryRender = retryButton ? document.activeElement : null;
       if (mapPage) {
         renderReaderHeader();
         if (!controlsBound) bindReaderViewport();
       } else {
         renderEditorHeader();
-        if (!controlsBound) bindEditorControls();
+        editorPage.classList.toggle('is-readonly', readOnly);
+        if (!readOnly && !controlsBound) bindEditorControls();
+        editorPage.querySelector('.course-map-studio-tools').hidden = readOnly;
+        document.getElementById('course-edge-status').hidden = readOnly;
       }
-      controlsBound = true;
+      controlsBound = !readOnly;
       renderMap();
+      if (readOnly) {
+        editorPage.querySelectorAll('button, input, textarea').forEach((control) => {
+          control.disabled = true;
+        });
+      }
       const restoreRetryFocus =
         retryButton &&
         (focusBeforeRetryRender === retryButton || focusBeforeRetryRender === document.body);
@@ -2394,7 +2395,9 @@
       loadRecovery = undefined;
       retryLoad = undefined;
       if (restoreRetryFocus) {
-        const heading = document.getElementById('course-reader-title');
+        const heading = document.getElementById(
+          editorPage ? 'course-editor-title' : 'course-reader-title',
+        );
         heading?.setAttribute('tabindex', '-1');
         heading?.focus({ preventScroll: true });
       } else if (focusBeforeRetryRender?.isConnected) {
@@ -2402,12 +2405,21 @@
       }
       // A chapter overview returns to its directory, never a fabricated point focus.
       if (requestedChapterId) state.structureController?.selectChapter(requestedChapterId);
-      setSaveState(editorPage ? '所有修改会自动保存' : '');
-      setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
+      setSaveState(editorPage ? (readOnly ? '只读模式' : '所有修改会自动保存') : '');
+      if (readOnly) {
+        setStatus('你不是该课程的资料负责人，无法编辑这张地图。', true);
+      } else {
+        setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
+      }
     } catch (error) {
       if (mapPage && !state.course) {
         const title = document.getElementById('course-reader-title');
         if (title) title.textContent = '课程暂时无法加载';
+      }
+      if (editorPage) {
+        editorPage.querySelector('.course-map-studio-tools').hidden = true;
+        document.getElementById('course-edge-status').hidden = true;
+        setSaveState('课程地图暂时无法加载', true);
       }
       setStatus(error.message, true);
       showLoadRecovery();

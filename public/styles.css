@@ -6698,6 +6698,7 @@ body.system-settings-page .system-settings-shell {
 
 body.system-settings-page .system-settings-detail-shell {
   display: grid;
+  align-content: start;
   gap: 24px;
 }
 
@@ -6976,13 +6977,13 @@ body.system-settings-page .system-settings-secret-field input:disabled {
 body.system-settings-page .system-settings-message {
   min-height: 1.5em;
   margin: 0;
-  color: #075260 !important;
+  color: var(--ui-accent) !important;
   font-size: 0.84rem;
   line-height: 1.5;
 }
 
 body.system-settings-page .system-settings-message.is-error {
-  color: #8a2f2f !important;
+  color: var(--ui-danger) !important;
 }
 
 /* User permission table alignment and accessible mobile labels */

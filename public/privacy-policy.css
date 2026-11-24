@@ -23,6 +23,24 @@
   margin: auto;
   padding: 24px;
 }
+
+.privacy-restore-notice {
+  grid-column: 1 / -1;
+  align-self: start;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--ui-line, var(--privacy-line));
+  border-radius: 10px;
+  background: var(--ui-surface, var(--privacy-bg));
+  color: var(--ui-text, var(--privacy-text));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.privacy-restore-notice a {
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
 .privacy-policy-document {
   font-size: 16px;
   line-height: 1.85;

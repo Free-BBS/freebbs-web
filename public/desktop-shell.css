@@ -171,6 +171,9 @@
     min-height: 128px;
     flex-shrink: 0;
   }
+  body.desktop-shell-active .topbar .brand-mark {
+    font-size: 0 !important;
+  }
   body.desktop-shell-active .topbar .nav-actions {
     display: flex;
     flex-direction: column;

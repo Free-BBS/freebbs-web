@@ -194,7 +194,8 @@
         link.href = '/login';
         link.textContent = ' 前往登录';
         notice.appendChild(link);
-        document.body.prepend(notice);
+        const content = document.querySelector('main') || document.body;
+        content.prepend(notice);
       }
     }
   }
