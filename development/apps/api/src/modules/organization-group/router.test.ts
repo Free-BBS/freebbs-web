@@ -22,6 +22,7 @@ const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
+const paddedPng = (size: number) => Buffer.concat([png, Buffer.alloc(size - png.length)]);
 function appFor(directory?: string, production = false) {
   const app = express();
   app.use(express.json());
@@ -352,7 +353,7 @@ it('requires v2 dates and participant names, limits descriptions, and rejects em
     ).status,
   ).toBe(201);
 });
-it('limits v2 photos to five and five MiB, preserving zero-photo submissions', async () => {
+it('limits v2 photos to five and twenty MiB, preserving zero-photo submissions', async () => {
   const f = await v2Fixture();
   const ids: string[] = [];
   for (let index = 0; index < 6; index++) ids.push(await photo(f.app, f.yearId));
@@ -367,11 +368,7 @@ it('limits v2 photos to five and five MiB, preserving zero-photo submissions', a
         .send({ revision: 1, photoIds: [] })
     ).status,
   ).toBe(200);
-  const large = Buffer.concat([
-    png.subarray(0, -12),
-    Buffer.alloc(5 * 1024 ** 2 + 1 - png.length),
-    png.subarray(-12),
-  ]);
+  const large = paddedPng(20 * 1024 ** 2 + 1);
   expect(
     (
       await request(f.app)
@@ -381,8 +378,7 @@ it('limits v2 photos to five and five MiB, preserving zero-photo submissions', a
         .attach('file', large, { filename: 'large.png', contentType: 'image/png' })
     ).status,
   ).toBe(413);
-  const exact = large.subarray(0, large.length - 1);
-  png.subarray(-12).copy(exact, exact.length - 12);
+  const exact = paddedPng(20 * 1024 ** 2);
   expect(
     (
       await request(f.app)
@@ -393,7 +389,7 @@ it('limits v2 photos to five and five MiB, preserving zero-photo submissions', a
     ).status,
   ).toBe(201);
 });
-it('keeps v2 photos at five and five MiB through upload, creation and editing while legacy versions retain lower settings', async () => {
+it('keeps v2 photos at five and twenty MiB through upload, creation and editing while legacy versions retain lower settings', async () => {
   const f = await v2Fixture();
   const workspace = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body.data;
   expect(
@@ -408,11 +404,7 @@ it('keeps v2 photos at five and five MiB through upload, creation and editing wh
         })
     ).status,
   ).toBe(200);
-  const large = Buffer.concat([
-    png.subarray(0, -12),
-    Buffer.alloc(2 * 1024 ** 2 - png.length),
-    png.subarray(-12),
-  ]);
+  const large = paddedPng(6 * 1024 ** 2);
   async function upload(bytes: Buffer, entryId?: string) {
     const req = request(f.app)
       .post('/org/uploads')
@@ -430,7 +422,7 @@ it('keeps v2 photos at five and five MiB through upload, creation and editing wh
   const created = await createV2(f, 'alice', { photoIds: [first.body.data.id, second] });
   expect(created.status).toBe(201);
   expect(created.body.data.photos).toHaveLength(2);
-  expect((await upload(Buffer.alloc(5 * 1024 ** 2 + 1))).status).toBe(413);
+  expect((await upload(Buffer.alloc(20 * 1024 ** 2 + 1))).status).toBe(413);
   const beforeLegacy = (await request(f.app).get('/org/workspace').set('x-user', 'manager')).body
     .data;
   const legacy = await request(f.app)
@@ -453,7 +445,7 @@ it('keeps v2 photos at five and five MiB through upload, creation and editing wh
     });
   expect(edited.status).toBe(200);
   expect(edited.body.data.photos).toHaveLength(2);
-  expect((await upload(Buffer.alloc(5 * 1024 ** 2 + 1), created.body.data.id)).status).toBe(413);
+  expect((await upload(Buffer.alloc(20 * 1024 ** 2 + 1), created.body.data.id)).status).toBe(413);
   // Legacy new uploads and binding still use the historical one-MiB limit.
   expect((await upload(large)).status).toBe(413);
   const oldContext = { ...f, versionId: legacy.body.data.id as string };
@@ -496,11 +488,7 @@ it('applies the fixed v2 limits to additional image answers and their binding as
     });
   expect(published.status).toBe(201);
   f.versionId = published.body.data.id;
-  const large = Buffer.concat([
-    png.subarray(0, -12),
-    Buffer.alloc(2 * 1024 ** 2 - png.length),
-    png.subarray(-12),
-  ]);
+  const large = paddedPng(6 * 1024 ** 2);
   const uploaded = await request(f.app)
     .post('/org/uploads')
     .field('yearId', f.yearId)
@@ -1545,7 +1533,7 @@ it('recognizes empty resource MIME and common RAR alias only after recognized co
   await expect(
     inspectFile({ ...file, buffer: Buffer.from('spoof'), originalname: 'bad.png' }, 'resource'),
   ).rejects.toMatchObject({ status: 400 });
-  await expect(inspectFile(file, 'activity_photo')).rejects.toMatchObject({ status: 400 });
+  expect((await inspectFile(file, 'activity_photo')).mime).toBe('image/png');
   const rar = {
     buffer: Buffer.from('526172211a07003b07007300000d00000000000000000000c43d7b00400700', 'hex'),
     originalname: 'archive.rar',

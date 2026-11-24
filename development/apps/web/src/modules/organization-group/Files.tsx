@@ -3,6 +3,15 @@ import type { OrganizationGroupFile } from '@freebbs-development/contracts';
 import type { GroupClient } from './OrganizationGroupPage.js';
 import { errorMessage } from './model.js';
 
+/** File pickers sometimes omit MIME or use legacy aliases; the API verifies actual bytes. */
+export function isActivityPhoto(file: Pick<File, 'type' | 'name'>) {
+  const mime = file.type.trim().toLowerCase().split(';')[0];
+  return (
+    /^image\/(png|x-png|jpeg|jpg|pjpeg|webp)$/.test(mime ?? '') ||
+    ((!mime || mime === 'application/octet-stream') && /\.(png|jpe?g|webp)$/i.test(file.name))
+  );
+}
+
 export async function downloadBlob(
   api: GroupClient,
   path: string,

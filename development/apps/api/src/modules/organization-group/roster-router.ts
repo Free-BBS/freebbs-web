@@ -1,10 +1,22 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import type { UserContext } from '@freebbs-development/contracts';
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { fail, type OrganizationState } from './domain.js';
-import { classRoster, classRosterHistory, replaceClassRosters } from './roster-service.js';
+import {
+  canImportRosters,
+  classRoster,
+  classRosterHistory,
+  replaceClassRosters,
+} from './roster-service.js';
+import {
+  parseRosterWorkbook,
+  previewRosterWorkbook,
+  ROSTER_EXCEL_MAX_BYTES,
+  rosterWorkbookTemplate,
+} from './roster-spreadsheet.js';
 
 const classId = z
   .string()
@@ -78,6 +90,50 @@ export function createClassRostersRouter(options: {
       fail(403, 'roster_forbidden', '当前身份不能修改名单');
     return identity.user;
   }
+  const excelUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: ROSTER_EXCEL_MAX_BYTES, files: 1, fields: 1, parts: 2, fieldSize: 20 },
+  }).single('file');
+  router.get('/import/template', async (request, response) => {
+    const user = await freshActor(request, response);
+    const state = await options.readState();
+    if (!canImportRosters(state, user))
+      fail(403, 'roster_import_forbidden', '当前无权导入班级名单');
+    const buffer = await rosterWorkbookTemplate(state.classes);
+    response.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    response.setHeader('Content-Disposition', 'attachment; filename="class-roster-template.xlsx"');
+    response.send(buffer);
+  });
+  router.post(
+    '/import/preview',
+    async (request, response, next) => {
+      const user = await freshActor(request, response);
+      if (!canImportRosters(await options.readState(), user))
+        fail(403, 'roster_import_forbidden', '当前无权导入班级名单');
+      // Authorize before multipart buffering; do not allocate workbook memory for ordinary users.
+      excelUpload(request, response, (error: unknown) => {
+        if (error) {
+          next(
+            new HttpError(
+              error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE' ? 413 : 400,
+              'roster_import_upload_invalid',
+              '请上传一个不超过 8 MiB 的 .xlsx 文件',
+            ),
+          );
+          return;
+        }
+        next();
+      });
+    },
+    async (request, response) => {
+      if (!request.file || !/\.xlsx$/i.test(request.file.originalname))
+        fail(400, 'roster_import_invalid_workbook', '请选择 .xlsx 班级名单文件');
+      const mode = parse(z.enum(['append', 'replace']), request.body?.mode ?? 'append');
+      const parsed = await parseRosterWorkbook(request.file.buffer);
+      const user = await freshActor(request, response);
+      send(response, previewRosterWorkbook(await options.readState(), user, parsed, mode));
+    },
+  );
   router.get('/:classId', async (request, response) => {
     const id = parse(classId, request.params.classId);
     send(response, classRoster(await options.readState(), actor(response), id));

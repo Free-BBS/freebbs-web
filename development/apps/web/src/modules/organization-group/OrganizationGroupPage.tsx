@@ -7,6 +7,7 @@ import { Ledger } from './Ledger.js';
 import { Materials } from './Materials.js';
 import { Settings } from './Settings.js';
 import { ClassSecretaries } from './Secretaries.js';
+import { ClassRosterImport } from './ClassRosterImport.js';
 import { errorMessage } from './model.js';
 import './organization-group.css';
 export type GroupClient = Pick<ApiClient, 'request'> & Partial<Pick<ApiClient, 'download'>>;
@@ -37,11 +38,13 @@ export function OrganizationGroupPage({
             setYearId(data.activeYearId);
             const requested = new URLSearchParams(search).get('tab');
             setTab(
-              requested === 'secretaries' && data.canGrantSecretaries
-                ? 'secretaries'
-                : data.canViewAll
-                  ? 'ledger'
-                  : 'form',
+              requested === 'rosters' && (data.canManage || data.canGrantSecretaries)
+                ? 'rosters'
+                : requested === 'secretaries' && data.canGrantSecretaries
+                  ? 'secretaries'
+                  : data.canViewAll
+                    ? 'ledger'
+                    : 'form',
             );
           }
         },
@@ -95,6 +98,7 @@ export function OrganizationGroupPage({
     ['form', '活动填报'],
     ['ledger', '活动台账'],
     ['materials', '截止事项与资料'],
+    ...(workspace.canManage || workspace.canGrantSecretaries ? [['rosters', '班级名单']] : []),
     ...(workspace.canGrantSecretaries ? [['secretaries', '团支书授权']] : []),
     ...(workspace.canManage ? [['settings', '管理设置']] : []),
   ];
@@ -144,6 +148,11 @@ export function OrganizationGroupPage({
           </button>
         ))}
       </nav>
+      {tab === 'rosters' && (workspace.canManage || workspace.canGrantSecretaries) ? (
+        <div id="og-rosters" role="tabpanel" aria-labelledby="og-tab-rosters">
+          <ClassRosterImport api={api} classes={workspace.classes} />
+        </div>
+      ) : null}
       {year ? (
         <>
           <div id="og-form" role="tabpanel" aria-labelledby="og-tab-form" hidden={tab !== 'form'}>
@@ -198,7 +207,7 @@ export function OrganizationGroupPage({
             </div>
           ) : null}
         </>
-      ) : (
+      ) : tab === 'rosters' ? null : (
         <p role="status">暂无可用学年，请联系管理员。</p>
       )}
     </section>

@@ -6,6 +6,8 @@ import type {
   OrganizationGroupVersionInput,
   OrganizationGroupWorkspace,
 } from '@freebbs-development/contracts';
+export const ACTIVITY_PHOTO_LIMIT = 5;
+export const ACTIVITY_PHOTO_BYTES = 20 * 1048576;
 export interface EntryDraft {
   classId: string;
   participantCount: string;
@@ -35,6 +37,17 @@ export function emptyDraft(classId = ''): EntryDraft {
 export function pointCount(value: string) {
   return Array.from(value).length;
 }
+export function activityPhotoCount(draft: EntryDraft, version: OrganizationGroupVersionInput) {
+  return (
+    draft.photos.length +
+    version.fields
+      .filter((field) => field.kind === 'image')
+      .reduce((total, field) => {
+        const value = draft.extraAnswers[field.id];
+        return total + (Array.isArray(value) ? value.length : 0);
+      }, 0)
+  );
+}
 export function validateEntry(
   draft: EntryDraft,
   version: OrganizationGroupVersionInput,
@@ -60,8 +73,12 @@ export function validateEntry(
   if (pointCount(draft.summary) > 200) return '活动概要最多 200 字（包含空白）。';
   if (pointCount(draft.difficulties) > 2000) return '困难反馈最多 2000 字。';
   if (!modern && !draft.photos.length) return '请至少上传一张活动照片。';
-  const photoLimit = modern ? 5 : workspace.maxPhotos;
+  const photoLimit = modern ? ACTIVITY_PHOTO_LIMIT : workspace.maxPhotos;
   if (draft.photos.length > photoLimit) return `活动照片最多 ${photoLimit} 张。`;
+  if (modern && activityPhotoCount(draft, version) > photoLimit)
+    return `每条活动最多 ${photoLimit} 张照片（含附加图片）。`;
+  if (modern && draft.photos.some((photo) => photo.size > ACTIVITY_PHOTO_BYTES))
+    return '每张活动照片不得超过 20 MiB。';
   for (const field of version.fields) {
     const value = draft.extraAnswers[field.id];
     if (

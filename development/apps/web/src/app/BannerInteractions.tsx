@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BannerReactions, UpdateBannerReactionsInput } from '@freebbs-development/contracts';
-import type { ApiClient } from '../core/api/client.js';
+import { ApiError, type ApiClient } from '../core/api/client.js';
 import { useOptionalAuth } from '../core/auth/AuthProvider.js';
 import { BannerCelebration } from './BannerCelebration.js';
 
@@ -19,6 +19,25 @@ function clientVersion(client?: ApiClient): number {
     clientVersions.set(client, version);
   }
   return version;
+}
+
+function reactionError(error: unknown, saving: boolean): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return '登录状态已失效，请刷新后重试';
+    if (error.code === 'banner_interaction_forbidden') return '当前身份不能参与横幅互动';
+    if (error.code === 'banner_identity_inactive') return '当前账号暂不能参与横幅互动';
+    if (error.code === 'banner_not_published') return '这幅横幅已下线，请刷新页面';
+    if (
+      [
+        'banner_storage_not_configured',
+        'banner_storage_unavailable',
+        'banner_storage_configuration_conflict',
+        'feature_busy',
+      ].includes(error.code)
+    )
+      return '互动服务暂时不可用，请稍后再试';
+  }
+  return saving ? '未能保存，请重试' : '互动暂时不可用';
 }
 
 function ReactionIcon({ kind }: { kind: 'heart' | 'fireworks' | 'gift' }) {
@@ -101,8 +120,8 @@ function BannerInteractionControls({ bannerId, client, readOnly }: Props & { rea
       const next = await client.request<BannerReactions>(path);
       if (!next || next.bannerId !== bannerId) throw new Error('Invalid banner response');
       if (request === generation.current) setSnapshot({ client, data: next });
-    } catch {
-      if (request === generation.current) setError('互动暂时不可用');
+    } catch (error) {
+      if (request === generation.current) setError(reactionError(error, false));
     } finally {
       if (request === generation.current) setLoading(false);
     }
@@ -141,8 +160,8 @@ function BannerInteractionControls({ bannerId, client, readOnly }: Props & { rea
         setFeedback('祝福已送达！');
         setBurst((current) => ({ id: current.id + 1, kind: 'blessing' }));
       } else setFeedback(next.liked ? '谢谢你的喜欢！' : '已取消点赞');
-    } catch {
-      if (request === generation.current) setError('未能保存，请重试');
+    } catch (error) {
+      if (request === generation.current) setError(reactionError(error, true));
     } finally {
       inFlight.current = false;
       if (request === generation.current) setPending(false);

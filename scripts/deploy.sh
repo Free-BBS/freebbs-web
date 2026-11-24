@@ -137,4 +137,22 @@ for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do
   sleep "$HEALTHCHECK_DELAY_SECONDS"
 done
 
+# Liveness alone does not exercise the private volume used by banner PUTs.
+# Probe through the restarted backend so its actual configured path, Unix
+# account and mount namespace are checked, including explicit overrides.
+DEVELOPMENT_READINESS_URL="$("$NODE_BINARY" -e 'const url = new URL(process.argv[1]); url.pathname = "/api/development/v1/ready"; url.search = ""; url.hash = ""; process.stdout.write(url.href)' "$HEALTHCHECK_URL")"
+echo "[deploy] checking development readiness (including enabled banner storage)"
+for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do
+  if curl --fail --silent --show-error "$DEVELOPMENT_READINESS_URL" >/dev/null; then
+    echo "[deploy] development readiness check passed"
+    break
+  fi
+
+  if [[ "$attempt" -eq "$HEALTHCHECK_RETRIES" ]]; then
+    echo "[deploy] development readiness failed; check the configured private banner storage and backend permissions" >&2
+    exit 1
+  fi
+  sleep "$HEALTHCHECK_DELAY_SECONDS"
+done
+
 echo "[deploy] done"

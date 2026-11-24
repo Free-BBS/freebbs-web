@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ApiClient } from '../core/api/client.js';
+import { ApiError, type ApiClient } from '../core/api/client.js';
 import type { BannerReactions } from '@freebbs-development/contracts';
 import { BannerInteractions } from './BannerInteractions.js';
 
@@ -82,6 +82,24 @@ describe('BannerInteractions', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^已点赞/ })).toHaveTextContent('1'),
     );
+  });
+
+  it.each([
+    [503, 'banner_storage_unavailable', '互动服务暂时不可用，请稍后再试'],
+    [403, 'banner_interaction_forbidden', '当前身份不能参与横幅互动'],
+    [401, 'invalid_identity', '登录状态已失效，请刷新后重试'],
+  ])('explains a failed save safely for %s/%s', async (status, code, message) => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockRejectedValueOnce(new ApiError(status, code, '/private/volume/secret.json', 'request'));
+    render(<BannerInteractions bannerId={initial.bannerId} client={asClient(request)} />);
+    const like = screen.getByRole('button', { name: /^点赞/ });
+    await waitFor(() => expect(like).toBeEnabled());
+    fireEvent.click(like);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(like).toHaveTextContent('0');
+    expect(screen.queryByText(/secret\.json/)).not.toBeInTheDocument();
   });
 
   it('allows local fireworks while offline and releases the short cooldown', async () => {

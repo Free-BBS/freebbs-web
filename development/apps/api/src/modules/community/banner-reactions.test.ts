@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,7 @@ import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PUBLISHED_FESTIVAL_BANNER_IDS } from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
+import type { AuthClient } from '../../core/auth/auth-client.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { BASE_STUDENT_PERMISSIONS } from '../../core/authorization/permission-catalog.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
@@ -15,9 +16,18 @@ import { BannerReactionsService } from './banner-reactions.js';
 import { bannerReactionsDataDirectory } from './banner-reaction-directory.js';
 import { createCommunityRouter } from './router.js';
 
-const { createDevelopmentBannerReactionsDirectory } = createRequire(import.meta.url)(
-  '../../../../../../backend/development-integration.js',
-) as {
+const { createDevelopmentAuthClient, createDevelopmentBannerReactionsDirectory } = createRequire(
+  import.meta.url,
+)('../../../../../../backend/development-integration.js') as {
+  createDevelopmentAuthClient(options: {
+    verifyToken(token: string): { sub: number } | null;
+    getUserById(id: number): Promise<{ uid: string; username: string } | null>;
+    toUserProfile(row: { uid: string; username: string }): {
+      uid: string;
+      username: string;
+      isAdmin: boolean;
+    };
+  }): AuthClient;
   createDevelopmentBannerReactionsDirectory(
     uploadDirectory: string,
     environment?: { BANNER_REACTIONS_DATA_DIR?: string },
@@ -382,9 +392,158 @@ describe('shared banner reactions', () => {
       (await request(restarted).get(base).set('X-Demo-User', 'demo-student').expect(200)).body.data,
     ).toMatchObject({ likeCount: 1, liked: true });
   });
+
+  it('saves through the real main-site identity adapter and mounted development app without previewing', async () => {
+    const root = await directory();
+    const authClient = createDevelopmentAuthClient({
+      verifyToken: (token) => (token === 'verified-local-token' ? { sub: 27 } : null),
+      getUserById: async (id) =>
+        id === 27 ? { uid: 'main-site-student', username: '同学' } : null,
+      toUserProfile: (row) => ({ ...row, isAdmin: false }),
+    });
+    const development = createApp({
+      environment: { NODE_ENV: 'production', AUTH_MODE: 'main' },
+      authClient,
+      store: createMemoryStore(),
+      systemSettingsDirectory: join(root, 'settings'),
+      bannerReactionsDirectory: join(root, 'private-reactions'),
+    });
+    // Match backend/server.js: pass the original URL to the nested app, before
+    // the main backend JSON parser. It must parse its own PUT body and use the
+    // authenticated viewer rather than a browser-supplied reaction identity.
+    const app = express();
+    app.use((req, res, next) => {
+      if (!req.path.startsWith('/api/development/v1')) return next();
+      return development(req, res, next);
+    });
+    app.use(express.json());
+    const base = `/api/development/v1/community/banner-reactions/${bannerId}`;
+    await request(app).get(base).expect(401);
+    expect(
+      (await request(app).get(base).auth('verified-local-token', { type: 'bearer' }).expect(200))
+        .body.data,
+    ).toMatchObject({ likeCount: 0, liked: false });
+    expect(
+      (
+        await request(app)
+          .put(base)
+          .auth('verified-local-token', { type: 'bearer' })
+          .send({ liked: true, blessed: true })
+          .expect(200)
+      ).body.data,
+    ).toMatchObject({ likeCount: 1, liked: true, blessingCount: 1, blessed: true });
+    expect(
+      (await request(app).get(base).auth('verified-local-token', { type: 'bearer' }).expect(200))
+        .body.data,
+    ).toMatchObject({ likeCount: 1, liked: true, blessingCount: 1, blessed: true });
+    await request(app)
+      .put(base)
+      .auth('verified-local-token', { type: 'bearer' })
+      .set('X-Development-Preview-Uid', 'someone-else')
+      .send({ liked: false })
+      .expect(403);
+  });
+
+  it('returns a safe storage-unavailable error for an unusable private volume on writes', async () => {
+    const root = await directory();
+    const blocker = join(root, 'private-path-must-not-be-disclosed');
+    await writeFile(blocker, 'a regular file cannot be a storage directory');
+    const app = createApp({
+      environment: { NODE_ENV: 'test', AUTH_MODE: 'demo' },
+      store: createMemoryStore(),
+      systemSettingsDirectory: join(root, 'settings'),
+      bannerReactionsDirectory: blocker,
+    });
+    const base = `/api/development/v1/community/banner-reactions/${bannerId}`;
+    const response = await request(app)
+      .put(base)
+      .set('X-Demo-User', 'demo-student')
+      .send({ liked: true })
+      .expect(503);
+    expect(response.body.data.error).toEqual({
+      code: 'banner_storage_unavailable',
+      message: '横幅互动暂时不可用，请稍后再试',
+    });
+    expect(JSON.stringify(response.body)).not.toContain(blocker);
+    expect(await readFile(blocker, 'utf8')).toBe('a regular file cannot be a storage directory');
+  });
+
+  it('does not turn unreadable persisted reactions into zero counts or expose storage details', async () => {
+    const root = await directory();
+    const privateDirectory = join(root, 'private-reactions');
+    const filename = join(
+      privateDirectory,
+      'banner-reactions',
+      `${createHash('sha256').update(bannerId).digest('hex')}.json`,
+    );
+    await mkdir(join(privateDirectory, 'banner-reactions'), { recursive: true });
+    await writeFile(filename, 'invalid persisted JSON');
+    const app = createApp({
+      environment: { NODE_ENV: 'test', AUTH_MODE: 'demo' },
+      store: createMemoryStore(),
+      systemSettingsDirectory: join(root, 'settings'),
+      bannerReactionsDirectory: privateDirectory,
+    });
+    const response = await request(app)
+      .get(`/api/development/v1/community/banner-reactions/${bannerId}`)
+      .set('X-Demo-User', 'demo-student')
+      .expect(503);
+    expect(response.body.data.error.code).toBe('banner_storage_unavailable');
+    expect(JSON.stringify(response.body)).not.toContain(filename);
+    expect(await readFile(filename, 'utf8')).toBe('invalid persisted JSON');
+  });
+
+  it('leaves optional standalone readiness available without production banner storage but requires it in integrated mode', async () => {
+    const root = await directory();
+    for (const required of [false, true]) {
+      const app = createApp({
+        environment: { NODE_ENV: 'production', AUTH_MODE: 'main' },
+        store: createMemoryStore(),
+        systemSettingsDirectory: join(
+          root,
+          required ? 'integrated-settings' : 'standalone-settings',
+        ),
+        bannerReactionsRequired: required,
+      });
+      const response = await request(app)
+        .get('/api/development/v1/ready')
+        .expect(required ? 503 : 200);
+      if (required) expect(response.body.data.error.code).toBe('banner_storage_not_configured');
+    }
+  });
 });
 
 describe('private banner reaction directory', () => {
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0).each([false, true])(
+    'detects actual Unix write denial on %s namespace without leaving probes or changing counters',
+    async (existingNamespace) => {
+      const root = await directory();
+      const target = existingNamespace ? join(root, 'banner-reactions') : root;
+      if (existingNamespace) await mkdir(target);
+      const service = new BannerReactionsService({
+        directory: root,
+        nodeEnvironment: 'production',
+      });
+      await chmod(target, 0o500);
+      try {
+        await expect(service.checkReadiness()).rejects.toMatchObject({
+          status: 503,
+          code: 'banner_storage_unavailable',
+        });
+        await expect(service.read(bannerId, 'student-a')).rejects.toMatchObject({ status: 503 });
+        expect(await readdir(target)).toEqual([]);
+      } finally {
+        await chmod(target, 0o700);
+      }
+      await service.checkReadiness();
+      expect(await readdir(target)).toEqual([]);
+      await expect(service.update(bannerId, 'student-a', { liked: true })).resolves.toMatchObject({
+        likeCount: 1,
+        liked: true,
+      });
+    },
+  );
+
   it('persists production reactions in the main backend default without writing public uploads', async () => {
     const root = await directory();
     const uploads = join(root, 'uploads');
@@ -421,14 +580,15 @@ describe('private banner reaction directory', () => {
       const configured = createDevelopmentBannerReactionsDirectory(uploads, {
         BANNER_REACTIONS_DATA_DIR: override,
       });
-      expect(
-        () =>
-          new BannerReactionsService({
-            directory: configured,
-            nodeEnvironment: 'production',
-            publicDirectories: [uploads],
-          }),
-      ).toThrow('must not overlap');
+      const service = new BannerReactionsService({
+        directory: configured,
+        nodeEnvironment: 'production',
+        publicDirectories: [uploads],
+      });
+      await expect(service.checkReadiness()).rejects.toMatchObject({
+        status: 503,
+        code: 'banner_storage_not_configured',
+      });
     }
   });
 
@@ -466,4 +626,69 @@ describe('private banner reaction directory', () => {
       }),
     ).toThrow('must not overlap');
   });
+
+  it('isolates storage startup failure, blocks misleading zero counts and recovers after readiness succeeds', async () => {
+    const root = await directory();
+    const blocker = join(root, 'temporarily-unusable-volume');
+    await writeFile(blocker, 'not a directory');
+    const app = createApp({
+      environment: { NODE_ENV: 'test', AUTH_MODE: 'demo' },
+      store: createMemoryStore(),
+      systemSettingsDirectory: join(root, 'settings'),
+      bannerReactionsDirectory: blocker,
+    });
+    const base = `/api/development/v1/community/banner-reactions/${bannerId}`;
+    await request(app).get('/api/development/v1/health').expect(200);
+    for (const path of ['/api/development/v1/ready', base]) {
+      const response = await request(app).get(path).set('X-Demo-User', 'demo-student').expect(503);
+      expect(response.body.data.error.code).toBe('banner_storage_unavailable');
+      expect(JSON.stringify(response.body)).not.toContain(blocker);
+    }
+    await rm(blocker);
+    await mkdir(blocker);
+    await request(app).get('/api/development/v1/ready').expect(200);
+    // Readiness probes leave neither counter records nor temporary files.
+    expect(await readdir(blocker)).toEqual([]);
+    expect(
+      (await request(app).get(base).set('X-Demo-User', 'demo-student').expect(200)).body.data,
+    ).toMatchObject({ likeCount: 0, liked: false });
+    expect(await readdir(blocker)).toEqual([]);
+    expect(
+      (
+        await request(app)
+          .put(base)
+          .set('X-Demo-User', 'demo-student')
+          .send({ liked: true })
+          .expect(200)
+      ).body.data,
+    ).toMatchObject({ likeCount: 1, liked: true });
+    await request(app).get('/api/development/v1/ready').expect(200);
+    expect(await readdir(join(blocker, 'banner-reactions'))).toHaveLength(1);
+  });
+
+  it.each([
+    ['relative/private', undefined],
+    [undefined, 'ambiguous_storage'],
+  ])(
+    'keeps unrelated API modules alive when banner configuration is invalid (%s/%s)',
+    async (configured, issue) => {
+      const root = await directory();
+      const store = createMemoryStore();
+      const app = createApp({
+        environment: { NODE_ENV: 'production', AUTH_MODE: 'main' },
+        store,
+        systemSettingsDirectory: join(root, 'settings'),
+        bannerReactionsDirectory: configured,
+        bannerReactionsConfigurationIssue: issue,
+      });
+      await request(app).get('/api/development/v1/health').expect(200);
+      const response = await request(app).get('/api/development/v1/ready').expect(503);
+      expect(response.body.data.error.code).toBe(
+        issue ? 'banner_storage_configuration_conflict' : 'banner_storage_not_configured',
+      );
+      const module = (await store.modules.list()).find(({ moduleId }) => moduleId === 'community')!;
+      await store.modules.update(module.id, { enabled: false });
+      await request(app).get('/api/development/v1/ready').expect(200);
+    },
+  );
 });

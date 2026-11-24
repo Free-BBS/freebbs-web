@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import JSZip from 'jszip';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -166,16 +166,13 @@ it('rejects a long Office filename with an explicit MIME mismatch', async () => 
   ).rejects.toMatchObject({ status: 400, code: 'invalid_file_type' });
 });
 
-it('keeps content recognition mandatory and generic MIME limited to resources', async () => {
+it('keeps content recognition mandatory when a photo has generic MIME', async () => {
   await expect(
     inspectFile(upload('a'.repeat(180) + '.png', Buffer.from('spoof')), 'activity_photo'),
   ).rejects.toMatchObject({ status: 400, code: 'invalid_file_type' });
-  await expect(
-    inspectFile(
-      upload('a'.repeat(180) + '.png', png, 'application/octet-stream'),
-      'activity_photo',
-    ),
-  ).rejects.toMatchObject({ status: 400, code: 'invalid_file_type' });
+  expect(
+    (await inspectFile(upload('照片.png', png, 'application/octet-stream'), 'activity_photo')).mime,
+  ).toBe('image/png');
   expect(
     (
       await inspectFile(
@@ -184,4 +181,67 @@ it('keeps content recognition mandatory and generic MIME limited to resources', 
       )
     ).mime,
   ).toBe('image/png');
+});
+
+it.each(['image/jpeg', 'image/jpg', 'image/pjpeg', '', 'application/octet-stream'])(
+  'recognizes a complete real JPEG with harmless trailing padding and transport MIME %j',
+  async (mime) => {
+    const jpeg = await readFile(
+      new URL(
+        '../../../../../docs/assets/organization-group-user-guide/05-photo-upload.jpg',
+        import.meta.url,
+      ),
+    );
+    const padded = Buffer.concat([jpeg, Buffer.from([0, 0, 0, 0])]);
+    expect(padded.length).toBeLessThan(5 * 1024 ** 2);
+    // The prior absolute-last-two-bytes condition rejected this otherwise unchanged JPEG.
+    expect(padded.subarray(-2).equals(Buffer.from([0xff, 0xd9]))).toBe(false);
+    const inspected = await inspectFile(upload('原尺寸照片.jpeg', padded, mime), 'activity_photo');
+    expect(inspected).toMatchObject({ mime: 'image/jpeg', previewable: true, size: padded.length });
+  },
+);
+
+it.each(['image/png', 'image/x-png', '', 'application/octet-stream'])(
+  'recognizes PNG chunks through IEND before trailing padding for MIME %j',
+  async (mime) => {
+    const inspected = await inspectFile(
+      upload('截图.png', Buffer.concat([png, Buffer.alloc(16)]), mime),
+      'activity_photo',
+    );
+    expect(inspected).toMatchObject({ mime: 'image/png', previewable: true });
+  },
+);
+
+it('still rejects truncated images, forged prefixes and explicit image MIME mismatches', async () => {
+  const jpeg = await readFile(
+    new URL(
+      '../../../../../docs/assets/organization-group-user-guide/05-photo-upload.jpg',
+      import.meta.url,
+    ),
+  );
+  for (const [bytes, mime] of [
+    [jpeg.subarray(0, -30), 'image/jpeg'],
+    [
+      Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff]),
+        Buffer.from('<html><script>alert(1)</script></html>'),
+        Buffer.from([0xff, 0xd9]),
+      ]),
+      'image/jpeg',
+    ],
+    [
+      Buffer.concat([
+        png.subarray(0, 33),
+        Buffer.from('<html>not PNG chunks</html>'),
+        png.subarray(-12),
+      ]),
+      'image/png',
+    ],
+    [Buffer.from('<svg onload="alert(1)"/>'), 'application/octet-stream'],
+    [png, 'image/jpeg'],
+    [jpeg, 'image/png'],
+  ] as const)
+    await expect(
+      inspectFile(upload('照片.jpg', bytes, mime), 'activity_photo'),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid_file_type' });
 });

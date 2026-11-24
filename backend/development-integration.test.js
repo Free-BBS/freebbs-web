@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   createDevelopmentAuthClient,
   createDevelopmentBannerReactionsDirectory,
+  createDevelopmentBannerReactionsStorageOptions,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   initializeDevelopmentRuntime,
@@ -39,6 +40,87 @@ test('banner reactions default to a stable private sibling and honor trimmed exp
     }),
     'relative/private',
   );
+});
+
+test('integrated banner default matches provision regardless of public uploads and preserves legacy records', async () => {
+  const { mkdtemp, mkdir, writeFile, readdir, rm } = require('node:fs/promises');
+  const path = require('node:path');
+  const { tmpdir } = require('node:os');
+  const root = await mkdtemp(path.join(tmpdir(), 'banner-directory-resolution-'));
+  try {
+    const repositoryRoot = path.join(root, 'repository');
+    const uploads = path.join(root, 'external-volume', 'uploads');
+    const canonical = path.join(repositoryRoot, 'database/banner-reactions-private');
+    const legacy = path.join(root, 'external-volume/banner-reactions-private');
+    assert.deepEqual(createDevelopmentBannerReactionsStorageOptions(uploads, repositoryRoot, {}), {
+      bannerReactionsDirectory: canonical,
+    });
+    // An empty former directory is not evidence that counters live there.
+    await mkdir(path.join(legacy, 'banner-reactions'), { recursive: true });
+    await writeFile(path.join(legacy, 'banner-reactions/ignored.tmp'), 'unfinished');
+    assert.equal(
+      createDevelopmentBannerReactionsStorageOptions(uploads, repositoryRoot, {})
+        .bannerReactionsDirectory,
+      canonical,
+    );
+    const recordName = `${'a'.repeat(64)}.json`;
+    await writeFile(path.join(legacy, 'banner-reactions', recordName), '{"existing":"legacy"}');
+    assert.deepEqual(createDevelopmentBannerReactionsStorageOptions(uploads, repositoryRoot, {}), {
+      bannerReactionsDirectory: legacy,
+    });
+    await mkdir(path.join(canonical, 'banner-reactions'), { recursive: true });
+    await writeFile(
+      path.join(canonical, 'banner-reactions', recordName),
+      '{"existing":"canonical"}',
+    );
+    assert.deepEqual(createDevelopmentBannerReactionsStorageOptions(uploads, repositoryRoot, {}), {
+      bannerReactionsDirectory: canonical,
+      bannerReactionsConfigurationIssue: 'ambiguous_storage',
+    });
+    for (const explicit of [legacy, canonical, 'relative/private'])
+      assert.deepEqual(
+        createDevelopmentBannerReactionsStorageOptions(uploads, repositoryRoot, {
+          BANNER_REACTIONS_DATA_DIR: `  ${explicit}  `,
+        }),
+        { bannerReactionsDirectory: explicit },
+      );
+    assert.deepEqual(await readdir(path.join(legacy, 'banner-reactions')), [
+      recordName,
+      'ignored.tmp',
+    ]);
+    assert.deepEqual(await readdir(path.join(canonical, 'banner-reactions')), [recordName]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('does not mistake a public-upload parent alias for two independent reaction stores', async () => {
+  const { mkdtemp, mkdir, writeFile, symlink, rm } = require('node:fs/promises');
+  const path = require('node:path');
+  const { tmpdir } = require('node:os');
+  const root = await mkdtemp(path.join(tmpdir(), 'banner-directory-alias-'));
+  try {
+    const repositoryRoot = path.join(root, 'repository');
+    const database = path.join(repositoryRoot, 'database');
+    const canonical = path.join(database, 'banner-reactions-private');
+    await mkdir(path.join(canonical, 'banner-reactions'), { recursive: true });
+    await writeFile(
+      path.join(canonical, 'banner-reactions', `${'b'.repeat(64)}.json`),
+      '{"count":1}',
+    );
+    const alias = path.join(root, 'database-alias');
+    await symlink(database, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.deepEqual(
+      createDevelopmentBannerReactionsStorageOptions(
+        path.join(alias, 'uploads'),
+        repositoryRoot,
+        {},
+      ),
+      { bannerReactionsDirectory: canonical },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('Map verifier loading is bounded and optional without affecting existing backend configuration', async () => {
@@ -272,6 +354,7 @@ test('runtime loader forwards private banner storage and optional providers with
       repositoryRoot: root,
       publicUploadDirectory,
       bannerReactionsDirectory,
+      bannerReactionsConfigurationIssue: 'ambiguous_storage',
       developmentRewardProvider: provider,
       learningAchievementProvider: learningProvider,
     });
@@ -280,6 +363,7 @@ test('runtime loader forwards private banner storage and optional providers with
     assert.equal(options.developmentMapTokenDigest, digest);
     assert.equal(options.publicUploadDirectory, publicUploadDirectory);
     assert.equal(options.bannerReactionsDirectory, bannerReactionsDirectory);
+    assert.equal(options.bannerReactionsConfigurationIssue, 'ambiguous_storage');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

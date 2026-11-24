@@ -11,10 +11,13 @@ import type {
 import { ApiError } from '../../core/api/client.js';
 import { jsonOptions } from './api.js';
 import type { GroupClient } from './OrganizationGroupPage.js';
-import { FileTile, uploadFile } from './Files.js';
+import { FileTile, isActivityPhoto, uploadFile } from './Files.js';
 import { ClassRosterPicker } from './ClassRosterPicker.js';
 import {
   coreLabels,
+  ACTIVITY_PHOTO_LIMIT,
+  ACTIVITY_PHOTO_BYTES,
+  activityPhotoCount,
   emptyDraft,
   errorMessage,
   pointCount,
@@ -85,8 +88,8 @@ export function EntryForm({
     };
   }, [api, year.id, entry?.id]);
   const modern = version.template === 'class_activity_v2';
-  const maxPhotos = modern ? 5 : workspace.maxPhotos;
-  const maxPhotoBytes = modern ? 5 * 1048576 : workspace.maxPhotoBytes;
+  const maxPhotos = modern ? ACTIVITY_PHOTO_LIMIT : workspace.maxPhotos;
+  const maxPhotoBytes = modern ? ACTIVITY_PHOTO_BYTES : workspace.maxPhotoBytes;
   const estimatedNames = (draft.participantNames ?? '')
     .trim()
     .split(/[\s、,，;；]+/u)
@@ -110,7 +113,13 @@ export function EntryForm({
         : modern && key === 'difficulties'
           ? '备注'
           : coreLabels[key]);
-  const help = (key: keyof typeof coreLabels) => version.corePresentation?.[key]?.help;
+  const help = (key: keyof typeof coreLabels) => {
+    const value = version.corePresentation?.[key]?.help;
+    // Old published questionnaires retain the previous default wording in storage.
+    return modern && key === 'photos' && value === '选填，最多 5 张，每张不超过 5 MiB'
+      ? '选填，最多 5 张，每张不超过 20 MiB'
+      : value;
+  };
   function cancelUpload() {
     const controller = activeUpload.current;
     if (!controller) return;
@@ -121,7 +130,7 @@ export function EntryForm({
     if (photoInput.current) photoInput.current.value = '';
     setMessage('已取消上传，填写内容和已上传照片已保留，可重新选择图片。');
   }
-  async function upload(files: FileList | null, field?: OrganizationGroupField) {
+  async function upload(files: FileList | readonly File[] | null, field?: OrganizationGroupField) {
     if (!files?.length || activeUpload.current) return;
     const controller = new AbortController();
     activeUpload.current = controller;
@@ -132,8 +141,10 @@ export function EntryForm({
     try {
       if (!field && draft.photos.length + selected.length > maxPhotos)
         throw new Error(`活动照片最多 ${maxPhotos} 张。`);
+      if (modern && activityPhotoCount(draft, version) + selected.length > maxPhotos)
+        throw new Error(`每条活动最多 ${maxPhotos} 张照片（含附加图片）。`);
       for (const file of selected) {
-        if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > maxPhotoBytes)
+        if (!isActivityPhoto(file) || file.size < 1 || file.size > maxPhotoBytes)
           throw new Error(
             `请选择 PNG、JPEG 或 WebP 图片，单张不超过 ${Math.round(maxPhotoBytes / 1048576)} MiB。`,
           );
@@ -310,6 +321,21 @@ export function EntryForm({
       ) : null}
       <form
         noValidate
+        onPaste={(event) => {
+          if (busy || unavailable || conflict || event.clipboardData.getData('text/plain')) return;
+          const files = Array.from(event.clipboardData.files);
+          const images = (
+            files.length
+              ? files
+              : Array.from(event.clipboardData.items)
+                  .filter((item) => item.kind === 'file')
+                  .map((item) => item.getAsFile())
+                  .filter((file): file is File => Boolean(file))
+          ).filter(isActivityPhoto);
+          if (!images.length) return;
+          event.preventDefault();
+          void upload(images);
+        }}
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -449,6 +475,7 @@ export function EntryForm({
               {help('photos') ??
                 `${modern ? '选填，' : '至少 1 张，'}最多 ${maxPhotos} 张；单张 ${Math.round(maxPhotoBytes / 1048576)} MiB。`}
             </small>
+            <small>也可在填写区粘贴图片。</small>
             {uploading ? (
               <div className="og-actions">
                 <p role="status">
