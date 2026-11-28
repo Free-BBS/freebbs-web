@@ -4,15 +4,22 @@ const path = require('node:path');
 const express = require('express');
 const { makeSchedule } = require('./training-scheduling');
 const { createHandoutProcessor, MAX_PDF_BYTES } = require('./training-handouts');
+const { normalizeTrainingImage, watermarkGroupQr } = require('./training-images');
 
 const MAX_COURSES = 40;
 const MAX_PREFERENCES = 20;
 const MAX_LECTURERS = 20;
 const DEFAULT_QUESTIONS = ['讲解清晰程度', '课程内容的实用性', '课堂节奏'];
-const BATCH_FIELDS = `id, slug, title, opens_at AS opensAt, closes_at AS closesAt,
-  published_at AS publishedAt, revision`;
+const MATERIALS_CONSENT = {
+  version: 'training-materials-v1',
+  text: '本人授权电子系学培部使用本人在本次小班辅导备课期间产生的讲义等资料，相关资料仅通过 FREE-BBS 平台发布。',
+};
+const BATCH_FIELDS = `b.id, b.slug, b.title, b.opens_at AS opensAt, b.closes_at AS closesAt,
+  b.published_at AS publishedAt, b.revision, v.visibility`;
 const COURSE_VISIBILITY = `(c.offered = 1 OR (c.capacity > 0 AND b.published_at IS NOT NULL))
-  AND (? OR (b.published_at IS NOT NULL AND EXISTS (
+  AND (? OR (b.published_at IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM training_batch_visibility v WHERE v.batch_id = b.id AND v.visibility = 'hidden'
+  ) AND EXISTS (
     SELECT 1 FROM training_assignments assigned WHERE assigned.course_id = c.id
   )))`;
 
@@ -129,7 +136,9 @@ async function transaction(pool, action) {
 async function batchBySlug(db, slug, lock = false) {
   const batch = await one(
     db,
-    `SELECT ${BATCH_FIELDS} FROM training_batches WHERE slug = ?${lock ? ' FOR UPDATE' : ''}`,
+    `SELECT ${BATCH_FIELDS} FROM training_batches b
+    LEFT JOIN training_batch_visibility v ON v.batch_id = b.id
+    WHERE b.slug = ?${lock ? ' FOR UPDATE OF b' : ''}`,
     [slug],
   );
   if (!batch) fail(404, '报名批次不存在');
@@ -294,10 +303,12 @@ async function reviewData(db, batch, includeDetails = true) {
   );
   const applications = await rows(
     db,
-    `SELECT id
-    ${includeDetails ? ', full_name AS fullName, student_id AS studentId, email, introduction, signature' : ''}
+    `SELECT a.id
+    ${includeDetails ? ', full_name AS fullName, student_id AS studentId, email, introduction, signature, consent.consent_version AS materialsConsent, consent.accepted_at AS materialsConsentAt' : ''}
     ${includeDetails && batch.publishedAt !== null ? ', is_lexue AS isLexue' : ''}
-    FROM training_applications WHERE batch_id = ? ORDER BY id`,
+    FROM training_applications a
+    ${includeDetails ? 'LEFT JOIN training_application_consents consent ON consent.application_id = a.id' : ''}
+    WHERE a.batch_id = ? ORDER BY a.id`,
     [batch.id],
   );
   const preferences = await rows(
@@ -356,7 +367,14 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const manage = request.query.manage === '1';
       if (manage) requirePermission(access.staff);
       const [batches, courses, lecturers] = await Promise.all([
-        rows(pool, `SELECT ${BATCH_FIELDS} FROM training_batches ORDER BY opens_at DESC, id DESC`),
+        rows(
+          pool,
+          `SELECT ${BATCH_FIELDS} FROM training_batches b
+          LEFT JOIN training_batch_visibility v ON v.batch_id = b.id
+          WHERE (? OR v.visibility IS NULL OR v.visibility = 'public')
+          ORDER BY b.opens_at DESC, b.id DESC`,
+          [manage],
+        ),
         access.revoked
           ? []
           : rows(
@@ -377,12 +395,13 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       });
       response.json({
         access,
-        batches: batches.map(({ id: batchId, slug, title, opensAt, closesAt, publishedAt }) => ({
+        batches: batches.map(({ id: batchId, slug, title, opensAt, closesAt, publishedAt, visibility }) => ({
           slug,
           title,
           opensAt,
           closesAt,
           phase: phase({ opensAt, closesAt, publishedAt }),
+          visibility,
           courses: cards.get(batchId) || [],
         })),
       });
@@ -503,17 +522,21 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       if (!Array.isArray(courses) || !courses.length || courses.length > MAX_COURSES) {
         fail(400, `请设置 1–${MAX_COURSES} 门课程`);
       }
-      const offered = courses.map((course) => {
+      const titleKeys = new Set();
+      const offered = courses.map((course, index) => {
         const name = input(course?.title, 100, '科目名称');
+        const titleKey = subjectKey(name);
+        // The first classroom keeps the name used by free-text applications.
+        // A leading tab cannot occur in a normalized subject key.
+        const key = titleKeys.has(titleKey) ? `\t${index + 1}` : titleKey;
+        titleKeys.add(titleKey);
         return {
           name,
-          key: subjectKey(name),
+          key,
           teacher: input(course.teacher, 100, '任课老师', true),
           capacity: integer(course.capacity, 1, MAX_LECTURERS, '每门课可设置 1–20 个讲师名额'),
         };
       });
-      if (new Set(offered.map(({ key }) => key)).size !== offered.length)
-        fail(400, '报名科目不能重复');
       const slug = crypto.randomUUID();
       await transaction(pool, async (db) => {
         const batch = await rows(
@@ -547,18 +570,19 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
     '/batches/:slug',
     route(async (request, response, { user }) => {
       const batch = await batchBySlug(pool, request.params.slug);
+      if (batch.visibility === 'hidden') fail(404, '报名批次不存在');
       const currentPhase = phase(batch);
       const [courses, application] = await Promise.all([
         currentPhase === 'open'
           ? rows(
               pool,
-              'SELECT id, title FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
+              'SELECT id, title, teacher FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
               [batch.id],
             )
           : [],
         one(
           pool,
-          `SELECT a.id, a.submitted_at AS submittedAt, c.title AS assignedCourse
+          `SELECT a.id, a.submitted_at AS submittedAt, c.title AS assignedCourse, c.id AS assignedCourseId
         FROM training_applications a LEFT JOIN training_assignments ta ON ta.application_id = a.id
         LEFT JOIN training_courses c ON c.id = ta.course_id WHERE a.batch_id = ? AND a.user_id = ?`,
           [batch.id, user.id],
@@ -572,7 +596,41 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         courses,
         application: application || null,
         fullName: user.full_name,
+        materialsConsent: MATERIALS_CONSENT,
       });
+    }),
+  );
+
+  router.put(
+    '/batches/:slug/visibility',
+    route(async (request, response, { access }) => {
+      requirePermission(access.minister);
+      const { visibility } = request.body || {};
+      if (!['hidden', 'public'].includes(visibility)) fail(400, '请选择有效的批次可见状态');
+      await transaction(pool, async (db) => {
+        const batch = await batchBySlug(db, request.params.slug, true);
+        if (visibility === 'public' && Date.now() < batch.closesAt)
+          fail(409, '报名截止后才可公布批次');
+        await rows(
+          db,
+          `INSERT INTO training_batch_visibility (batch_id, visibility) VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE visibility = ?`,
+          [batch.id, visibility, visibility],
+        );
+      });
+      response.json({ message: visibility === 'public' ? '批次已公布' : '批次已隐藏' });
+    }),
+  );
+
+  router.delete(
+    '/batches/:slug',
+    route(async (request, response, { access }) => {
+      requirePermission(access.minister);
+      await transaction(pool, async (db) => {
+        const batch = await batchBySlug(db, request.params.slug, true);
+        await rows(db, 'DELETE FROM training_batches WHERE id = ?', [batch.id]);
+      });
+      response.status(204).end();
     }),
   );
 
@@ -601,8 +659,8 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
     '/batches/:slug/applications',
     route(async (request, response, { user }) => {
       const introduction = input(request.body.introduction, 5000, '自我介绍');
-      const signed = signature(request.body.signature);
-      const { isLexue, preferences } = request.body;
+      const { isLexue, preferences, materialsConsent } = request.body;
+      if (materialsConsent !== MATERIALS_CONSENT.version) fail(400, '请确认备课资料授权');
       if (typeof isLexue !== 'boolean') fail(400, '请选择是否为乐学讲师');
       if (
         !Array.isArray(preferences) ||
@@ -611,8 +669,14 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       ) {
         fail(400, `请按志愿顺位填写 1–${MAX_PREFERENCES} 个科目`);
       }
+      const signatureInput = request.body.signature;
+      const signed =
+        signatureInput?.photo !== undefined
+          ? JSON.stringify({ photo: (await normalizeTrainingImage(signatureInput.photo)).toString('base64') })
+          : signature(signatureInput);
       await transaction(pool, async (db) => {
         const batch = await batchBySlug(db, request.params.slug, true);
+        if (batch.visibility === 'hidden') fail(404, '报名批次不存在');
         if (phase(batch) !== 'open') fail(409, '当前批次未在报名时间内');
         const existing = await one(
           db,
@@ -650,9 +714,10 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
               byTitle.set(key, course);
             }
           }
-          if (chosen.has(course.id)) fail(400, '报名科目不能重复');
+          // Insertion order keeps the first occurrence for scheduling.
           chosen.add(course.id);
         }
+        const submittedAt = Date.now();
         const application = await rows(
           db,
           `INSERT INTO training_applications
@@ -667,8 +732,13 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
             introduction,
             isLexue,
             signed,
-            Date.now(),
+            submittedAt,
           ],
+        );
+        await rows(
+          db,
+          'INSERT INTO training_application_consents (application_id, consent_version, accepted_at) VALUES (?, ?, ?)',
+          [application.insertId, materialsConsent, submittedAt],
         );
         let rank = 1;
         for (const courseId of chosen) {
@@ -695,10 +765,10 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
   router.get(
     '/batches/:slug/review',
     route(async (request, response, { access }) => {
-      requirePermission(access.minister);
+      requirePermission(access.staff);
       const data = await transaction(pool, async (db) => {
         const batch = await batchBySlug(db, request.params.slug);
-        if (!['closed', 'published'].includes(phase(batch))) fail(409, '报名截止后可查看报名情况');
+        const canReview = access.minister && phase(batch) === 'closed';
         const review = await reviewData(db, batch);
         const published =
           batch.publishedAt === null
@@ -717,7 +787,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
                   [batch.id],
                 ),
               };
-        return { batch, ...review, published };
+        return { batch, ...review, published, canReview };
       });
       response.json(data);
     }),
@@ -876,7 +946,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         includeDraft: manage && context.access.staff,
       });
       if (manage) requirePermission(course.canEdit);
-      const [lecturers, materials, feedback] = await Promise.all([
+      const [lecturers, materials, feedback, groupQr] = await Promise.all([
         assignmentsByCourse(pool, course.batchId),
         rows(
           pool,
@@ -887,12 +957,14 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
           courseId,
           context.user.id,
         ]),
+        one(pool, 'SELECT 1 FROM training_course_group_qr WHERE course_id = ?', [courseId]),
       ]);
       response.json({
         ...courseCard(course, lecturers),
         batchTitle: course.batchTitle,
         batchSlug: course.batchSlug,
         materials,
+        hasGroupQr: Boolean(groupQr),
         canEdit: course.canEdit,
         canEditFeedback: course.canEditFeedback,
         canEditTeacher: context.access.staff,
@@ -901,6 +973,42 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         feedbackOpen: course.endsAt !== null && Date.now() >= course.endsAt,
         feedbackSubmitted: Boolean(feedback),
       });
+    }),
+  );
+
+  router.put(
+    '/courses/:id/group-qr',
+    route(async (request, response, context) => {
+      const courseId = id(request.params.id);
+      requirePermission((await getCourse(pool, courseId, context)).canEdit);
+      const image = await normalizeTrainingImage(request.body.image, { qr: true });
+      const access = await getAccess(pool, context.user);
+      await transaction(pool, async (db) => {
+        const course = await getCourse(db, courseId, { ...context, access }, { lock: true });
+        requirePermission(course.canEdit);
+        await rows(
+          db,
+          `INSERT INTO training_course_group_qr (course_id, image) VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE image = ?`,
+          [course.id, image, image],
+        );
+      });
+      response.json({ message: '课程群二维码已保存' });
+    }),
+  );
+
+  router.get(
+    '/courses/:id/group-qr',
+    route(async (request, response, context) => {
+      const course = await getCourse(pool, id(request.params.id), context);
+      const qr = await one(pool, 'SELECT image FROM training_course_group_qr WHERE course_id = ?', [
+        course.id,
+      ]);
+      if (!qr) fail(404, '课程群二维码尚未上传');
+      const marked = await watermarkGroupQr(qr.image, context.user);
+      const access = await getAccess(pool, context.user);
+      await getCourse(pool, course.id, { ...context, access });
+      response.type('png').send(marked);
     }),
   );
 
@@ -1000,7 +1108,8 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         fullName: context.user.full_name,
         studentId: context.user.student_id,
       });
-      requirePermission(!(await getAccess(pool, context.user)).revoked);
+      const access = await getAccess(pool, context.user);
+      await getCourse(pool, course.id, { ...context, access });
       if (!(await one(pool, 'SELECT 1 FROM training_materials WHERE id = ?', [materialId])))
         fail(404, '讲义不存在');
       const filename = material.title.replace(/[\r\n/\\]/g, ' ').replace(/\.pdf$/i, '');
@@ -1100,7 +1209,12 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
 }
 
 async function ensureTrainingTables(pool) {
-  for (const filename of ['074_training_courses.sql', '075_training_roster.sql']) {
+  for (const filename of [
+    '074_training_courses.sql',
+    '075_training_roster.sql',
+    '076_training_batch_visibility.sql',
+    '077_training_enrollment_and_group_qr.sql',
+  ]) {
     const migration = readFileSync(
       path.join(__dirname, '../database/migrations', filename),
       'utf8',

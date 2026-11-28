@@ -17,6 +17,8 @@
     closed: '报名已截止',
     published: '录取已发布',
   };
+  const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+  const IMAGE_ACCEPT = 'image/jpeg,image/png';
   const formatDate = new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
     month: 'numeric',
@@ -32,8 +34,8 @@
     formatDate.formatRange?.(start, end) ?? `${date(start)} 至 ${date(end)}`;
   const button = (label, attributes = '', variant = '') =>
     `<button type="button" class="training-button${variant ? ` training-${variant}` : ''}" ${attributes}>${label}</button>`;
-  const submit = (label) =>
-    `<button type="submit" class="training-button training-primary">${label}</button>`;
+  const submit = (label, variant = 'primary') =>
+    `<button type="submit" class="training-button training-${variant}">${label}</button>`;
   const link = (label, path, variant = '') =>
     `<a class="training-button${variant ? ` training-${variant}` : ''}" href="${escape(path)}">${escape(label)}</a>`;
   const route = (key, value) => `/training?${new URLSearchParams({ [key]: value })}`;
@@ -46,6 +48,25 @@
   const back = backTo('小班辅导', '/training');
   const empty = (message) => `<p class="training-empty">${escape(message)}</p>`;
   const errorField = '<p class="training-error" role="alert" hidden></p>';
+
+  function classroomLabels(courses, { numberClasses = true } = {}) {
+    const keys = courses.map(({ title }) =>
+      title.normalize('NFKC').toLowerCase().trim().replace(/\s+/g, ' '),
+    );
+    const counts = new Map();
+    const numbers = new Map();
+    keys.forEach((key) => counts.set(key, (counts.get(key) || 0) + 1));
+    return new Map(
+      courses.map(({ id, title, teacher }, index) => {
+        const key = keys[index];
+        if (counts.get(key) === 1) return [id, title];
+        if (!numberClasses) return [id, teacher ? `${title}（${teacher}）` : title];
+        const number = (numbers.get(key) || 0) + 1;
+        numbers.set(key, number);
+        return [id, `${title}（第 ${number} 班${teacher ? ` · ${teacher}` : ''}）`];
+      }),
+    );
+  }
 
   function api(path, method, payload) {
     return callApi(`/training${path}`, { method, body: JSON.stringify(payload) });
@@ -119,18 +140,22 @@
 
   const toTimestamp = (value) => Date.parse(`${value}:00+08:00`);
 
-  function courseFacts(course) {
-    return `<dl class="training-facts">${[
-      ['任课老师', course.teacher || '待定'],
-      ['讲师', course.lecturers.join('、') || '待定'],
+  function courseFacts(course, { includePending = true } = {}) {
+    const facts = [
+      ['任课老师', course.teacher?.trim()],
+      ['讲师', course.lecturers?.map((name) => name.trim()).filter(Boolean).join('、')],
       [
         '上课时间',
-        course.startsAt === null ? '待定' : `${dateRange(course.startsAt, course.endsAt)}`,
+        course.startsAt == null || course.endsAt == null
+          ? ''
+          : dateRange(course.startsAt, course.endsAt),
       ],
-      ['上课地点', course.location || '待定'],
+      ['上课地点', course.location?.trim()],
     ]
-      .map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`)
-      .join('')}</dl>`;
+      .filter(([, value]) => includePending || value)
+      .map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value || '待定')}</dd></div>`)
+      .join('');
+    return facts ? `<dl class="training-facts">${facts}</dl>` : '';
   }
 
   async function copyLink(slug, control) {
@@ -158,7 +183,7 @@
         (course) =>
           `<a class="training-card" href="${escape(coursePage(course.id, manage))}"><h3>${escape(
             course.title,
-          )}</h3>${courseFacts(course)}</a>`,
+          )}</h3>${courseFacts(course, { includePending: false })}</a>`,
       )
       .join('')}</div>`;
   }
@@ -179,10 +204,12 @@
       : button('我要报名', 'disabled aria-describedby="training-no-registration"', 'primary') +
         '<span id="training-no-registration" class="training-action-note">暂无开放报名</span>';
     const courses = batches
-      .filter((batch) => batch.courses.length > 0)
+      .filter((batch) => batch.visibility === 'public' || batch.courses.length > 0)
       .map(
         (batch) =>
-          `<section class="training-course-group"><h2>${escape(batch.title)}</h2>${courseCards(batch.courses)}</section>`,
+          `<section class="training-course-group"><h2>${escape(batch.title)}</h2>${
+            batch.courses.length ? courseCards(batch.courses) : empty(phases[batch.phase])
+          }</section>`,
       )
       .join('');
     setPage(
@@ -217,39 +244,75 @@
 
   async function renderManagement() {
     const { access, batches } = await api('/?manage=1');
+    content.dataset.view = 'management';
+    const expanded = new Map(
+      Array.from(content.querySelectorAll('[data-batch-courses]'), (item) => [
+        item.dataset.batchCourses,
+        item.open,
+      ]),
+    );
     const actions =
       (access.minister ? button('新建报名批次', 'id="training-new"', 'primary') : '') +
       (access.admin ? link('用户管理', '/adminusers') : '');
     const markup = batches
       .map((batch) => {
         const reviewing = batch.phase === 'closed' || batch.phase === 'published';
-        const tools =
-          (access.minister && reviewing
-            ? link(
-                batch.phase === 'published' ? '录取名单' : '审核与排班',
-                route('review', batch.slug),
-                'primary',
-              )
-            : '') +
-          (access.minister ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`) : '') +
-          link('打开报名页', route('apply', batch.slug)) +
+        const hidden = batch.visibility === 'hidden';
+        const batchAction = (label, action, extra = '', variant = '') =>
+          button(
+            label,
+            `data-batch-action="${action}" data-batch-slug="${escape(batch.slug)}" ${extra}`,
+            variant,
+          );
+        const visibilityTools = access.minister
+          ? (hidden ? '' : batchAction('隐藏批次', 'hide')) +
+            (batch.visibility === 'public'
+              ? ''
+              : batchAction(
+                  '公布批次',
+                  'publish',
+                  reviewing ? '' : 'disabled title="报名截止后才可公布批次"',
+                )) +
+            batchAction('删除批次', 'delete', '', 'danger')
+          : '';
+        const reviewLabel =
+          batch.phase === 'published'
+            ? '录取名单'
+            : access.minister && reviewing ? '审核与排班' : '查看已收问卷';
+        const more =
+          (hidden ? '' : link('打开报名页', route('apply', batch.slug))) +
           (access.admin && batch.phase === 'open'
             ? button('截止报名', `data-close-registration="${escape(batch.slug)}"`, 'danger')
+            : '') +
+          visibilityTools;
+        const tools =
+          link(reviewLabel, route('review', batch.slug), 'primary') +
+          (access.minister && !hidden
+            ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`)
+            : '') +
+          (more
+            ? `<details class="training-batch-menu"><summary class="training-button">更多操作</summary><div class="training-batch-menu-items">${more}</div></details>`
             : '');
+        const visibilityLabel = hidden ? '已隐藏' : batch.visibility === 'public' ? '已公布' : '';
+        const showCourses = expanded.get(batch.slug) ?? batch.courses.length <= 4;
         return (
-          `<section class="training-batch"><header class="training-section-heading">` +
+          `<section class="training-batch"><header class="training-batch-header">` +
           `<div><div class="training-batch-title"><h2>${escape(batch.title)}</h2>` +
-          `<span class="training-phase" data-phase="${escape(batch.phase)}">${phases[batch.phase]}</span></div>` +
+          `<span class="training-phase" data-phase="${escape(batch.phase)}">${phases[batch.phase]}</span>` +
+          (visibilityLabel ? `<span class="training-phase">${visibilityLabel}</span>` : '') +
+          '</div>' +
           `<p>报名时间：${date(batch.opensAt)} 至 ${date(batch.closesAt)}（北京时间）</p></div>` +
           `<div class="training-actions">${tools}</div></header>${
-            batch.courses.length ? courseCards(batch.courses, true) : ''
+            batch.courses.length
+              ? `<details class="training-batch-courses" data-batch-courses="${escape(batch.slug)}" ${showCourses ? 'open' : ''}><summary>课堂（${batch.courses.length}）</summary>${courseCards(batch.courses, true)}</details>`
+              : ''
           }</section>`
         );
       })
       .join('');
     setPage(
       '管理小班辅导',
-      markup || empty('暂无小班辅导批次。'),
+      markup ? `<div class="training-batch-grid">${markup}</div>` : empty('暂无小班辅导批次。'),
       '',
       actions,
       backTo('小班辅导', '/training'),
@@ -260,7 +323,57 @@
     });
     content.querySelectorAll('[data-close-registration]').forEach((control) => {
       const batch = batches.find(({ slug }) => slug === control.dataset.closeRegistration);
-      control.addEventListener('click', () => openCloseRegistrationDialog(batch));
+      control.addEventListener('click', () => {
+        control.closest('.training-batch-menu')?.removeAttribute('open');
+        openCloseRegistrationDialog(batch);
+      });
+    });
+    content.querySelectorAll('[data-batch-action]').forEach((control) => {
+      const batch = batches.find(({ slug }) => slug === control.dataset.batchSlug);
+      control.addEventListener('click', () => {
+        control.closest('.training-batch-menu')?.removeAttribute('open');
+        openBatchActionDialog(batch, control.dataset.batchAction);
+      });
+    });
+  }
+
+  function openBatchActionDialog(batch, action) {
+    const controls = {
+      hide: {
+        title: '隐藏批次',
+        confirm: '确认隐藏',
+        detail: '隐藏后，用户无法查看此批次的报名页和课堂。报名截止后可重新公布。',
+        visibility: 'hidden',
+      },
+      publish: {
+        title: '公布批次',
+        confirm: '确认公布',
+        detail: '此批次将在小班辅导首页显示。',
+        visibility: 'public',
+      },
+      delete: {
+        title: '删除批次',
+        confirm: '确认删除',
+        detail: '此操作会永久删除批次及相关课堂、报名记录、录取结果、课程资料和反馈。',
+      },
+    }[action];
+    const deleting = action === 'delete';
+    const modal = dialog(
+      controls.title,
+      `<form class="training-form"><p>「${escape(batch.title)}」</p><p>${controls.detail}</p>${errorField}` +
+        `<div class="training-actions">${button('取消', 'data-close')}${submit(
+          controls.confirm,
+          deleting ? 'danger' : 'primary',
+        )}</div></form>`,
+    );
+    bindForm(modal.querySelector('form'), async () => {
+      const endpoint = batchEndpoint(batch.slug);
+      const result = deleting
+        ? await api(endpoint, 'DELETE')
+        : await api(`${endpoint}/visibility`, 'PUT', { visibility: controls.visibility });
+      modal.close();
+      await renderManagement();
+      tell(deleting ? '批次已删除' : result.message);
     });
   }
 
@@ -432,10 +545,18 @@
     redraw();
   }
 
-  function showSignature(container, strokes) {
+  function showSignature(container, value) {
     const canvas = container.querySelector('canvas');
-    paintSignature(canvas, strokes);
-    canvas.hidden = false;
+    if (Array.isArray(value)) {
+      paintSignature(canvas, value);
+      canvas.hidden = false;
+      return;
+    }
+    if (value?.photo) {
+      const photo = container.querySelector('.training-signature-photo');
+      photo.src = `data:image/jpeg;base64,${value.photo}`;
+      photo.hidden = false;
+    }
   }
 
   async function renderApplication() {
@@ -451,38 +572,52 @@
           ? `你已被录取为「${application.assignedCourse}」的讲师。`
           : '本期报名未录取。';
       }
-      setPage(`${batch.title} · 讲师报名`, empty(status), intro, '', back);
+      const assignedClassroom =
+        batch.phase === 'published' && application.assignedCourseId
+          ? link('查看录取课堂', coursePage(application.assignedCourseId))
+          : '';
+      setPage(`${batch.title} · 讲师报名`, empty(status), intro, assignedClassroom, back);
       return;
     }
     if (batch.phase !== 'open') {
       setPage(`${batch.title} · 讲师报名`, empty(phases[batch.phase]), intro, '', back);
       return;
     }
+    const labels = classroomLabels(batch.courses, { numberClasses: false });
     markup =
-      `<form class="training-form training-panel">` +
-      `<fieldset><legend>报名课堂</legend><p>添加科目后使用「上移」「下移」调整志愿顺位。</p>` +
-      `<div class="training-inline"><label class="visually-hidden" for="training-pick">选择报名科目</label>` +
+      `<form class="training-form training-application-form">` +
+      `<section class="training-panel training-application-section" aria-labelledby="training-preference-heading">
+        <h2 id="training-preference-heading">课堂志愿</h2>
+        <p>添加后可调整志愿顺位。同一课堂重复添加时，以最靠前的志愿为准。</p>` +
+      `<div class="training-preference-picker"><label class="visually-hidden" for="training-pick">选择报名科目</label>` +
       `<select id="training-pick"><option value="">选择科目</option>${batch.courses
-        .map(({ id, title }) => `<option value="${id}">${escape(title)}</option>`)
+        .map(({ id }) => `<option value="${id}">${escape(labels.get(id))}</option>`)
         .join('')}<option value="custom">其他，请输入</option></select>${button(
         '添加志愿',
         'id="training-add-preference"',
       )}</div>` +
       `<div id="training-custom" hidden class="training-inline"><label class="visually-hidden" for="training-custom-title">自选科目</label>` +
       `<input id="training-custom-title" placeholder="输入科目名称" maxlength="100"></div>` +
-      `<ol id="training-preferences" class="training-stack"></ol></fieldset>` +
-      `<label>自我介绍<textarea name="introduction" rows="5" maxlength="5000" required ` +
-      `placeholder="请说明你的报名原因和优势，包括但不限于成绩、辅导经验等"></textarea></label>` +
-      `<fieldset><legend>是否乐学讲师</legend><p>本题仅用于确认补助发放方式，不作为报名审核参考。</p>` +
+      `<ol id="training-preferences" class="training-stack"></ol></section>` +
+      `<section class="training-panel training-application-section" aria-labelledby="training-profile-heading">
+        <h2 id="training-profile-heading">个人情况</h2>
+        <label>自我介绍<textarea name="introduction" rows="4" maxlength="5000" required ` +
+      `placeholder="可以写报名原因、相关成绩或辅导经验"></textarea></label>` +
+      `<fieldset><legend>是否乐学讲师</legend><p>仅用于确认补助发放方式。</p>` +
       `<div class="training-options"><label><input type="radio" name="lexue" value="yes" required>是</label>` +
-      `<label><input type="radio" name="lexue" value="no" required>否</label></div></fieldset>` +
-      `<fieldset><legend>签字确认</legend><p>我保证本次问卷为（${escape(
+      `<label><input type="radio" name="lexue" value="no" required>否</label></div></fieldset></section>` +
+      `<section class="training-panel training-application-section" aria-labelledby="training-confirm-heading">
+        <h2 id="training-confirm-heading">授权与签名</h2>
+        <label class="training-consent"><input type="checkbox" name="materialsConsent" required value="${escape(batch.materialsConsent.version)}"><span>${escape(batch.materialsConsent.text)}</span></label>
+        <p>我保证本次问卷为（${escape(
         batch.fullName,
       )}）本人填写，若被录取为讲师，如无特殊原因将听从电子系学生科协学培部对于讲授科目的安排。</p>` +
-      `<canvas class="training-signature-preview" width="500" height="180" aria-label="签名预览" hidden></canvas>${button(
+      `<canvas class="training-signature-preview" width="500" height="180" aria-label="签名预览" hidden></canvas><div class="training-actions">${button(
         '手写签名',
         'id="training-sign"',
-      )}</fieldset>${errorField}<div class="training-actions">${submit('提交报名')}</div></form>`;
+      )}<label class="training-button training-file-button">上传电子签名照片<input class="visually-hidden" type="file" name="signaturePhoto" accept="${IMAGE_ACCEPT}" aria-describedby="training-signature-file-note"></label></div>
+      <p id="training-signature-file-note" role="status">JPG 或 PNG，3 MB 以内</p></section>
+      <div class="training-application-submit">${errorField}<div class="training-actions">${submit('提交报名')}</div></div></form>`;
     setPage(`${batch.title} · 讲师报名`, markup, intro, '', back);
     const form = content.querySelector('form');
     const pick = form.querySelector('#training-pick');
@@ -513,14 +648,11 @@
     });
     form.querySelector('#training-add-preference').addEventListener('click', () => {
       const item = batch.courses.find(({ id }) => String(id) === pick.value);
-      const title = item?.title || (pick.value === 'custom' ? titleInput.value.trim() : '');
+      const title = item
+        ? labels.get(item.id)
+        : pick.value === 'custom' ? titleInput.value.trim() : '';
       if (!title) {
         showError(form, '请选择科目或输入自选科目名称');
-        return;
-      }
-      const key = (value) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
-      if (preferences.some((preference) => key(preference.title) === key(title))) {
-        showError(form, '该科目已经添加');
         return;
       }
       if (preferences.length >= 20) {
@@ -551,21 +683,35 @@
         ?.focus();
     });
     const sign = form.querySelector('#training-sign');
+    const signaturePhoto = form.elements.signaturePhoto;
+    const fileNote = form.querySelector('#training-signature-file-note');
+    signaturePhoto.addEventListener('change', () => {
+      fileNote.textContent = signaturePhoto.files[0]?.name || 'JPG 或 PNG，3 MB 以内';
+      if (!signaturePhoto.files.length) return;
+      signed = null;
+      form.querySelector('.training-signature-preview').hidden = true;
+      sign.textContent = '手写签名';
+    });
     sign.addEventListener('click', () =>
       captureSignature(signed, (strokes) => {
         signed = strokes;
+        signaturePhoto.value = '';
+        fileNote.textContent = 'JPG 或 PNG，3 MB 以内';
         showSignature(form, signed);
         sign.textContent = '重新签名';
       }),
     );
     bindForm(form, async (values) => {
       if (!preferences.length) throw new Error('请添加至少一个报名科目');
-      if (!signed) throw new Error('请完成手写签名');
+      const photo = values.get('signaturePhoto');
+      const signature = photo?.size ? { photo: await trainingImageContent(photo) } : signed;
+      if (!signature) throw new Error('请手写签名或上传电子签名照片');
       await api(`${endpoint}/applications`, 'POST', {
         introduction: values.get('introduction'),
         isLexue: values.get('lexue') === 'yes',
         preferences: preferences.map(({ value }) => value),
-        signature: signed,
+        signature,
+        materialsConsent: values.get('materialsConsent'),
       });
       await renderApplication();
       tell('讲师报名问卷填写成功');
@@ -574,28 +720,28 @@
 
   async function renderReview() {
     const endpoint = batchEndpoint(reviewSlug);
-    const { batch, courses, applications, published } = await api(`${endpoint}/review`);
-    const courseById = new Map(courses.map((course) => [course.id, course]));
+    const { batch, courses, applications, published, canReview } = await api(`${endpoint}/review`);
+    const labels = classroomLabels(courses);
     const applicationById = new Map(
       applications.map((application) => [application.id, application]),
     );
     const expanded = new Set(
       Array.from(content.querySelectorAll('details[open]'), (item) => item.id),
     );
-    const disabled = published ? 'disabled' : '';
+    const disabled = canReview ? '' : 'disabled';
     const selected = (value, actual) => (value === actual ? 'selected' : '');
     const courseList = courses
       .map(
         (course) =>
           `<form class="training-inline training-review-row" data-course="${course.id}">` +
-          `<strong>${escape(course.title)}${course.offered ? '' : '（自选）'}</strong>` +
+          `<strong>${escape(labels.get(course.id))}${course.offered ? '' : '（自选）'}</strong>` +
           `<label>任课老师<input name="teacher" maxlength="100" value="${escape(course.teacher)}" ${
             disabled
           }></label>` +
           `<label>讲师名额<input name="capacity" type="number" min="${
             course.offered ? 1 : 0
           }" max="20" value="${course.capacity}" required ${disabled}></label>${
-            published ? '' : submit('保存')
+            canReview ? submit('保存') : ''
           }${errorField}</form>`,
       )
       .join('');
@@ -614,16 +760,18 @@
           )}</p>` +
           `<p class="training-preserve">${escape(application.introduction)}</p>${
             published ? `<p>乐学讲师 ${application.isLexue ? '是' : '否'}</p>` : ''
-          }<canvas class="training-signature-preview" width="500" height="180" aria-label="报名签名"></canvas>` +
+          }<p>备课资料授权 ${application.materialsConsentAt ? `已确认 · ${date(application.materialsConsentAt)}` : '暂无记录'}</p>` +
+          '<canvas class="training-signature-preview" width="500" height="180" aria-label="报名签名" hidden></canvas>' +
+          '<img class="training-signature-photo" alt="电子签名照片" hidden>' +
           `<ol class="training-stack">${application.preferences
             .map(
               ({ courseId: preference, decision }, index) =>
                 `<li><form class="training-inline training-review-row" data-application="${
                   application.id
                 }" data-preference="${preference}"><strong>${index + 1}. ${escape(
-                  courseById.get(preference).title,
+                  labels.get(preference),
                 )}</strong>${
-                  published
+                  !canReview
                     ? `<span>${decisions[decision] || '常规排班'}</span>`
                     : `<label>审核决定<select name="decision">` +
                       `<option value="" ${selected(null, decision)}>按志愿排班</option>` +
@@ -649,8 +797,8 @@
       const results = courses
         .filter(({ capacity }) => capacity > 0)
         .map(
-          ({ id, title, capacity }) =>
-            `<div><dt>${escape(title)}（${names.get(id)?.length || 0}/${
+          ({ id, capacity }) =>
+            `<div><dt>${escape(labels.get(id))}（${names.get(id)?.length || 0}/${
               capacity
             }）</dt><dd>${escape(names.get(id)?.join('、') || '暂无讲师')}</dd></div>`,
         )
@@ -680,13 +828,15 @@
           )}</div>${errorField}`
     }</section>`;
     setPage(
-      `${batch.title} · 审核与排班`,
-      `<section class="training-panel"><h2>排班科目</h2>${
-        published ? '' : '<p>自选科目设置至少一个名额后即可参与排班。</p>'
-      }<div class="training-stack">${courseList}</div></section>` +
+      `${batch.title} · ${canReview || published ? '审核与排班' : '已提交问卷'}`,
+      (canReview || published
+        ? `<section class="training-panel"><h2>排班科目</h2>${
+            canReview ? '<p>自选科目设置至少一个名额后即可参与排班。</p>' : ''
+          }<div class="training-stack">${courseList}</div></section>`
+        : '') +
         `<section class="training-panel"><h2>报名名单（${applications.length}）</h2>` +
         `<div class="training-stack">${applicationList || empty('本期暂无报名。')}</div></section>${
-          schedule
+          canReview || published ? schedule : ''
         }`,
       '',
       '',
@@ -700,6 +850,7 @@
       showSignature(schedulePanel, published.signature.strokes);
       return;
     }
+    if (!canReview) return;
     content.querySelectorAll('form[data-course]').forEach((form) =>
       bindForm(form, async (values) => {
         await api(`${endpoint}/courses/${form.dataset.course}`, 'PUT', {
@@ -748,7 +899,7 @@
       const { key, courseId: conflictedCourse, rank, seats, candidateIds } = result.conflict;
       const modal = dialog(
         '处理志愿冲突',
-        `<form class="training-form"><p>「${escape(courseById.get(conflictedCourse).title)}」有 ${
+        `<form class="training-form"><p>「${escape(labels.get(conflictedCourse))}」有 ${
           candidateIds.length
         } 位第 ${rank} 志愿申请者，剩余 ${seats} 个名额。请选择 ${seats} 人。</p>` +
           `<div class="training-stack training-candidates">${candidateIds
@@ -872,9 +1023,66 @@
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = () => reject(new Error('读取讲义失败'));
+      reader.onerror = () => reject(new Error('读取文件失败'));
       reader.readAsDataURL(file);
     });
+  }
+
+  function trainingImageContent(file) {
+    if (!file || !file.size || file.size > MAX_IMAGE_BYTES)
+      throw new Error('请选择 3 MB 以内的 JPG 或 PNG 图片');
+    return fileContent(file);
+  }
+
+  function openGroupQrForm() {
+    const modal = dialog(
+      '上传课程群二维码',
+      `<form class="training-form"><label>二维码图片（JPG、PNG，3 MB 以内）
+        <input type="file" name="image" accept="${IMAGE_ACCEPT}" required></label>
+        ${errorField}<div class="training-actions">${button('取消', 'data-close')}${submit('保存二维码')}</div></form>`,
+    );
+    bindForm(modal.querySelector('form'), async (values) => {
+      const image = await trainingImageContent(values.get('image'));
+      await api(`${courseEndpoint}/group-qr`, 'PUT', { image });
+      modal.close();
+      await renderCourse();
+      tell('课程群二维码已保存');
+    });
+  }
+
+  async function openGroupQr() {
+    const modal = dialog(
+      '课程群二维码',
+      '<p data-qr-loading role="status">正在打开二维码…</p>' +
+        '<img class="training-group-qr" alt="带个人水印的课程群二维码" hidden>' +
+        errorField +
+        `<div class="training-actions">${button('关闭', 'data-close')}</div>`,
+    );
+    const controller = new AbortController();
+    let objectUrl;
+    modal.addEventListener('close', () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }, { once: true });
+    try {
+      const response = await fetch(`${API_BASE_URL}/training${courseEndpoint}/group-qr`, {
+        headers: { Authorization: `Bearer ${userState.token}` },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error((await response.json().catch(() => ({}))).message || '二维码暂时无法打开');
+      }
+      const blob = await response.blob();
+      if (!modal.open) return;
+      objectUrl = URL.createObjectURL(blob);
+      const image = modal.querySelector('img');
+      image.src = objectUrl;
+      image.hidden = false;
+    } catch (error) {
+      if (modal.open) showError(modal, error.message);
+    } finally {
+      modal.querySelector('[data-qr-loading]').hidden = true;
+    }
   }
 
   function openMaterialForm() {
@@ -1032,6 +1240,15 @@
     const course = await api(courseEndpoint + (manage ? '?manage=1' : ''));
     const canEdit = manage && course.canEdit;
     const canEditFeedback = manage && course.canEditFeedback;
+    const groupQr =
+      course.hasGroupQr || course.canEdit
+        ? `<section class="training-panel"><header class="training-section-heading"><h2>课程群</h2>
+          <div class="training-actions">${course.hasGroupQr ? button('查看课程群二维码', 'id="training-view-qr"') : ''}${
+            course.canEdit
+              ? button(course.hasGroupQr ? '更换二维码' : '上传课程群二维码', 'id="training-upload-qr"')
+              : ''
+          }</div></header></section>`
+        : '';
     const materials = course.materials
       .map((material) => {
         const action =
@@ -1059,7 +1276,7 @@
               'id="training-edit-session"',
             )}</div>`
           : ''
-      }</section><section class="training-panel"><header class="training-section-heading"><h2>课程资料</h2>${
+      }</section>${groupQr}<section class="training-panel"><header class="training-section-heading"><h2>课程资料</h2>${
         canEdit ? button('添加资料', 'id="training-add-material"') : ''
       }</header>${
         materials
@@ -1088,6 +1305,8 @@
       .querySelector('#training-edit-session')
       ?.addEventListener('click', () => openSessionForm(course));
     content.querySelector('#training-add-material')?.addEventListener('click', openMaterialForm);
+    content.querySelector('#training-upload-qr')?.addEventListener('click', openGroupQrForm);
+    content.querySelector('#training-view-qr')?.addEventListener('click', openGroupQr);
     content
       .querySelector('#training-write-feedback')
       ?.addEventListener('click', () => openFeedbackForm(course));
