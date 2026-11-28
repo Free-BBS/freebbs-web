@@ -137,18 +137,22 @@
 
   const toTimestamp = (value) => Date.parse(`${value}:00+08:00`);
 
-  function courseFacts(course) {
-    return `<dl class="training-facts">${[
-      ['任课老师', course.teacher || '待定'],
-      ['讲师', course.lecturers.join('、') || '待定'],
+  function courseFacts(course, { includePending = true } = {}) {
+    const facts = [
+      ['任课老师', course.teacher?.trim()],
+      ['讲师', course.lecturers?.map((name) => name.trim()).filter(Boolean).join('、')],
       [
         '上课时间',
-        course.startsAt === null ? '待定' : `${dateRange(course.startsAt, course.endsAt)}`,
+        course.startsAt == null || course.endsAt == null
+          ? ''
+          : dateRange(course.startsAt, course.endsAt),
       ],
-      ['上课地点', course.location || '待定'],
+      ['上课地点', course.location?.trim()],
     ]
-      .map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`)
-      .join('')}</dl>`;
+      .filter(([, value]) => includePending || value)
+      .map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value || '待定')}</dd></div>`)
+      .join('');
+    return facts ? `<dl class="training-facts">${facts}</dl>` : '';
   }
 
   async function copyLink(slug, control) {
@@ -176,7 +180,7 @@
         (course) =>
           `<a class="training-card" href="${escape(coursePage(course.id, manage))}"><h3>${escape(
             course.title,
-          )}</h3>${courseFacts(course)}</a>`,
+          )}</h3>${courseFacts(course, { includePending: false })}</a>`,
       )
       .join('')}</div>`;
   }
