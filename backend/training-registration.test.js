@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const test = require('node:test');
 const express = require('express');
+const { PDFDocument } = require('pdf-lib');
 const { createTrainingRouter } = require('./training');
 
 test('小班辅导报名及批次管理', async (t) => {
@@ -190,4 +191,62 @@ test('小班辅导报名及批次管理', async (t) => {
     assert.equal((await requestApi('GET', endpoint, '2')).status, 404);
     assert.deepEqual((await (await requestApi('GET', '/?manage=1', '1')).json()).batches, []);
   });
+});
+
+test('带水印的讲义下载会在返回文件前重新检查课程可见性', async (t) => {
+  const fixture = await PDFDocument.create();
+  fixture.addPage([300, 420]).drawText('Handout fixture');
+  const pdf = Buffer.from(await fixture.save());
+  const course = { id: 12 };
+  let courseReads = 0;
+  let hiddenBeforeDownload = false;
+  const pool = {
+    async execute(sql, args) {
+      if (sql.includes('FROM training_user_access')) return [[]];
+      if (sql.includes('FROM training_courses c JOIN training_batches b')) {
+        assert.deepEqual(args, [course.id, false]);
+        courseReads += 1;
+        return [hiddenBeforeDownload && courseReads === 2 ? [] : [course]];
+      }
+      if (sql.includes('WHERE a.course_id = ? AND p.user_id = ?')) return [[]];
+      if (sql.startsWith('SELECT title, pdf FROM training_materials')) {
+        return [[{ title: '讲义', pdf }]];
+      }
+      if (sql.startsWith('SELECT 1 FROM training_materials')) return [[{ available: 1 }]];
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  };
+  const app = express();
+  app.use(express.json());
+  app.use(
+    createTrainingRouter({
+      pool,
+      requireAuth: async () => ({ id: 7, full_name: '测试同学', student_id: '2026000000' }),
+    }),
+  );
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => server.close());
+  const endpoint = `http://127.0.0.1:${server.address().port}/courses/12/materials/2/download`;
+  function download() {
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acknowledged: true }),
+    });
+  }
+
+  const response = await download();
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.match(response.headers.get('content-type'), /^application\/pdf/);
+  assert.match(response.headers.get('content-disposition'), /^attachment/);
+  const downloaded = Buffer.from(await response.arrayBuffer());
+  assert.notDeepEqual(downloaded, pdf);
+  assert.equal((await PDFDocument.load(downloaded)).getPageCount(), 1);
+  assert.equal(courseReads, 2);
+
+  hiddenBeforeDownload = true;
+  courseReads = 0;
+  assert.equal((await download()).status, 404);
+  assert.equal(courseReads, 2);
 });

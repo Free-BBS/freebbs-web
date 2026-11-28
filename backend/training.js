@@ -1052,7 +1052,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         studentId: context.user.student_id,
       });
       const access = await getAccess(pool, context.user);
-      await getCourse(pool, courseId, { ...context, access });
+      await getCourse(pool, course.id, { ...context, access });
       if (!(await one(pool, 'SELECT 1 FROM training_materials WHERE id = ?', [materialId])))
         fail(404, '讲义不存在');
       const filename = material.title.replace(/[\r\n/\\]/g, ' ').replace(/\.pdf$/i, '');
