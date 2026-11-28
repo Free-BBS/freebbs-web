@@ -503,17 +503,21 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       if (!Array.isArray(courses) || !courses.length || courses.length > MAX_COURSES) {
         fail(400, `请设置 1–${MAX_COURSES} 门课程`);
       }
-      const offered = courses.map((course) => {
+      const titleKeys = new Set();
+      const offered = courses.map((course, index) => {
         const name = input(course?.title, 100, '科目名称');
+        const titleKey = subjectKey(name);
+        // The first classroom keeps the name used by free-text applications.
+        // A leading tab cannot occur in a normalized subject key.
+        const key = titleKeys.has(titleKey) ? `\t${index + 1}` : titleKey;
+        titleKeys.add(titleKey);
         return {
           name,
-          key: subjectKey(name),
+          key,
           teacher: input(course.teacher, 100, '任课老师', true),
           capacity: integer(course.capacity, 1, MAX_LECTURERS, '每门课可设置 1–20 个讲师名额'),
         };
       });
-      if (new Set(offered.map(({ key }) => key)).size !== offered.length)
-        fail(400, '报名科目不能重复');
       const slug = crypto.randomUUID();
       await transaction(pool, async (db) => {
         const batch = await rows(
@@ -552,13 +556,13 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         currentPhase === 'open'
           ? rows(
               pool,
-              'SELECT id, title FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
+              'SELECT id, title, teacher FROM training_courses WHERE batch_id = ? AND offered = 1 ORDER BY id',
               [batch.id],
             )
           : [],
         one(
           pool,
-          `SELECT a.id, a.submitted_at AS submittedAt, c.title AS assignedCourse
+          `SELECT a.id, a.submitted_at AS submittedAt, c.title AS assignedCourse, c.id AS assignedCourseId
         FROM training_applications a LEFT JOIN training_assignments ta ON ta.application_id = a.id
         LEFT JOIN training_courses c ON c.id = ta.course_id WHERE a.batch_id = ? AND a.user_id = ?`,
           [batch.id, user.id],
@@ -650,7 +654,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
               byTitle.set(key, course);
             }
           }
-          if (chosen.has(course.id)) fail(400, '报名科目不能重复');
+          // Insertion order keeps the first occurrence for scheduling.
           chosen.add(course.id);
         }
         const application = await rows(

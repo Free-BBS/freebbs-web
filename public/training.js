@@ -47,6 +47,24 @@
   const empty = (message) => `<p class="training-empty">${escape(message)}</p>`;
   const errorField = '<p class="training-error" role="alert" hidden></p>';
 
+  function classroomLabels(courses) {
+    const keys = courses.map(({ title }) =>
+      title.normalize('NFKC').toLowerCase().trim().replace(/\s+/g, ' '),
+    );
+    const counts = new Map();
+    const numbers = new Map();
+    keys.forEach((key) => counts.set(key, (counts.get(key) || 0) + 1));
+    return new Map(
+      courses.map(({ id, title, teacher }, index) => {
+        const key = keys[index];
+        if (counts.get(key) === 1) return [id, title];
+        const number = (numbers.get(key) || 0) + 1;
+        numbers.set(key, number);
+        return [id, `${title}（第 ${number} 班${teacher ? ` · ${teacher}` : ''}）`];
+      }),
+    );
+  }
+
   function api(path, method, payload) {
     return callApi(`/training${path}`, { method, body: JSON.stringify(payload) });
   }
@@ -451,19 +469,24 @@
           ? `你已被录取为「${application.assignedCourse}」的讲师。`
           : '本期报名未录取。';
       }
-      setPage(`${batch.title} · 讲师报名`, empty(status), intro, '', back);
+      const assignedClassroom =
+        batch.phase === 'published' && application.assignedCourseId
+          ? link('查看录取课堂', coursePage(application.assignedCourseId))
+          : '';
+      setPage(`${batch.title} · 讲师报名`, empty(status), intro, assignedClassroom, back);
       return;
     }
     if (batch.phase !== 'open') {
       setPage(`${batch.title} · 讲师报名`, empty(phases[batch.phase]), intro, '', back);
       return;
     }
+    const labels = classroomLabels(batch.courses);
     markup =
       `<form class="training-form training-panel">` +
-      `<fieldset><legend>报名课堂</legend><p>添加科目后使用「上移」「下移」调整志愿顺位。</p>` +
+      `<fieldset><legend>报名课堂</legend><p>添加科目后可调整志愿顺位。重复添加同一课堂时，按最靠前的志愿排班。</p>` +
       `<div class="training-inline"><label class="visually-hidden" for="training-pick">选择报名科目</label>` +
       `<select id="training-pick"><option value="">选择科目</option>${batch.courses
-        .map(({ id, title }) => `<option value="${id}">${escape(title)}</option>`)
+        .map(({ id }) => `<option value="${id}">${escape(labels.get(id))}</option>`)
         .join('')}<option value="custom">其他，请输入</option></select>${button(
         '添加志愿',
         'id="training-add-preference"',
@@ -513,14 +536,11 @@
     });
     form.querySelector('#training-add-preference').addEventListener('click', () => {
       const item = batch.courses.find(({ id }) => String(id) === pick.value);
-      const title = item?.title || (pick.value === 'custom' ? titleInput.value.trim() : '');
+      const title = item
+        ? labels.get(item.id)
+        : pick.value === 'custom' ? titleInput.value.trim() : '';
       if (!title) {
         showError(form, '请选择科目或输入自选科目名称');
-        return;
-      }
-      const key = (value) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
-      if (preferences.some((preference) => key(preference.title) === key(title))) {
-        showError(form, '该科目已经添加');
         return;
       }
       if (preferences.length >= 20) {
@@ -575,7 +595,7 @@
   async function renderReview() {
     const endpoint = batchEndpoint(reviewSlug);
     const { batch, courses, applications, published } = await api(`${endpoint}/review`);
-    const courseById = new Map(courses.map((course) => [course.id, course]));
+    const labels = classroomLabels(courses);
     const applicationById = new Map(
       applications.map((application) => [application.id, application]),
     );
@@ -588,7 +608,7 @@
       .map(
         (course) =>
           `<form class="training-inline training-review-row" data-course="${course.id}">` +
-          `<strong>${escape(course.title)}${course.offered ? '' : '（自选）'}</strong>` +
+          `<strong>${escape(labels.get(course.id))}${course.offered ? '' : '（自选）'}</strong>` +
           `<label>任课老师<input name="teacher" maxlength="100" value="${escape(course.teacher)}" ${
             disabled
           }></label>` +
@@ -621,7 +641,7 @@
                 `<li><form class="training-inline training-review-row" data-application="${
                   application.id
                 }" data-preference="${preference}"><strong>${index + 1}. ${escape(
-                  courseById.get(preference).title,
+                  labels.get(preference),
                 )}</strong>${
                   published
                     ? `<span>${decisions[decision] || '常规排班'}</span>`
@@ -649,8 +669,8 @@
       const results = courses
         .filter(({ capacity }) => capacity > 0)
         .map(
-          ({ id, title, capacity }) =>
-            `<div><dt>${escape(title)}（${names.get(id)?.length || 0}/${
+          ({ id, capacity }) =>
+            `<div><dt>${escape(labels.get(id))}（${names.get(id)?.length || 0}/${
               capacity
             }）</dt><dd>${escape(names.get(id)?.join('、') || '暂无讲师')}</dd></div>`,
         )
@@ -748,7 +768,7 @@
       const { key, courseId: conflictedCourse, rank, seats, candidateIds } = result.conflict;
       const modal = dialog(
         '处理志愿冲突',
-        `<form class="training-form"><p>「${escape(courseById.get(conflictedCourse).title)}」有 ${
+        `<form class="training-form"><p>「${escape(labels.get(conflictedCourse))}」有 ${
           candidateIds.length
         } 位第 ${rank} 志愿申请者，剩余 ${seats} 个名额。请选择 ${seats} 人。</p>` +
           `<div class="training-stack training-candidates">${candidateIds
