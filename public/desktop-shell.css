@@ -1,5 +1,8 @@
 /* Desktop only: the mobile shell keeps its original structure and positions. */
 @media (min-width: 901px) {
+  body.desktop-shell-active .topbar .brand-mark {
+    font-size: 0 !important;
+  }
   body.desktop-shell-active > .mobile-header-backdrop {
     height: var(--desktop-header-height, 94px);
   }

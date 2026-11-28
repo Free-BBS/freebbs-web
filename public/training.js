@@ -32,8 +32,8 @@
     formatDate.formatRange?.(start, end) ?? `${date(start)} 至 ${date(end)}`;
   const button = (label, attributes = '', variant = '') =>
     `<button type="button" class="training-button${variant ? ` training-${variant}` : ''}" ${attributes}>${label}</button>`;
-  const submit = (label) =>
-    `<button type="submit" class="training-button training-primary">${label}</button>`;
+  const submit = (label, variant = 'primary') =>
+    `<button type="submit" class="training-button training-${variant}">${label}</button>`;
   const link = (label, path, variant = '') =>
     `<a class="training-button${variant ? ` training-${variant}` : ''}" href="${escape(path)}">${escape(label)}</a>`;
   const route = (key, value) => `/training?${new URLSearchParams({ [key]: value })}`;
@@ -197,10 +197,12 @@
       : button('我要报名', 'disabled aria-describedby="training-no-registration"', 'primary') +
         '<span id="training-no-registration" class="training-action-note">暂无开放报名</span>';
     const courses = batches
-      .filter((batch) => batch.courses.length > 0)
+      .filter((batch) => batch.visibility === 'public' || batch.courses.length > 0)
       .map(
         (batch) =>
-          `<section class="training-course-group"><h2>${escape(batch.title)}</h2>${courseCards(batch.courses)}</section>`,
+          `<section class="training-course-group"><h2>${escape(batch.title)}</h2>${
+            batch.courses.length ? courseCards(batch.courses) : empty(phases[batch.phase])
+          }</section>`,
       )
       .join('');
     setPage(
@@ -241,6 +243,24 @@
     const markup = batches
       .map((batch) => {
         const reviewing = batch.phase === 'closed' || batch.phase === 'published';
+        const hidden = batch.visibility === 'hidden';
+        const batchAction = (label, action, extra = '', variant = '') =>
+          button(
+            label,
+            `data-batch-action="${action}" data-batch-slug="${escape(batch.slug)}" ${extra}`,
+            variant,
+          );
+        const visibilityTools = access.minister
+          ? (hidden ? '' : batchAction('隐藏批次', 'hide')) +
+            (batch.visibility === 'public'
+              ? ''
+              : batchAction(
+                  '公布批次',
+                  'publish',
+                  reviewing ? '' : 'disabled title="报名截止后才可公布批次"',
+                )) +
+            batchAction('删除批次', 'delete', '', 'danger')
+          : '';
         const tools =
           (access.minister && reviewing
             ? link(
@@ -249,15 +269,21 @@
                 'primary',
               )
             : '') +
-          (access.minister ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`) : '') +
-          link('打开报名页', route('apply', batch.slug)) +
+          (access.minister && !hidden
+            ? button('复制报名链接', `data-copy="${escape(batch.slug)}"`)
+            : '') +
+          (hidden ? '' : link('打开报名页', route('apply', batch.slug))) +
           (access.admin && batch.phase === 'open'
             ? button('截止报名', `data-close-registration="${escape(batch.slug)}"`, 'danger')
-            : '');
+            : '') +
+          visibilityTools;
+        const visibilityLabel = hidden ? '已隐藏' : batch.visibility === 'public' ? '已公布' : '';
         return (
           `<section class="training-batch"><header class="training-section-heading">` +
           `<div><div class="training-batch-title"><h2>${escape(batch.title)}</h2>` +
-          `<span class="training-phase" data-phase="${escape(batch.phase)}">${phases[batch.phase]}</span></div>` +
+          `<span class="training-phase" data-phase="${escape(batch.phase)}">${phases[batch.phase]}</span>` +
+          (visibilityLabel ? `<span class="training-phase">${visibilityLabel}</span>` : '') +
+          '</div>' +
           `<p>报名时间：${date(batch.opensAt)} 至 ${date(batch.closesAt)}（北京时间）</p></div>` +
           `<div class="training-actions">${tools}</div></header>${
             batch.courses.length ? courseCards(batch.courses, true) : ''
@@ -279,6 +305,50 @@
     content.querySelectorAll('[data-close-registration]').forEach((control) => {
       const batch = batches.find(({ slug }) => slug === control.dataset.closeRegistration);
       control.addEventListener('click', () => openCloseRegistrationDialog(batch));
+    });
+    content.querySelectorAll('[data-batch-action]').forEach((control) => {
+      const batch = batches.find(({ slug }) => slug === control.dataset.batchSlug);
+      control.addEventListener('click', () => openBatchActionDialog(batch, control.dataset.batchAction));
+    });
+  }
+
+  function openBatchActionDialog(batch, action) {
+    const controls = {
+      hide: {
+        title: '隐藏批次',
+        confirm: '确认隐藏',
+        detail: '隐藏后，用户无法查看此批次的报名页和课堂。报名截止后可重新公布。',
+        visibility: 'hidden',
+      },
+      publish: {
+        title: '公布批次',
+        confirm: '确认公布',
+        detail: '此批次将在小班辅导首页显示。',
+        visibility: 'public',
+      },
+      delete: {
+        title: '删除批次',
+        confirm: '确认删除',
+        detail: '此操作会永久删除批次及相关课堂、报名记录、录取结果、课程资料和反馈。',
+      },
+    }[action];
+    const deleting = action === 'delete';
+    const modal = dialog(
+      controls.title,
+      `<form class="training-form"><p>「${escape(batch.title)}」</p><p>${controls.detail}</p>${errorField}` +
+        `<div class="training-actions">${button('取消', 'data-close')}${submit(
+          controls.confirm,
+          deleting ? 'danger' : 'primary',
+        )}</div></form>`,
+    );
+    bindForm(modal.querySelector('form'), async () => {
+      const endpoint = batchEndpoint(batch.slug);
+      const result = deleting
+        ? await api(endpoint, 'DELETE')
+        : await api(`${endpoint}/visibility`, 'PUT', { visibility: controls.visibility });
+      modal.close();
+      await renderManagement();
+      tell(deleting ? '批次已删除' : result.message);
     });
   }
 

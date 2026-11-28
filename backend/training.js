@@ -9,10 +9,12 @@ const MAX_COURSES = 40;
 const MAX_PREFERENCES = 20;
 const MAX_LECTURERS = 20;
 const DEFAULT_QUESTIONS = ['讲解清晰程度', '课程内容的实用性', '课堂节奏'];
-const BATCH_FIELDS = `id, slug, title, opens_at AS opensAt, closes_at AS closesAt,
-  published_at AS publishedAt, revision`;
+const BATCH_FIELDS = `b.id, b.slug, b.title, b.opens_at AS opensAt, b.closes_at AS closesAt,
+  b.published_at AS publishedAt, b.revision, v.visibility`;
 const COURSE_VISIBILITY = `(c.offered = 1 OR (c.capacity > 0 AND b.published_at IS NOT NULL))
-  AND (? OR (b.published_at IS NOT NULL AND EXISTS (
+  AND (? OR (b.published_at IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM training_batch_visibility v WHERE v.batch_id = b.id AND v.visibility = 'hidden'
+  ) AND EXISTS (
     SELECT 1 FROM training_assignments assigned WHERE assigned.course_id = c.id
   )))`;
 
@@ -129,7 +131,9 @@ async function transaction(pool, action) {
 async function batchBySlug(db, slug, lock = false) {
   const batch = await one(
     db,
-    `SELECT ${BATCH_FIELDS} FROM training_batches WHERE slug = ?${lock ? ' FOR UPDATE' : ''}`,
+    `SELECT ${BATCH_FIELDS} FROM training_batches b
+    LEFT JOIN training_batch_visibility v ON v.batch_id = b.id
+    WHERE b.slug = ?${lock ? ' FOR UPDATE OF b' : ''}`,
     [slug],
   );
   if (!batch) fail(404, '报名批次不存在');
@@ -356,7 +360,14 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       const manage = request.query.manage === '1';
       if (manage) requirePermission(access.staff);
       const [batches, courses, lecturers] = await Promise.all([
-        rows(pool, `SELECT ${BATCH_FIELDS} FROM training_batches ORDER BY opens_at DESC, id DESC`),
+        rows(
+          pool,
+          `SELECT ${BATCH_FIELDS} FROM training_batches b
+          LEFT JOIN training_batch_visibility v ON v.batch_id = b.id
+          WHERE (? OR v.visibility IS NULL OR v.visibility = 'public')
+          ORDER BY b.opens_at DESC, b.id DESC`,
+          [manage],
+        ),
         access.revoked
           ? []
           : rows(
@@ -377,12 +388,13 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       });
       response.json({
         access,
-        batches: batches.map(({ id: batchId, slug, title, opensAt, closesAt, publishedAt }) => ({
+        batches: batches.map(({ id: batchId, slug, title, opensAt, closesAt, publishedAt, visibility }) => ({
           slug,
           title,
           opensAt,
           closesAt,
           phase: phase({ opensAt, closesAt, publishedAt }),
+          visibility,
           courses: cards.get(batchId) || [],
         })),
       });
@@ -551,6 +563,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
     '/batches/:slug',
     route(async (request, response, { user }) => {
       const batch = await batchBySlug(pool, request.params.slug);
+      if (batch.visibility === 'hidden') fail(404, '报名批次不存在');
       const currentPhase = phase(batch);
       const [courses, application] = await Promise.all([
         currentPhase === 'open'
@@ -577,6 +590,39 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         application: application || null,
         fullName: user.full_name,
       });
+    }),
+  );
+
+  router.put(
+    '/batches/:slug/visibility',
+    route(async (request, response, { access }) => {
+      requirePermission(access.minister);
+      const { visibility } = request.body || {};
+      if (!['hidden', 'public'].includes(visibility)) fail(400, '请选择有效的批次可见状态');
+      await transaction(pool, async (db) => {
+        const batch = await batchBySlug(db, request.params.slug, true);
+        if (visibility === 'public' && Date.now() < batch.closesAt)
+          fail(409, '报名截止后才可公布批次');
+        await rows(
+          db,
+          `INSERT INTO training_batch_visibility (batch_id, visibility) VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE visibility = ?`,
+          [batch.id, visibility, visibility],
+        );
+      });
+      response.json({ message: visibility === 'public' ? '批次已公布' : '批次已隐藏' });
+    }),
+  );
+
+  router.delete(
+    '/batches/:slug',
+    route(async (request, response, { access }) => {
+      requirePermission(access.minister);
+      await transaction(pool, async (db) => {
+        const batch = await batchBySlug(db, request.params.slug, true);
+        await rows(db, 'DELETE FROM training_batches WHERE id = ?', [batch.id]);
+      });
+      response.status(204).end();
     }),
   );
 
@@ -617,6 +663,7 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
       }
       await transaction(pool, async (db) => {
         const batch = await batchBySlug(db, request.params.slug, true);
+        if (batch.visibility === 'hidden') fail(404, '报名批次不存在');
         if (phase(batch) !== 'open') fail(409, '当前批次未在报名时间内');
         const existing = await one(
           db,
@@ -1004,7 +1051,8 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
         fullName: context.user.full_name,
         studentId: context.user.student_id,
       });
-      requirePermission(!(await getAccess(pool, context.user)).revoked);
+      const access = await getAccess(pool, context.user);
+      await getCourse(pool, courseId, { ...context, access });
       if (!(await one(pool, 'SELECT 1 FROM training_materials WHERE id = ?', [materialId])))
         fail(404, '讲义不存在');
       const filename = material.title.replace(/[\r\n/\\]/g, ' ').replace(/\.pdf$/i, '');
@@ -1104,7 +1152,11 @@ function createTrainingRouter({ pool, requireAuth, notifications }) {
 }
 
 async function ensureTrainingTables(pool) {
-  for (const filename of ['074_training_courses.sql', '075_training_roster.sql']) {
+  for (const filename of [
+    '074_training_courses.sql',
+    '075_training_roster.sql',
+    '076_training_batch_visibility.sql',
+  ]) {
     const migration = readFileSync(
       path.join(__dirname, '../database/migrations', filename),
       'utf8',
