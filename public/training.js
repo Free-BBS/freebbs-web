@@ -49,7 +49,7 @@
   const empty = (message) => `<p class="training-empty">${escape(message)}</p>`;
   const errorField = '<p class="training-error" role="alert" hidden></p>';
 
-  function classroomLabels(courses) {
+  function classroomLabels(courses, { numberClasses = true } = {}) {
     const keys = courses.map(({ title }) =>
       title.normalize('NFKC').toLowerCase().trim().replace(/\s+/g, ' '),
     );
@@ -60,6 +60,7 @@
       courses.map(({ id, title, teacher }, index) => {
         const key = keys[index];
         if (counts.get(key) === 1) return [id, title];
+        if (!numberClasses) return [id, teacher ? `${title}（${teacher}）` : title];
         const number = (numbers.get(key) || 0) + 1;
         numbers.set(key, number);
         return [id, `${title}（第 ${number} 班${teacher ? ` · ${teacher}` : ''}）`];
@@ -582,7 +583,7 @@
       setPage(`${batch.title} · 讲师报名`, empty(phases[batch.phase]), intro, '', back);
       return;
     }
-    const labels = classroomLabels(batch.courses);
+    const labels = classroomLabels(batch.courses, { numberClasses: false });
     markup =
       `<form class="training-form training-application-form">` +
       `<section class="training-panel training-application-section" aria-labelledby="training-preference-heading">
